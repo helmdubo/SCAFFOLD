@@ -134,6 +134,25 @@ run_pass_0()
 assert_no_blocking_diagnostics()
 ```
 
+`build_topology_snapshot()` now implements the G1 topology policy instead of
+the old fixture baseline:
+
+```text
+- selected-face edge adjacency;
+- Shell detection as edge-connected selected-face components;
+- Patch flood fill blocked by mesh/selection border, selected non-manifold edge,
+  explicit Scaffold boundary mark and Blender UV Seam;
+- Blender Sharp is read as a source mark but ignored by default Patch segmentation;
+- BoundaryLoops, Chains and ChainUses are built from real Patch boundary uses.
+```
+
+Blender source mesh inspection is available without an add-on UI through:
+
+```text
+scaffold_core/layer_0_source/blender_io.py
+scaffold_core/pipeline/inspection.py
+```
+
 Implemented test fixtures:
 
 ```text
@@ -141,6 +160,7 @@ single_patch.py
 l_shape.py
 seam_self.py
 non_manifold.py
+corner_touch.py
 ```
 
 Implemented tests:
@@ -153,6 +173,16 @@ test_layer_1_invariants.py
 test_seam_self.py
 test_pipeline_pass0.py
 test_shared_chain.py
+test_seam_splits_patch.py
+test_seam_does_not_split_shell.py
+test_vertex_only_contact_separates_shells.py
+test_non_manifold_stays_in_shell.py
+test_shared_chain_two_uses.py
+test_boundary_mark_splits_patch.py
+test_sharp_does_not_split_patch.py
+test_multi_face_patch_loop.py
+test_blender_io.py
+test_pipeline_inspection.py
 ```
 
 Recent cleanup:
@@ -162,6 +192,16 @@ scaffold_core/layer_0_source/fingerprints.py removed as premature speculative in
 SourceMeshSnapshot.checksum documented as optional future rebuild provenance.
 l_shape.py fixture is now covered by test_shared_chain.py.
 README documents versioning and deferred add-on wrapper.
+```
+
+Recent implementation:
+
+```text
+Commit 26dbd6a implements G1 topology segmentation policy and Blender inspection.
+Full local verification at the time of handoff: python -m pytest scaffold_core/tests -q
+Result: 28 passed.
+Blender smoke test: cube with all faces selected and seam loop around one face produced
+1 Shell, 2 Patches, 4 Chains and 8 ChainUses.
 ```
 
 ---
@@ -201,16 +241,24 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 ### Must do before G1 is complete
 
-- Replace fixture-oriented `build_topology_snapshot()` with real selected-face edge graph construction.
-- Implement Shell detection as selected-face edge-connected components.
-- Implement Patch segmentation as flood fill blocked by the G1 boundary predicate.
-- Build real BoundaryLoops from Patch boundary edges instead of one face = one loop baseline.
-- Build Chains / ChainUses from Patch boundary uses after segmentation.
-- Add tests for seam-based patch split.
-- Add tests that seam splits Patch but not Shell.
-- Add tests that vertex-only contact creates separate Shells.
-- Add tests that non-manifold edge remains in Shell candidate and emits DEGRADED diagnostic.
-- Run the full test suite locally.
+The core G1 topology policy items listed in the previous handoff are now done:
+
+- Real selected-face edge graph construction.
+- Shell detection as selected-face edge-connected components.
+- Patch segmentation as flood fill blocked by the G1 boundary predicate.
+- BoundaryLoops from Patch boundary edges.
+- Chains / ChainUses from Patch boundary uses.
+- Tests for seam split, seam-not-shell split, vertex-only Shell split,
+  non-manifold Shell candidate and shared ChainUses.
+- Full local test suite run.
+
+Remaining before declaring G1 complete:
+
+- Review G1 acceptance against `docs/phases/G1_topology_snapshot.md`.
+- Decide whether `pipeline/inspection.py` is sufficient debug surface for G1,
+  or whether add-on/UI work should remain deferred to a later phase.
+- Keep Blender UI, UV transfer and future layer work out of G1 unless G0/phase
+  docs are amended.
 
 ### Explicitly not part of G1
 
@@ -227,31 +275,13 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 ## Recommended next task
 
-Implement G1 topology builder policy in small steps:
+Do a G1 completion review:
 
-1. Add selected-face edge adjacency helper inside `scaffold_core/layer_1_topology/build.py` or a small sibling module if the file grows too large.
-2. Add Shell component detection from selected-face edge adjacency.
-3. Add Patch component detection using the G1 boundary predicate.
-4. Add seam split fixture/test.
-5. Add shell-not-split-by-seam test.
-6. Replace the current one-face-one-patch baseline only after tests cover the new behavior.
-
-Do not refactor unrelated data models while doing this.
-
----
-
-## Known baseline limitation
-
-Current `build_topology_snapshot()` is intentionally simple and fixture-oriented.
-
-It currently behaves roughly as:
-
-```text
-each selected face = one Patch
-all selected faces = one Shell
-```
-
-This is not the final G1 policy. It is a temporary baseline to support early invariant tests.
+1. Re-run `python -m pytest scaffold_core/tests -q`.
+2. Compare implemented behavior to `docs/phases/G1_topology_snapshot.md`.
+3. Update the phase/handoff docs if G1 is considered complete.
+4. Do not start Layer 2 / Geometry Facts, UV transfer, Blender UI or add-on
+   wrapper work without an explicit phase decision.
 
 ---
 
