@@ -4,6 +4,7 @@ Layer: tests
 Rules:
 - Architectural import boundary test only.
 - No production logic here.
+- Reads phase/layer routing from docs/context_map.yaml.
 """
 
 from __future__ import annotations
@@ -12,16 +13,9 @@ import ast
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
-
-FUTURE_DIRS_G1 = {
-    "layer_2_geometry",
-    "layer_3_relations",
-    "layer_4_features",
-    "layer_5_runtime",
-    "api",
-    "ui",
-}
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = PACKAGE_ROOT.parent
+CONTEXT_MAP_PATH = REPO_ROOT / "docs" / "context_map.yaml"
 
 FORBIDDEN_MODULE_NAMES = {
     "utils",
@@ -35,26 +29,80 @@ FORBIDDEN_MODULE_NAMES = {
     "registry",
 }
 
-LAYER_BY_PACKAGE = {
-    "layer_0_source": 0,
-    "layer_1_topology": 1,
-    "layer_2_geometry": 2,
-    "layer_3_relations": 3,
-    "layer_4_features": 4,
-    "layer_5_runtime": 5,
-}
+
+def _read_context_map_lines() -> list[str]:
+    return CONTEXT_MAP_PATH.read_text(encoding="utf-8").splitlines()
+
+
+def _current_phase() -> str:
+    for line in _read_context_map_lines():
+        if line.startswith("current_phase:"):
+            return line.split(":", 1)[1].strip()
+    raise AssertionError("docs/context_map.yaml does not define current_phase")
+
+
+def _list_items_under_section(section: str, subsection: str | None = None) -> tuple[str, ...]:
+    """Read a simple list from docs/context_map.yaml without a YAML dependency.
+
+    This parser intentionally supports only the small routing shape used by
+    context_map.yaml. It is not a general YAML parser.
+    """
+
+    lines = _read_context_map_lines()
+    in_section = False
+    in_subsection = subsection is None
+    items: list[str] = []
+
+    for raw_line in lines:
+        line = raw_line.rstrip()
+        stripped = line.strip()
+
+        if not line.startswith(" ") and stripped.endswith(":"):
+            current_section = stripped[:-1]
+            if current_section == section:
+                in_section = True
+                in_subsection = subsection is None
+                continue
+            if in_section:
+                break
+            continue
+
+        if not in_section:
+            continue
+
+        if subsection is not None and line.startswith("  ") and not line.startswith("    "):
+            current_subsection = stripped[:-1] if stripped.endswith(":") else stripped
+            in_subsection = current_subsection == subsection
+            continue
+
+        if in_subsection and stripped.startswith("- "):
+            items.append(stripped[2:])
+
+    return tuple(items)
+
+
+def _phase_forbidden_dirs() -> tuple[Path, ...]:
+    phase = _current_phase()
+    return tuple(REPO_ROOT / item for item in _list_items_under_section("phase_forbidden_dirs", phase))
+
+
+def _layer_by_package() -> dict[str, int]:
+    return {
+        package_name: index
+        for index, package_name in enumerate(_list_items_under_section("layer_order"))
+    }
 
 
 def _source_files() -> list[Path]:
     return [
         path
-        for path in ROOT.rglob("*.py")
-        if "tests" not in path.relative_to(ROOT).parts
+        for path in PACKAGE_ROOT.rglob("*.py")
+        if "tests" not in path.relative_to(PACKAGE_ROOT).parts
     ]
 
 
 def _module_parts_from_file(path: Path) -> tuple[str, ...]:
-    return path.relative_to(ROOT).with_suffix("").parts
+    return path.relative_to(PACKAGE_ROOT).with_suffix("").parts
 
 
 def _import_roots(path: Path) -> list[str]:
@@ -69,19 +117,20 @@ def _import_roots(path: Path) -> list[str]:
 
 
 def _layer_index(parts: tuple[str, ...]) -> int | None:
+    layer_by_package = _layer_by_package()
     for part in parts:
-        if part in LAYER_BY_PACKAGE:
-            return LAYER_BY_PACKAGE[part]
+        if part in layer_by_package:
+            return layer_by_package[part]
     return None
 
 
-def test_g1_future_phase_directories_do_not_exist() -> None:
-    existing = {path.name for path in ROOT.iterdir() if path.is_dir()}
-    assert not (existing & FUTURE_DIRS_G1)
+def test_current_phase_forbidden_directories_do_not_exist() -> None:
+    existing_forbidden_dirs = [path for path in _phase_forbidden_dirs() if path.exists()]
+    assert not existing_forbidden_dirs
 
 
 def test_forbidden_generic_module_names_do_not_exist() -> None:
-    bad_files = [path for path in ROOT.rglob("*.py") if path.stem in FORBIDDEN_MODULE_NAMES]
+    bad_files = [path for path in PACKAGE_ROOT.rglob("*.py") if path.stem in FORBIDDEN_MODULE_NAMES]
     assert not bad_files
 
 
@@ -97,7 +146,7 @@ def test_layers_do_not_import_higher_layers() -> None:
                 parts = parts[1:]
             target_layer = _layer_index(parts)
             if target_layer is not None and target_layer > source_layer:
-                violations.append(f"{path.relative_to(ROOT)} imports higher layer {imported}")
+                violations.append(f"{path.relative_to(PACKAGE_ROOT)} imports higher layer {imported}")
     assert not violations
 
 
@@ -112,7 +161,7 @@ def test_layers_do_not_import_pipeline_orchestration() -> None:
             continue
         for imported in _import_roots(path):
             if imported in forbidden:
-                violations.append(f"{path.relative_to(ROOT)} imports {imported}")
+                violations.append(f"{path.relative_to(PACKAGE_ROOT)} imports {imported}")
     assert not violations
 
 
@@ -124,5 +173,5 @@ def test_model_files_stay_pure() -> None:
             continue
         for imported in _import_roots(path):
             if any(fragment in imported for fragment in forbidden_fragments):
-                violations.append(f"{path.relative_to(ROOT)} imports {imported}")
+                violations.append(f"{path.relative_to(PACKAGE_ROOT)} imports {imported}")
     assert not violations
