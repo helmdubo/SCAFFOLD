@@ -38,6 +38,8 @@ ui/
 
 Do not create them during G1.
 
+The Blender add-on wrapper package `scaffold/` is also intentionally deferred during G1. Do not create it until an explicit UI/add-on phase begins, likely no earlier than G5 / UV transfer / UI integration work.
+
 ---
 
 ## Essential reading order for a new agent
@@ -52,6 +54,25 @@ Do not create them during G1.
 8. `docs/agent_rules/minimal_patch_protocol.md` if fixing existing code
 
 Read `G0.md` only when the task touches architecture or phase boundaries.
+
+---
+
+## Versioning note
+
+Scaffold uses three separate numbering systems:
+
+```text
+G0 vX.Y:
+  architecture contract version
+
+G1 / G2 / G3 / ...:
+  implementation phase names
+
+bl_info.version:
+  Blender add-on semantic version
+```
+
+Example: `G0 v1.1`, `G1`, and `bl_info.version = (0, 1, 0)` can all be true at the same time.
 
 ---
 
@@ -131,6 +152,16 @@ test_chainuse_orientation.py
 test_layer_1_invariants.py
 test_seam_self.py
 test_pipeline_pass0.py
+test_shared_chain.py
+```
+
+Recent cleanup:
+
+```text
+scaffold_core/layer_0_source/fingerprints.py removed as premature speculative infrastructure.
+SourceMeshSnapshot.checksum documented as optional future rebuild provenance.
+l_shape.py fixture is now covered by test_shared_chain.py.
+README documents versioning and deferred add-on wrapper.
 ```
 
 ---
@@ -227,6 +258,7 @@ This is not the final G1 policy. It is a temporary baseline to support early inv
 ## Agent safety rules
 
 - Do not create future phase directories.
+- Do not create the deferred `scaffold/` add-on wrapper during G1.
 - Do not add `utils.py`, `helpers.py`, `manager.py`, `service.py`, `factory.py`, `registry.py`.
 - Do not put H/V or WALL/FLOOR/SLOPE on Layer 1 topology entities.
 - Do not import higher layers from lower layers.
