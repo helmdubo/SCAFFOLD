@@ -10,6 +10,7 @@ Rules:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Mapping
 
 from scaffold_core.core.diagnostics import Diagnostic
@@ -17,6 +18,14 @@ from scaffold_core.ids import ChainId, PatchId, VertexId
 
 
 Vector3 = tuple[float, float, float]
+
+
+class ChainShapeHint(str, Enum):
+    """Raw geometric shape hint for a Chain."""
+
+    UNKNOWN = "UNKNOWN"
+    STRAIGHT = "STRAIGHT"
+    SAWTOOTH_STRAIGHT = "SAWTOOTH_STRAIGHT"
 
 
 @dataclass(frozen=True)
@@ -31,7 +40,11 @@ class PatchGeometryFacts:
 class ChainGeometryFacts:
     chain_id: ChainId
     length: float
+    chord_length: float
     chord_direction: Vector3
+    straightness: float
+    detour_ratio: float
+    shape_hint: ChainShapeHint = ChainShapeHint.UNKNOWN
 
 
 @dataclass(frozen=True)

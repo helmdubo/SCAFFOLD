@@ -57,7 +57,7 @@ G2 may introduce:
 - `VertexGeometryFacts`
 - `GeometryFactSnapshot`
 
-Initial G2a facts:
+G2a facts:
 
 ```text
 Patch:
@@ -75,7 +75,7 @@ Vertex:
   position
 ```
 
-Later G2b facts:
+G2b facts:
 
 ```text
 straightness
@@ -86,6 +86,14 @@ sawtooth-straight geometry classifier
 
 Sawtooth classification remains a geometry fact. It must not promote anything
 to runtime roles or H/V labels.
+
+G2b acceptance:
+
+1. Chain straightness is measured.
+2. Chain detour ratio is measured.
+3. Chain shape hints remain raw geometry facts.
+4. Sawtooth-straight classification does not derive roles, alignment,
+   world orientation, feature facts, pin facts or UV facts.
 
 ## Must Not Contain
 

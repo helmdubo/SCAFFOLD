@@ -15,6 +15,7 @@ from scaffold_core.layer_0_source.snapshot import SourceMeshSnapshot
 from scaffold_core.layer_1_topology.model import Chain, Patch, SurfaceModel, Vertex
 from scaffold_core.layer_2_geometry.facts import (
     ChainGeometryFacts,
+    ChainShapeHint,
     GeometryFactSnapshot,
     PatchGeometryFacts,
     Vector3,
@@ -24,12 +25,17 @@ from scaffold_core.layer_2_geometry.measures import (
     EPSILON,
     add,
     average,
+    dot,
     length,
     normalize,
     scale,
     subtract,
     triangle_area_normal_centroid,
 )
+
+
+STRAIGHTNESS_TOLERANCE = 1.0e-6
+SAWTOOTH_DETOUR_RATIO = 1.02
 
 
 def build_geometry_facts(
@@ -118,13 +124,27 @@ def _build_chain_geometry_facts(
     diagnostics: list[Diagnostic],
 ) -> ChainGeometryFacts:
     length_total = 0.0
+    segment_vectors: list[Vector3] = []
     for source_edge_id in chain.source_edge_ids:
         start, end = _source_edge_points(source, source_edge_id)
-        length_total += length(subtract(end, start))
+        segment = subtract(end, start)
+        segment_vectors.append(segment)
+        length_total += length(segment)
 
     start_point = _topology_vertex_point(source, topology.vertices[chain.start_vertex_id])
     end_point = _topology_vertex_point(source, topology.vertices[chain.end_vertex_id])
     chord = subtract(end_point, start_point)
+    chord_length = length(chord)
+    chord_direction = normalize(chord)
+    straightness = chord_length / length_total if length_total > EPSILON else 0.0
+    detour_ratio = length_total / chord_length if chord_length > EPSILON else 0.0
+    shape_hint = _chain_shape_hint(
+        length_total,
+        chord_length,
+        detour_ratio,
+        segment_vectors,
+        chord_direction,
+    )
 
     if length_total <= EPSILON:
         diagnostics.append(
@@ -141,8 +161,38 @@ def _build_chain_geometry_facts(
     return ChainGeometryFacts(
         chain_id=chain.id,
         length=length_total,
-        chord_direction=normalize(chord),
+        chord_length=chord_length,
+        chord_direction=chord_direction,
+        straightness=straightness,
+        detour_ratio=detour_ratio,
+        shape_hint=shape_hint,
     )
+
+
+def _chain_shape_hint(
+    length_total: float,
+    chord_length: float,
+    detour_ratio: float,
+    segment_vectors: list[Vector3],
+    chord_direction: Vector3,
+) -> ChainShapeHint:
+    if length_total <= EPSILON or chord_length <= EPSILON:
+        return ChainShapeHint.UNKNOWN
+    if abs(1.0 - (chord_length / length_total)) <= STRAIGHTNESS_TOLERANCE:
+        return ChainShapeHint.STRAIGHT
+    if detour_ratio >= SAWTOOTH_DETOUR_RATIO and _segments_advance_along_chord(
+        segment_vectors,
+        chord_direction,
+    ):
+        return ChainShapeHint.SAWTOOTH_STRAIGHT
+    return ChainShapeHint.UNKNOWN
+
+
+def _segments_advance_along_chord(
+    segment_vectors: list[Vector3],
+    chord_direction: Vector3,
+) -> bool:
+    return all(dot(segment, chord_direction) > EPSILON for segment in segment_vectors)
 
 
 def _build_vertex_geometry_facts(

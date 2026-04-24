@@ -8,10 +8,14 @@ Rules:
 
 from __future__ import annotations
 
+from math import isclose
+
 from scaffold_core.core.diagnostics import DiagnosticSeverity
 from scaffold_core.ids import ChainId, PatchId, VertexId
 from scaffold_core.layer_1_topology.build import build_topology_snapshot
 from scaffold_core.layer_2_geometry.build import build_geometry_facts
+from scaffold_core.layer_2_geometry.facts import ChainShapeHint
+from scaffold_core.tests.fixtures.chain_shape_geometry import make_chain_shape_source_and_topology
 from scaffold_core.tests.fixtures.degenerate_geometry import make_degenerate_triangle_source
 from scaffold_core.tests.fixtures.l_shape import make_two_quad_l_source
 from scaffold_core.tests.fixtures.single_patch import make_single_quad_source
@@ -28,7 +32,11 @@ def test_single_quad_geometry_facts_are_measured() -> None:
     assert patch.normal == (0.0, 0.0, 1.0)
     assert patch.centroid == (0.5, 0.5, 0.0)
     assert facts.chain_facts[ChainId("chain:e0")].length == 1.0
+    assert facts.chain_facts[ChainId("chain:e0")].chord_length == 1.0
     assert facts.chain_facts[ChainId("chain:e0")].chord_direction == (1.0, 0.0, 0.0)
+    assert facts.chain_facts[ChainId("chain:e0")].straightness == 1.0
+    assert facts.chain_facts[ChainId("chain:e0")].detour_ratio == 1.0
+    assert facts.chain_facts[ChainId("chain:e0")].shape_hint is ChainShapeHint.STRAIGHT
     assert facts.vertex_facts[VertexId("vertex:v0")].position == (0.0, 0.0, 0.0)
 
 
@@ -57,3 +65,23 @@ def test_degenerate_geometry_emits_degraded_diagnostics() -> None:
         diagnostic.severity is DiagnosticSeverity.DEGRADED
         for diagnostic in facts.diagnostics
     )
+
+
+def test_chain_shape_hints_measure_straightness_and_detour() -> None:
+    source, topology = make_chain_shape_source_and_topology()
+
+    facts = build_geometry_facts(source, topology)
+
+    straight = facts.chain_facts[ChainId("chain:straight")]
+    assert straight.length == 2.0
+    assert straight.chord_length == 2.0
+    assert straight.straightness == 1.0
+    assert straight.detour_ratio == 1.0
+    assert straight.shape_hint is ChainShapeHint.STRAIGHT
+
+    sawtooth = facts.chain_facts[ChainId("chain:sawtooth")]
+    assert sawtooth.chord_length == 3.0
+    assert sawtooth.length > sawtooth.chord_length
+    assert isclose(sawtooth.straightness, sawtooth.chord_length / sawtooth.length)
+    assert isclose(sawtooth.detour_ratio, sawtooth.length / sawtooth.chord_length)
+    assert sawtooth.shape_hint is ChainShapeHint.SAWTOOTH_STRAIGHT

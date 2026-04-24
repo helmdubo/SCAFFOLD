@@ -177,6 +177,8 @@ scaffold_core/layer_2_geometry/build.py
 
 G2a includes raw patch area/normal/centroid, chain length/chord direction,
 vertex position and degraded diagnostics for degenerate patch/chain geometry.
+G2b adds chain chord length, straightness, detour ratio and raw shape hints
+including `SAWTOOTH_STRAIGHT`.
 
 Implemented test fixtures:
 
@@ -187,6 +189,7 @@ seam_self.py
 non_manifold.py
 corner_touch.py
 degenerate_geometry.py
+chain_shape_geometry.py
 ```
 
 Implemented tests:
@@ -228,7 +231,7 @@ Recent implementation:
 Commit 26dbd6a implements G1 topology segmentation policy and Blender inspection.
 Commit ca7cd72 adds normal shared Chain diagnostics.
 Full local verification at the time of handoff: python -m pytest scaffold_core/tests -q
-Result: 33 passed.
+Result: 34 passed.
 Blender smoke test: cube with all faces selected and seam loop around one face produced
 1 Shell, 2 Patches, 4 Chains and 8 ChainUses.
 ```
@@ -268,11 +271,11 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 ## What is not done yet
 
-### Must do next in G2b
+### Must do next
 
-- Decide whether to add straightness, detour ratio and shape hints.
-- Keep sawtooth-straight as a geometry classifier only.
-- Do not derive alignment, world orientation, relation or runtime roles.
+- Review whether G2 is sufficient for G3 relation work.
+- If yes, transition to G3 before creating `layer_3_relations/`.
+- If more G2 work is needed, keep it limited to raw measured geometry facts.
 
 ### Explicitly not part of G2a
 
@@ -292,8 +295,8 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 Review G2a, then choose the next slice:
 
-1. G2b straightness / detour / shape hints.
-2. G3 phase transition for derived relations.
+1. G3 phase transition for derived relations.
+2. Additional raw geometry measurements, if needed.
 3. Defer Blender UI, runtime solve and transfer work until their phases.
 
 ---

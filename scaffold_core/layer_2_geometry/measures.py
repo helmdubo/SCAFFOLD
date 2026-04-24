@@ -37,6 +37,10 @@ def cross(left: Vector3, right: Vector3) -> Vector3:
     )
 
 
+def dot(left: Vector3, right: Vector3) -> float:
+    return left[0] * right[0] + left[1] * right[1] + left[2] * right[2]
+
+
 def length(vector: Vector3) -> float:
     return sqrt(vector[0] * vector[0] + vector[1] * vector[1] + vector[2] * vector[2])
 
