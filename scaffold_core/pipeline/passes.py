@@ -35,7 +35,7 @@ def run_pass_0(source_snapshot: SourceMeshSnapshot) -> PipelineContext:
     )
 
 
-def run_pass_1(context: PipelineContext) -> PipelineContext:
+def run_pass_1_relations(context: PipelineContext) -> PipelineContext:
     """Run G3 Pass 1 relation building from topology and geometry facts."""
 
     if context.topology_snapshot is None or context.geometry_facts is None:

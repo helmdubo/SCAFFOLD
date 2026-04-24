@@ -20,7 +20,7 @@ from scaffold_core.ids import ChainId, ChainUseId, PatchId
 class DihedralKind(str, Enum):
     """Coarse signed dihedral classification for adjacent Patches."""
 
-    UNKNOWN = "UNKNOWN"
+    UNDEFINED = "UNDEFINED"
     COPLANAR = "COPLANAR"
     CONVEX = "CONVEX"
     CONCAVE = "CONCAVE"

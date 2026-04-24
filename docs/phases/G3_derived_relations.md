@@ -118,3 +118,5 @@ G3a is acceptable when:
 5. `DihedralKind` is stored on `PatchAdjacency`.
 6. Pipeline output can carry a relation snapshot.
 7. Layer 3 does not import Layer 4, Layer 5, API, UI or Blender modules.
+8. Layer 3 stores no H/V, WALL/FLOOR/SLOPE, Feature, runtime, UV, or solve roles.
+9. G3a relation builder does not use `WORLD_UP`.

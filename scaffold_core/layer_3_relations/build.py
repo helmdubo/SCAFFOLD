@@ -63,7 +63,7 @@ def _build_patch_adjacency(
     edge_direction = _chain_use_direction(topology, geometry, first_use)
     if length(first_normal) == 0.0 or length(second_normal) == 0.0 or length(edge_direction) == 0.0:
         signed_angle = 0.0
-        dihedral_kind = DihedralKind.UNKNOWN
+        dihedral_kind = DihedralKind.UNDEFINED
     else:
         signed_angle = _signed_angle(first_normal, second_normal, edge_direction)
         dihedral_kind = _dihedral_kind(signed_angle)
@@ -110,4 +110,4 @@ def _dihedral_kind(signed_angle: float) -> DihedralKind:
         return DihedralKind.CONVEX
     if signed_angle < 0.0:
         return DihedralKind.CONCAVE
-    return DihedralKind.UNKNOWN
+    return DihedralKind.UNDEFINED
