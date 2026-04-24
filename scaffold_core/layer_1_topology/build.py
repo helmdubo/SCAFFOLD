@@ -221,7 +221,7 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
         shell_patch_ids: list[PatchId] = []
 
         for patch_face_ids_tuple in patch_components:
-            patch_id = PatchId(f"patch:{patch_face_ids_tuple[0]}")
+            patch_id = PatchId(f"patch:seed:{patch_face_ids_tuple[0]}")
             shell_patch_ids.append(patch_id)
             patch_face_ids[patch_id] = patch_face_ids_tuple
             patch_shell_ids[patch_id] = shell_id
