@@ -30,6 +30,23 @@ G1 implements only:
 
 Future layers are intentionally not created yet.
 
+## Versioning
+
+Scaffold uses three separate numbering systems:
+
+```text
+G0 vX.Y:
+  architecture contract version
+
+G1 / G2 / G3 / ...:
+  implementation phase names
+
+bl_info.version:
+  Blender add-on semantic version
+```
+
+Example: `G0 v1.1`, `G1`, and `bl_info.version = (0, 1, 0)` can all be true at the same time.
+
 ## G1 segmentation policy
 
 Patch segmentation is seam-only by default.
@@ -77,6 +94,8 @@ The Blender add-on wrapper may later live separately as:
 ```text
 scaffold/
 ```
+
+The add-on wrapper is intentionally deferred during G1. Do not create `scaffold/` during G1.
 
 Recommended Blender add-on metadata:
 
