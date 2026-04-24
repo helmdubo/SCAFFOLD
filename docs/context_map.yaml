@@ -1,0 +1,54 @@
+current_phase: G1
+
+canonical_docs:
+  architecture: G0.md
+  agent_router: AGENTS.md
+  anti_over_editing: SKILL.md
+
+phase_allowed_dirs:
+  G1:
+    - scaffold_core/core
+    - scaffold_core/layer_0_source
+    - scaffold_core/layer_1_topology
+    - scaffold_core/pipeline
+    - scaffold_core/tests
+
+phase_forbidden_dirs:
+  G1:
+    - scaffold_core/layer_2_geometry
+    - scaffold_core/layer_3_relations
+    - scaffold_core/layer_4_features
+    - scaffold_core/layer_5_runtime
+    - scaffold_core/api
+    - scaffold_core/ui
+
+task_routes:
+  architecture:
+    - G0.md
+  design_decisions:
+    - docs/architecture/design_decisions.md
+  g1_topology:
+    - docs/phases/G1_topology_snapshot.md
+    - docs/layers/layer_1_topology.md
+  source_snapshot:
+    - docs/layers/layer_0_source.md
+  imports:
+    - docs/agent_rules/import_boundaries.md
+  bug_fix:
+    - docs/agent_rules/minimal_patch_protocol.md
+  testing:
+    - docs/agent_rules/testing_rules.md
+  blender_io:
+    - docs/agent_rules/blender_boundaries.md
+  overengineering:
+    - docs/agent_rules/anti_overengineering.md
+  file_tree:
+    - docs/reference/file_tree_target.md
+
+layer_order:
+  - layer_0_source
+  - layer_1_topology
+  - layer_2_geometry
+  - layer_3_relations
+  - layer_4_features
+  - layer_5_runtime
