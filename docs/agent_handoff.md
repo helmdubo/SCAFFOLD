@@ -146,6 +146,15 @@ the old fixture baseline:
 - BoundaryLoops, Chains and ChainUses are built from real Patch boundary uses.
 ```
 
+`validate_chain_cardinality()` classifies all G1 Chain cardinality cases:
+
+```text
+- TOPOLOGY_CHAIN_BORDER
+- TOPOLOGY_CHAIN_SHARED
+- TOPOLOGY_CHAIN_SEAM_SELF
+- TOPOLOGY_CHAIN_NON_MANIFOLD
+```
+
 Blender source mesh inspection is available without an add-on UI through:
 
 ```text
@@ -198,8 +207,9 @@ Recent implementation:
 
 ```text
 Commit 26dbd6a implements G1 topology segmentation policy and Blender inspection.
+Commit ca7cd72 adds normal shared Chain diagnostics.
 Full local verification at the time of handoff: python -m pytest scaffold_core/tests -q
-Result: 28 passed.
+Result: 29 passed.
 Blender smoke test: cube with all faces selected and seam loop around one face produced
 1 Shell, 2 Patches, 4 Chains and 8 ChainUses.
 ```
@@ -254,9 +264,7 @@ The core G1 topology policy items listed in the previous handoff are now done:
 
 Remaining before declaring G1 complete:
 
-- Review G1 acceptance against `docs/phases/G1_topology_snapshot.md`.
-- Decide whether `pipeline/inspection.py` is sufficient debug surface for G1,
-  or whether add-on/UI work should remain deferred to a later phase.
+- Decide whether to mark G1 complete in project planning.
 - Keep Blender UI, UV transfer and future layer work out of G1 unless G0/phase
   docs are amended.
 
@@ -275,13 +283,12 @@ Remaining before declaring G1 complete:
 
 ## Recommended next task
 
-Do a G1 completion review:
+Choose the next phase direction:
 
-1. Re-run `python -m pytest scaffold_core/tests -q`.
-2. Compare implemented behavior to `docs/phases/G1_topology_snapshot.md`.
-3. Update the phase/handoff docs if G1 is considered complete.
-4. Do not start Layer 2 / Geometry Facts, UV transfer, Blender UI or add-on
-   wrapper work without an explicit phase decision.
+1. Mark G1 complete in planning docs if the owner accepts the current debug surface.
+2. Open an explicit phase decision before starting Layer 2 / Geometry Facts.
+3. Keep UV transfer, Blender UI and add-on wrapper work out of scope without
+   an explicit phase decision.
 
 ---
 
