@@ -1,4 +1,4 @@
-current_phase: G2
+current_phase: G3
 
 canonical_docs:
   architecture: G0.md
@@ -19,6 +19,14 @@ phase_allowed_dirs:
     - scaffold_core/layer_2_geometry
     - scaffold_core/pipeline
     - scaffold_core/tests
+  G3:
+    - scaffold_core/core
+    - scaffold_core/layer_0_source
+    - scaffold_core/layer_1_topology
+    - scaffold_core/layer_2_geometry
+    - scaffold_core/layer_3_relations
+    - scaffold_core/pipeline
+    - scaffold_core/tests
 
 phase_forbidden_dirs:
   G1:
@@ -30,6 +38,11 @@ phase_forbidden_dirs:
     - scaffold_core/ui
   G2:
     - scaffold_core/layer_3_relations
+    - scaffold_core/layer_4_features
+    - scaffold_core/layer_5_runtime
+    - scaffold_core/api
+    - scaffold_core/ui
+  G3:
     - scaffold_core/layer_4_features
     - scaffold_core/layer_5_runtime
     - scaffold_core/api
@@ -48,6 +61,9 @@ task_routes:
     - docs/architecture/segmentation_shell_policy.md
   g2_geometry:
     - docs/phases/G2_geometry_facts.md
+    - docs/architecture/G0_full.md
+  g3_relations:
+    - docs/phases/G3_derived_relations.md
     - docs/architecture/G0_full.md
   source_snapshot:
     - docs/layers/layer_0_source.md

@@ -38,19 +38,18 @@ from scaffold_core.pipeline.context import PipelineContext
 
 Layer builder functions may type-reference `PipelineContext` when needed, but must not control pass order.
 
-## G2 forbidden future directories
+## G3 forbidden future directories
 
-During G2, the following future-phase directories must not exist:
+During G3, the following future-phase directories must not exist:
 
 ```text
-scaffold_core/layer_3_relations/
 scaffold_core/layer_4_features/
 scaffold_core/layer_5_runtime/
 scaffold_core/api/
 scaffold_core/ui/
 ```
 
-`scaffold_core/layer_2_geometry/` is allowed during G2.
+`scaffold_core/layer_2_geometry/` and `scaffold_core/layer_3_relations/` are allowed during G3.
 
 ## Enforced by test
 

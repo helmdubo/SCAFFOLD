@@ -18,17 +18,18 @@ scaffold_core/             # core implementation package
 ## Current phase
 
 ```text
-G2 — Geometry Facts
+G3 - Derived Relations
 ```
 
-G2 adds Layer 2 raw geometry facts on top of completed G1 topology:
+G3 derives relations from completed G1 topology and G2 geometry:
 
 - Layer 0 — Source Mesh Snapshot
 - Layer 1 — Immutable Topology Snapshot
 - Layer 2 — Geometry Facts
-- Pipeline Pass 0 with topology and geometry snapshots
+- Layer 3 - Derived Relations
+- Pipeline relation-building integration
 
-Future relation, feature, runtime, API and UI layers are intentionally not created yet.
+Future feature, runtime, API and UI layers are intentionally not created yet.
 
 ## Versioning
 
@@ -81,6 +82,19 @@ degenerate geometry diagnostics
 Layer 2 must not contain semantic roles, alignment classes, world orientation,
 feature facts, pin facts or UV solve facts.
 
+## G3 relations policy
+
+Initial G3a work is limited to:
+
+```text
+PatchAdjacency
+DihedralKind
+RelationSnapshot
+```
+
+Continuation, junction relations, AlignmentClass, PatchAxes and
+WorldOrientation are deferred to later G3 slices.
+
 ## Agent workflow
 
 Agents should read `AGENTS.md` first.
@@ -112,7 +126,7 @@ The Blender add-on wrapper may later live separately as:
 scaffold/
 ```
 
-The add-on wrapper is intentionally deferred during G2. Do not create `scaffold/` during G2.
+The add-on wrapper is intentionally deferred during G3. Do not create `scaffold/` during G3.
 
 Recommended Blender add-on metadata:
 
@@ -151,8 +165,9 @@ scaffold_core/tests/test_module_docstrings.py
 |---|---|
 | Architecture contract | `G0.md` |
 | Full architecture reference | `docs/architecture/G0_full.md` |
-| Current phase | `docs/phases/G2_geometry_facts.md` |
-| G2 geometry facts | `docs/phases/G2_geometry_facts.md` |
+| Current phase | `docs/phases/G3_derived_relations.md` |
+| G2 geometry facts | docs/phases/G2_geometry_facts.md |
+| G3 derived relations | docs/phases/G3_derived_relations.md |
 | Segmentation / shell policy | `docs/architecture/segmentation_shell_policy.md` |
 | Layer 0 contract | `docs/layers/layer_0_source.md` |
 | Layer 1 contract | `docs/layers/layer_1_topology.md` |

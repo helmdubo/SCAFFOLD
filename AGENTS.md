@@ -23,24 +23,24 @@ docs/context_map.yaml
 ## Current phase
 
 ```text
-G2 — Geometry Facts
+G3 - Derived Relations
 ```
 
-Allowed during G2:
+Allowed during G3:
 
 ```text
 scaffold_core/core/
 scaffold_core/layer_0_source/
 scaffold_core/layer_1_topology/
 scaffold_core/layer_2_geometry/
+scaffold_core/layer_3_relations/
 scaffold_core/pipeline/
 scaffold_core/tests/
 ```
 
-Forbidden during G2:
+Forbidden during G3:
 
 ```text
-scaffold_core/layer_3_relations/
 scaffold_core/layer_4_features/
 scaffold_core/layer_5_runtime/
 scaffold_core/api/
@@ -74,6 +74,7 @@ Before coding, read only the routed docs needed for the task.
 | Any architecture question | `G0.md` |
 | G1 topology work | `docs/phases/G1_topology_snapshot.md` + `docs/layers/layer_1_topology.md` + `docs/architecture/segmentation_shell_policy.md` |
 | G2 geometry facts | `docs/phases/G2_geometry_facts.md` + `docs/architecture/G0_full.md` |
+| G3 derived relations | `docs/phases/G3_derived_relations.md` + `docs/architecture/G0_full.md` |
 | Patch segmentation / shell detection | `docs/architecture/segmentation_shell_policy.md` |
 | Source mesh snapshot | `docs/layers/layer_0_source.md` |
 | Import rule / new file | `docs/agent_rules/import_boundaries.md` |
@@ -137,7 +138,34 @@ Pin
 UV
 ```
 
-Sawtooth/straightness work is deferred to a later G2b slice unless explicitly requested.
+Sawtooth/straightness work exists only as raw G2 geometry facts.
+
+---
+
+## G3 relations rule
+
+Layer 3 stores derived relations over topology and geometry.
+
+Initial G3a scope:
+
+```text
+PatchAdjacency
+DihedralKind
+RelationSnapshot
+```
+
+Deferred G3 slices:
+
+```text
+ChainContinuationRelation
+Junction relations
+AlignmentClass
+PatchAxes
+WorldOrientation
+```
+
+Layer 3 must not import or depend on Layer 4 features, Layer 5 runtime/solve,
+UV transfer, API, UI or Blender modules.
 
 ---
 

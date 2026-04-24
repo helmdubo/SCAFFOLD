@@ -11,16 +11,17 @@ Read this after `AGENTS.md` and before changing code.
 ```text
 Project: Scaffold
 Core package: scaffold_core/
-Current phase: G2 — Geometry Facts
+Current phase: G3 - Derived Relations
 Architecture: immutable B-rep-inspired interpretation pipeline
 ```
 
-Scaffold Core currently focuses on the G2 foundation:
+Scaffold Core currently focuses on the G3 foundation:
 
 ```text
 Layer 0 — Source Mesh Snapshot
 Layer 1 — Immutable Topology Snapshot
 Layer 2 — Geometry Facts
+Layer 3 - Derived Relations
 Pipeline Pass 0
 Diagnostics
 ```
@@ -28,16 +29,15 @@ Diagnostics
 Future layers are intentionally not created yet:
 
 ```text
-layer_3_relations/
 layer_4_features/
 layer_5_runtime/
 api/
 ui/
 ```
 
-Do not create them during G2.
+Do not create them during G3.
 
-The Blender add-on wrapper package `scaffold/` is also intentionally deferred during G2. Do not create it until an explicit UI/add-on phase begins, likely no earlier than G5 / UV transfer / UI integration work.
+The Blender add-on wrapper package `scaffold/` is also intentionally deferred during G3. Do not create it until an explicit UI/add-on phase begins, likely no earlier than G5 / UV transfer / UI integration work.
 
 ---
 
@@ -45,7 +45,7 @@ The Blender add-on wrapper package `scaffold/` is also intentionally deferred du
 
 1. `AGENTS.md`
 2. `docs/context_map.yaml`
-3. `docs/phases/G2_geometry_facts.md`
+3. `docs/phases/G3_derived_relations.md`
 4. `docs/architecture/G0_full.md`
 5. `docs/agent_rules/import_boundaries.md`
 6. `docs/agent_rules/anti_overengineering.md`
@@ -96,7 +96,7 @@ scaffold_core/core/
 scaffold_core/layer_0_source/
 scaffold_core/layer_1_topology/
 scaffold_core/layer_2_geometry/
-scaffold_core/pipeline/
+scaffold_core/scaffold_core/pipeline/
 scaffold_core/tests/
 ```
 
@@ -179,6 +179,14 @@ G2a includes raw patch area/normal/centroid, chain length/chord direction,
 vertex position and degraded diagnostics for degenerate patch/chain geometry.
 G2b adds chain chord length, straightness, detour ratio and raw shape hints
 including `SAWTOOTH_STRAIGHT`.
+
+G3 phase transition is active. Initial G3a work should stay limited to:
+
+```text
+PatchAdjacency
+DihedralKind
+RelationSnapshot
+```
 
 Implemented test fixtures:
 
@@ -271,19 +279,22 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 ## What is not done yet
 
-### Must do next
+### Must do next in G3a
 
-- Review whether G2 is sufficient for G3 relation work.
-- If yes, transition to G3 before creating `layer_3_relations/`.
-- If more G2 work is needed, keep it limited to raw measured geometry facts.
+- Add `scaffold_core/layer_3_relations/`.
+- Add frozen Layer 3 relation dataclasses for adjacency.
+- Build `PatchAdjacency` from shared two-patch Chains.
+- Store `DihedralKind` on `PatchAdjacency`, not on `Chain`.
+- Add relation snapshot output to pipeline context.
+- Add G3 tests for normal adjacency and excluded border/SEAM_SELF/non-manifold cases.
 
-### Explicitly not part of G2a
+### Explicitly not part of G3a
 
-- Layer 3 Relations.
 - AlignmentClass.
 - PatchAxes.
 - WorldOrientation.
-- DihedralKind.
+- ChainContinuationRelation.
+- Junction relations.
 - Feature Grammar.
 - Skeleton solve.
 - UV transfer.
@@ -293,21 +304,23 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 ## Recommended next task
 
-Review G2a, then choose the next slice:
+Implement G3a in two commits:
 
-1. G3 phase transition for derived relations.
-2. Additional raw geometry measurements, if needed.
-3. Defer Blender UI, runtime solve and transfer work until their phases.
+1. Phase transition docs: `docs/phases/G3_derived_relations.md`,
+   `docs/context_map.yaml`, `AGENTS.md`, `README.md`, this handoff and
+   import-boundary docs.
+2. Layer 3 adjacency foundation: relation facts, adjacency builder, pipeline
+   integration and focused tests.
 
 ---
 
 ## Agent safety rules
 
 - Do not create future phase directories.
-- Do not create the deferred `scaffold/` add-on wrapper during G2.
+- Do not create the deferred `scaffold/` add-on wrapper during G3.
 - Do not add `utils.py`, `helpers.py`, `manager.py`, `service.py`, `factory.py`, `registry.py`.
-- Do not put H/V, WALL/FLOOR/SLOPE, alignment, world-orientation, feature,
-  pin or UV facts in Layer 2.
+- Do not put Feature, runtime solve, pin or UV facts in Layer 3.
+- Do not feed WorldOrientation labels into base Alignment.
 - Do not import higher layers from lower layers.
 - Do not import `pipeline.passes` or `pipeline.validator` from layer code.
 - Do not touch `G0.md` unless the task is explicitly an architecture amendment.
