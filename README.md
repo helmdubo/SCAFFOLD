@@ -30,6 +30,23 @@ G1 implements only:
 
 Future layers are intentionally not created yet.
 
+## G1 segmentation policy
+
+Patch segmentation is seam-only by default.
+
+Patch flood fill is blocked by:
+
+```text
+mesh/selection border
+non-manifold selected edge
+explicit Scaffold boundary mark
+Blender UV Seam
+```
+
+Blender Sharp is not a default Patch boundary source.
+
+A future optional command may support `make seams by sharps`, but Sharp must not become a hidden default segmentation source.
+
 ## Agent workflow
 
 Agents should read `AGENTS.md` first.
@@ -99,6 +116,7 @@ scaffold_core/tests/test_module_docstrings.py
 | Architecture contract | `G0.md` |
 | Full architecture reference | `docs/architecture/G0_full.md` |
 | Current phase | `docs/phases/G1_topology_snapshot.md` |
+| Segmentation / shell policy | `docs/architecture/segmentation_shell_policy.md` |
 | Layer 0 contract | `docs/layers/layer_0_source.md` |
 | Layer 1 contract | `docs/layers/layer_1_topology.md` |
 | Import boundaries | `docs/agent_rules/import_boundaries.md` |
