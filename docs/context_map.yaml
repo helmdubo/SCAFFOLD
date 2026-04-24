@@ -27,9 +27,12 @@ task_routes:
     - G0.md
   design_decisions:
     - docs/architecture/design_decisions.md
+  segmentation_shell_policy:
+    - docs/architecture/segmentation_shell_policy.md
   g1_topology:
     - docs/phases/G1_topology_snapshot.md
     - docs/layers/layer_1_topology.md
+    - docs/architecture/segmentation_shell_policy.md
   source_snapshot:
     - docs/layers/layer_0_source.md
   imports:
