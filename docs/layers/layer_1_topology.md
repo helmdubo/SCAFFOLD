@@ -27,6 +27,54 @@ Layer 1 is intentionally ignorant of:
 - topology invariants
 - topology queries
 
+## G1 Patch segmentation policy
+
+Patch segmentation uses selected-face flood fill.
+
+A source edge blocks Patch flood fill and becomes a Patch boundary if:
+
+```text
+- it is a mesh/selection border;
+- it is non-manifold in selected scope;
+- it has an explicit Scaffold boundary mark;
+- it has a Blender UV Seam.
+```
+
+Blender Sharp is **not** a default Patch boundary source in G1.
+
+A future optional command/flag may support:
+
+```text
+make seams by sharps
+```
+
+That option should convert sharp information into seam/boundary input before segmentation. It must not make Sharp a hidden default segmentation source.
+
+Not default in G1:
+
+```text
+- Blender Sharp;
+- material boundary;
+- normal angle threshold;
+- existing UV island boundary.
+```
+
+## G1 Shell detection policy
+
+Shell detection uses edge-connected components of selected faces.
+
+Shell connectivity ignores Patch segmentation boundaries:
+
+```text
+seams / explicit Scaffold boundary marks:
+  may split Patches
+  do not split Shells
+```
+
+Vertex-only contact does not connect Shells.
+
+Non-manifold edge connectivity keeps faces in the same Shell candidate, but emits a degraded non-manifold diagnostic.
+
 ## ChainUse rule
 
 `ChainUse` is mandatory.
