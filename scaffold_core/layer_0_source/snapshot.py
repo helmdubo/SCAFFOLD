@@ -41,6 +41,12 @@ class MeshFaceRef:
 
 @dataclass(frozen=True)
 class SourceMeshSnapshot:
+    """Immutable source mesh snapshot.
+
+    checksum is optional source provenance for future rebuild detection.
+    G1 fixtures may leave it None.
+    """
+
     id: SourceMeshId
     vertices: Mapping[SourceVertexId, MeshVertexRef]
     edges: Mapping[SourceEdgeId, MeshEdgeRef]
