@@ -12,15 +12,22 @@ Rules:
 
 from __future__ import annotations
 
+from collections import defaultdict
+from dataclasses import dataclass
+
 from scaffold_core.ids import (
     BoundaryLoopId,
     ChainId,
     ChainUseId,
     PatchId,
     ShellId,
+    SourceEdgeId,
+    SourceFaceId,
+    SourceVertexId,
     SurfaceModelId,
     VertexId,
 )
+from scaffold_core.layer_0_source.marks import SourceMarkKind
 from scaffold_core.layer_0_source.snapshot import SourceMeshSnapshot
 from scaffold_core.layer_1_topology.model import (
     BoundaryLoop,
@@ -34,17 +41,154 @@ from scaffold_core.layer_1_topology.model import (
 )
 
 
+@dataclass(frozen=True)
+class _BoundarySide:
+    face_id: SourceFaceId
+    edge_id: SourceEdgeId
+    edge_index: int
+    chain_id: ChainId
+    start_vertex_id: VertexId
+    end_vertex_id: VertexId
+    orientation_sign: int
+
+
+def selected_face_ids(source: SourceMeshSnapshot) -> tuple[SourceFaceId, ...]:
+    """Return selected faces, or all source faces when no explicit selection exists."""
+
+    return tuple(source.selected_face_ids) or tuple(source.faces.keys())
+
+
+def selected_edge_incidence(
+    source: SourceMeshSnapshot,
+    face_ids: tuple[SourceFaceId, ...],
+) -> dict[SourceEdgeId, tuple[SourceFaceId, ...]]:
+    """Map each source edge to selected faces that use it."""
+
+    selected = set(face_ids)
+    incidence: dict[SourceEdgeId, list[SourceFaceId]] = defaultdict(list)
+    for face_id in face_ids:
+        face = source.faces[face_id]
+        for edge_id in face.edge_ids:
+            if face_id in selected:
+                incidence[edge_id].append(face_id)
+    return {edge_id: tuple(edge_face_ids) for edge_id, edge_face_ids in incidence.items()}
+
+
+def marked_patch_boundary_edge_ids(source: SourceMeshSnapshot) -> set[SourceEdgeId]:
+    """Return source edges explicitly marked as G1 Patch boundaries."""
+
+    boundary_edge_ids: set[SourceEdgeId] = set()
+    source_edge_ids = set(source.edges)
+    for mark in source.marks:
+        if mark.target_id not in source_edge_ids or not mark.value:
+            continue
+        if mark.kind in (SourceMarkKind.SEAM, SourceMarkKind.USER):
+            boundary_edge_ids.add(SourceEdgeId(mark.target_id))
+    return boundary_edge_ids
+
+
+def is_patch_boundary_edge(
+    edge_id: SourceEdgeId,
+    selected_incident_face_ids: tuple[SourceFaceId, ...],
+    boundary_mark_edge_ids: set[SourceEdgeId],
+) -> bool:
+    """Return whether a selected source edge blocks G1 Patch flood fill."""
+
+    if len(selected_incident_face_ids) != 2:
+        return True
+    return edge_id in boundary_mark_edge_ids
+
+
+def _edge_connected_face_components(
+    source: SourceMeshSnapshot,
+    face_ids: tuple[SourceFaceId, ...],
+    edge_incidence: dict[SourceEdgeId, tuple[SourceFaceId, ...]],
+    boundary_mark_edge_ids: set[SourceEdgeId] | None = None,
+) -> tuple[tuple[SourceFaceId, ...], ...]:
+    components: list[tuple[SourceFaceId, ...]] = []
+    face_order = {face_id: index for index, face_id in enumerate(face_ids)}
+    remaining = set(face_ids)
+
+    while remaining:
+        start = min(remaining, key=face_order.__getitem__)
+        stack = [start]
+        component: list[SourceFaceId] = []
+        remaining.remove(start)
+
+        while stack:
+            face_id = stack.pop()
+            component.append(face_id)
+            for edge_id in source.faces[face_id].edge_ids:
+                incident_face_ids = edge_incidence[edge_id]
+                if boundary_mark_edge_ids is not None and is_patch_boundary_edge(
+                    edge_id,
+                    incident_face_ids,
+                    boundary_mark_edge_ids,
+                ):
+                    continue
+                for neighbor_face_id in incident_face_ids:
+                    if neighbor_face_id in remaining:
+                        remaining.remove(neighbor_face_id)
+                        stack.append(neighbor_face_id)
+
+        components.append(tuple(sorted(component, key=face_order.__getitem__)))
+
+    return tuple(components)
+
+
+def _source_edge_orientation_sign(
+    source_edge_vertex_ids: tuple[SourceVertexId, SourceVertexId],
+    face_start: SourceVertexId,
+    face_end: SourceVertexId,
+) -> int:
+    if (face_start, face_end) == source_edge_vertex_ids:
+        return 1
+    if (face_end, face_start) == source_edge_vertex_ids:
+        return -1
+    return 1
+
+
+def _order_boundary_cycles(
+    sides: tuple[_BoundarySide, ...],
+) -> tuple[tuple[tuple[_BoundarySide, ...], bool], ...]:
+    cycles: list[tuple[tuple[_BoundarySide, ...], bool]] = []
+    remaining = sorted(sides, key=lambda side: (str(side.face_id), side.edge_index, str(side.edge_id)))
+
+    while remaining:
+        cycle = [remaining.pop(0)]
+        first_start = cycle[0].start_vertex_id
+        current_end = cycle[0].end_vertex_id
+        closed = current_end == first_start
+
+        while remaining and not closed:
+            next_index = next(
+                (
+                    index
+                    for index, candidate in enumerate(remaining)
+                    if candidate.start_vertex_id == current_end
+                ),
+                None,
+            )
+            if next_index is None:
+                break
+
+            next_side = remaining.pop(next_index)
+            cycle.append(next_side)
+            current_end = next_side.end_vertex_id
+            closed = current_end == first_start
+
+        cycles.append((tuple(cycle), closed))
+
+    return tuple(cycles)
+
+
 def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
-    """Build a minimal Layer 1 topology snapshot from a source mesh snapshot.
+    """Build a Layer 1 topology snapshot from a source mesh snapshot."""
 
-    G1 policy is intentionally simple: all selected faces become patches in one shell.
-    Patch segmentation policy remains an open G0 question and must not be hardcoded here
-    beyond this G1 fixture-oriented baseline.
-    """
-
-    face_ids = tuple(source.selected_face_ids) or tuple(source.faces.keys())
+    face_ids = selected_face_ids(source)
+    edge_incidence = selected_edge_incidence(source, face_ids)
+    boundary_mark_edge_ids = marked_patch_boundary_edge_ids(source)
     model_id = SurfaceModelId(f"surface:{source.id}")
-    shell_id = ShellId("shell:0")
 
     vertices = {
         VertexId(f"vertex:{source_vertex_id}"): Vertex(
@@ -58,14 +202,48 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
     chain_uses: dict[ChainUseId, ChainUse] = {}
     loops: dict[BoundaryLoopId, BoundaryLoop] = {}
     patches: dict[PatchId, Patch] = {}
+    shells: dict[ShellId, Shell] = {}
+    face_to_patch_id: dict[SourceFaceId, PatchId] = {}
+    patch_face_ids: dict[PatchId, tuple[SourceFaceId, ...]] = {}
+    patch_shell_ids: dict[PatchId, ShellId] = {}
+    patch_loop_ids: dict[PatchId, list[BoundaryLoopId]] = defaultdict(list)
 
-    for face_index, face_id in enumerate(face_ids):
+    shell_components = _edge_connected_face_components(source, face_ids, edge_incidence)
+
+    for shell_index, shell_face_ids in enumerate(shell_components):
+        shell_id = ShellId(f"shell:{shell_index}")
+        patch_components = _edge_connected_face_components(
+            source,
+            shell_face_ids,
+            edge_incidence,
+            boundary_mark_edge_ids,
+        )
+        shell_patch_ids: list[PatchId] = []
+
+        for patch_face_ids_tuple in patch_components:
+            patch_id = PatchId(f"patch:{patch_face_ids_tuple[0]}")
+            shell_patch_ids.append(patch_id)
+            patch_face_ids[patch_id] = patch_face_ids_tuple
+            patch_shell_ids[patch_id] = shell_id
+            for face_id in patch_face_ids_tuple:
+                face_to_patch_id[face_id] = patch_id
+
+        shells[shell_id] = Shell(id=shell_id, patch_ids=tuple(shell_patch_ids))
+
+    boundary_sides_by_patch: dict[PatchId, list[_BoundarySide]] = defaultdict(list)
+
+    for face_id in face_ids:
         face = source.faces[face_id]
-        patch_id = PatchId(f"patch:{face_id}")
-        loop_id = BoundaryLoopId(f"loop:{face_id}:0")
-        use_ids: list[ChainUseId] = []
-
+        patch_id = face_to_patch_id[face_id]
         for edge_index, source_edge_id in enumerate(face.edge_ids):
+            selected_incident_face_ids = edge_incidence[source_edge_id]
+            if not is_patch_boundary_edge(
+                source_edge_id,
+                selected_incident_face_ids,
+                boundary_mark_edge_ids,
+            ):
+                continue
+
             source_edge = source.edges[source_edge_id]
             chain_id = ChainId(f"chain:{source_edge_id}")
             start_vertex_id = VertexId(f"vertex:{source_edge.vertex_ids[0]}")
@@ -81,42 +259,81 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
 
             face_start = face.vertex_ids[edge_index]
             face_end = face.vertex_ids[(edge_index + 1) % len(face.vertex_ids)]
-            if (face_start, face_end) == source_edge.vertex_ids:
-                orientation_sign = 1
-            elif (face_end, face_start) == source_edge.vertex_ids:
-                orientation_sign = -1
+            orientation_sign = _source_edge_orientation_sign(source_edge.vertex_ids, face_start, face_end)
+            if orientation_sign == 1:
+                side_start_vertex_id = start_vertex_id
+                side_end_vertex_id = end_vertex_id
             else:
-                orientation_sign = 1
+                side_start_vertex_id = end_vertex_id
+                side_end_vertex_id = start_vertex_id
 
-            use_id = ChainUseId(f"use:{face_id}:{edge_index}")
-            chain_uses[use_id] = ChainUse(
-                id=use_id,
-                chain_id=chain_id,
-                patch_id=patch_id,
-                loop_id=loop_id,
-                orientation_sign=orientation_sign,
-                position_in_loop=edge_index,
+            boundary_sides_by_patch[patch_id].append(
+                _BoundarySide(
+                    face_id=face_id,
+                    edge_id=source_edge_id,
+                    edge_index=edge_index,
+                    chain_id=chain_id,
+                    start_vertex_id=side_start_vertex_id,
+                    end_vertex_id=side_end_vertex_id,
+                    orientation_sign=orientation_sign,
+                )
             )
-            use_ids.append(use_id)
 
-        loops[loop_id] = BoundaryLoop(
-            id=loop_id,
-            patch_id=patch_id,
-            kind=BoundaryLoopKind.OUTER,
-            chain_use_ids=tuple(use_ids),
-            loop_index=0,
+    for patch_id in patch_face_ids:
+        ordered_cycles = _order_boundary_cycles(tuple(boundary_sides_by_patch.get(patch_id, ())))
+        closed_cycles = [
+            (cycle, closed)
+            for cycle, closed in ordered_cycles
+            if closed
+        ]
+        sorted_cycles = sorted(
+            closed_cycles,
+            key=lambda item: (-len(item[0]), str(item[0][0].chain_id) if item[0] else ""),
         )
+        sorted_cycles.extend((cycle, closed) for cycle, closed in ordered_cycles if not closed)
+
+        for loop_index, (cycle, closed) in enumerate(sorted_cycles):
+            loop_id = BoundaryLoopId(f"loop:{patch_id}:{loop_index}")
+            use_ids: list[ChainUseId] = []
+
+            for position_in_loop, side in enumerate(cycle):
+                use_id = ChainUseId(f"use:{patch_id}:{loop_index}:{position_in_loop}")
+                chain_uses[use_id] = ChainUse(
+                    id=use_id,
+                    chain_id=side.chain_id,
+                    patch_id=patch_id,
+                    loop_id=loop_id,
+                    orientation_sign=side.orientation_sign,
+                    position_in_loop=position_in_loop,
+                )
+                use_ids.append(use_id)
+
+            if not closed:
+                loop_kind = BoundaryLoopKind.DEGRADED
+            elif loop_index == 0:
+                loop_kind = BoundaryLoopKind.OUTER
+            else:
+                loop_kind = BoundaryLoopKind.INNER
+
+            loops[loop_id] = BoundaryLoop(
+                id=loop_id,
+                patch_id=patch_id,
+                kind=loop_kind,
+                chain_use_ids=tuple(use_ids),
+                loop_index=loop_index,
+            )
+            patch_loop_ids[patch_id].append(loop_id)
+
         patches[patch_id] = Patch(
             id=patch_id,
-            shell_id=shell_id,
-            loop_ids=(loop_id,),
-            source_face_ids=(face_id,),
+            shell_id=patch_shell_ids[patch_id],
+            loop_ids=tuple(patch_loop_ids[patch_id]),
+            source_face_ids=patch_face_ids[patch_id],
         )
 
-    shell = Shell(id=shell_id, patch_ids=tuple(patches.keys()))
     return SurfaceModel(
         id=model_id,
-        shells={shell_id: shell},
+        shells=shells,
         patches=patches,
         loops=loops,
         chains=chains,

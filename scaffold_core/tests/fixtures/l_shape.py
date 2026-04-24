@@ -9,7 +9,10 @@ Rules:
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from scaffold_core.ids import SourceEdgeId, SourceFaceId, SourceMeshId, SourceVertexId
+from scaffold_core.layer_0_source.marks import SourceMark, SourceMarkKind
 from scaffold_core.layer_0_source.snapshot import (
     MeshEdgeRef,
     MeshFaceRef,
@@ -63,4 +66,37 @@ def make_two_quad_l_source() -> SourceMeshSnapshot:
             f1: MeshFaceRef(f1, (v1, v4, v5, v2), (e4, e5, e6, e1)),
         },
         selected_face_ids=(f0, f1),
+    )
+
+
+def make_two_quad_l_source_with_seam_on_shared_edge() -> SourceMeshSnapshot:
+    """Return the L fixture with the shared source edge marked as a UV seam."""
+
+    source = make_two_quad_l_source()
+    shared_edge_id = SourceEdgeId("e1")
+    return replace(
+        source,
+        marks=(SourceMark(kind=SourceMarkKind.SEAM, target_id=shared_edge_id),),
+    )
+
+
+def make_two_quad_l_source_with_user_boundary_on_shared_edge() -> SourceMeshSnapshot:
+    """Return the L fixture with the shared source edge marked as Scaffold boundary."""
+
+    source = make_two_quad_l_source()
+    shared_edge_id = SourceEdgeId("e1")
+    return replace(
+        source,
+        marks=(SourceMark(kind=SourceMarkKind.USER, target_id=shared_edge_id),),
+    )
+
+
+def make_two_quad_l_source_with_sharp_on_shared_edge() -> SourceMeshSnapshot:
+    """Return the L fixture with the shared source edge marked as Blender Sharp."""
+
+    source = make_two_quad_l_source()
+    shared_edge_id = SourceEdgeId("e1")
+    return replace(
+        source,
+        marks=(SourceMark(kind=SourceMarkKind.SHARP, target_id=shared_edge_id),),
     )

@@ -18,6 +18,7 @@ from scaffold_core.ids import (
     SourceMeshId,
     SourceVertexId,
 )
+from scaffold_core.layer_0_source.marks import SourceMark
 
 
 @dataclass(frozen=True)
@@ -52,4 +53,5 @@ class SourceMeshSnapshot:
     edges: Mapping[SourceEdgeId, MeshEdgeRef]
     faces: Mapping[SourceFaceId, MeshFaceRef]
     selected_face_ids: Sequence[SourceFaceId] = field(default_factory=tuple)
+    marks: Sequence[SourceMark] = field(default_factory=tuple)
     checksum: str | None = None
