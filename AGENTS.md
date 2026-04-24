@@ -72,7 +72,8 @@ Before coding, read only the routed docs needed for the task.
 | Task | Read |
 |---|---|
 | Any architecture question | `G0.md` |
-| G1 topology work | `docs/phases/G1_topology_snapshot.md` + `docs/layers/layer_1_topology.md` |
+| G1 topology work | `docs/phases/G1_topology_snapshot.md` + `docs/layers/layer_1_topology.md` + `docs/architecture/segmentation_shell_policy.md` |
+| Patch segmentation / shell detection | `docs/architecture/segmentation_shell_policy.md` |
 | Source mesh snapshot | `docs/layers/layer_0_source.md` |
 | Import rule / new file | `docs/agent_rules/import_boundaries.md` |
 | Bug fix / regression | `docs/agent_rules/minimal_patch_protocol.md` |
@@ -80,6 +81,25 @@ Before coding, read only the routed docs needed for the task.
 | Blender IO | `docs/agent_rules/blender_boundaries.md` |
 | File split / new abstraction | `docs/agent_rules/anti_overengineering.md` |
 | Design decision lookup | `docs/architecture/design_decisions.md` |
+
+---
+
+## G1 segmentation rule
+
+Patch segmentation is seam-only by default.
+
+Patch flood fill is blocked by:
+
+```text
+mesh/selection border
+non-manifold selected edge
+explicit Scaffold boundary mark
+Blender UV Seam
+```
+
+Blender Sharp is not a default Patch boundary source.
+
+A future optional command may support `make seams by sharps`, but Sharp must not become a hidden default segmentation source.
 
 ---
 
