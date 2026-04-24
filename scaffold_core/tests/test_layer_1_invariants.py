@@ -17,6 +17,7 @@ from scaffold_core.layer_1_topology.invariants import (
     validate_topology,
 )
 from scaffold_core.tests.fixtures.non_manifold import make_non_manifold_chain_model
+from scaffold_core.tests.fixtures.l_shape import make_two_quad_l_source_with_seam_on_shared_edge
 from scaffold_core.tests.fixtures.single_patch import make_single_quad_source
 
 
@@ -56,3 +57,13 @@ def test_non_manifold_chain_is_represented_as_degraded_diagnostic() -> None:
 
     assert any(d.code == "TOPOLOGY_CHAIN_NON_MANIFOLD" for d in diagnostics)
     assert any(d.severity is DiagnosticSeverity.DEGRADED for d in diagnostics)
+
+
+def test_shared_chain_is_represented_as_info_diagnostic() -> None:
+    model = build_topology_snapshot(make_two_quad_l_source_with_seam_on_shared_edge())
+
+    diagnostics = validate_chain_cardinality(model)
+    shared = [d for d in diagnostics if d.code == "TOPOLOGY_CHAIN_SHARED"]
+
+    assert len(shared) == 1
+    assert shared[0].severity is DiagnosticSeverity.INFO

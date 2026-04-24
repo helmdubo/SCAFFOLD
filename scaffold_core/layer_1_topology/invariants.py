@@ -109,6 +109,16 @@ def validate_chain_cardinality(model: SurfaceModel) -> tuple[Diagnostic, ...]:
                     entity_ids=(str(chain_id), *use_ids),
                 )
             )
+        elif use_count == 2 and unique_patch_count == 2:
+            diagnostics.append(
+                Diagnostic(
+                    code="TOPOLOGY_CHAIN_SHARED",
+                    severity=DiagnosticSeverity.INFO,
+                    message="Chain is shared by two different Patches.",
+                    source="layer_1_topology.invariants.validate_chain_cardinality",
+                    entity_ids=(str(chain_id), *use_ids),
+                )
+            )
         elif use_count > 2:
             diagnostics.append(
                 Diagnostic(
