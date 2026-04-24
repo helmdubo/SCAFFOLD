@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from scaffold_core.core.diagnostics import DiagnosticReport
 from scaffold_core.layer_0_source.snapshot import SourceMeshSnapshot
 from scaffold_core.layer_1_topology.model import SurfaceModel
+from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot
 
 
 @dataclass(frozen=True)
@@ -22,4 +23,5 @@ class PipelineContext:
 
     source_snapshot: SourceMeshSnapshot | None = None
     topology_snapshot: SurfaceModel | None = None
+    geometry_facts: GeometryFactSnapshot | None = None
     diagnostics: DiagnosticReport = DiagnosticReport()

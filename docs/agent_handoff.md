@@ -95,6 +95,7 @@ Implemented packages:
 scaffold_core/core/
 scaffold_core/layer_0_source/
 scaffold_core/layer_1_topology/
+scaffold_core/layer_2_geometry/
 scaffold_core/pipeline/
 scaffold_core/tests/
 ```
@@ -115,6 +116,10 @@ BoundaryLoop
 Chain
 ChainUse
 Vertex
+GeometryFactSnapshot
+PatchGeometryFacts
+ChainGeometryFacts
+VertexGeometryFacts
 PipelineContext
 Diagnostic
 DiagnosticReport
@@ -129,6 +134,7 @@ validate_topology()
 validate_loop_closure()
 validate_chain_cardinality()
 validate_patch_outer_loops()
+build_geometry_facts()
 run_pass_0()
 assert_no_blocking_diagnostics()
 ```
@@ -161,6 +167,17 @@ scaffold_core/layer_0_source/blender_io.py
 scaffold_core/pipeline/inspection.py
 ```
 
+Layer 2 geometry facts are now available through:
+
+```text
+scaffold_core/layer_2_geometry/facts.py
+scaffold_core/layer_2_geometry/measures.py
+scaffold_core/layer_2_geometry/build.py
+```
+
+G2a includes raw patch area/normal/centroid, chain length/chord direction,
+vertex position and degraded diagnostics for degenerate patch/chain geometry.
+
 Implemented test fixtures:
 
 ```text
@@ -169,6 +186,7 @@ l_shape.py
 seam_self.py
 non_manifold.py
 corner_touch.py
+degenerate_geometry.py
 ```
 
 Implemented tests:
@@ -191,6 +209,8 @@ test_sharp_does_not_split_patch.py
 test_multi_face_patch_loop.py
 test_blender_io.py
 test_pipeline_inspection.py
+test_layer_2_geometry_facts.py
+test_layer_2_no_semantic_roles.py
 ```
 
 Recent cleanup:
@@ -208,7 +228,7 @@ Recent implementation:
 Commit 26dbd6a implements G1 topology segmentation policy and Blender inspection.
 Commit ca7cd72 adds normal shared Chain diagnostics.
 Full local verification at the time of handoff: python -m pytest scaffold_core/tests -q
-Result: 29 passed.
+Result: 33 passed.
 Blender smoke test: cube with all faces selected and seam loop around one face produced
 1 Shell, 2 Patches, 4 Chains and 8 ChainUses.
 ```
@@ -248,15 +268,11 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 ## What is not done yet
 
-### Must do next in G2a
+### Must do next in G2b
 
-- Add `scaffold_core/layer_2_geometry/`.
-- Add frozen Layer 2 facts dataclasses.
-- Implement raw patch, chain and vertex measurements.
-- Emit degraded diagnostics for degenerate geometry.
-- Extend `PipelineContext` and `run_pass_0()` with geometry facts.
-- Add G2 tests for single quad, multi-face patch aggregation,
-  degenerate geometry, import boundaries and semantic-role leakage.
+- Decide whether to add straightness, detour ratio and shape hints.
+- Keep sawtooth-straight as a geometry classifier only.
+- Do not derive alignment, world orientation, relation or runtime roles.
 
 ### Explicitly not part of G2a
 
@@ -274,13 +290,11 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 ## Recommended next task
 
-Implement G2a in two commits:
+Review G2a, then choose the next slice:
 
-1. Phase transition docs: `docs/phases/G2_geometry_facts.md`,
-   `docs/context_map.yaml`, `AGENTS.md`, `README.md`, this handoff and
-   import-boundary docs.
-2. Layer 2 foundation: `facts.py`, `measures.py`, `build.py`, pipeline
-   integration and focused tests.
+1. G2b straightness / detour / shape hints.
+2. G3 phase transition for derived relations.
+3. Defer Blender UI, runtime solve and transfer work until their phases.
 
 ---
 
