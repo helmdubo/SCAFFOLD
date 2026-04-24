@@ -11,24 +11,23 @@ Read this after `AGENTS.md` and before changing code.
 ```text
 Project: Scaffold
 Core package: scaffold_core/
-Current phase: G1 — Topology Snapshot Prototype
+Current phase: G2 — Geometry Facts
 Architecture: immutable B-rep-inspired interpretation pipeline
 ```
 
-Scaffold Core currently focuses on the G1 foundation:
+Scaffold Core currently focuses on the G2 foundation:
 
 ```text
 Layer 0 — Source Mesh Snapshot
 Layer 1 — Immutable Topology Snapshot
+Layer 2 — Geometry Facts
 Pipeline Pass 0
 Diagnostics
-Synthetic tests
 ```
 
 Future layers are intentionally not created yet:
 
 ```text
-layer_2_geometry/
 layer_3_relations/
 layer_4_features/
 layer_5_runtime/
@@ -36,9 +35,9 @@ api/
 ui/
 ```
 
-Do not create them during G1.
+Do not create them during G2.
 
-The Blender add-on wrapper package `scaffold/` is also intentionally deferred during G1. Do not create it until an explicit UI/add-on phase begins, likely no earlier than G5 / UV transfer / UI integration work.
+The Blender add-on wrapper package `scaffold/` is also intentionally deferred during G2. Do not create it until an explicit UI/add-on phase begins, likely no earlier than G5 / UV transfer / UI integration work.
 
 ---
 
@@ -46,11 +45,11 @@ The Blender add-on wrapper package `scaffold/` is also intentionally deferred du
 
 1. `AGENTS.md`
 2. `docs/context_map.yaml`
-3. `docs/phases/G1_topology_snapshot.md`
-4. `docs/layers/layer_1_topology.md`
-5. `docs/architecture/segmentation_shell_policy.md`
-6. `docs/agent_rules/import_boundaries.md`
-7. `docs/agent_rules/anti_overengineering.md`
+3. `docs/phases/G2_geometry_facts.md`
+4. `docs/architecture/G0_full.md`
+5. `docs/agent_rules/import_boundaries.md`
+6. `docs/agent_rules/anti_overengineering.md`
+7. `docs/agent_rules/testing_rules.md`
 8. `docs/agent_rules/minimal_patch_protocol.md` if fixing existing code
 
 Read `G0.md` only when the task touches architecture or phase boundaries.
@@ -249,31 +248,23 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 ## What is not done yet
 
-### Must do before G1 is complete
+### Must do next in G2a
 
-The core G1 topology policy items listed in the previous handoff are now done:
+- Add `scaffold_core/layer_2_geometry/`.
+- Add frozen Layer 2 facts dataclasses.
+- Implement raw patch, chain and vertex measurements.
+- Emit degraded diagnostics for degenerate geometry.
+- Extend `PipelineContext` and `run_pass_0()` with geometry facts.
+- Add G2 tests for single quad, multi-face patch aggregation,
+  degenerate geometry, import boundaries and semantic-role leakage.
 
-- Real selected-face edge graph construction.
-- Shell detection as selected-face edge-connected components.
-- Patch segmentation as flood fill blocked by the G1 boundary predicate.
-- BoundaryLoops from Patch boundary edges.
-- Chains / ChainUses from Patch boundary uses.
-- Tests for seam split, seam-not-shell split, vertex-only Shell split,
-  non-manifold Shell candidate and shared ChainUses.
-- Full local test suite run.
+### Explicitly not part of G2a
 
-Remaining before declaring G1 complete:
-
-- Decide whether to mark G1 complete in project planning.
-- Keep Blender UI, UV transfer and future layer work out of G1 unless G0/phase
-  docs are amended.
-
-### Explicitly not part of G1
-
-- Layer 2 Geometry Facts.
 - Layer 3 Relations.
 - AlignmentClass.
+- PatchAxes.
 - WorldOrientation.
+- DihedralKind.
 - Feature Grammar.
 - Skeleton solve.
 - UV transfer.
@@ -283,21 +274,23 @@ Remaining before declaring G1 complete:
 
 ## Recommended next task
 
-Choose the next phase direction:
+Implement G2a in two commits:
 
-1. Mark G1 complete in planning docs if the owner accepts the current debug surface.
-2. Open an explicit phase decision before starting Layer 2 / Geometry Facts.
-3. Keep UV transfer, Blender UI and add-on wrapper work out of scope without
-   an explicit phase decision.
+1. Phase transition docs: `docs/phases/G2_geometry_facts.md`,
+   `docs/context_map.yaml`, `AGENTS.md`, `README.md`, this handoff and
+   import-boundary docs.
+2. Layer 2 foundation: `facts.py`, `measures.py`, `build.py`, pipeline
+   integration and focused tests.
 
 ---
 
 ## Agent safety rules
 
 - Do not create future phase directories.
-- Do not create the deferred `scaffold/` add-on wrapper during G1.
+- Do not create the deferred `scaffold/` add-on wrapper during G2.
 - Do not add `utils.py`, `helpers.py`, `manager.py`, `service.py`, `factory.py`, `registry.py`.
-- Do not put H/V or WALL/FLOOR/SLOPE on Layer 1 topology entities.
+- Do not put H/V, WALL/FLOOR/SLOPE, alignment, world-orientation, feature,
+  pin or UV facts in Layer 2.
 - Do not import higher layers from lower layers.
 - Do not import `pipeline.passes` or `pipeline.validator` from layer code.
 - Do not touch `G0.md` unless the task is explicitly an architecture amendment.

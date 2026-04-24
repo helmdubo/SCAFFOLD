@@ -23,23 +23,23 @@ docs/context_map.yaml
 ## Current phase
 
 ```text
-G1 — Topology Snapshot Prototype
+G2 — Geometry Facts
 ```
 
-Allowed during G1:
+Allowed during G2:
 
 ```text
 scaffold_core/core/
 scaffold_core/layer_0_source/
 scaffold_core/layer_1_topology/
+scaffold_core/layer_2_geometry/
 scaffold_core/pipeline/
 scaffold_core/tests/
 ```
 
-Forbidden during G1:
+Forbidden during G2:
 
 ```text
-scaffold_core/layer_2_geometry/
 scaffold_core/layer_3_relations/
 scaffold_core/layer_4_features/
 scaffold_core/layer_5_runtime/
@@ -73,6 +73,7 @@ Before coding, read only the routed docs needed for the task.
 |---|---|
 | Any architecture question | `G0.md` |
 | G1 topology work | `docs/phases/G1_topology_snapshot.md` + `docs/layers/layer_1_topology.md` + `docs/architecture/segmentation_shell_policy.md` |
+| G2 geometry facts | `docs/phases/G2_geometry_facts.md` + `docs/architecture/G0_full.md` |
 | Patch segmentation / shell detection | `docs/architecture/segmentation_shell_policy.md` |
 | Source mesh snapshot | `docs/layers/layer_0_source.md` |
 | Import rule / new file | `docs/agent_rules/import_boundaries.md` |
@@ -100,6 +101,43 @@ Blender UV Seam
 Blender Sharp is not a default Patch boundary source.
 
 A future optional command may support `make seams by sharps`, but Sharp must not become a hidden default segmentation source.
+
+---
+
+## G2 geometry rule
+
+Layer 2 stores raw measured geometry facts only.
+
+Allowed G2 facts:
+
+```text
+area
+normal
+centroid
+length
+chord direction
+vertex position
+degenerate geometry diagnostics
+```
+
+Forbidden in Layer 2:
+
+```text
+H_FRAME
+V_FRAME
+WALL
+FLOOR
+SLOPE
+AlignmentClass
+PatchAxes
+WorldOrientation
+DihedralKind
+Feature
+Pin
+UV
+```
+
+Sawtooth/straightness work is deferred to a later G2b slice unless explicitly requested.
 
 ---
 
@@ -215,7 +253,7 @@ bl_info = {
 [ ] I did not add utils/helpers/managers/services.
 [ ] I did not mutate lower-layer data from a higher layer.
 [ ] I added or updated tests.
-[ ] I did not reintroduce H/V or WALL/FLOOR/SLOPE as primary topology facts.
+[ ] I did not reintroduce H/V or WALL/FLOOR/SLOPE as primary topology or geometry facts.
 [ ] If this was a bug fix, I followed Minimal Patch Protocol.
 ```
 

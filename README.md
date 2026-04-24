@@ -18,17 +18,17 @@ scaffold_core/             # core implementation package
 ## Current phase
 
 ```text
-G1 — Topology Snapshot Prototype
+G2 — Geometry Facts
 ```
 
-G1 implements only:
+G2 adds Layer 2 raw geometry facts on top of completed G1 topology:
 
 - Layer 0 — Source Mesh Snapshot
 - Layer 1 — Immutable Topology Snapshot
-- Pipeline Pass 0
-- Diagnostics and tests
+- Layer 2 — Geometry Facts
+- Pipeline Pass 0 with topology and geometry snapshots
 
-Future layers are intentionally not created yet.
+Future relation, feature, runtime, API and UI layers are intentionally not created yet.
 
 ## Versioning
 
@@ -64,6 +64,23 @@ Blender Sharp is not a default Patch boundary source.
 
 A future optional command may support `make seams by sharps`, but Sharp must not become a hidden default segmentation source.
 
+## G2 geometry policy
+
+Layer 2 stores raw measured geometry facts only:
+
+```text
+area
+normal
+centroid
+length
+chord direction
+vertex position
+degenerate geometry diagnostics
+```
+
+Layer 2 must not contain semantic roles, alignment classes, world orientation,
+feature facts, pin facts or UV solve facts.
+
 ## Agent workflow
 
 Agents should read `AGENTS.md` first.
@@ -95,7 +112,7 @@ The Blender add-on wrapper may later live separately as:
 scaffold/
 ```
 
-The add-on wrapper is intentionally deferred during G1. Do not create `scaffold/` during G1.
+The add-on wrapper is intentionally deferred during G2. Do not create `scaffold/` during G2.
 
 Recommended Blender add-on metadata:
 
@@ -134,7 +151,8 @@ scaffold_core/tests/test_module_docstrings.py
 |---|---|
 | Architecture contract | `G0.md` |
 | Full architecture reference | `docs/architecture/G0_full.md` |
-| Current phase | `docs/phases/G1_topology_snapshot.md` |
+| Current phase | `docs/phases/G2_geometry_facts.md` |
+| G2 geometry facts | `docs/phases/G2_geometry_facts.md` |
 | Segmentation / shell policy | `docs/architecture/segmentation_shell_policy.md` |
 | Layer 0 contract | `docs/layers/layer_0_source.md` |
 | Layer 1 contract | `docs/layers/layer_1_topology.md` |
