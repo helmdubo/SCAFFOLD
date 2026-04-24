@@ -100,3 +100,21 @@ def make_two_quad_l_source_with_sharp_on_shared_edge() -> SourceMeshSnapshot:
         source,
         marks=(SourceMark(kind=SourceMarkKind.SHARP, target_id=shared_edge_id),),
     )
+
+
+def make_two_quad_folded_source_with_seam_on_shared_edge() -> SourceMeshSnapshot:
+    """Return the L fixture folded 90 degrees around the shared edge with a seam on it.
+
+    The second quad is rotated up around edge e1 so adjacent patch normals are
+    perpendicular, producing a non-coplanar signed dihedral.
+    """
+
+    source = make_two_quad_l_source_with_seam_on_shared_edge()
+    return replace(
+        source,
+        vertices={
+            **source.vertices,
+            SourceVertexId("v4"): MeshVertexRef(SourceVertexId("v4"), (1.0, 0.0, 1.0)),
+            SourceVertexId("v5"): MeshVertexRef(SourceVertexId("v5"), (1.0, 1.0, 1.0)),
+        },
+    )

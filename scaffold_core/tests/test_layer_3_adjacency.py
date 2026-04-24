@@ -8,6 +8,8 @@ Rules:
 
 from __future__ import annotations
 
+import math
+
 from scaffold_core.ids import ChainId, PatchId, VertexId
 from scaffold_core.layer_1_topology.build import build_topology_snapshot
 from scaffold_core.layer_2_geometry.build import build_geometry_facts
@@ -22,7 +24,10 @@ from scaffold_core.layer_3_relations.model import DihedralKind
 from scaffold_core.tests.fixtures.non_manifold import make_three_quad_non_manifold_source
 from scaffold_core.tests.fixtures.seam_self import make_seam_self_model
 from scaffold_core.tests.fixtures.single_patch import make_single_quad_source
-from scaffold_core.tests.fixtures.l_shape import make_two_quad_l_source_with_seam_on_shared_edge
+from scaffold_core.tests.fixtures.l_shape import (
+    make_two_quad_folded_source_with_seam_on_shared_edge,
+    make_two_quad_l_source_with_seam_on_shared_edge,
+)
 
 
 def test_shared_two_patch_chain_builds_patch_adjacency() -> None:
@@ -42,6 +47,19 @@ def test_shared_two_patch_chain_builds_patch_adjacency() -> None:
     assert adjacency.shared_length == 1.0
     assert adjacency.signed_angle_radians == 0.0
     assert adjacency.dihedral_kind is DihedralKind.COPLANAR
+
+
+def test_folded_two_patch_chain_classifies_signed_dihedral() -> None:
+    source = make_two_quad_folded_source_with_seam_on_shared_edge()
+    topology = build_topology_snapshot(source)
+    geometry = build_geometry_facts(source, topology)
+
+    relations = build_relation_snapshot(topology, geometry)
+
+    assert len(relations.patch_adjacencies) == 1
+    adjacency = next(iter(relations.patch_adjacencies.values()))
+    assert adjacency.dihedral_kind is DihedralKind.CONCAVE
+    assert math.isclose(abs(adjacency.signed_angle_radians), math.pi / 2.0)
 
 
 def test_border_chains_do_not_build_patch_adjacency() -> None:
