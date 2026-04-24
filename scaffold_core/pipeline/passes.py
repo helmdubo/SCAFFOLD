@@ -15,6 +15,7 @@ from scaffold_core.layer_0_source.snapshot import SourceMeshSnapshot
 from scaffold_core.layer_1_topology.build import build_topology_snapshot
 from scaffold_core.layer_1_topology.invariants import validate_topology
 from scaffold_core.layer_2_geometry.build import build_geometry_facts
+from scaffold_core.layer_3_relations.build import build_relation_snapshot
 from scaffold_core.pipeline.context import PipelineContext
 
 
@@ -31,4 +32,23 @@ def run_pass_0(source_snapshot: SourceMeshSnapshot) -> PipelineContext:
         topology_snapshot=topology_snapshot,
         geometry_facts=geometry_facts,
         diagnostics=diagnostics,
+    )
+
+
+def run_pass_1(context: PipelineContext) -> PipelineContext:
+    """Run G3 Pass 1 relation building from topology and geometry facts."""
+
+    if context.topology_snapshot is None or context.geometry_facts is None:
+        raise ValueError("Pass 1 requires topology_snapshot and geometry_facts.")
+
+    relation_snapshot = build_relation_snapshot(
+        context.topology_snapshot,
+        context.geometry_facts,
+    )
+    return PipelineContext(
+        source_snapshot=context.source_snapshot,
+        topology_snapshot=context.topology_snapshot,
+        geometry_facts=context.geometry_facts,
+        relation_snapshot=relation_snapshot,
+        diagnostics=context.diagnostics.extend(relation_snapshot.diagnostics),
     )
