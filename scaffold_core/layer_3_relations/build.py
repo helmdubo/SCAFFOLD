@@ -60,7 +60,7 @@ def _build_patch_adjacency(
 ) -> PatchAdjacency:
     first_normal = geometry.patch_facts[first_use.patch_id].normal
     second_normal = geometry.patch_facts[second_use.patch_id].normal
-    edge_direction = _chain_use_direction(topology, geometry, first_use)
+    edge_direction = _chain_pair_direction(topology, geometry, first_use, second_use)
     if length(first_normal) == 0.0 or length(second_normal) == 0.0 or length(edge_direction) == 0.0:
         signed_angle = 0.0
         dihedral_kind = DihedralKind.UNDEFINED
@@ -91,6 +91,17 @@ def _chain_use_direction(
     start = geometry.vertex_facts[start_vertex_id].position
     end = geometry.vertex_facts[end_vertex_id].position
     return normalize(subtract(end, start))
+
+
+def _chain_pair_direction(
+    topology: SurfaceModel,
+    geometry: GeometryFactSnapshot,
+    first_use: ChainUse,
+    second_use: ChainUse,
+) -> Vector3:
+    first_direction = _chain_use_direction(topology, geometry, first_use)
+    second_direction = _chain_use_direction(topology, geometry, second_use)
+    return normalize(subtract(first_direction, second_direction))
 
 
 def _signed_angle(

@@ -8,6 +8,7 @@ Rules:
 
 from __future__ import annotations
 
+from dataclasses import replace
 import math
 
 from scaffold_core.ids import ChainId, PatchId, VertexId
@@ -60,6 +61,26 @@ def test_folded_two_patch_chain_classifies_signed_dihedral() -> None:
     adjacency = next(iter(relations.patch_adjacencies.values()))
     assert adjacency.dihedral_kind is DihedralKind.CONCAVE
     assert math.isclose(abs(adjacency.signed_angle_radians), math.pi / 2.0)
+
+
+def test_dihedral_is_undefined_when_chain_use_orientations_do_not_pair() -> None:
+    source = make_two_quad_folded_source_with_seam_on_shared_edge()
+    topology = build_topology_snapshot(source)
+    uses = tuple(
+        use
+        for use in topology.chain_uses.values()
+        if use.chain_id == ChainId("chain:e1")
+    )
+    chain_uses = dict(topology.chain_uses)
+    chain_uses[uses[1].id] = replace(uses[1], orientation_sign=uses[0].orientation_sign)
+    topology = replace(topology, chain_uses=chain_uses)
+    geometry = build_geometry_facts(source, topology)
+
+    relations = build_relation_snapshot(topology, geometry)
+
+    adjacency = next(iter(relations.patch_adjacencies.values()))
+    assert adjacency.dihedral_kind is DihedralKind.UNDEFINED
+    assert adjacency.signed_angle_radians == 0.0
 
 
 def test_border_chains_do_not_build_patch_adjacency() -> None:
