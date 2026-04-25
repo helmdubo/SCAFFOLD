@@ -35,17 +35,21 @@ def test_two_edge_shared_boundary_coalesces_to_one_chain() -> None:
 def test_closed_seam_loop_coalesces_to_one_shared_chain() -> None:
     model = build_topology_snapshot(make_closed_shared_boundary_loop_source())
 
-    shared_chain = model.chains[ChainId("chain:e0:e1:e2:e3")]
+    shared_chain = model.chains[ChainId("chain:e10:e9:e6:e7")]
     uses = chain_uses_for_chain(model, shared_chain.id)
 
     assert len(model.patches) == 2
     assert len(model.chains) == 1
     assert len(model.chain_uses) == 2
     assert shared_chain.source_edge_ids == (
-        SourceEdgeId("e0"),
-        SourceEdgeId("e1"),
-        SourceEdgeId("e2"),
-        SourceEdgeId("e3"),
+        SourceEdgeId("e10"),
+        SourceEdgeId("e9"),
+        SourceEdgeId("e6"),
+        SourceEdgeId("e7"),
+    )
+    assert str(shared_chain.id) == "chain:" + ":".join(
+        str(edge_id)
+        for edge_id in shared_chain.source_edge_ids
     )
     assert len(uses) == 2
     assert {use.patch_id for use in uses} == set(model.patches)

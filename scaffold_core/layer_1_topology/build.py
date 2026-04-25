@@ -251,12 +251,12 @@ def _run_source_edge_ids(run: _BoundaryRun) -> tuple[SourceEdgeId, ...]:
     return tuple(side.edge_id for side in run.sides)
 
 
-def _chain_key_for_run(run: _BoundaryRun) -> tuple[SourceEdgeId, ...]:
+def _chain_lookup_key_for_run(run: _BoundaryRun) -> tuple[SourceEdgeId, ...]:
     return tuple(sorted(_run_source_edge_ids(run), key=str))
 
 
-def _chain_id_for_key(chain_key: tuple[SourceEdgeId, ...]) -> ChainId:
-    return ChainId("chain:" + ":".join(str(edge_id) for edge_id in chain_key))
+def _chain_id_for_source_edge_ids(source_edge_ids: tuple[SourceEdgeId, ...]) -> ChainId:
+    return ChainId("chain:" + ":".join(str(edge_id) for edge_id in source_edge_ids))
 
 
 def _matches_cyclic_order(
@@ -398,15 +398,16 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
             boundary_runs = _coalesce_boundary_runs(cycle, edge_patch_contexts)
 
             for position_in_loop, run in enumerate(boundary_runs):
-                chain_key = _chain_key_for_run(run)
+                chain_key = _chain_lookup_key_for_run(run)
                 if chain_key not in chain_ids_by_key:
-                    chain_id = _chain_id_for_key(chain_key)
+                    source_edge_ids = _run_source_edge_ids(run)
+                    chain_id = _chain_id_for_source_edge_ids(source_edge_ids)
                     chain_ids_by_key[chain_key] = chain_id
                     chains[chain_id] = Chain(
                         id=chain_id,
                         start_vertex_id=_run_start_vertex_id(run),
                         end_vertex_id=_run_end_vertex_id(run),
-                        source_edge_ids=_run_source_edge_ids(run),
+                        source_edge_ids=source_edge_ids,
                     )
                 else:
                     chain_id = chain_ids_by_key[chain_key]
