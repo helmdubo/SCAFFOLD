@@ -78,6 +78,13 @@ G3d:
   WorldOrientation
 ```
 
+## G3b1 Junction incidence
+
+G3b1 implements Junction incidence queries as derived views over Vertex.
+It does not introduce a Junction entity.
+It does not implement disk-cycle ordering.
+It does not implement ChainContinuationRelation.
+
 ## Rules
 
 Layer 3 is derived from:

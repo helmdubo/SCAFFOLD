@@ -246,6 +246,11 @@ G3a builds `PatchAdjacency` from normal shared two-Patch Chains, stores
 ChainUse orientations, skips border / SEAM_SELF / non-manifold Chains for
 normal adjacency, and exposes `run_pass_1_relations()` in the pipeline.
 
+G3b1 implements Junction incidence queries as derived views over Vertex.
+It does not introduce a Junction entity.
+It does not implement disk-cycle ordering.
+It does not implement ChainContinuationRelation.
+
 Implemented test fixtures:
 
 ```text
