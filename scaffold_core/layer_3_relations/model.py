@@ -15,7 +15,15 @@ from typing import Mapping
 
 from scaffold_core.core.diagnostics import Diagnostic
 from scaffold_core.core.evidence import Evidence
-from scaffold_core.ids import ChainId, ChainUseId, PatchId, SourceEdgeId, SourceVertexId, VertexId
+from scaffold_core.ids import (
+    BoundaryLoopId,
+    ChainId,
+    ChainUseId,
+    PatchId,
+    SourceEdgeId,
+    SourceVertexId,
+    VertexId,
+)
 from scaffold_core.layer_2_geometry.facts import Vector3
 
 
@@ -76,8 +84,29 @@ class ChainDirectionalRun:
 
 
 @dataclass(frozen=True)
+class ChainDirectionalRunUse:
+    id: str
+    directional_run_id: str
+    parent_chain_id: ChainId
+    chain_use_id: ChainUseId
+    patch_id: PatchId
+    loop_id: BoundaryLoopId
+    position_in_loop: int
+    orientation_sign: int
+    source_edge_ids: tuple[SourceEdgeId, ...]
+    segment_indices: tuple[int, ...]
+    start_source_vertex_id: SourceVertexId
+    end_source_vertex_id: SourceVertexId
+    length: float
+    direction: Vector3
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
     chain_continuations: tuple[ChainContinuationRelation, ...] = ()
     chain_directional_runs: tuple[ChainDirectionalRun, ...] = ()
+    chain_directional_run_uses: tuple[ChainDirectionalRunUse, ...] = ()
     diagnostics: tuple[Diagnostic, ...] = ()

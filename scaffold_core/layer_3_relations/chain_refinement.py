@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from scaffold_core.core.evidence import Evidence
 from scaffold_core.ids import ChainId
-from scaffold_core.layer_1_topology.model import SurfaceModel
+from scaffold_core.layer_1_topology.model import ChainUse, SurfaceModel
 from scaffold_core.layer_2_geometry.facts import (
     ChainGeometryFacts,
     ChainSegmentGeometryFacts,
@@ -20,7 +20,7 @@ from scaffold_core.layer_2_geometry.facts import (
     Vector3,
 )
 from scaffold_core.layer_2_geometry.measures import EPSILON, dot, normalize
-from scaffold_core.layer_3_relations.model import ChainDirectionalRun
+from scaffold_core.layer_3_relations.model import ChainDirectionalRun, ChainDirectionalRunUse
 
 
 DIRECTION_RUN_COS_TOLERANCE = 0.996
@@ -40,6 +40,26 @@ def build_chain_directional_runs(
             continue
         runs.extend(_runs_for_chain(chain_id, chain_facts))
     return tuple(runs)
+
+
+def build_chain_directional_run_uses(
+    topology: SurfaceModel,
+    directional_runs: tuple[ChainDirectionalRun, ...],
+) -> tuple[ChainDirectionalRunUse, ...]:
+    """Build patch-local uses for chain-level directional runs."""
+
+    runs_by_chain: dict[ChainId, list[ChainDirectionalRun]] = {}
+    for run in directional_runs:
+        runs_by_chain.setdefault(run.parent_chain_id, []).append(run)
+
+    run_uses: list[ChainDirectionalRunUse] = []
+    for chain_use in sorted(topology.chain_uses.values(), key=lambda item: str(item.id)):
+        chain_runs = tuple(sorted(runs_by_chain.get(chain_use.chain_id, ()), key=lambda item: item.id))
+        run_uses.extend(
+            _run_use_from_chain_use(chain_use, run_index, run)
+            for run_index, run in enumerate(chain_runs)
+        )
+    return tuple(run_uses)
 
 
 def _runs_for_chain(
@@ -112,6 +132,40 @@ def _aggregate_direction(segments: tuple[ChainSegmentGeometryFacts, ...]) -> Vec
     return normalize(vector)
 
 
+def _run_use_from_chain_use(
+    chain_use: ChainUse,
+    run_index: int,
+    run: ChainDirectionalRun,
+) -> ChainDirectionalRunUse:
+    if chain_use.orientation_sign == -1:
+        direction = (-run.direction[0], -run.direction[1], -run.direction[2])
+        start_source_vertex_id = run.end_source_vertex_id
+        end_source_vertex_id = run.start_source_vertex_id
+    else:
+        direction = run.direction
+        start_source_vertex_id = run.start_source_vertex_id
+        end_source_vertex_id = run.end_source_vertex_id
+
+    return ChainDirectionalRunUse(
+        id=f"directional_run_use:{chain_use.id}:{run_index}",
+        directional_run_id=run.id,
+        parent_chain_id=run.parent_chain_id,
+        chain_use_id=chain_use.id,
+        patch_id=chain_use.patch_id,
+        loop_id=chain_use.loop_id,
+        position_in_loop=chain_use.position_in_loop,
+        orientation_sign=chain_use.orientation_sign,
+        source_edge_ids=run.source_edge_ids,
+        segment_indices=run.segment_indices,
+        start_source_vertex_id=start_source_vertex_id,
+        end_source_vertex_id=end_source_vertex_id,
+        length=run.length,
+        direction=direction,
+        confidence=run.confidence,
+        evidence=(_run_use_evidence(run),),
+    )
+
+
 def _evidence(
     chain_facts: ChainGeometryFacts,
     segments: tuple[ChainSegmentGeometryFacts, ...],
@@ -124,5 +178,16 @@ def _evidence(
             "parent_shape_hint": chain_facts.shape_hint.value,
             "segment_count": len(segments),
             "cos_tolerance": DIRECTION_RUN_COS_TOLERANCE,
+        },
+    )
+
+
+def _run_use_evidence(run: ChainDirectionalRun) -> Evidence:
+    return Evidence(
+        source="layer_3_relations.chain_refinement",
+        summary="patch-local directional run occurrence derived from ChainUse",
+        data={
+            "policy": "g3c1_directional_run_uses",
+            "directional_run_id": run.id,
         },
     )

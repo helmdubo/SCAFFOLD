@@ -286,6 +286,17 @@ This is a partial OQ-11 decision for straight/turning polygonal Chains only.
 Curved, sawtooth tuning, user split marks, closed-loop wrap merge, advanced
 corner detection and relation to disk-cycle ordering remain unresolved.
 
+G3c1 implemented ChainDirectionalRunUse:
+
+```text
+ChainDirectionalRunUse is a patch-local directional occurrence of
+ChainDirectionalRun.
+This is the bridge between topology-level Chain refinement and future
+AlignmentClass.
+AlignmentClass is still not implemented.
+PatchAxes is still not implemented.
+```
+
 Implemented test fixtures:
 
 ```text

@@ -174,6 +174,17 @@ advanced corner detection and relation to disk-cycle ordering remain unresolved.
 
 G3c0 does not implement AlignmentClass or PatchAxes.
 
+## G3c1 - Chain directional run uses
+
+G3c1 implements `ChainDirectionalRunUse` as a patch-local directional
+occurrence derived from `ChainDirectionalRun` plus Layer 1 `ChainUse`.
+
+Scope:
+- Preserve per-ChainUse membership needed by future AlignmentClass.
+- Reverse direction and source endpoints for negatively oriented ChainUses.
+- Preserve Layer 1 Chain, ChainUse, BoundaryLoop and Patch identity.
+- Do not implement AlignmentClass or PatchAxes.
+
 ## Rules
 
 Layer 3 is derived from:

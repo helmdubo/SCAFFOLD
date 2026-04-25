@@ -119,6 +119,7 @@ def relation_summary_to_dict(relations: RelationSnapshot) -> InspectionDict:
         "patch_adjacency_count": len(relations.patch_adjacencies),
         "chain_continuation_count": len(relations.chain_continuations),
         "chain_directional_run_count": len(relations.chain_directional_runs),
+        "chain_directional_run_use_count": len(relations.chain_directional_run_uses),
         "patch_adjacencies": [
             {
                 "id": adjacency.id,
@@ -174,6 +175,29 @@ def relation_summary_to_dict(relations: RelationSnapshot) -> InspectionDict:
             }
             for run in sorted(
                 relations.chain_directional_runs,
+                key=lambda item: item.id,
+            )
+        ],
+        "chain_directional_run_uses": [
+            {
+                "id": run_use.id,
+                "directional_run_id": run_use.directional_run_id,
+                "parent_chain_id": str(run_use.parent_chain_id),
+                "chain_use_id": str(run_use.chain_use_id),
+                "patch_id": str(run_use.patch_id),
+                "loop_id": str(run_use.loop_id),
+                "position_in_loop": run_use.position_in_loop,
+                "orientation_sign": run_use.orientation_sign,
+                "source_edge_ids": [str(source_edge_id) for source_edge_id in run_use.source_edge_ids],
+                "segment_indices": list(run_use.segment_indices),
+                "start_source_vertex_id": str(run_use.start_source_vertex_id),
+                "end_source_vertex_id": str(run_use.end_source_vertex_id),
+                "length": run_use.length,
+                "direction": list(run_use.direction),
+                "confidence": run_use.confidence,
+            }
+            for run_use in sorted(
+                relations.chain_directional_run_uses,
                 key=lambda item: item.id,
             )
         ],
