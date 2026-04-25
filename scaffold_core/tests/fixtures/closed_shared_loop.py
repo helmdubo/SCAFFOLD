@@ -2,7 +2,7 @@
 Layer: tests fixtures
 
 Rules:
-- Synthetic cube-like source fixtures only.
+- Synthetic closed shared boundary loop source fixtures only.
 - Fixtures build small explicit source data.
 - No production logic here.
 """
@@ -19,8 +19,8 @@ from scaffold_core.layer_0_source.snapshot import (
 )
 
 
-def make_cube_source_with_seam_loop_around_one_face() -> SourceMeshSnapshot:
-    """Return a cube with all faces selected and one face isolated by four seam edges."""
+def make_closed_shared_boundary_loop_source() -> SourceMeshSnapshot:
+    """Return two Patch candidates sharing a closed four-edge boundary loop."""
 
     v0 = SourceVertexId("v0")
     v1 = SourceVertexId("v1")
@@ -52,7 +52,7 @@ def make_cube_source_with_seam_loop_around_one_face() -> SourceMeshSnapshot:
     f5 = SourceFaceId("f5")
 
     return SourceMeshSnapshot(
-        id=SourceMeshId("cube_seam_loop"),
+        id=SourceMeshId("closed_shared_boundary_loop"),
         vertices={
             v0: MeshVertexRef(v0, (0.0, 0.0, 0.0)),
             v1: MeshVertexRef(v1, (1.0, 0.0, 0.0)),

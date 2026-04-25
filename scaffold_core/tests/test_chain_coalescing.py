@@ -12,7 +12,7 @@ from scaffold_core.ids import ChainId, SourceEdgeId
 from scaffold_core.layer_1_topology.build import build_topology_snapshot
 from scaffold_core.layer_1_topology.invariants import validate_loop_closure
 from scaffold_core.layer_1_topology.queries import chain_uses_for_chain
-from scaffold_core.tests.fixtures.cube import make_cube_source_with_seam_loop_around_one_face
+from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_boundary_loop_source
 from scaffold_core.tests.fixtures.l_shape import make_two_patch_source_with_two_edge_seam_run
 
 
@@ -33,7 +33,7 @@ def test_two_edge_shared_boundary_coalesces_to_one_chain() -> None:
 
 
 def test_closed_seam_loop_coalesces_to_one_shared_chain() -> None:
-    model = build_topology_snapshot(make_cube_source_with_seam_loop_around_one_face())
+    model = build_topology_snapshot(make_closed_shared_boundary_loop_source())
 
     shared_chain = model.chains[ChainId("chain:e0:e1:e2:e3")]
     uses = chain_uses_for_chain(model, shared_chain.id)
