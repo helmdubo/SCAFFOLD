@@ -71,8 +71,13 @@ Final G1 topology building should follow this order:
 2. Detect Shells as selected-face edge-connected components.
 3. Detect Patch components by flood fill blocked by the G1 boundary predicate.
 4. Build boundary loops per Patch.
-5. Build Chain / ChainUse cardinality from Patch boundary uses.
+5. Build Chain / ChainUse cardinality from Patch boundary uses:
+   - collect atomic boundary sides;
+   - order them into BoundaryLoops;
+   - coalesce consecutive sides with the same adjacency context into Chains;
+   - create one ChainUse per Chain occurrence in a Patch loop.
 6. Emit diagnostics for border, SEAM_SELF and non-manifold cardinality cases.
 ```
 
-The current fixture-oriented baseline builder may remain simple while tests and policy-specific implementation are added incrementally.
+Current G1/G3 Chain coalescing is topology/context-based only.
+Geometry-based Chain splitting or refinement is deferred.

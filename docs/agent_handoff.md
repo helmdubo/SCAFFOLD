@@ -96,7 +96,8 @@ scaffold_core/core/
 scaffold_core/layer_0_source/
 scaffold_core/layer_1_topology/
 scaffold_core/layer_2_geometry/
-scaffold_core/scaffold_core/pipeline/
+scaffold_core/layer_3_relations/
+scaffold_core/pipeline/
 scaffold_core/tests/
 ```
 
@@ -151,6 +152,38 @@ the old fixture baseline:
 - BoundaryLoops, Chains and ChainUses are built from real Patch boundary uses.
 ```
 
+Layer 1 Chain coalescing is implemented for shared boundary runs:
+
+```text
+- Chain is no longer always one source edge.
+- Atomic boundary sides are ordered into BoundaryLoops.
+- Consecutive shared boundary sides with the same Patch adjacency context are
+  coalesced into one Chain.
+- Chain.source_edge_ids stores source edges in run order.
+- ChainId is built from source_edge_ids in run order.
+- Lookup remains orientation-independent so opposite ChainUses resolve to the
+  same Chain.
+```
+
+Current Chain coalescing limitations:
+
+```text
+- Coalescing is topology/context-based only.
+- Border chains are not guaranteed to coalesce yet.
+- Geometry-based split/refinement by tangent, angle, normal or user split is
+  future work.
+```
+
+Example:
+
+```text
+Closed seam loop of 4 source edges between two Patches:
+  expected:
+    1 Chain
+    Chain.source_edge_ids = (e10, e9, e6, e7)
+    2 ChainUses, one per Patch loop
+```
+
 `validate_chain_cardinality()` classifies all G1 Chain cardinality cases:
 
 ```text
@@ -188,6 +221,18 @@ DihedralKind
 RelationSnapshot
 ```
 
+Layer 3 adjacency foundation is implemented through:
+
+```text
+scaffold_core/layer_3_relations/model.py
+scaffold_core/layer_3_relations/build.py
+```
+
+G3a builds `PatchAdjacency` from normal shared two-Patch Chains, stores
+`DihedralKind` on the adjacency record, computes signed dihedral using both
+ChainUse orientations, skips border / SEAM_SELF / non-manifold Chains for
+normal adjacency, and exposes `run_pass_1_relations()` in the pipeline.
+
 Implemented test fixtures:
 
 ```text
@@ -198,6 +243,7 @@ non_manifold.py
 corner_touch.py
 degenerate_geometry.py
 chain_shape_geometry.py
+closed_shared_loop.py
 ```
 
 Implemented tests:
@@ -222,6 +268,10 @@ test_blender_io.py
 test_pipeline_inspection.py
 test_layer_2_geometry_facts.py
 test_layer_2_no_semantic_roles.py
+test_chain_coalescing.py
+test_layer_3_adjacency.py
+test_layer_3_no_semantic_roles.py
+test_pipeline_pass1.py
 ```
 
 Recent cleanup:
@@ -238,10 +288,13 @@ Recent implementation:
 ```text
 Commit 26dbd6a implements G1 topology segmentation policy and Blender inspection.
 Commit ca7cd72 adds normal shared Chain diagnostics.
-Full local verification at the time of handoff: python -m pytest scaffold_core/tests -q
-Result: 34 passed.
+Commit 92c188d coalesces shared boundary runs into topology Chains.
+Commit c39b789 coalesces closed shared seam loops.
+Commit 61b5cd7 builds coalesced Chain ids from source_edge_ids in run order.
+Full local verification at the time of handoff: python -m pytest scaffold_core/tests
+Result: 46 passed.
 Blender smoke test: cube with all faces selected and seam loop around one face produced
-1 Shell, 2 Patches, 4 Chains and 8 ChainUses.
+1 Shell, 2 Patches, 1 Chain and 2 ChainUses.
 ```
 
 ---
@@ -279,14 +332,21 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 ## What is not done yet
 
-### Must do next in G3a
+### Layer 1 / Chain refinement still open
 
-- Add `scaffold_core/layer_3_relations/`.
-- Add frozen Layer 3 relation dataclasses for adjacency.
-- Build `PatchAdjacency` from shared two-patch Chains.
-- Store `DihedralKind` on `PatchAdjacency`, not on `Chain`.
-- Add relation snapshot output to pipeline context.
-- Add G3 tests for normal adjacency and excluded border/SEAM_SELF/non-manifold cases.
+- Decide whether border boundary runs should coalesce into Chains.
+- Add geometry-based Chain split/refinement before AlignmentClass,
+  ChainContinuationRelation or continuation-heavy work.
+- Consider `ChainUse` -> `PatchChain` naming separately, if desired.
+
+### G3 relation work still open
+
+- Add relation queries when consumers appear, e.g. `adjacencies_for_chain()` or
+  `adjacency_between_patches()`.
+- Add diagnostics for skipped Chains in `build_relation_snapshot()` only after
+  there is a clear reporting requirement.
+- Continue with G3b only after Chain coalescing/refinement assumptions are
+  stable enough for continuation and junction relations.
 
 ### Explicitly not part of G3a
 
@@ -304,13 +364,14 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 ## Recommended next task
 
-Implement G3a in two commits:
+Before moving into continuation-heavy G3b work, decide and document the next
+Chain refinement slice:
 
-1. Phase transition docs: `docs/phases/G3_derived_relations.md`,
-   `docs/context_map.yaml`, `AGENTS.md`, `README.md`, this handoff and
-   import-boundary docs.
-2. Layer 3 adjacency foundation: relation facts, adjacency builder, pipeline
-   integration and focused tests.
+```text
+1. Whether border boundary runs coalesce.
+2. Where geometry-based Chain split/refinement belongs.
+3. Which geometric breakpoints are allowed before AlignmentClass / PatchAxes.
+```
 
 ---
 

@@ -84,6 +84,48 @@ A `ChainUse` is the oriented use of a `Chain` inside a loop/patch.
 
 All orientation-sensitive logic must use `ChainUse`, not raw `Chain`.
 
+## Chain coalescing
+
+Layer 1 distinguishes atomic boundary segments from topology Chains:
+
+```text
+Atomic boundary segment:
+  one source edge on a Patch boundary.
+
+Chain:
+  shared topological boundary run built from one or more atomic boundary
+  segments.
+
+ChainUse:
+  oriented patch-local use of a Chain inside a BoundaryLoop.
+```
+
+Current G1/G3 implementation rule:
+
+```text
+Merge consecutive boundary segments when they have the same multi-Patch
+adjacency context and are continuous in loop order.
+```
+
+Example:
+
+```text
+Long seam of 4 source edges between two Patches:
+  expected:
+    1 Chain
+    Chain.source_edge_ids = (e10, e9, e6, e7)
+    2 ChainUses
+```
+
+Current limitations:
+
+```text
+- Coalescing is topology/context-based only.
+- Border boundary runs are not guaranteed to coalesce yet.
+- Geometry-based Chain split/refinement by tangent, angle, normal or user split
+  is deferred.
+```
+
 ## Cardinality cases
 
 | Case | Chain has ChainUses | Meaning |
