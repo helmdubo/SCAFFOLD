@@ -117,14 +117,33 @@ Long seam of 4 source edges between two Patches:
     2 ChainUses
 ```
 
-Current limitations:
+## Current limitations
 
-```text
 - Coalescing is topology/context-based only.
 - Border boundary runs are not guaranteed to coalesce yet.
 - Geometry-based Chain split/refinement by tangent, angle, normal or user split
   is deferred.
-```
+
+## Chain refinement note
+
+Current G3a Chain identity is topological. A coalesced Chain represents a
+shared boundary region between Patches. It is correct for `PatchAdjacency`.
+
+It is **not** guaranteed direction-stable for AlignmentClass.
+
+A coalesced Chain may be:
+
+- closed (start_vertex_id == end_vertex_id);
+- turning (multiple direction segments through corners);
+- direction-ambiguous (no stable chord direction).
+
+Before AlignmentClass / PatchAxes, such Chains require Layer 2
+geometry-based refinement.
+
+Refinement does not change Layer 1 Chain identity. It produces derived
+Layer 3 entities or alignment groupings consumed by AlignmentClass.
+
+See DD-29, DD-30, OQ-11.
 
 ## Cardinality cases
 

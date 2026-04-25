@@ -167,12 +167,25 @@ Layer 1 Chain coalescing is implemented for shared boundary runs:
 
 Current Chain coalescing limitations:
 
-```text
 - Coalescing is topology/context-based only.
 - Border chains are not guaranteed to coalesce yet.
-- Geometry-based split/refinement by tangent, angle, normal or user split is
+- Geometry-based split/refinement by tangent, angle, normal or user split
   future work.
-```
+
+Chain refinement is staged (DD-29):
+
+- G3a Chain identity is topological.
+- Closed, turning, or direction-ambiguous Chains are accepted at this stage.
+- They must be refined using Layer 2 geometry before AlignmentClass.
+- Refinement must not change Layer 1 Chain identity (DD-30).
+
+Future agents:
+
+- Do not build AlignmentClass on the assumption that every Chain is
+  straight or direction-stable.
+- Resolve OQ-11 before starting G3c AlignmentClass work.
+- See `scaffold_core/tests/test_chain_refinement_pending.py` for an
+  executable reminder.
 
 Example:
 

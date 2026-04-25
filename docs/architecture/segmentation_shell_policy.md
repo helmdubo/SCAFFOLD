@@ -81,3 +81,16 @@ Final G1 topology building should follow this order:
 
 Current G1/G3 Chain coalescing is topology/context-based only.
 Geometry-based Chain splitting or refinement is deferred.
+
+## Coalescing scope
+
+Topology coalescing and any future geometry-based Chain refinement must:
+
+- operate inside one ordered atomic boundary cycle;
+- never cross OUTER / INNER BoundaryLoop boundaries;
+- never merge across separate cycles;
+- preserve Layer 1 Chain identity once it is decided in Pass 0
+  (see DD-30).
+
+Refinement, if introduced, lives in Layer 3 and produces derived entities
+that AlignmentClass consumes. It does not rewrite Layer 1 Chains.

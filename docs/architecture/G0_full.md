@@ -764,6 +764,36 @@ Layers 3, 4 and 5 always full rebuild in v1.
 
 The authoritative compact DD register is also mirrored in `docs/architecture/design_decisions.md`.
 
+## DD-29 — Chain coalescing is staged
+
+G1 / G3a:
+- Shared boundary coalescing may use topology adjacency context.
+- Border boundary coalescing is not performed by default.
+- Border source edges remain atomic Chains.
+
+Before Alignment / PatchAxes:
+- Chains that are closed, turning, or direction-ambiguous must be refined
+  using Layer 2 geometry facts.
+
+Scope:
+- Coalescing/refinement is constrained to one ordered atomic boundary cycle
+  that materializes as one final BoundaryLoop.
+- Coalescing/refinement must not cross OUTER/INNER loop boundaries.
+
+## DD-30 — Chain refinement does not change Layer 1 Chain identity
+
+Layer 1 Chain identity is decided by topology coalescing only.
+
+Geometry-driven Chain refinement, when introduced, lives in Layer 3 and
+must be computed before AlignmentClass consumes Chain-like entities.
+
+Refinement may produce derived sub-chain entities or alignment-level
+groupings that AlignmentClass consumes. It must not rewrite, split, or
+re-id existing Layer 1 Chain records after Pass 0.
+
+This preserves stable Chain ids for downstream references and keeps
+geometry-driven decisions inside Layer 3.
+
 ---
 
 # 25. Public Consumer APIs
@@ -921,6 +951,21 @@ How is `PLANAR / CURVED / UNKNOWN` determined?
 ## OQ-10 — WorldSemanticRule implementation
 
 Distinct class or FeatureRule variant?
+
+## OQ-11 — Geometry-based Chain refinement policy
+
+How do Layer 2 geometry facts split or merge topology Chains before
+Alignment?
+
+Sub-questions:
+
+- tangent angle threshold for corner detection;
+- closed-chain handling (start == end);
+- turning-chain handling (multiple direction segments);
+- curved-chain handling;
+- user split mark priority.
+
+Resolution required before G3c AlignmentClass implementation begins.
 
 ---
 
