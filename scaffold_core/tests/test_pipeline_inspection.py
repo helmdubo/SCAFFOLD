@@ -93,7 +93,7 @@ def test_describe_active_blender_mesh_topology_reports_g1_counts() -> None:
 def test_inspect_pipeline_context_reports_single_patch_topology_tree() -> None:
     context = run_pass_0(make_single_quad_source())
 
-    report = inspect_pipeline_context(context)
+    report = inspect_pipeline_context(context, detail="full")
 
     json.dumps(report)
     surface = report["surface_model"]
@@ -122,7 +122,7 @@ def test_inspect_pipeline_context_reports_relations_and_coalesced_chain() -> Non
         run_pass_0(make_two_patch_source_with_two_edge_seam_run())
     )
 
-    report = inspect_pipeline_context(context)
+    report = inspect_pipeline_context(context, detail="full")
 
     json.dumps(report)
     relations = report["relations"]
@@ -146,7 +146,7 @@ def test_inspection_marks_closed_coalesced_chain_and_vertex_run() -> None:
         run_pass_0(make_closed_shared_boundary_loop_source())
     )
 
-    report = inspect_pipeline_context(context)
+    report = inspect_pipeline_context(context, detail="full")
 
     json.dumps(report)
     chains = [
@@ -178,10 +178,33 @@ def test_inspection_output_order_is_stable() -> None:
         run_pass_0(make_two_patch_source_with_two_edge_seam_run())
     )
 
-    first_report = inspect_pipeline_context(context)
-    second_report = inspect_pipeline_context(context)
+    first_report = inspect_pipeline_context(context, detail="full")
+    second_report = inspect_pipeline_context(context, detail="full")
 
     assert first_report == second_report
+
+
+def test_inspection_default_output_is_compact() -> None:
+    context = run_pass_1_relations(
+        run_pass_0(make_closed_shared_boundary_loop_source())
+    )
+
+    report = inspect_pipeline_context(context)
+
+    json.dumps(report)
+    assert "surface_model" not in report
+    assert report["geometry"] == {
+        "patch_count": 2,
+        "chain_count": 1,
+        "vertex_count": 8,
+    }
+    assert report["relations"] == {
+        "patch_adjacency_count": 1,
+        "chain_continuation_count": 2,
+        "chain_directional_run_count": 4,
+        "chain_directional_run_use_count": 8,
+        "alignment_class_count": 2,
+    }
 
 
 def test_inspection_code_does_not_introduce_deferred_semantic_terms() -> None:

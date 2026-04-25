@@ -134,7 +134,7 @@ def test_inspection_json_includes_chain_directional_runs() -> None:
         run_pass_0(make_closed_shared_boundary_loop_source())
     )
 
-    report = inspect_pipeline_context(context)
+    report = inspect_pipeline_context(context, detail="full")
 
     json.dumps(report)
     relations = report["relations"]

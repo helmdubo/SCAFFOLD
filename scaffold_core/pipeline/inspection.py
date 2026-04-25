@@ -27,16 +27,16 @@ InspectionDict = dict[str, object]
 DIRECTION_STABLE_EPSILON = 1.0e-9
 
 
-def inspect_pipeline_context(context: PipelineContext) -> InspectionDict:
+def inspect_pipeline_context(context: PipelineContext, detail: str = "compact") -> InspectionDict:
     """Return JSON-serializable inspection data for available pipeline snapshots."""
 
     report: InspectionDict = {}
-    if context.topology_snapshot is not None:
+    if context.topology_snapshot is not None and detail == "full":
         report.update(topology_tree_to_dict(context.topology_snapshot, context.source_snapshot))
     if context.geometry_facts is not None:
-        report["geometry"] = geometry_summary_to_dict(context.geometry_facts)
+        report["geometry"] = geometry_summary_to_dict(context.geometry_facts, detail=detail)
     if context.relation_snapshot is not None:
-        report["relations"] = relation_summary_to_dict(context.relation_snapshot)
+        report["relations"] = relation_summary_to_dict(context.relation_snapshot, detail=detail)
     report["diagnostics"] = _diagnostics_to_list(context)
     return report
 
@@ -64,13 +64,17 @@ def topology_tree_to_dict(
     }
 
 
-def geometry_summary_to_dict(geometry: GeometryFactSnapshot) -> InspectionDict:
+def geometry_summary_to_dict(geometry: GeometryFactSnapshot, detail: str = "compact") -> InspectionDict:
     """Return compact geometry fact summary."""
 
-    return {
+    summary: InspectionDict = {
         "patch_count": len(geometry.patch_facts),
         "chain_count": len(geometry.chain_facts),
         "vertex_count": len(geometry.vertex_facts),
+    }
+    if detail != "full":
+        return summary
+    summary.update({
         "patches": [
             {
                 "id": str(facts.patch_id),
@@ -109,18 +113,23 @@ def geometry_summary_to_dict(geometry: GeometryFactSnapshot) -> InspectionDict:
             }
             for facts in sorted(geometry.chain_facts.values(), key=lambda item: str(item.chain_id))
         ],
-    }
+    })
+    return summary
 
 
-def relation_summary_to_dict(relations: RelationSnapshot) -> InspectionDict:
+def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact") -> InspectionDict:
     """Return compact relation snapshot summary."""
 
-    return {
+    summary: InspectionDict = {
         "patch_adjacency_count": len(relations.patch_adjacencies),
         "chain_continuation_count": len(relations.chain_continuations),
         "chain_directional_run_count": len(relations.chain_directional_runs),
         "chain_directional_run_use_count": len(relations.chain_directional_run_uses),
         "alignment_class_count": len(relations.alignment_classes),
+    }
+    if detail != "full":
+        return summary
+    summary.update({
         "patch_adjacencies": [
             {
                 "id": adjacency.id,
@@ -216,7 +225,8 @@ def relation_summary_to_dict(relations: RelationSnapshot) -> InspectionDict:
                 key=lambda item: item.id,
             )
         ],
-    }
+    })
+    return summary
 
 
 def describe_active_blender_mesh_topology(context: object) -> str:
