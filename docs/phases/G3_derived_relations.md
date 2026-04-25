@@ -85,6 +85,76 @@ It does not introduce a Junction entity.
 It does not implement disk-cycle ordering.
 It does not implement ChainContinuationRelation.
 
+## G3b2 — Conservative ChainContinuationRelation
+
+Scope:
+- Define continuation relations at topology vertices.
+- Use G3b1 junction incidence queries as input.
+- Implement conservative TERMINUS / SPLIT first.
+- SMOOTH / TURN are allowed only for trivial synthetic fixtures in Task E.
+- Do not solve OQ-11.
+- Do not create AlignmentClass.
+- Do not create PatchAxes.
+- Do not create WorldOrientation.
+- Do not mutate or re-id Layer 1 Chains.
+
+Concept:
+
+```text
+At this Vertex, does this ChainUse continue into another ChainUse?
+```
+
+Conservative kinds for Task E:
+
+```text
+TERMINUS:
+  A ChainUse reaches a Vertex and has no safe continuation candidate.
+
+SPLIT:
+  A ChainUse reaches a Vertex and multiple continuation candidates exist,
+  but G3b2 cannot choose one safely.
+
+SMOOTH:
+  Deferred by default.
+  Task E may support only on trivial synthetic fixtures where geometry is unambiguous.
+
+TURN:
+  Deferred by default.
+  Task E may support only on trivial synthetic fixtures where geometry is unambiguous.
+```
+
+G3b2 conservative implementation must prefer TERMINUS/SPLIT over false
+SMOOTH/TURN.
+
+Proposed future model contract for Task E:
+
+```python
+@dataclass(frozen=True)
+class ChainContinuationRelation:
+    junction_vertex_id: VertexId
+    source_chain_use_id: ChainUseId
+    target_chain_use_id: ChainUseId | None
+    kind: ContinuationKind
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+```
+
+Notes:
+- `target_chain_use_id = None` for TERMINUS.
+- SPLIT may be represented as multiple relations from the same source use
+  to multiple candidate target uses, each with kind = SPLIT.
+- No ContinuationId is required in the first implementation.
+- RelationSnapshot may store continuations as a tuple.
+
+Acceptance for Task E:
+1. Continuation relations derive from Layer 1 + Layer 2 + G3b1 incidence only.
+2. TERMINUS is produced when no safe target exists.
+3. SPLIT is produced when multiple candidates exist.
+4. SMOOTH / TURN are absent or fixture-only.
+5. No Layer 1 Chain identity changes.
+6. No H/V, WALL/FLOOR/SLOPE, Feature, Runtime, UV, or Solve terms.
+7. Tests cover simple terminus, ambiguous split, non-manifold ambiguity, and skipped full-continuation policy.
+
 ## Rules
 
 Layer 3 is derived from:

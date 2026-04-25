@@ -251,6 +251,14 @@ It does not introduce a Junction entity.
 It does not implement disk-cycle ordering.
 It does not implement ChainContinuationRelation.
 
+Next task:
+  G3b2 Conservative ChainContinuationRelation.
+
+Current caution:
+  Continuation must not assume Chains are direction-stable.
+  Full geometric continuation policy is deferred.
+  OQ-11 remains unresolved and blocks AlignmentClass, not conservative continuation.
+
 Implemented test fixtures:
 
 ```text
@@ -361,6 +369,8 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 - Add relation queries when consumers appear, e.g. `adjacencies_for_chain()` or
   `adjacency_between_patches()`.
+- Implement G3b2 Conservative ChainContinuationRelation using TERMINUS / SPLIT
+  as the safe baseline.
 - Add diagnostics for skipped Chains in `build_relation_snapshot()` only after
   there is a clear reporting requirement.
 - Continue with G3b only after Chain coalescing/refinement assumptions are
@@ -382,13 +392,13 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 ## Recommended next task
 
-Before moving into continuation-heavy G3b work, decide and document the next
-Chain refinement slice:
+G3b2 Conservative ChainContinuationRelation.
 
 ```text
-1. Whether border boundary runs coalesce.
-2. Where geometry-based Chain split/refinement belongs.
-3. Which geometric breakpoints are allowed before AlignmentClass / PatchAxes.
+Use G3b1 deterministic incidence.
+Prefer TERMINUS / SPLIT over false SMOOTH / TURN.
+Do not solve OQ-11.
+Do not start AlignmentClass.
 ```
 
 ---

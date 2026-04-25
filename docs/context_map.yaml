@@ -83,6 +83,10 @@ task_routes:
     - docs/layers/layer_1_topology.md
     - docs/architecture/design_decisions.md
     - docs/architecture/segmentation_shell_policy.md
+  continuation:
+    - docs/phases/G3_derived_relations.md
+    - docs/agent_handoff.md
+    - docs/architecture/design_decisions.md
 
 layer_order:
   - layer_0_source
