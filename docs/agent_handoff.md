@@ -213,6 +213,11 @@ scaffold_core/layer_0_source/blender_io.py
 scaffold_core/pipeline/inspection.py
 ```
 
+Structured inspection exists in `scaffold_core/pipeline/inspection.py`.
+It provides JSON-serializable read-only snapshots for topology, geometry,
+relations and diagnostics. It is debug/reporting only and must not contain
+topology or relation logic.
+
 Layer 2 geometry facts are now available through:
 
 ```text

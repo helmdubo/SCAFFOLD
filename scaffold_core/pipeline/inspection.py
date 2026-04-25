@@ -10,10 +10,122 @@ Rules:
 
 from __future__ import annotations
 
+from typing import Any
+
 from scaffold_core.layer_0_source.blender_io import read_source_mesh_from_blender
 from scaffold_core.layer_1_topology.build import build_topology_snapshot
 from scaffold_core.layer_1_topology.invariants import validate_topology
+from scaffold_core.layer_1_topology.model import ChainUse, SurfaceModel
 from scaffold_core.layer_1_topology.queries import chain_uses_for_chain
+from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot
+from scaffold_core.layer_3_relations.model import RelationSnapshot
+from scaffold_core.pipeline.context import PipelineContext
+
+
+InspectionDict = dict[str, object]
+
+
+def inspect_pipeline_context(context: PipelineContext) -> InspectionDict:
+    """Return JSON-serializable inspection data for available pipeline snapshots."""
+
+    report: InspectionDict = {}
+    if context.topology_snapshot is not None:
+        report.update(topology_tree_to_dict(context.topology_snapshot))
+    if context.geometry_facts is not None:
+        report["geometry"] = geometry_summary_to_dict(context.geometry_facts)
+    if context.relation_snapshot is not None:
+        report["relations"] = relation_summary_to_dict(context.relation_snapshot)
+    report["diagnostics"] = _diagnostics_to_list(context)
+    return report
+
+
+def topology_tree_to_dict(model: SurfaceModel) -> InspectionDict:
+    """Return nested SurfaceModel -> Shell -> Patch -> Loop -> ChainUse data."""
+
+    return {
+        "surface_model": {
+            "id": str(model.id),
+            "shells": [
+                {
+                    "id": str(shell.id),
+                    "patches": [
+                        _patch_to_dict(model, patch_id)
+                        for patch_id in sorted(shell.patch_ids, key=str)
+                    ],
+                }
+                for shell in sorted(model.shells.values(), key=lambda item: str(item.id))
+            ],
+        }
+    }
+
+
+def geometry_summary_to_dict(geometry: GeometryFactSnapshot) -> InspectionDict:
+    """Return compact geometry fact summary."""
+
+    return {
+        "patch_count": len(geometry.patch_facts),
+        "chain_count": len(geometry.chain_facts),
+        "vertex_count": len(geometry.vertex_facts),
+        "patches": [
+            {
+                "id": str(facts.patch_id),
+                "area": facts.area,
+                "normal": list(facts.normal),
+                "centroid": list(facts.centroid),
+            }
+            for facts in sorted(geometry.patch_facts.values(), key=lambda item: str(item.patch_id))
+        ],
+        "chains": [
+            {
+                "id": str(facts.chain_id),
+                "length": facts.length,
+                "chord_length": facts.chord_length,
+                "shape_hint": str(facts.shape_hint.value),
+            }
+            for facts in sorted(geometry.chain_facts.values(), key=lambda item: str(item.chain_id))
+        ],
+    }
+
+
+def relation_summary_to_dict(relations: RelationSnapshot) -> InspectionDict:
+    """Return compact relation snapshot summary."""
+
+    return {
+        "patch_adjacency_count": len(relations.patch_adjacencies),
+        "chain_continuation_count": len(relations.chain_continuations),
+        "patch_adjacencies": [
+            {
+                "id": adjacency.id,
+                "first_patch_id": str(adjacency.first_patch_id),
+                "second_patch_id": str(adjacency.second_patch_id),
+                "chain_id": str(adjacency.chain_id),
+                "dihedral_kind": str(adjacency.dihedral_kind.value),
+            }
+            for adjacency in sorted(relations.patch_adjacencies.values(), key=lambda item: item.id)
+        ],
+        "chain_continuations": [
+            {
+                "junction_vertex_id": str(relation.junction_vertex_id),
+                "source_chain_use_id": str(relation.source_chain_use_id),
+                "target_chain_use_id": (
+                    str(relation.target_chain_use_id)
+                    if relation.target_chain_use_id is not None
+                    else None
+                ),
+                "kind": str(relation.kind.value),
+                "confidence": relation.confidence,
+            }
+            for relation in sorted(
+                relations.chain_continuations,
+                key=lambda item: (
+                    str(item.junction_vertex_id),
+                    str(item.source_chain_use_id),
+                    str(item.target_chain_use_id),
+                    str(item.kind.value),
+                ),
+            )
+        ],
+    }
 
 
 def describe_active_blender_mesh_topology(context: object) -> str:
@@ -58,3 +170,64 @@ def describe_active_blender_mesh_topology(context: object) -> str:
         for diagnostic in diagnostics
     )
     return "\n".join(lines)
+
+
+def _patch_to_dict(model: SurfaceModel, patch_id) -> InspectionDict:
+    patch = model.patches[patch_id]
+    return {
+        "id": str(patch.id),
+        "source_face_ids": [str(face_id) for face_id in patch.source_face_ids],
+        "loops": [
+            {
+                "id": str(loop.id),
+                "kind": str(loop.kind.value),
+                "loop_index": loop.loop_index,
+                "chain_uses": [
+                    _chain_use_to_dict(model, model.chain_uses[use_id])
+                    for use_id in sorted(loop.chain_use_ids, key=lambda item: model.chain_uses[item].position_in_loop)
+                ],
+            }
+            for loop in sorted(
+                (model.loops[loop_id] for loop_id in patch.loop_ids),
+                key=lambda item: item.loop_index,
+            )
+        ],
+    }
+
+
+def _chain_use_to_dict(model: SurfaceModel, use: ChainUse) -> InspectionDict:
+    chain = model.chains[use.chain_id]
+    start_vertex = model.vertices[chain.start_vertex_id]
+    end_vertex = model.vertices[chain.end_vertex_id]
+    return {
+        "id": str(use.id),
+        "orientation_sign": use.orientation_sign,
+        "position_in_loop": use.position_in_loop,
+        "chain": {
+            "id": str(chain.id),
+            "source_edge_ids": [str(edge_id) for edge_id in chain.source_edge_ids],
+            "start_vertex_id": str(chain.start_vertex_id),
+            "end_vertex_id": str(chain.end_vertex_id),
+            "start_source_vertex_ids": [
+                str(source_vertex_id)
+                for source_vertex_id in start_vertex.source_vertex_ids
+            ],
+            "end_source_vertex_ids": [
+                str(source_vertex_id)
+                for source_vertex_id in end_vertex.source_vertex_ids
+            ],
+        },
+    }
+
+
+def _diagnostics_to_list(context: PipelineContext) -> list[dict[str, Any]]:
+    diagnostics = list(context.diagnostics.diagnostics)
+    return [
+        {
+            "code": diagnostic.code,
+            "severity": str(diagnostic.severity.value),
+            "message": diagnostic.message,
+            "entity_ids": [str(entity_id) for entity_id in diagnostic.entity_ids],
+        }
+        for diagnostic in diagnostics
+    ]
