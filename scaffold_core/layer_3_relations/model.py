@@ -15,7 +15,8 @@ from typing import Mapping
 
 from scaffold_core.core.diagnostics import Diagnostic
 from scaffold_core.core.evidence import Evidence
-from scaffold_core.ids import ChainId, ChainUseId, PatchId, VertexId
+from scaffold_core.ids import ChainId, ChainUseId, PatchId, SourceEdgeId, SourceVertexId, VertexId
+from scaffold_core.layer_2_geometry.facts import Vector3
 
 
 class DihedralKind(str, Enum):
@@ -60,7 +61,23 @@ class ChainContinuationRelation:
 
 
 @dataclass(frozen=True)
+class ChainDirectionalRun:
+    id: str
+    parent_chain_id: ChainId
+    source_edge_ids: tuple[SourceEdgeId, ...]
+    segment_indices: tuple[int, ...]
+    start_source_vertex_id: SourceVertexId
+    end_source_vertex_id: SourceVertexId
+    length: float
+    direction: Vector3
+    is_closed: bool
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
     chain_continuations: tuple[ChainContinuationRelation, ...] = ()
+    chain_directional_runs: tuple[ChainDirectionalRun, ...] = ()
     diagnostics: tuple[Diagnostic, ...] = ()

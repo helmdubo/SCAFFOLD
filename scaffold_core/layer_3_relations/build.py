@@ -16,6 +16,7 @@ from scaffold_core.layer_1_topology.model import ChainUse, SurfaceModel
 from scaffold_core.layer_1_topology.queries import chain_use_vertices, chain_uses_for_chain
 from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot, Vector3
 from scaffold_core.layer_2_geometry.measures import cross, dot, length, normalize, subtract
+from scaffold_core.layer_3_relations.chain_refinement import build_chain_directional_runs
 from scaffold_core.layer_3_relations.continuation import build_chain_continuations
 from scaffold_core.layer_3_relations.model import DihedralKind, PatchAdjacency, RelationSnapshot
 
@@ -48,6 +49,7 @@ def build_relation_snapshot(
     return RelationSnapshot(
         patch_adjacencies=patch_adjacencies,
         chain_continuations=build_chain_continuations(topology),
+        chain_directional_runs=build_chain_directional_runs(topology, geometry),
     )
 
 

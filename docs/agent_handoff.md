@@ -273,6 +273,19 @@ Current caution:
   Full geometric continuation policy is deferred.
   OQ-11 remains unresolved and blocks AlignmentClass, not conservative continuation.
 
+G3c0 chain directional refinement view is implemented:
+
+```text
+Layer 3 now exposes ChainDirectionalRun as a derived direction-ready view
+from Layer 2 ChainSegmentGeometryFacts.
+This does not mutate Layer 1 Chain identity.
+AlignmentClass is still not implemented.
+```
+
+This is a partial OQ-11 decision for straight/turning polygonal Chains only.
+Curved, sawtooth tuning, user split marks, closed-loop wrap merge, advanced
+corner detection and relation to disk-cycle ordering remain unresolved.
+
 Implemented test fixtures:
 
 ```text

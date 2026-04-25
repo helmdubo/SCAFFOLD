@@ -155,6 +155,25 @@ Acceptance for Task E:
 6. No H/V, WALL/FLOOR/SLOPE, Feature, Runtime, UV, or Solve terms.
 7. Tests cover simple terminus, ambiguous split, non-manifold ambiguity, and skipped full-continuation policy.
 
+## G3c0 - Chain directional refinement view
+
+G3c0 implements `ChainDirectionalRun` as a Layer 3 derived view from Layer 2
+segment geometry.
+
+Scope:
+- Derive direction-ready runs from `ChainGeometryFacts.segments`.
+- Preserve Layer 1 Chain identity.
+- Emit one run for one-segment, `STRAIGHT`, or `SAWTOOTH_STRAIGHT` Chains.
+- Split `UNKNOWN`, closed, or direction-unstable polygonal Chains by adjacent
+  segment direction compatibility.
+- Do not merge across closed-loop wrap in v1.
+
+This is a partial OQ-11 decision for straight/turning polygonal Chains only.
+Curved policy, sawtooth tuning, user split marks, closed-loop wrap merge,
+advanced corner detection and relation to disk-cycle ordering remain unresolved.
+
+G3c0 does not implement AlignmentClass or PatchAxes.
+
 ## Rules
 
 Layer 3 is derived from:
