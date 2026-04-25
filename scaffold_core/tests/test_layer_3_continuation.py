@@ -98,7 +98,7 @@ def test_isolated_chain_use_without_candidate_produces_terminus() -> None:
     assert all(_evidence_values(relation)["candidate_count"] == 0 for relation in continuations)
 
 
-def test_ambiguous_junction_produces_split_relations_to_each_candidate() -> None:
+def test_ambiguous_junction_produces_one_split_relation_per_source_use() -> None:
     source = make_two_quad_l_source_with_seam_on_shared_edge()
     topology = build_topology_snapshot(source)
     geometry = build_geometry_facts(source, topology)
@@ -112,7 +112,7 @@ def test_ambiguous_junction_produces_split_relations_to_each_candidate() -> None
 
     assert split_relations
     assert {relation.kind for relation in split_relations} == {ContinuationKind.SPLIT}
-    assert all(relation.target_chain_use_id is not None for relation in split_relations)
+    assert all(relation.target_chain_use_id is None for relation in split_relations)
     assert all(_evidence_values(relation)["candidate_count"] >= 2 for relation in split_relations)
 
 
@@ -123,7 +123,7 @@ def test_non_manifold_incidence_becomes_split_not_false_smooth_or_turn() -> None
 
     assert continuations
     assert {relation.kind for relation in continuations} == {ContinuationKind.SPLIT}
-    assert all(relation.target_chain_use_id is not None for relation in continuations)
+    assert all(relation.target_chain_use_id is None for relation in continuations)
 
 
 def test_continuations_for_source_use_filters_snapshot_relations() -> None:

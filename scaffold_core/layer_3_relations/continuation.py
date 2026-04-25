@@ -35,10 +35,7 @@ def build_chain_continuations(
         for source_use in incident_uses:
             candidates = tuple(use for use in incident_uses if use.id != source_use.id)
             if len(candidates) >= 2:
-                relations.extend(
-                    _split_relation(vertex_id, source_use, target_use, incident_uses, candidates)
-                    for target_use in candidates
-                )
+                relations.append(_split_relation(vertex_id, source_use, incident_uses, candidates))
                 continue
             relations.append(_terminus_relation(vertex_id, source_use, incident_uses, candidates))
     return tuple(relations)
@@ -76,14 +73,13 @@ def _terminus_relation(
 def _split_relation(
     vertex_id: VertexId,
     source_use: ChainUse,
-    target_use: ChainUse,
     incident_uses: tuple[ChainUse, ...],
     candidates: tuple[ChainUse, ...],
 ) -> ChainContinuationRelation:
     return ChainContinuationRelation(
         junction_vertex_id=vertex_id,
         source_chain_use_id=source_use.id,
-        target_chain_use_id=target_use.id,
+        target_chain_use_id=None,
         kind=ContinuationKind.SPLIT,
         confidence=1.0,
         evidence=(_evidence(incident_uses, candidates),),

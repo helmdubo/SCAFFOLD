@@ -141,8 +141,8 @@ class ChainContinuationRelation:
 
 Notes:
 - `target_chain_use_id = None` for TERMINUS.
-- SPLIT may be represented as multiple relations from the same source use
-  to multiple candidate target uses, each with kind = SPLIT.
+- SPLIT is represented as one relation from the source use with no selected
+  target. Candidate count is retained in evidence.
 - No ContinuationId is required in the first implementation.
 - RelationSnapshot may store continuations as a tuple.
 

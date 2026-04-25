@@ -265,7 +265,7 @@ Current policy is intentionally narrow:
 ```text
 0 candidates -> TERMINUS
 1 candidate  -> TERMINUS
-2+ candidates -> SPLIT to each candidate
+2+ candidates -> one SPLIT with candidate_count evidence
 ```
 
 Current caution:
