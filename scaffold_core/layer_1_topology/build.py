@@ -46,10 +46,14 @@ class _BoundarySide:
     face_id: SourceFaceId
     edge_id: SourceEdgeId
     edge_index: int
-    chain_id: ChainId
     start_vertex_id: VertexId
     end_vertex_id: VertexId
-    orientation_sign: int
+
+
+@dataclass(frozen=True)
+class _BoundaryRun:
+    sides: tuple[_BoundarySide, ...]
+    patch_context: tuple[PatchId, ...]
 
 
 def selected_face_ids(source: SourceMeshSnapshot) -> tuple[SourceFaceId, ...]:
@@ -182,6 +186,106 @@ def _order_boundary_cycles(
     return tuple(cycles)
 
 
+def _edge_patch_contexts(
+    edge_incidence: dict[SourceEdgeId, tuple[SourceFaceId, ...]],
+    face_to_patch_id: dict[SourceFaceId, PatchId],
+) -> dict[SourceEdgeId, tuple[PatchId, ...]]:
+    contexts: dict[SourceEdgeId, tuple[PatchId, ...]] = {}
+    for edge_id, face_ids in edge_incidence.items():
+        patch_ids = {face_to_patch_id[face_id] for face_id in face_ids}
+        contexts[edge_id] = tuple(sorted(patch_ids, key=str))
+    return contexts
+
+
+def _can_merge_boundary_contexts(
+    first: tuple[PatchId, ...],
+    second: tuple[PatchId, ...],
+) -> bool:
+    return len(first) > 1 and first == second
+
+
+def _atomic_boundary_runs(
+    sides: tuple[_BoundarySide, ...],
+    edge_patch_contexts: dict[SourceEdgeId, tuple[PatchId, ...]],
+) -> tuple[_BoundaryRun, ...]:
+    return tuple(
+        _BoundaryRun(sides=(side,), patch_context=edge_patch_contexts[side.edge_id])
+        for side in sides
+    )
+
+
+def _run_start_vertex_id(run: _BoundaryRun) -> VertexId:
+    return run.sides[0].start_vertex_id
+
+
+def _run_end_vertex_id(run: _BoundaryRun) -> VertexId:
+    return run.sides[-1].end_vertex_id
+
+
+def _coalesce_boundary_runs(
+    cycle: tuple[_BoundarySide, ...],
+    edge_patch_contexts: dict[SourceEdgeId, tuple[PatchId, ...]],
+) -> tuple[_BoundaryRun, ...]:
+    if not cycle:
+        return ()
+
+    runs: list[_BoundaryRun] = []
+    current_sides = [cycle[0]]
+    current_context = edge_patch_contexts[cycle[0].edge_id]
+
+    for side in cycle[1:]:
+        side_context = edge_patch_contexts[side.edge_id]
+        if _can_merge_boundary_contexts(current_context, side_context):
+            current_sides.append(side)
+            continue
+        runs.append(_BoundaryRun(sides=tuple(current_sides), patch_context=current_context))
+        current_sides = [side]
+        current_context = side_context
+
+    runs.append(_BoundaryRun(sides=tuple(current_sides), patch_context=current_context))
+
+    if len(runs) == 1:
+        run = runs[0]
+        if (
+            len(run.sides) > 1
+            and _can_merge_boundary_contexts(run.patch_context, run.patch_context)
+            and _run_start_vertex_id(run) == _run_end_vertex_id(run)
+        ):
+            return _atomic_boundary_runs(cycle, edge_patch_contexts)
+        return tuple(runs)
+
+    if _can_merge_boundary_contexts(runs[-1].patch_context, runs[0].patch_context):
+        runs[0] = _BoundaryRun(
+            sides=runs[-1].sides + runs[0].sides,
+            patch_context=runs[0].patch_context,
+        )
+        runs.pop()
+
+    return tuple(runs)
+
+
+def _run_source_edge_ids(run: _BoundaryRun) -> tuple[SourceEdgeId, ...]:
+    return tuple(side.edge_id for side in run.sides)
+
+
+def _chain_key_for_run(run: _BoundaryRun) -> tuple[SourceEdgeId, ...]:
+    return tuple(sorted(_run_source_edge_ids(run), key=str))
+
+
+def _chain_id_for_key(chain_key: tuple[SourceEdgeId, ...]) -> ChainId:
+    return ChainId("chain:" + ":".join(str(edge_id) for edge_id in chain_key))
+
+
+def _orientation_sign_for_run(chain: Chain, run: _BoundaryRun) -> int:
+    run_start = _run_start_vertex_id(run)
+    run_end = _run_end_vertex_id(run)
+    if chain.start_vertex_id == run_start and chain.end_vertex_id == run_end:
+        return 1
+    if chain.start_vertex_id == run_end and chain.end_vertex_id == run_start:
+        return -1
+    return 1
+
+
 def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
     """Build a Layer 1 topology snapshot from a source mesh snapshot."""
 
@@ -207,6 +311,7 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
     patch_face_ids: dict[PatchId, tuple[SourceFaceId, ...]] = {}
     patch_shell_ids: dict[PatchId, ShellId] = {}
     patch_loop_ids: dict[PatchId, list[BoundaryLoopId]] = defaultdict(list)
+    chain_ids_by_key: dict[tuple[SourceEdgeId, ...], ChainId] = {}
 
     shell_components = _edge_connected_face_components(source, face_ids, edge_incidence)
 
@@ -231,6 +336,7 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
         shells[shell_id] = Shell(id=shell_id, patch_ids=tuple(shell_patch_ids))
 
     boundary_sides_by_patch: dict[PatchId, list[_BoundarySide]] = defaultdict(list)
+    edge_patch_contexts = _edge_patch_contexts(edge_incidence, face_to_patch_id)
 
     for face_id in face_ids:
         face = source.faces[face_id]
@@ -245,17 +351,8 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
                 continue
 
             source_edge = source.edges[source_edge_id]
-            chain_id = ChainId(f"chain:{source_edge_id}")
             start_vertex_id = VertexId(f"vertex:{source_edge.vertex_ids[0]}")
             end_vertex_id = VertexId(f"vertex:{source_edge.vertex_ids[1]}")
-
-            if chain_id not in chains:
-                chains[chain_id] = Chain(
-                    id=chain_id,
-                    start_vertex_id=start_vertex_id,
-                    end_vertex_id=end_vertex_id,
-                    source_edge_ids=(source_edge_id,),
-                )
 
             face_start = face.vertex_ids[edge_index]
             face_end = face.vertex_ids[(edge_index + 1) % len(face.vertex_ids)]
@@ -272,10 +369,8 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
                     face_id=face_id,
                     edge_id=source_edge_id,
                     edge_index=edge_index,
-                    chain_id=chain_id,
                     start_vertex_id=side_start_vertex_id,
                     end_vertex_id=side_end_vertex_id,
-                    orientation_sign=orientation_sign,
                 )
             )
 
@@ -288,22 +383,36 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
         ]
         sorted_cycles = sorted(
             closed_cycles,
-            key=lambda item: (-len(item[0]), str(item[0][0].chain_id) if item[0] else ""),
+            key=lambda item: (-len(item[0]), str(item[0][0].edge_id) if item[0] else ""),
         )
         sorted_cycles.extend((cycle, closed) for cycle, closed in ordered_cycles if not closed)
 
         for loop_index, (cycle, closed) in enumerate(sorted_cycles):
             loop_id = BoundaryLoopId(f"loop:{patch_id}:{loop_index}")
             use_ids: list[ChainUseId] = []
+            boundary_runs = _coalesce_boundary_runs(cycle, edge_patch_contexts)
 
-            for position_in_loop, side in enumerate(cycle):
+            for position_in_loop, run in enumerate(boundary_runs):
+                chain_key = _chain_key_for_run(run)
+                if chain_key not in chain_ids_by_key:
+                    chain_id = _chain_id_for_key(chain_key)
+                    chain_ids_by_key[chain_key] = chain_id
+                    chains[chain_id] = Chain(
+                        id=chain_id,
+                        start_vertex_id=_run_start_vertex_id(run),
+                        end_vertex_id=_run_end_vertex_id(run),
+                        source_edge_ids=_run_source_edge_ids(run),
+                    )
+                else:
+                    chain_id = chain_ids_by_key[chain_key]
+
                 use_id = ChainUseId(f"use:{patch_id}:{loop_index}:{position_in_loop}")
                 chain_uses[use_id] = ChainUse(
                     id=use_id,
-                    chain_id=side.chain_id,
+                    chain_id=chain_id,
                     patch_id=patch_id,
                     loop_id=loop_id,
-                    orientation_sign=side.orientation_sign,
+                    orientation_sign=_orientation_sign_for_run(chains[chain_id], run),
                     position_in_loop=position_in_loop,
                 )
                 use_ids.append(use_id)

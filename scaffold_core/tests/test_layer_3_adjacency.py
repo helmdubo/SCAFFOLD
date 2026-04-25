@@ -26,6 +26,7 @@ from scaffold_core.tests.fixtures.non_manifold import make_three_quad_non_manifo
 from scaffold_core.tests.fixtures.seam_self import make_seam_self_model
 from scaffold_core.tests.fixtures.single_patch import make_single_quad_source
 from scaffold_core.tests.fixtures.l_shape import (
+    make_two_patch_source_with_two_edge_seam_run,
     make_two_quad_folded_source_with_seam_on_shared_edge,
     make_two_quad_l_source_with_seam_on_shared_edge,
 )
@@ -47,6 +48,20 @@ def test_shared_two_patch_chain_builds_patch_adjacency() -> None:
     }
     assert adjacency.shared_length == 1.0
     assert adjacency.signed_angle_radians == 0.0
+    assert adjacency.dihedral_kind is DihedralKind.COPLANAR
+
+
+def test_coalesced_two_edge_chain_builds_one_patch_adjacency() -> None:
+    source = make_two_patch_source_with_two_edge_seam_run()
+    topology = build_topology_snapshot(source)
+    geometry = build_geometry_facts(source, topology)
+
+    relations = build_relation_snapshot(topology, geometry)
+
+    assert len(relations.patch_adjacencies) == 1
+    adjacency = next(iter(relations.patch_adjacencies.values()))
+    assert adjacency.chain_id == ChainId("chain:e1:e2")
+    assert adjacency.shared_length == 1.0
     assert adjacency.dihedral_kind is DihedralKind.COPLANAR
 
 
