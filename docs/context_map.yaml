@@ -79,6 +79,10 @@ task_routes:
     - docs/agent_rules/anti_overengineering.md
   file_tree:
     - docs/reference/file_tree_target.md
+  chain_refinement:
+    - docs/layers/layer_1_topology.md
+    - docs/architecture/design_decisions.md
+    - docs/architecture/segmentation_shell_policy.md
 
 layer_order:
   - layer_0_source
@@ -87,8 +91,3 @@ layer_order:
   - layer_3_relations
   - layer_4_features
   - layer_5_runtime
-
-chain_refinement:
-  - docs/layers/layer_1_topology.md
-  - docs/architecture/design_decisions.md
-  - docs/architecture/segmentation_shell_policy.md
