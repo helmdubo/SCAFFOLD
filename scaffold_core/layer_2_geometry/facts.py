@@ -14,7 +14,7 @@ from enum import Enum
 from typing import Mapping
 
 from scaffold_core.core.diagnostics import Diagnostic
-from scaffold_core.ids import ChainId, PatchId, VertexId
+from scaffold_core.ids import ChainId, PatchId, SourceEdgeId, SourceVertexId, VertexId
 
 
 Vector3 = tuple[float, float, float]
@@ -37,6 +37,20 @@ class PatchGeometryFacts:
 
 
 @dataclass(frozen=True)
+class ChainSegmentGeometryFacts:
+    chain_id: ChainId
+    source_edge_id: SourceEdgeId
+    segment_index: int
+    start_source_vertex_id: SourceVertexId
+    end_source_vertex_id: SourceVertexId
+    start_position: Vector3
+    end_position: Vector3
+    vector: Vector3
+    length: float
+    direction: Vector3
+
+
+@dataclass(frozen=True)
 class ChainGeometryFacts:
     chain_id: ChainId
     length: float
@@ -45,6 +59,8 @@ class ChainGeometryFacts:
     straightness: float
     detour_ratio: float
     shape_hint: ChainShapeHint = ChainShapeHint.UNKNOWN
+    source_vertex_run: tuple[SourceVertexId, ...] = ()
+    segments: tuple[ChainSegmentGeometryFacts, ...] = ()
 
 
 @dataclass(frozen=True)

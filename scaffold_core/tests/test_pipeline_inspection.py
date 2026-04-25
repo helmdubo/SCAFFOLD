@@ -166,6 +166,11 @@ def test_inspection_marks_closed_coalesced_chain_and_vertex_run() -> None:
     assert closed_chain["source_vertex_run"] == ["v0", "v1", "v2", "v3", "v0"]
     assert geometry_chain["is_closed"]
     assert not geometry_chain["is_direction_stable"]
+    assert geometry_chain["source_vertex_run"] == ["v0", "v1", "v2", "v3", "v0"]
+    assert len(geometry_chain["segments"]) == 4
+    assert geometry_chain["segments"][0]["source_edge_id"] == "e10"
+    assert geometry_chain["segments"][0]["start_source_vertex_id"] == "v0"
+    assert geometry_chain["segments"][0]["end_source_vertex_id"] == "v1"
 
 
 def test_inspection_output_order_is_stable() -> None:

@@ -91,6 +91,21 @@ def geometry_summary_to_dict(geometry: GeometryFactSnapshot) -> InspectionDict:
                     facts.shape_hint.value != "UNKNOWN"
                     and facts.chord_length > DIRECTION_STABLE_EPSILON
                 ),
+                "source_vertex_run": [
+                    str(source_vertex_id)
+                    for source_vertex_id in facts.source_vertex_run
+                ],
+                "segments": [
+                    {
+                        "source_edge_id": str(segment.source_edge_id),
+                        "segment_index": segment.segment_index,
+                        "start_source_vertex_id": str(segment.start_source_vertex_id),
+                        "end_source_vertex_id": str(segment.end_source_vertex_id),
+                        "length": segment.length,
+                        "direction": list(segment.direction),
+                    }
+                    for segment in facts.segments
+                ],
             }
             for facts in sorted(geometry.chain_facts.values(), key=lambda item: str(item.chain_id))
         ],

@@ -230,6 +230,9 @@ G2a includes raw patch area/normal/centroid, chain length/chord direction,
 vertex position and degraded diagnostics for degenerate patch/chain geometry.
 G2b adds chain chord length, straightness, detour ratio and raw shape hints
 including `SAWTOOTH_STRAIGHT`.
+G2.1 now exposes per-source-edge Chain segment geometry facts. This is raw
+geometry only. It does not refine Chain identity. It is intended as input for
+future Layer 3 OQ-11 chain refinement.
 
 G3 phase transition is active. Initial G3a work should stay limited to:
 

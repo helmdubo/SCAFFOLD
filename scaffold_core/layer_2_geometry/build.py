@@ -15,6 +15,7 @@ from scaffold_core.layer_0_source.snapshot import SourceMeshSnapshot
 from scaffold_core.layer_1_topology.model import Chain, Patch, SurfaceModel, Vertex
 from scaffold_core.layer_2_geometry.facts import (
     ChainGeometryFacts,
+    ChainSegmentGeometryFacts,
     ChainShapeHint,
     GeometryFactSnapshot,
     PatchGeometryFacts,
@@ -123,13 +124,25 @@ def _build_chain_geometry_facts(
     chain: Chain,
     diagnostics: list[Diagnostic],
 ) -> ChainGeometryFacts:
-    length_total = 0.0
-    segment_vectors: list[Vector3] = []
-    for source_edge_id in chain.source_edge_ids:
-        start, end = _source_edge_points(source, source_edge_id)
-        segment = subtract(end, start)
-        segment_vectors.append(segment)
-        length_total += length(segment)
+    source_vertex_run, source_segment_vertex_ids = _source_vertex_run_for_chain(
+        source,
+        chain,
+        diagnostics,
+    )
+    segments = tuple(
+        _build_chain_segment_geometry_facts(
+            source,
+            chain,
+            segment_index,
+            source_edge_id,
+            start_source_vertex_id,
+            end_source_vertex_id,
+        )
+        for segment_index, (source_edge_id, start_source_vertex_id, end_source_vertex_id)
+        in enumerate(source_segment_vertex_ids)
+    )
+    length_total = sum(segment.length for segment in segments)
+    segment_vectors = [segment.vector for segment in segments]
 
     start_point = _topology_vertex_point(source, topology.vertices[chain.start_vertex_id])
     end_point = _topology_vertex_point(source, topology.vertices[chain.end_vertex_id])
@@ -166,6 +179,96 @@ def _build_chain_geometry_facts(
         straightness=straightness,
         detour_ratio=detour_ratio,
         shape_hint=shape_hint,
+        source_vertex_run=source_vertex_run,
+        segments=segments,
+    )
+
+
+def _source_vertex_run_for_chain(
+    source: SourceMeshSnapshot,
+    chain: Chain,
+    diagnostics: list[Diagnostic],
+) -> tuple[tuple[SourceVertexId, ...], tuple[tuple[SourceEdgeId, SourceVertexId, SourceVertexId], ...]]:
+    if not chain.source_edge_ids:
+        return (), ()
+
+    first_edge = source.edges[chain.source_edge_ids[0]]
+    attempts = (
+        (first_edge.vertex_ids[0], first_edge.vertex_ids[1]),
+        (first_edge.vertex_ids[1], first_edge.vertex_ids[0]),
+    )
+    for first_start_vertex_id, first_end_vertex_id in attempts:
+        run = [first_start_vertex_id, first_end_vertex_id]
+        segment_vertex_ids = [
+            (chain.source_edge_ids[0], first_start_vertex_id, first_end_vertex_id)
+        ]
+        for source_edge_id in chain.source_edge_ids[1:]:
+            edge = source.edges[source_edge_id]
+            if edge.vertex_ids[0] == run[-1]:
+                start_vertex_id = edge.vertex_ids[0]
+                end_vertex_id = edge.vertex_ids[1]
+            elif edge.vertex_ids[1] == run[-1]:
+                start_vertex_id = edge.vertex_ids[1]
+                end_vertex_id = edge.vertex_ids[0]
+            else:
+                break
+            run.append(end_vertex_id)
+            segment_vertex_ids.append((source_edge_id, start_vertex_id, end_vertex_id))
+        else:
+            return tuple(run), tuple(segment_vertex_ids)
+
+    diagnostics.append(
+        Diagnostic(
+            code="GEOMETRY_CHAIN_SEGMENT_ORDER_DEGRADED",
+            severity=DiagnosticSeverity.DEGRADED,
+            message="Chain source edges could not be reconstructed as one continuous vertex run.",
+            source="layer_2_geometry.build.build_geometry_facts",
+            entity_ids=(str(chain.id),),
+            evidence={
+                "source_edge_ids": tuple(str(source_edge_id) for source_edge_id in chain.source_edge_ids),
+            },
+        )
+    )
+    fallback_segments = tuple(
+        (
+            source_edge_id,
+            source.edges[source_edge_id].vertex_ids[0],
+            source.edges[source_edge_id].vertex_ids[1],
+        )
+        for source_edge_id in chain.source_edge_ids
+    )
+    fallback_run: list[SourceVertexId] = []
+    for _, start_vertex_id, end_vertex_id in fallback_segments:
+        if not fallback_run:
+            fallback_run.extend((start_vertex_id, end_vertex_id))
+        else:
+            fallback_run.extend((start_vertex_id, end_vertex_id))
+    return tuple(fallback_run), fallback_segments
+
+
+def _build_chain_segment_geometry_facts(
+    source: SourceMeshSnapshot,
+    chain: Chain,
+    segment_index: int,
+    source_edge_id: SourceEdgeId,
+    start_source_vertex_id: SourceVertexId,
+    end_source_vertex_id: SourceVertexId,
+) -> ChainSegmentGeometryFacts:
+    start = _source_vertex_point(source, start_source_vertex_id)
+    end = _source_vertex_point(source, end_source_vertex_id)
+    segment = subtract(end, start)
+    segment_length = length(segment)
+    return ChainSegmentGeometryFacts(
+        chain_id=chain.id,
+        source_edge_id=source_edge_id,
+        segment_index=segment_index,
+        start_source_vertex_id=start_source_vertex_id,
+        end_source_vertex_id=end_source_vertex_id,
+        start_position=start,
+        end_position=end,
+        vector=segment,
+        length=segment_length,
+        direction=normalize(segment),
     )
 
 
