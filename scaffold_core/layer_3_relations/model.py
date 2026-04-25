@@ -45,6 +45,13 @@ class ContinuationKind(str, Enum):
     TURN = "TURN"
 
 
+class AlignmentClassKind(str, Enum):
+    """Conservative G3c2 alignment grouping kind."""
+
+    LINEAR = "LINEAR"
+    UNKNOWN = "UNKNOWN"
+
+
 @dataclass(frozen=True)
 class PatchAdjacency:
     id: str
@@ -104,9 +111,21 @@ class ChainDirectionalRunUse:
 
 
 @dataclass(frozen=True)
+class AlignmentClass:
+    id: str
+    member_run_use_ids: tuple[str, ...]
+    patch_ids: tuple[PatchId, ...]
+    dominant_direction: Vector3
+    kind: AlignmentClassKind
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
     chain_continuations: tuple[ChainContinuationRelation, ...] = ()
     chain_directional_runs: tuple[ChainDirectionalRun, ...] = ()
     chain_directional_run_uses: tuple[ChainDirectionalRunUse, ...] = ()
+    alignment_classes: tuple[AlignmentClass, ...] = ()
     diagnostics: tuple[Diagnostic, ...] = ()

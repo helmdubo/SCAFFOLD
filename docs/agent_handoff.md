@@ -297,6 +297,15 @@ AlignmentClass is still not implemented.
 PatchAxes is still not implemented.
 ```
 
+G3c2 AlignmentClass v0 is implemented:
+
+```text
+AlignmentClass consumes ChainDirectionalRunUse, not Chain.
+It groups patch-local directional run uses into sign-insensitive direction
+families.
+PatchAxes remains deferred.
+```
+
 Implemented test fixtures:
 
 ```text

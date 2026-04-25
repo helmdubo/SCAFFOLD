@@ -185,6 +185,18 @@ Scope:
 - Preserve Layer 1 Chain, ChainUse, BoundaryLoop and Patch identity.
 - Do not implement AlignmentClass or PatchAxes.
 
+## G3c2 - AlignmentClass v0
+
+G3c2 implements `AlignmentClass` v0 as sign-insensitive direction-family
+groups over `ChainDirectionalRunUse` records.
+
+Scope:
+- Consume `ChainDirectionalRunUse`, not Layer 1 Chain directly.
+- Group by direction similarity only.
+- Preserve per-ChainUse membership through `member_run_use_ids`.
+- Do not implement PatchAxes, CoordinateHint, WORLD_UP bias, H/V labels,
+  or WorldOrientation.
+
 ## Rules
 
 Layer 3 is derived from:

@@ -120,6 +120,7 @@ def relation_summary_to_dict(relations: RelationSnapshot) -> InspectionDict:
         "chain_continuation_count": len(relations.chain_continuations),
         "chain_directional_run_count": len(relations.chain_directional_runs),
         "chain_directional_run_use_count": len(relations.chain_directional_run_uses),
+        "alignment_class_count": len(relations.alignment_classes),
         "patch_adjacencies": [
             {
                 "id": adjacency.id,
@@ -198,6 +199,20 @@ def relation_summary_to_dict(relations: RelationSnapshot) -> InspectionDict:
             }
             for run_use in sorted(
                 relations.chain_directional_run_uses,
+                key=lambda item: item.id,
+            )
+        ],
+        "alignment_classes": [
+            {
+                "id": alignment_class.id,
+                "kind": str(alignment_class.kind.value),
+                "member_run_use_ids": list(alignment_class.member_run_use_ids),
+                "patch_ids": [str(patch_id) for patch_id in alignment_class.patch_ids],
+                "dominant_direction": list(alignment_class.dominant_direction),
+                "confidence": alignment_class.confidence,
+            }
+            for alignment_class in sorted(
+                relations.alignment_classes,
                 key=lambda item: item.id,
             )
         ],
