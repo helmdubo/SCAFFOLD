@@ -55,7 +55,7 @@ def test_direction_ambiguous_chain_handling_is_unresolved() -> None:
     """G3a Chains can have shape_hint = UNKNOWN in Layer 2 because they have
     no stable chord direction.
 
-    Layer 2 already exposes that signal. It is not yet decided how
+    Layer 2 may expose that signal. It is not yet decided how
     AlignmentClass consumes it: skip the Chain, refine it into stable
     sub-segments, defer to user override, or another approach.
 

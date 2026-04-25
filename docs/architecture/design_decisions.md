@@ -38,7 +38,7 @@ Agents may read this file for quick lookup. If it disagrees with `G0.md`, `G0.md
   coalescing only. Border edges remain atomic by default. Closed, turning,
   or direction-ambiguous Chains require Layer 2 geometry-based refinement
   before Alignment. Coalescing and refinement are scoped to one ordered
-  atomic boundary cycle inside one BoundaryLoop.
+  atomic boundary cycle that materializes as one final BoundaryLoop.
 - **DD-30 — Chain refinement does not change Layer 1 Chain identity.**
   Layer 1 Chain identity is topology-only. Geometry-driven refinement
   lives in Layer 3 and produces derived sub-chain entities or alignment
