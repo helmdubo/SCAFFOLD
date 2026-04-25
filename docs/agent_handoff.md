@@ -251,8 +251,14 @@ It does not introduce a Junction entity.
 It does not implement disk-cycle ordering.
 It does not implement ChainContinuationRelation.
 
-Next task:
-  G3b2 Conservative ChainContinuationRelation.
+G3b2 implements conservative ChainContinuationRelation records.
+Current policy is intentionally narrow:
+
+```text
+0 candidates -> TERMINUS
+1 candidate  -> TERMINUS
+2+ candidates -> SPLIT to each candidate
+```
 
 Current caution:
   Continuation must not assume Chains are direction-stable.

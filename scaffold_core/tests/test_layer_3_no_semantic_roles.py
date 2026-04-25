@@ -24,9 +24,10 @@ FORBIDDEN_TOKENS = frozenset({
     "PatchAxes",
     "WorldOrientation",
     "WORLD_UP",
-    "ChainContinuationRelation",
     "Junction",
     "Feature",
+    "Runtime",
+    "Solve",
     "Pin",
     "UV",
 })
