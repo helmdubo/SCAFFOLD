@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from scaffold_core.layer_0_source.blender_io import read_source_mesh_from_blender
+from scaffold_core.layer_0_source.snapshot import SourceMeshSnapshot
 from scaffold_core.layer_1_topology.build import build_topology_snapshot
 from scaffold_core.layer_1_topology.invariants import validate_topology
 from scaffold_core.layer_1_topology.model import ChainUse, SurfaceModel
@@ -23,6 +24,7 @@ from scaffold_core.pipeline.context import PipelineContext
 
 
 InspectionDict = dict[str, object]
+DIRECTION_STABLE_EPSILON = 1.0e-9
 
 
 def inspect_pipeline_context(context: PipelineContext) -> InspectionDict:
@@ -30,7 +32,7 @@ def inspect_pipeline_context(context: PipelineContext) -> InspectionDict:
 
     report: InspectionDict = {}
     if context.topology_snapshot is not None:
-        report.update(topology_tree_to_dict(context.topology_snapshot))
+        report.update(topology_tree_to_dict(context.topology_snapshot, context.source_snapshot))
     if context.geometry_facts is not None:
         report["geometry"] = geometry_summary_to_dict(context.geometry_facts)
     if context.relation_snapshot is not None:
@@ -39,7 +41,10 @@ def inspect_pipeline_context(context: PipelineContext) -> InspectionDict:
     return report
 
 
-def topology_tree_to_dict(model: SurfaceModel) -> InspectionDict:
+def topology_tree_to_dict(
+    model: SurfaceModel,
+    source: SourceMeshSnapshot | None = None,
+) -> InspectionDict:
     """Return nested SurfaceModel -> Shell -> Patch -> Loop -> ChainUse data."""
 
     return {
@@ -49,7 +54,7 @@ def topology_tree_to_dict(model: SurfaceModel) -> InspectionDict:
                 {
                     "id": str(shell.id),
                     "patches": [
-                        _patch_to_dict(model, patch_id)
+                        _patch_to_dict(model, patch_id, source)
                         for patch_id in sorted(shell.patch_ids, key=str)
                     ],
                 }
@@ -81,6 +86,11 @@ def geometry_summary_to_dict(geometry: GeometryFactSnapshot) -> InspectionDict:
                 "length": facts.length,
                 "chord_length": facts.chord_length,
                 "shape_hint": str(facts.shape_hint.value),
+                "is_closed": facts.chord_length <= DIRECTION_STABLE_EPSILON,
+                "is_direction_stable": (
+                    facts.shape_hint.value != "UNKNOWN"
+                    and facts.chord_length > DIRECTION_STABLE_EPSILON
+                ),
             }
             for facts in sorted(geometry.chain_facts.values(), key=lambda item: str(item.chain_id))
         ],
@@ -114,6 +124,14 @@ def relation_summary_to_dict(relations: RelationSnapshot) -> InspectionDict:
                 ),
                 "kind": str(relation.kind.value),
                 "confidence": relation.confidence,
+                "evidence": [
+                    {
+                        "source": evidence.source,
+                        "summary": evidence.summary,
+                        "data": dict(evidence.data),
+                    }
+                    for evidence in relation.evidence
+                ],
             }
             for relation in sorted(
                 relations.chain_continuations,
@@ -172,7 +190,11 @@ def describe_active_blender_mesh_topology(context: object) -> str:
     return "\n".join(lines)
 
 
-def _patch_to_dict(model: SurfaceModel, patch_id) -> InspectionDict:
+def _patch_to_dict(
+    model: SurfaceModel,
+    patch_id,
+    source: SourceMeshSnapshot | None,
+) -> InspectionDict:
     patch = model.patches[patch_id]
     return {
         "id": str(patch.id),
@@ -183,7 +205,7 @@ def _patch_to_dict(model: SurfaceModel, patch_id) -> InspectionDict:
                 "kind": str(loop.kind.value),
                 "loop_index": loop.loop_index,
                 "chain_uses": [
-                    _chain_use_to_dict(model, model.chain_uses[use_id])
+                    _chain_use_to_dict(model, model.chain_uses[use_id], source)
                     for use_id in sorted(loop.chain_use_ids, key=lambda item: model.chain_uses[item].position_in_loop)
                 ],
             }
@@ -195,29 +217,59 @@ def _patch_to_dict(model: SurfaceModel, patch_id) -> InspectionDict:
     }
 
 
-def _chain_use_to_dict(model: SurfaceModel, use: ChainUse) -> InspectionDict:
+def _chain_use_to_dict(
+    model: SurfaceModel,
+    use: ChainUse,
+    source: SourceMeshSnapshot | None,
+) -> InspectionDict:
     chain = model.chains[use.chain_id]
     start_vertex = model.vertices[chain.start_vertex_id]
     end_vertex = model.vertices[chain.end_vertex_id]
+    chain_data: InspectionDict = {
+        "id": str(chain.id),
+        "source_edge_ids": [str(edge_id) for edge_id in chain.source_edge_ids],
+        "source_edge_count": len(chain.source_edge_ids),
+        "is_closed": chain.start_vertex_id == chain.end_vertex_id,
+        "start_vertex_id": str(chain.start_vertex_id),
+        "end_vertex_id": str(chain.end_vertex_id),
+        "start_source_vertex_ids": [
+            str(source_vertex_id)
+            for source_vertex_id in start_vertex.source_vertex_ids
+        ],
+        "end_source_vertex_ids": [
+            str(source_vertex_id)
+            for source_vertex_id in end_vertex.source_vertex_ids
+        ],
+    }
+    source_vertex_run = _source_vertex_run(source, chain.source_edge_ids)
+    if source_vertex_run:
+        chain_data["source_vertex_run"] = source_vertex_run
     return {
         "id": str(use.id),
         "orientation_sign": use.orientation_sign,
         "position_in_loop": use.position_in_loop,
-        "chain": {
-            "id": str(chain.id),
-            "source_edge_ids": [str(edge_id) for edge_id in chain.source_edge_ids],
-            "start_vertex_id": str(chain.start_vertex_id),
-            "end_vertex_id": str(chain.end_vertex_id),
-            "start_source_vertex_ids": [
-                str(source_vertex_id)
-                for source_vertex_id in start_vertex.source_vertex_ids
-            ],
-            "end_source_vertex_ids": [
-                str(source_vertex_id)
-                for source_vertex_id in end_vertex.source_vertex_ids
-            ],
-        },
+        "chain": chain_data,
     }
+
+
+def _source_vertex_run(
+    source: SourceMeshSnapshot | None,
+    source_edge_ids,
+) -> list[str]:
+    if source is None or not source_edge_ids:
+        return []
+
+    first_edge = source.edges[source_edge_ids[0]]
+    run = [first_edge.vertex_ids[0], first_edge.vertex_ids[1]]
+    for edge_id in source_edge_ids[1:]:
+        edge = source.edges[edge_id]
+        if edge.vertex_ids[0] == run[-1]:
+            run.append(edge.vertex_ids[1])
+        elif edge.vertex_ids[1] == run[-1]:
+            run.append(edge.vertex_ids[0])
+        else:
+            return []
+    return [str(vertex_id) for vertex_id in run]
 
 
 def _diagnostics_to_list(context: PipelineContext) -> list[dict[str, Any]]:

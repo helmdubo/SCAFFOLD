@@ -18,6 +18,7 @@ from scaffold_core.pipeline.inspection import (
     inspect_pipeline_context,
 )
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
+from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_boundary_loop_source
 from scaffold_core.tests.fixtures.l_shape import make_two_patch_source_with_two_edge_seam_run
 from scaffold_core.tests.fixtures.single_patch import make_single_quad_source
 
@@ -108,6 +109,9 @@ def test_inspect_pipeline_context_reports_single_patch_topology_tree() -> None:
     assert chain_use["orientation_sign"] in (-1, 1)
     assert chain["start_vertex_id"].startswith("vertex:")
     assert chain["start_source_vertex_ids"]
+    assert chain["source_edge_count"] == 1
+    assert not chain["is_closed"]
+    assert chain["source_vertex_run"] == ["v0", "v1"]
     assert report["geometry"]["patch_count"] == 1
     assert report["diagnostics"]
     assert report["diagnostics"][0]["code"] == "TOPOLOGY_CHAIN_BORDER"
@@ -133,6 +137,35 @@ def test_inspect_pipeline_context_reports_relations_and_coalesced_chain() -> Non
         for loop in patch["loops"]
         for chain_use in loop["chain_uses"]
     )
+    assert relations["chain_continuations"][0]["evidence"]
+    assert relations["chain_continuations"][0]["evidence"][0]["data"]["policy"] == "conservative_g3b2"
+
+
+def test_inspection_marks_closed_coalesced_chain_and_vertex_run() -> None:
+    context = run_pass_1_relations(
+        run_pass_0(make_closed_shared_boundary_loop_source())
+    )
+
+    report = inspect_pipeline_context(context)
+
+    json.dumps(report)
+    chains = [
+        chain_use["chain"]
+        for shell in report["surface_model"]["shells"]
+        for patch in shell["patches"]
+        for loop in patch["loops"]
+        for chain_use in loop["chain_uses"]
+    ]
+    closed_chain = next(chain for chain in chains if chain["is_closed"])
+    geometry_chain = next(
+        chain
+        for chain in report["geometry"]["chains"]
+        if chain["id"] == closed_chain["id"]
+    )
+    assert closed_chain["source_edge_count"] == 4
+    assert closed_chain["source_vertex_run"] == ["v0", "v1", "v2", "v3", "v0"]
+    assert geometry_chain["is_closed"]
+    assert not geometry_chain["is_direction_stable"]
 
 
 def test_inspection_output_order_is_stable() -> None:
