@@ -204,16 +204,6 @@ def _can_merge_boundary_contexts(
     return len(first) > 1 and first == second
 
 
-def _atomic_boundary_runs(
-    sides: tuple[_BoundarySide, ...],
-    edge_patch_contexts: dict[SourceEdgeId, tuple[PatchId, ...]],
-) -> tuple[_BoundaryRun, ...]:
-    return tuple(
-        _BoundaryRun(sides=(side,), patch_context=edge_patch_contexts[side.edge_id])
-        for side in sides
-    )
-
-
 def _run_start_vertex_id(run: _BoundaryRun) -> VertexId:
     return run.sides[0].start_vertex_id
 
@@ -245,13 +235,6 @@ def _coalesce_boundary_runs(
     runs.append(_BoundaryRun(sides=tuple(current_sides), patch_context=current_context))
 
     if len(runs) == 1:
-        run = runs[0]
-        if (
-            len(run.sides) > 1
-            and _can_merge_boundary_contexts(run.patch_context, run.patch_context)
-            and _run_start_vertex_id(run) == _run_end_vertex_id(run)
-        ):
-            return _atomic_boundary_runs(cycle, edge_patch_contexts)
         return tuple(runs)
 
     if _can_merge_boundary_contexts(runs[-1].patch_context, runs[0].patch_context):
@@ -276,9 +259,31 @@ def _chain_id_for_key(chain_key: tuple[SourceEdgeId, ...]) -> ChainId:
     return ChainId("chain:" + ":".join(str(edge_id) for edge_id in chain_key))
 
 
+def _matches_cyclic_order(
+    candidate: tuple[SourceEdgeId, ...],
+    reference: tuple[SourceEdgeId, ...],
+) -> bool:
+    if len(candidate) != len(reference):
+        return False
+    if not candidate:
+        return True
+    doubled_reference = reference + reference
+    return any(
+        candidate == doubled_reference[index:index + len(candidate)]
+        for index in range(len(reference))
+    )
+
+
 def _orientation_sign_for_run(chain: Chain, run: _BoundaryRun) -> int:
     run_start = _run_start_vertex_id(run)
     run_end = _run_end_vertex_id(run)
+    run_source_edge_ids = _run_source_edge_ids(run)
+    if chain.start_vertex_id == chain.end_vertex_id and run_start == run_end:
+        if _matches_cyclic_order(run_source_edge_ids, chain.source_edge_ids):
+            return 1
+        if _matches_cyclic_order(tuple(reversed(run_source_edge_ids)), chain.source_edge_ids):
+            return -1
+
     if chain.start_vertex_id == run_start and chain.end_vertex_id == run_end:
         return 1
     if chain.start_vertex_id == run_end and chain.end_vertex_id == run_start:

@@ -56,4 +56,8 @@ def test_describe_active_blender_mesh_topology_reports_g1_counts() -> None:
     assert "chains: 4" in report
     assert "shell shell:0: patches ('patch:seed:f0',)" in report
     assert "patch patch:seed:f0: shell shell:0 faces ('f0',) loops ('loop:patch:seed:f0:0',)" in report
-    assert "chain chain:e0: uses 1" in report
+    assert "chain chain:e0: edges ('e0',) uses 1" in report
+    assert (
+        "chain use use:patch:seed:f0:0:0: chain chain:e0 "
+        "patch patch:seed:f0 loop loop:patch:seed:f0:0 orientation 1"
+    ) in report

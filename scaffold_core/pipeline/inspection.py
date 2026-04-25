@@ -43,8 +43,14 @@ def describe_active_blender_mesh_topology(context: object) -> str:
         for patch in model.patches.values()
     )
     lines.extend(
-        f"chain {chain.id}: uses {len(chain_uses_for_chain(model, chain.id))}"
+        f"chain {chain.id}: edges {tuple(str(edge_id) for edge_id in chain.source_edge_ids)} "
+        f"uses {len(chain_uses_for_chain(model, chain.id))}"
         for chain in model.chains.values()
+    )
+    lines.extend(
+        f"chain use {use.id}: chain {use.chain_id} patch {use.patch_id} "
+        f"loop {use.loop_id} orientation {use.orientation_sign}"
+        for use in model.chain_uses.values()
     )
     lines.extend(
         f"{diagnostic.severity} {diagnostic.code} "
