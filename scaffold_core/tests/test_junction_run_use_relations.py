@@ -24,6 +24,9 @@ from scaffold_core.layer_3_relations.model import (
 from scaffold_core.pipeline.inspection import inspect_pipeline_context
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_boundary_loop_source
+from scaffold_core.tests.fixtures.cylinder_tube import (
+    make_segmented_cylinder_tube_without_caps_with_one_seam_source,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -132,6 +135,20 @@ def test_pipeline_builds_closed_loop_junction_run_use_relations() -> None:
         JunctionRunUseRelationKind.CORNER_CONNECTOR,
         JunctionRunUseRelationKind.AMBIGUOUS,
     }
+
+
+def test_cylinder_junction_relations_use_vertex_fan_normals() -> None:
+    context = run_pass_1_relations(
+        run_pass_0(make_segmented_cylinder_tube_without_caps_with_one_seam_source())
+    )
+
+    snapshot = context.relation_snapshot
+    assert snapshot is not None
+    assert snapshot.junction_run_use_relations
+    assert all(
+        relation.kind is not JunctionRunUseRelationKind.DEGENERATE
+        for relation in snapshot.junction_run_use_relations
+    )
 
 
 def test_inspection_json_includes_junction_run_use_relations() -> None:

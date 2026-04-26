@@ -70,6 +70,7 @@ class RunUseEndpointRole(str, Enum):
 class OwnerNormalSource(str, Enum):
     """Source for a junction sample owner normal."""
 
+    VERTEX_FAN_NORMAL = "VERTEX_FAN_NORMAL"
     PATCH_AGGREGATE_NORMAL = "PATCH_AGGREGATE_NORMAL"
     LOCAL_FACE_NORMAL_AVERAGE = "LOCAL_FACE_NORMAL_AVERAGE"
     UNKNOWN = "UNKNOWN"

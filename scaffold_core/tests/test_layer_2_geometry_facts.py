@@ -45,6 +45,9 @@ from scaffold_core.layer_2_geometry.build import build_geometry_facts
 from scaffold_core.layer_2_geometry.facts import ChainShapeHint
 from scaffold_core.tests.fixtures.chain_shape_geometry import make_chain_shape_source_and_topology
 from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_boundary_loop_source
+from scaffold_core.tests.fixtures.cylinder_tube import (
+    make_segmented_cylinder_tube_without_caps_with_one_seam_source,
+)
 from scaffold_core.tests.fixtures.degenerate_geometry import make_degenerate_triangle_source
 from scaffold_core.tests.fixtures.l_shape import make_two_quad_l_source
 from scaffold_core.tests.fixtures.single_patch import make_single_quad_source
@@ -88,6 +91,26 @@ def test_two_quad_patch_geometry_aggregates_source_faces() -> None:
     assert patch.area == 2.0
     assert patch.normal == (0.0, 0.0, 1.0)
     assert patch.centroid == (1.0, 0.5, 0.0)
+
+
+def test_vertex_fan_geometry_splits_materialized_seam_occurrences() -> None:
+    source = make_segmented_cylinder_tube_without_caps_with_one_seam_source()
+    topology = build_topology_snapshot(source)
+
+    facts = build_geometry_facts(source, topology)
+
+    seam_top_fans = tuple(
+        fan
+        for fan in facts.vertex_fan_facts.values()
+        if fan.source_vertex_id == SourceVertexId("v_a_t")
+    )
+    assert len(seam_top_fans) == 2
+    assert {fan.vertex_id for fan in seam_top_fans} == {
+        VertexId("vertex:v_a_t:use:patch:seed:f_ab_top:0"),
+        VertexId("vertex:v_a_t:use:patch:seed:f_ab_top:1"),
+    }
+    assert all(fan.normal != (0.0, 0.0, 0.0) for fan in seam_top_fans)
+    assert {len(fan.source_face_ids) for fan in seam_top_fans} == {1}
 
 
 def test_degenerate_geometry_emits_degraded_diagnostics() -> None:

@@ -55,6 +55,7 @@ G2 may introduce:
 - `PatchGeometryFacts`
 - `ChainGeometryFacts`
 - `VertexGeometryFacts`
+- `VertexFanGeometryFacts`
 - `GeometryFactSnapshot`
 
 G2a facts:
@@ -73,6 +74,11 @@ Chain:
 
 Vertex:
   position
+
+VertexFan:
+  patch-local source face component around a topology Vertex
+  area
+  area-weighted normal
 ```
 
 G2b facts:

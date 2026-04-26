@@ -10,7 +10,10 @@ Rules:
 from __future__ import annotations
 
 from scaffold_core.core.diagnostics import Diagnostic, DiagnosticSeverity
-from scaffold_core.ids import SourceEdgeId, SourceFaceId, SourceVertexId
+from collections import defaultdict
+
+from scaffold_core.ids import PatchId, SourceEdgeId, SourceFaceId, SourceVertexId, VertexId
+from scaffold_core.layer_0_source.marks import SourceMarkKind
 from scaffold_core.layer_0_source.snapshot import SourceMeshSnapshot
 from scaffold_core.layer_1_topology.model import Chain, Patch, SurfaceModel, Vertex
 from scaffold_core.layer_2_geometry.facts import (
@@ -20,6 +23,7 @@ from scaffold_core.layer_2_geometry.facts import (
     GeometryFactSnapshot,
     PatchGeometryFacts,
     Vector3,
+    VertexFanGeometryFacts,
     VertexGeometryFacts,
 )
 from scaffold_core.layer_2_geometry.measures import (
@@ -58,10 +62,12 @@ def build_geometry_facts(
         vertex.id: _build_vertex_geometry_facts(source, vertex, diagnostics)
         for vertex in topology.vertices.values()
     }
+    vertex_fan_facts = _build_vertex_fan_geometry_facts(source, topology)
     return GeometryFactSnapshot(
         patch_facts=patch_facts,
         chain_facts=chain_facts,
         vertex_facts=vertex_facts,
+        vertex_fan_facts=vertex_fan_facts,
         diagnostics=tuple(diagnostics),
     )
 
@@ -315,6 +321,192 @@ def _build_vertex_geometry_facts(
             )
         )
     return VertexGeometryFacts(vertex_id=vertex.id, position=average(points))
+
+
+def _build_vertex_fan_geometry_facts(
+    source: SourceMeshSnapshot,
+    topology: SurfaceModel,
+) -> dict[str, VertexFanGeometryFacts]:
+    face_to_patch_id = {
+        source_face_id: patch.id
+        for patch in topology.patches.values()
+        for source_face_id in patch.source_face_ids
+    }
+    selected_face_ids = tuple(face_to_patch_id)
+    edge_incidence = _selected_edge_incidence(source, selected_face_ids)
+    boundary_mark_edge_ids = _marked_patch_boundary_edge_ids(source)
+
+    facts: dict[str, VertexFanGeometryFacts] = {}
+    for patch in topology.patches.values():
+        faces_by_vertex: dict[SourceVertexId, list[SourceFaceId]] = defaultdict(list)
+        for source_face_id in patch.source_face_ids:
+            for source_vertex_id in source.faces[source_face_id].vertex_ids:
+                faces_by_vertex[source_vertex_id].append(source_face_id)
+
+        for source_vertex_id, source_face_ids in faces_by_vertex.items():
+            components = _source_vertex_face_components(
+                source,
+                patch.id,
+                source_vertex_id,
+                tuple(source_face_ids),
+                face_to_patch_id,
+                edge_incidence,
+                boundary_mark_edge_ids,
+            )
+            for component_index, component_face_ids in enumerate(components):
+                vertex_id = _vertex_id_for_fan_component(
+                    topology,
+                    patch.id,
+                    source_vertex_id,
+                    component_index,
+                    len(components),
+                )
+                area, normal = _face_fan_area_normal(source, component_face_ids)
+                fan_id = f"vertex_fan:{patch.id}:{vertex_id}"
+                facts[fan_id] = VertexFanGeometryFacts(
+                    id=fan_id,
+                    patch_id=patch.id,
+                    vertex_id=vertex_id,
+                    source_vertex_id=source_vertex_id,
+                    source_face_ids=component_face_ids,
+                    area=area,
+                    normal=normal,
+                )
+
+    return facts
+
+
+def _source_vertex_face_components(
+    source: SourceMeshSnapshot,
+    patch_id: PatchId,
+    source_vertex_id: SourceVertexId,
+    source_face_ids: tuple[SourceFaceId, ...],
+    face_to_patch_id: dict[SourceFaceId, PatchId],
+    edge_incidence: dict[SourceEdgeId, tuple[SourceFaceId, ...]],
+    boundary_mark_edge_ids: set[SourceEdgeId],
+) -> tuple[tuple[SourceFaceId, ...], ...]:
+    face_set = set(source_face_ids)
+    if len(face_set) <= 1:
+        return (tuple(sorted(face_set, key=str)),)
+
+    parents = {source_face_id: source_face_id for source_face_id in face_set}
+
+    def find(source_face_id: SourceFaceId) -> SourceFaceId:
+        while parents[source_face_id] != source_face_id:
+            parents[source_face_id] = parents[parents[source_face_id]]
+            source_face_id = parents[source_face_id]
+        return source_face_id
+
+    def union(first: SourceFaceId, second: SourceFaceId) -> None:
+        first_root = find(first)
+        second_root = find(second)
+        if first_root != second_root:
+            parents[second_root] = first_root
+
+    for source_edge_id, source_edge in source.edges.items():
+        if source_vertex_id not in source_edge.vertex_ids:
+            continue
+        if _is_patch_boundary_edge(
+            source_edge_id,
+            edge_incidence.get(source_edge_id, ()),
+            boundary_mark_edge_ids,
+        ):
+            continue
+        incident_patch_face_ids = [
+            incident_face_id
+            for incident_face_id in edge_incidence.get(source_edge_id, ())
+            if incident_face_id in face_set
+            and face_to_patch_id[incident_face_id] == patch_id
+        ]
+        for incident_face_id in incident_patch_face_ids[1:]:
+            union(incident_patch_face_ids[0], incident_face_id)
+
+    components: dict[SourceFaceId, list[SourceFaceId]] = defaultdict(list)
+    for source_face_id in face_set:
+        components[find(source_face_id)].append(source_face_id)
+    return tuple(
+        sorted(
+            (tuple(sorted(component, key=str)) for component in components.values()),
+            key=lambda component: str(component[0]),
+        )
+    )
+
+
+def _vertex_id_for_fan_component(
+    topology: SurfaceModel,
+    patch_id: PatchId,
+    source_vertex_id: SourceVertexId,
+    component_index: int,
+    component_count: int,
+) -> VertexId:
+    vertex_id = (
+        VertexId(f"vertex:{source_vertex_id}")
+        if component_count == 1
+        else VertexId(f"vertex:{source_vertex_id}:use:{patch_id}:{component_index}")
+    )
+    if vertex_id in topology.vertices:
+        return vertex_id
+    for topology_vertex in sorted(topology.vertices.values(), key=lambda item: str(item.id)):
+        if source_vertex_id in topology_vertex.source_vertex_ids:
+            return topology_vertex.id
+    return vertex_id
+
+
+def _face_fan_area_normal(
+    source: SourceMeshSnapshot,
+    source_face_ids: tuple[SourceFaceId, ...],
+) -> tuple[float, Vector3]:
+    total_area = 0.0
+    normal_accumulator = (0.0, 0.0, 0.0)
+    for source_face_id in source_face_ids:
+        face_points = _face_points(source, source_face_id)
+        if len(face_points) < 3:
+            continue
+        first = face_points[0]
+        for index in range(1, len(face_points) - 1):
+            area, area_vector, _triangle_centroid = triangle_area_normal_centroid(
+                first,
+                face_points[index],
+                face_points[index + 1],
+            )
+            total_area += area
+            normal_accumulator = add(normal_accumulator, area_vector)
+    return total_area, normalize(normal_accumulator)
+
+
+def _selected_edge_incidence(
+    source: SourceMeshSnapshot,
+    source_face_ids: tuple[SourceFaceId, ...],
+) -> dict[SourceEdgeId, tuple[SourceFaceId, ...]]:
+    incidence: dict[SourceEdgeId, list[SourceFaceId]] = defaultdict(list)
+    for source_face_id in source_face_ids:
+        for source_edge_id in source.faces[source_face_id].edge_ids:
+            incidence[source_edge_id].append(source_face_id)
+    return {
+        source_edge_id: tuple(source_face_ids)
+        for source_edge_id, source_face_ids in incidence.items()
+    }
+
+
+def _marked_patch_boundary_edge_ids(source: SourceMeshSnapshot) -> set[SourceEdgeId]:
+    source_edge_ids = set(source.edges)
+    return {
+        SourceEdgeId(mark.target_id)
+        for mark in source.marks
+        if mark.target_id in source_edge_ids
+        and mark.value
+        and mark.kind in (SourceMarkKind.SEAM, SourceMarkKind.USER)
+    }
+
+
+def _is_patch_boundary_edge(
+    source_edge_id: SourceEdgeId,
+    selected_incident_face_ids: tuple[SourceFaceId, ...],
+    boundary_mark_edge_ids: set[SourceEdgeId],
+) -> bool:
+    if len(selected_incident_face_ids) != 2:
+        return True
+    return source_edge_id in boundary_mark_edge_ids
 
 
 def _face_points(source: SourceMeshSnapshot, source_face_id: SourceFaceId) -> tuple[Vector3, ...]:

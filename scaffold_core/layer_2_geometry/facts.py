@@ -14,7 +14,7 @@ from enum import Enum
 from typing import Mapping
 
 from scaffold_core.core.diagnostics import Diagnostic
-from scaffold_core.ids import ChainId, PatchId, SourceEdgeId, SourceVertexId, VertexId
+from scaffold_core.ids import ChainId, PatchId, SourceEdgeId, SourceFaceId, SourceVertexId, VertexId
 
 
 Vector3 = tuple[float, float, float]
@@ -70,8 +70,20 @@ class VertexGeometryFacts:
 
 
 @dataclass(frozen=True)
+class VertexFanGeometryFacts:
+    id: str
+    patch_id: PatchId
+    vertex_id: VertexId
+    source_vertex_id: SourceVertexId
+    source_face_ids: tuple[SourceFaceId, ...]
+    area: float
+    normal: Vector3
+
+
+@dataclass(frozen=True)
 class GeometryFactSnapshot:
     patch_facts: Mapping[PatchId, PatchGeometryFacts] = field(default_factory=dict)
     chain_facts: Mapping[ChainId, ChainGeometryFacts] = field(default_factory=dict)
     vertex_facts: Mapping[VertexId, VertexGeometryFacts] = field(default_factory=dict)
+    vertex_fan_facts: Mapping[str, VertexFanGeometryFacts] = field(default_factory=dict)
     diagnostics: tuple[Diagnostic, ...] = ()

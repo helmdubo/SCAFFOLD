@@ -11,9 +11,10 @@ Rules:
 from __future__ import annotations
 
 from scaffold_core.core.evidence import Evidence
-from scaffold_core.ids import SourceVertexId, VertexId
+from scaffold_core.ids import PatchId, SourceVertexId, VertexId
 from scaffold_core.layer_1_topology.model import SurfaceModel
-from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot, Vector3
+from scaffold_core.layer_1_topology.queries import chain_use_vertices
+from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot, Vector3, VertexFanGeometryFacts
 from scaffold_core.layer_2_geometry.measures import EPSILON, length, normalize
 from scaffold_core.layer_3_relations.model import (
     ChainDirectionalRunUse,
@@ -33,39 +34,54 @@ def build_junction_samples(
 ) -> tuple[ChainDirectionalRunUseJunctionSample, ...]:
     """Build endpoint samples for patch-local directional run uses."""
 
-    source_vertex_to_vertex = _source_vertex_to_vertex(topology)
+    source_vertex_to_vertices = _source_vertex_to_vertices(topology)
+    vertex_fans_by_patch_vertex = {
+        (fan.patch_id, fan.vertex_id): fan
+        for fan in geometry.vertex_fan_facts.values()
+    }
     samples: list[ChainDirectionalRunUseJunctionSample] = []
     for run_use in sorted(run_uses, key=lambda item: item.id):
-        samples.extend(_samples_for_run_use(run_use, geometry, source_vertex_to_vertex))
+        samples.extend(
+            _samples_for_run_use(
+                topology,
+                run_use,
+                geometry,
+                source_vertex_to_vertices,
+                vertex_fans_by_patch_vertex,
+            )
+        )
     return tuple(samples)
 
 
 def _samples_for_run_use(
+    topology: SurfaceModel,
     run_use: ChainDirectionalRunUse,
     geometry: GeometryFactSnapshot,
-    source_vertex_to_vertex: dict[SourceVertexId, VertexId],
+    source_vertex_to_vertices: dict[SourceVertexId, tuple[VertexId, ...]],
+    vertex_fans_by_patch_vertex: dict[tuple[PatchId, VertexId], VertexFanGeometryFacts],
 ) -> tuple[ChainDirectionalRunUseJunctionSample, ...]:
-    owner_normal, owner_normal_source = _owner_normal(run_use, geometry)
     return tuple(
         sample
         for sample in (
             _sample(
+                topology=topology,
                 run_use=run_use,
                 role=RunUseEndpointRole.START,
                 source_vertex_id=run_use.start_source_vertex_id,
                 tangent_away_from_vertex=run_use.direction,
-                owner_normal=owner_normal,
-                owner_normal_source=owner_normal_source,
-                source_vertex_to_vertex=source_vertex_to_vertex,
+                geometry=geometry,
+                source_vertex_to_vertices=source_vertex_to_vertices,
+                vertex_fans_by_patch_vertex=vertex_fans_by_patch_vertex,
             ),
             _sample(
+                topology=topology,
                 run_use=run_use,
                 role=RunUseEndpointRole.END,
                 source_vertex_id=run_use.end_source_vertex_id,
                 tangent_away_from_vertex=_reverse(run_use.direction),
-                owner_normal=owner_normal,
-                owner_normal_source=owner_normal_source,
-                source_vertex_to_vertex=source_vertex_to_vertex,
+                geometry=geometry,
+                source_vertex_to_vertices=source_vertex_to_vertices,
+                vertex_fans_by_patch_vertex=vertex_fans_by_patch_vertex,
             ),
         )
         if sample is not None
@@ -73,18 +89,31 @@ def _samples_for_run_use(
 
 
 def _sample(
+    topology: SurfaceModel,
     run_use: ChainDirectionalRunUse,
     role: RunUseEndpointRole,
     source_vertex_id: SourceVertexId,
     tangent_away_from_vertex: Vector3,
-    owner_normal: Vector3,
-    owner_normal_source: OwnerNormalSource,
-    source_vertex_to_vertex: dict[SourceVertexId, VertexId],
+    geometry: GeometryFactSnapshot,
+    source_vertex_to_vertices: dict[SourceVertexId, tuple[VertexId, ...]],
+    vertex_fans_by_patch_vertex: dict[tuple[PatchId, VertexId], VertexFanGeometryFacts],
 ) -> ChainDirectionalRunUseJunctionSample | None:
-    vertex_id = source_vertex_to_vertex.get(source_vertex_id)
+    vertex_id = _endpoint_vertex_id(
+        topology,
+        run_use,
+        role,
+        source_vertex_id,
+        source_vertex_to_vertices,
+    )
     if vertex_id is None:
         return None
 
+    owner_normal, owner_normal_source, owner_data = _owner_normal(
+        run_use,
+        geometry,
+        vertex_id,
+        vertex_fans_by_patch_vertex,
+    )
     tangent = normalize(tangent_away_from_vertex)
     normal = normalize(owner_normal)
     confidence = run_use.confidence
@@ -104,30 +133,66 @@ def _sample(
         owner_normal=normal,
         owner_normal_source=owner_normal_source,
         confidence=confidence,
-        evidence=(_evidence(run_use, source_vertex_id, owner_normal_source),),
+        evidence=(_evidence(run_use, source_vertex_id, owner_normal_source, owner_data),),
     )
 
 
 def _owner_normal(
     run_use: ChainDirectionalRunUse,
     geometry: GeometryFactSnapshot,
-) -> tuple[Vector3, OwnerNormalSource]:
+    vertex_id: VertexId,
+    vertex_fans_by_patch_vertex: dict[tuple[PatchId, VertexId], VertexFanGeometryFacts],
+) -> tuple[Vector3, OwnerNormalSource, dict[str, object]]:
+    vertex_fan = vertex_fans_by_patch_vertex.get((run_use.patch_id, vertex_id))
+    if vertex_fan is not None and length(vertex_fan.normal) > EPSILON:
+        return (
+            vertex_fan.normal,
+            OwnerNormalSource.VERTEX_FAN_NORMAL,
+            {"vertex_fan_id": vertex_fan.id},
+        )
+
     patch_facts = geometry.patch_facts.get(run_use.patch_id)
     if patch_facts is None:
-        return (0.0, 0.0, 0.0), OwnerNormalSource.UNKNOWN
+        return (0.0, 0.0, 0.0), OwnerNormalSource.UNKNOWN, {}
     source = (
         OwnerNormalSource.PATCH_AGGREGATE_NORMAL
         if length(patch_facts.normal) > EPSILON
         else OwnerNormalSource.UNKNOWN
     )
-    return patch_facts.normal, source
+    return patch_facts.normal, source, {}
 
 
-def _source_vertex_to_vertex(topology: SurfaceModel) -> dict[SourceVertexId, VertexId]:
+def _endpoint_vertex_id(
+    topology: SurfaceModel,
+    run_use: ChainDirectionalRunUse,
+    role: RunUseEndpointRole,
+    source_vertex_id: SourceVertexId,
+    source_vertex_to_vertices: dict[SourceVertexId, tuple[VertexId, ...]],
+) -> VertexId | None:
+    chain_use = topology.chain_uses.get(run_use.chain_use_id)
+    if chain_use is not None:
+        start_vertex_id, end_vertex_id = chain_use_vertices(topology, chain_use.id)
+        start_sources = topology.vertices[start_vertex_id].source_vertex_ids
+        end_sources = topology.vertices[end_vertex_id].source_vertex_ids
+        if role is RunUseEndpointRole.START and source_vertex_id in start_sources:
+            return start_vertex_id
+        if role is RunUseEndpointRole.END and source_vertex_id in end_sources:
+            return end_vertex_id
+
+    vertex_ids = source_vertex_to_vertices.get(source_vertex_id, ())
+    if VertexId(f"vertex:{source_vertex_id}") in vertex_ids:
+        return VertexId(f"vertex:{source_vertex_id}")
+    return vertex_ids[0] if vertex_ids else None
+
+
+def _source_vertex_to_vertices(topology: SurfaceModel) -> dict[SourceVertexId, tuple[VertexId, ...]]:
+    vertex_ids_by_source: dict[SourceVertexId, list[VertexId]] = {}
+    for vertex in topology.vertices.values():
+        for source_vertex_id in vertex.source_vertex_ids:
+            vertex_ids_by_source.setdefault(source_vertex_id, []).append(vertex.id)
     return {
-        source_vertex_id: vertex.id
-        for vertex in topology.vertices.values()
-        for source_vertex_id in vertex.source_vertex_ids
+        source_vertex_id: tuple(sorted(vertex_ids, key=str))
+        for source_vertex_id, vertex_ids in vertex_ids_by_source.items()
     }
 
 
@@ -139,6 +204,7 @@ def _evidence(
     run_use: ChainDirectionalRunUse,
     source_vertex_id: SourceVertexId,
     owner_normal_source: OwnerNormalSource,
+    owner_data: dict[str, object],
 ) -> Evidence:
     return Evidence(
         source="layer_3_relations.junction_samples",
@@ -148,5 +214,6 @@ def _evidence(
             "run_use_id": run_use.id,
             "source_vertex_id": str(source_vertex_id),
             "owner_normal_source": owner_normal_source.value,
+            **owner_data,
         },
     )

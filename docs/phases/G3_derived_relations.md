@@ -243,7 +243,9 @@ Each sample stores:
 - owner_normal_source;
 - confidence / evidence.
 
-In v0, owner_normal may use `PatchGeometryFacts.normal` with
+Owner normals prefer Layer 2 `VertexFanGeometryFacts.normal` with
+`owner_normal_source = VERTEX_FAN_NORMAL`. If no non-zero fan normal is
+available, junction samples may fall back to `PatchGeometryFacts.normal` with
 `owner_normal_source = PATCH_AGGREGATE_NORMAL`.
 
 Layer 1 `ChainUse` must not store normals.
@@ -253,7 +255,8 @@ Implementation status:
   relation.
 - Samples are emitted for START and END run-use endpoints.
 - `tangent_away_from_vertex` points away from the sampled topology Vertex.
-- Owner normals use Patch aggregate normals in v0.
+- Owner normals prefer VertexFan normals and fall back to Patch aggregate
+  normals when needed.
 
 ## G3c5 - Junction RunUse Relations
 

@@ -21,6 +21,9 @@ from scaffold_core.layer_3_relations.model import OwnerNormalSource, RunUseEndpo
 from scaffold_core.pipeline.inspection import inspect_pipeline_context
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_boundary_loop_source
+from scaffold_core.tests.fixtures.cylinder_tube import (
+    make_segmented_cylinder_tube_without_caps_with_one_seam_source,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -87,16 +90,35 @@ def test_junction_sample_tangent_points_away_from_endpoint() -> None:
     )
 
 
-def test_junction_sample_owner_normal_uses_patch_aggregate_normal() -> None:
+def test_junction_sample_owner_normal_prefers_vertex_fan_normal() -> None:
     source = make_closed_shared_boundary_loop_source()
     topology = build_topology_snapshot(source)
     geometry = build_geometry_facts(source, topology)
     snapshot = build_relation_snapshot(topology, geometry)
 
     for sample in snapshot.junction_samples:
-        assert sample.owner_normal == geometry.patch_facts[sample.patch_id].normal
-        assert sample.owner_normal_source is OwnerNormalSource.PATCH_AGGREGATE_NORMAL
+        assert sample.owner_normal_source is OwnerNormalSource.VERTEX_FAN_NORMAL
         assert sample.confidence == 1.0
+
+
+def test_cylinder_junction_samples_use_nonzero_vertex_fan_normals() -> None:
+    context = run_pass_1_relations(
+        run_pass_0(make_segmented_cylinder_tube_without_caps_with_one_seam_source())
+    )
+
+    geometry = context.geometry_facts
+    snapshot = context.relation_snapshot
+
+    assert geometry is not None
+    assert snapshot is not None
+    assert next(iter(geometry.patch_facts.values())).normal == (0.0, 0.0, 0.0)
+    assert snapshot.junction_samples
+    assert {
+        sample.owner_normal_source
+        for sample in snapshot.junction_samples
+    } == {OwnerNormalSource.VERTEX_FAN_NORMAL}
+    assert all(sample.owner_normal != (0.0, 0.0, 0.0) for sample in snapshot.junction_samples)
+    assert all(sample.confidence > 0.0 for sample in snapshot.junction_samples)
 
 
 def test_junction_samples_do_not_change_layer_1_identity() -> None:
@@ -130,7 +152,7 @@ def test_inspection_json_includes_junction_samples() -> None:
     assert first_sample["vertex_id"].startswith("vertex:")
     assert first_sample["run_use_id"].startswith("directional_run_use:")
     assert first_sample["endpoint_role"] in ("START", "END")
-    assert first_sample["owner_normal_source"] == "PATCH_AGGREGATE_NORMAL"
+    assert first_sample["owner_normal_source"] == "VERTEX_FAN_NORMAL"
     assert "tangent_away_from_vertex" in first_sample
     assert "owner_normal" in first_sample
 

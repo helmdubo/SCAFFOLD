@@ -71,6 +71,7 @@ def geometry_summary_to_dict(geometry: GeometryFactSnapshot, detail: str = "comp
         "patch_count": len(geometry.patch_facts),
         "chain_count": len(geometry.chain_facts),
         "vertex_count": len(geometry.vertex_facts),
+        "vertex_fan_count": len(geometry.vertex_fan_facts),
     }
     if detail != "full":
         return summary
@@ -112,6 +113,18 @@ def geometry_summary_to_dict(geometry: GeometryFactSnapshot, detail: str = "comp
                 ],
             }
             for facts in sorted(geometry.chain_facts.values(), key=lambda item: str(item.chain_id))
+        ],
+        "vertex_fans": [
+            {
+                "id": facts.id,
+                "patch_id": str(facts.patch_id),
+                "vertex_id": str(facts.vertex_id),
+                "source_vertex_id": str(facts.source_vertex_id),
+                "source_face_ids": [str(source_face_id) for source_face_id in facts.source_face_ids],
+                "area": facts.area,
+                "normal": list(facts.normal),
+            }
+            for facts in sorted(geometry.vertex_fan_facts.values(), key=lambda item: item.id)
         ],
     })
     return summary

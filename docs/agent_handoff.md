@@ -392,8 +392,9 @@ G3c4 ChainDirectionalRunUseJunctionSample is implemented:
 Layer 3 now exposes junction_samples for START and END endpoints of each
 ChainDirectionalRunUse.
 tangent_away_from_vertex is oriented away from the endpoint Vertex.
-owner_normal uses PatchGeometryFacts.normal with
-owner_normal_source = PATCH_AGGREGATE_NORMAL.
+owner_normal prefers Layer 2 VertexFanGeometryFacts.normal with
+owner_normal_source = VERTEX_FAN_NORMAL, falling back to PatchGeometryFacts.normal
+when a non-zero fan normal is unavailable.
 Layer 1 ChainUse still stores topology only.
 Endpoint samples do not themselves classify pairwise relations.
 ScaffoldGraph is still not implemented.

@@ -200,6 +200,7 @@ def test_inspection_default_output_is_compact() -> None:
         "patch_count": 2,
         "chain_count": 1,
         "vertex_count": 8,
+        "vertex_fan_count": 12,
     }
     assert report["relations"] == {
         "patch_adjacency_count": 1,
