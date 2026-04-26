@@ -2,4 +2,3 @@ docs/agent_handoff.md
 __pycache__/
 *.py[cod]
 .pytest_cache/
-scaffold_blender_inspection.json
