@@ -18,7 +18,7 @@ from scaffold_core.core.evidence import Evidence
 from scaffold_core.ids import (
     BoundaryLoopId,
     ChainId,
-    ChainUseId,
+    PatchChainId,
     PatchId,
     SourceEdgeId,
     SourceVertexId,
@@ -60,15 +60,15 @@ class PatchAxisSource(str, Enum):
     NO_ALIGNMENT = "NO_ALIGNMENT"
 
 
-class RunUseEndpointRole(str, Enum):
-    """Endpoint role for a patch-local directional run-use sample."""
+class PatchChainEndpointRole(str, Enum):
+    """Endpoint role for a patch-local directional evidence sample."""
 
     START = "START"
     END = "END"
 
 
 class OwnerNormalSource(str, Enum):
-    """Source for a junction sample owner normal."""
+    """Source for a PatchChain endpoint sample owner normal."""
 
     LOCAL_FACE_FAN_NORMAL = "LOCAL_FACE_FAN_NORMAL"
     PATCH_AGGREGATE_NORMAL = "PATCH_AGGREGATE_NORMAL"
@@ -76,7 +76,7 @@ class OwnerNormalSource(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
-class JunctionDirectionRelationKind(str, Enum):
+class EndpointDirectionRelationKind(str, Enum):
     """Directional relation between two endpoint samples at one Vertex."""
 
     OPPOSITE_COLLINEAR = "OPPOSITE_COLLINEAR"
@@ -86,7 +86,7 @@ class JunctionDirectionRelationKind(str, Enum):
     DEGENERATE = "DEGENERATE"
 
 
-class JunctionRunUseRelationKind(str, Enum):
+class PatchChainEndpointRelationKind(str, Enum):
     """Structural relation between two endpoint samples at one Vertex."""
 
     CONTINUATION_CANDIDATE = "CONTINUATION_CANDIDATE"
@@ -96,17 +96,14 @@ class JunctionRunUseRelationKind(str, Enum):
     DEGENERATE = "DEGENERATE"
 
 
-PatchChainEndpointRelationKind = JunctionRunUseRelationKind
-
-
 @dataclass(frozen=True)
 class PatchAdjacency:
     id: str
     first_patch_id: PatchId
     second_patch_id: PatchId
     chain_id: ChainId
-    first_chain_use_id: ChainUseId
-    second_chain_use_id: ChainUseId
+    first_patch_chain_id: PatchChainId
+    second_patch_chain_id: PatchChainId
     shared_length: float
     signed_angle_radians: float
     dihedral_kind: DihedralKind
@@ -114,9 +111,9 @@ class PatchAdjacency:
 
 @dataclass(frozen=True)
 class ChainContinuationRelation:
-    junction_vertex_id: VertexId
-    source_chain_use_id: ChainUseId
-    target_chain_use_id: ChainUseId | None
+    vertex_id: VertexId
+    source_patch_chain_id: PatchChainId
+    target_patch_chain_id: PatchChainId | None
     kind: ContinuationKind
     confidence: float
     evidence: tuple[Evidence, ...] = ()
@@ -138,13 +135,13 @@ class ChainDirectionalRun:
 
 
 @dataclass(frozen=True)
-class ChainDirectionalRunUse:
+class PatchChainDirectionalEvidence:
     """Derived directional evidence for a PatchChain; not PatchChain identity."""
 
     id: str
     directional_run_id: str
     parent_chain_id: ChainId
-    chain_use_id: ChainUseId
+    patch_chain_id: PatchChainId
     patch_id: PatchId
     loop_id: BoundaryLoopId
     position_in_loop: int
@@ -162,7 +159,7 @@ class ChainDirectionalRunUse:
 @dataclass(frozen=True)
 class AlignmentClass:
     id: str
-    member_run_use_ids: tuple[str, ...]
+    member_directional_evidence_ids: tuple[str, ...]
     patch_ids: tuple[PatchId, ...]
     dominant_direction: Vector3
     kind: AlignmentClassKind
@@ -186,10 +183,10 @@ class PatchAxes:
 class PatchChainEndpointSample:
     id: str
     vertex_id: VertexId
-    run_use_id: str
-    chain_use_id: ChainUseId
+    directional_evidence_id: str
+    patch_chain_id: PatchChainId
     patch_id: PatchId
-    endpoint_role: RunUseEndpointRole
+    endpoint_role: PatchChainEndpointRole
     tangent_away_from_vertex: Vector3
     owner_normal: Vector3
     owner_normal_source: OwnerNormalSource
@@ -203,12 +200,12 @@ class PatchChainEndpointRelation:
     vertex_id: VertexId
     first_sample_id: str
     second_sample_id: str
-    first_run_use_id: str
-    second_run_use_id: str
+    first_directional_evidence_id: str
+    second_directional_evidence_id: str
     direction_dot: float
     normal_dot: float
-    direction_relation: JunctionDirectionRelationKind
-    kind: JunctionRunUseRelationKind
+    direction_relation: EndpointDirectionRelationKind
+    kind: PatchChainEndpointRelationKind
     confidence: float
     evidence: tuple[Evidence, ...] = ()
 
@@ -219,37 +216,20 @@ class LoopCorner:
     patch_id: PatchId
     loop_id: BoundaryLoopId
     vertex_id: VertexId
-    previous_patch_chain_id: ChainUseId
-    next_patch_chain_id: ChainUseId
+    previous_patch_chain_id: PatchChainId
+    next_patch_chain_id: PatchChainId
     position_in_loop: int
     evidence: tuple[Evidence, ...] = ()
-
-
-ChainDirectionalRunUseJunctionSample = PatchChainEndpointSample
-JunctionRunUseRelation = PatchChainEndpointRelation
-
 
 @dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
     chain_continuations: tuple[ChainContinuationRelation, ...] = ()
     chain_directional_runs: tuple[ChainDirectionalRun, ...] = ()
-    chain_directional_run_uses: tuple[ChainDirectionalRunUse, ...] = ()
+    patch_chain_directional_evidence: tuple[PatchChainDirectionalEvidence, ...] = ()
     loop_corners: tuple[LoopCorner, ...] = ()
     patch_chain_endpoint_samples: tuple[PatchChainEndpointSample, ...] = ()
     patch_chain_endpoint_relations: tuple[PatchChainEndpointRelation, ...] = ()
     alignment_classes: tuple[AlignmentClass, ...] = ()
     patch_axes: Mapping[PatchId, PatchAxes] = field(default_factory=dict)
     diagnostics: tuple[Diagnostic, ...] = ()
-
-    @property
-    def junction_samples(self) -> tuple[PatchChainEndpointSample, ...]:
-        """Legacy name for patch_chain_endpoint_samples."""
-
-        return self.patch_chain_endpoint_samples
-
-    @property
-    def junction_run_use_relations(self) -> tuple[PatchChainEndpointRelation, ...]:
-        """Legacy name for patch_chain_endpoint_relations."""
-
-        return self.patch_chain_endpoint_relations

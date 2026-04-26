@@ -39,7 +39,7 @@ scaffold_core/
     ├── test_forbidden_imports.py
     ├── test_module_docstrings.py
     ├── test_layer_1_invariants.py
-    ├── test_chainuse_orientation.py
+    ├── test_patch_chain_orientation.py
     ├── test_seam_self.py
     └── test_pipeline_pass0.py
 ```

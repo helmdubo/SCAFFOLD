@@ -442,7 +442,7 @@ def _vertex_id_for_fan_component(
     vertex_id = (
         VertexId(f"vertex:{source_vertex_id}")
         if component_count == 1
-        else VertexId(f"vertex:{source_vertex_id}:use:{patch_id}:{component_index}")
+        else VertexId(f"vertex:{source_vertex_id}:patch_chain:{patch_id}:{component_index}")
     )
     if vertex_id in topology.vertices:
         return vertex_id

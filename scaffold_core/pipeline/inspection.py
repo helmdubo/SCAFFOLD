@@ -17,7 +17,7 @@ from scaffold_core.layer_0_source.snapshot import SourceMeshSnapshot
 from scaffold_core.layer_1_topology.build import build_topology_snapshot
 from scaffold_core.layer_1_topology.invariants import validate_topology
 from scaffold_core.layer_1_topology.model import PatchChain, SurfaceModel
-from scaffold_core.layer_1_topology.queries import chain_use_vertices, chain_uses_for_chain
+from scaffold_core.layer_1_topology.queries import patch_chain_vertices, patch_chains_for_chain
 from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot
 from scaffold_core.layer_3_relations.model import RelationSnapshot
 from scaffold_core.pipeline.context import PipelineContext
@@ -72,7 +72,6 @@ def geometry_summary_to_dict(geometry: GeometryFactSnapshot, detail: str = "comp
         "chain_count": len(geometry.chain_facts),
         "vertex_count": len(geometry.vertex_facts),
         "local_face_fan_count": len(geometry.local_face_fan_facts),
-        "vertex_fan_count": len(geometry.local_face_fan_facts),
     }
     if detail != "full":
         return summary
@@ -119,10 +118,6 @@ def geometry_summary_to_dict(geometry: GeometryFactSnapshot, detail: str = "comp
             _local_face_fan_to_dict(facts)
             for facts in sorted(geometry.local_face_fan_facts.values(), key=lambda item: item.id)
         ],
-        "vertex_fans": [
-            {**_local_face_fan_to_dict(facts), "legacy_name": "vertex_fan"}
-            for facts in sorted(geometry.local_face_fan_facts.values(), key=lambda item: item.id)
-        ],
     })
     return summary
 
@@ -134,12 +129,10 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         "patch_adjacency_count": len(relations.patch_adjacencies),
         "chain_continuation_count": len(relations.chain_continuations),
         "chain_directional_run_count": len(relations.chain_directional_runs),
-        "chain_directional_run_use_count": len(relations.chain_directional_run_uses),
+        "patch_chain_directional_evidence_count": len(relations.patch_chain_directional_evidence),
         "loop_corner_count": len(relations.loop_corners),
         "patch_chain_endpoint_sample_count": len(relations.patch_chain_endpoint_samples),
         "patch_chain_endpoint_relation_count": len(relations.patch_chain_endpoint_relations),
-        "junction_sample_count": len(relations.junction_samples),
-        "junction_run_use_relation_count": len(relations.junction_run_use_relations),
         "alignment_class_count": len(relations.alignment_classes),
         "patch_axes_count": len(relations.patch_axes),
     }
@@ -158,11 +151,11 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         ],
         "chain_continuations": [
             {
-                "junction_vertex_id": str(relation.junction_vertex_id),
-                "source_chain_use_id": str(relation.source_chain_use_id),
-                "target_chain_use_id": (
-                    str(relation.target_chain_use_id)
-                    if relation.target_chain_use_id is not None
+                "vertex_id": str(relation.vertex_id),
+                "source_patch_chain_id": str(relation.source_patch_chain_id),
+                "target_patch_chain_id": (
+                    str(relation.target_patch_chain_id)
+                    if relation.target_patch_chain_id is not None
                     else None
                 ),
                 "kind": str(relation.kind.value),
@@ -179,9 +172,9 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
             for relation in sorted(
                 relations.chain_continuations,
                 key=lambda item: (
-                    str(item.junction_vertex_id),
-                    str(item.source_chain_use_id),
-                    str(item.target_chain_use_id),
+                    str(item.vertex_id),
+                    str(item.source_patch_chain_id),
+                    str(item.target_patch_chain_id),
                     str(item.kind.value),
                 ),
             )
@@ -204,26 +197,26 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
                 key=lambda item: item.id,
             )
         ],
-        "chain_directional_run_uses": [
+        "patch_chain_directional_evidence": [
             {
-                "id": run_use.id,
-                "directional_run_id": run_use.directional_run_id,
-                "parent_chain_id": str(run_use.parent_chain_id),
-                "chain_use_id": str(run_use.chain_use_id),
-                "patch_id": str(run_use.patch_id),
-                "loop_id": str(run_use.loop_id),
-                "position_in_loop": run_use.position_in_loop,
-                "orientation_sign": run_use.orientation_sign,
-                "source_edge_ids": [str(source_edge_id) for source_edge_id in run_use.source_edge_ids],
-                "segment_indices": list(run_use.segment_indices),
-                "start_source_vertex_id": str(run_use.start_source_vertex_id),
-                "end_source_vertex_id": str(run_use.end_source_vertex_id),
-                "length": run_use.length,
-                "direction": list(run_use.direction),
-                "confidence": run_use.confidence,
+                "id": directional_evidence.id,
+                "directional_run_id": directional_evidence.directional_run_id,
+                "parent_chain_id": str(directional_evidence.parent_chain_id),
+                "patch_chain_id": str(directional_evidence.patch_chain_id),
+                "patch_id": str(directional_evidence.patch_id),
+                "loop_id": str(directional_evidence.loop_id),
+                "position_in_loop": directional_evidence.position_in_loop,
+                "orientation_sign": directional_evidence.orientation_sign,
+                "source_edge_ids": [str(source_edge_id) for source_edge_id in directional_evidence.source_edge_ids],
+                "segment_indices": list(directional_evidence.segment_indices),
+                "start_source_vertex_id": str(directional_evidence.start_source_vertex_id),
+                "end_source_vertex_id": str(directional_evidence.end_source_vertex_id),
+                "length": directional_evidence.length,
+                "direction": list(directional_evidence.direction),
+                "confidence": directional_evidence.confidence,
             }
-            for run_use in sorted(
-                relations.chain_directional_run_uses,
+            for directional_evidence in sorted(
+                relations.patch_chain_directional_evidence,
                 key=lambda item: item.id,
             )
         ],
@@ -231,7 +224,7 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
             {
                 "id": alignment_class.id,
                 "kind": str(alignment_class.kind.value),
-                "member_run_use_ids": list(alignment_class.member_run_use_ids),
+                "member_directional_evidence_ids": list(alignment_class.member_directional_evidence_ids),
                 "patch_ids": [str(patch_id) for patch_id in alignment_class.patch_ids],
                 "dominant_direction": list(alignment_class.dominant_direction),
                 "confidence": alignment_class.confidence,
@@ -249,17 +242,9 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
             _endpoint_sample_to_dict(sample)
             for sample in sorted(relations.patch_chain_endpoint_samples, key=lambda item: item.id)
         ],
-        "junction_samples": [
-            {**_endpoint_sample_to_dict(sample), "legacy_name": "junction_sample"}
-            for sample in sorted(relations.junction_samples, key=lambda item: item.id)
-        ],
         "patch_chain_endpoint_relations": [
             _endpoint_relation_to_dict(relation)
             for relation in sorted(relations.patch_chain_endpoint_relations, key=lambda item: item.id)
-        ],
-        "junction_run_use_relations": [
-            {**_endpoint_relation_to_dict(relation), "legacy_name": "junction_run_use_relation"}
-            for relation in sorted(relations.junction_run_use_relations, key=lambda item: item.id)
         ],
         "patch_axes": [
             {
@@ -315,9 +300,8 @@ def _endpoint_sample_to_dict(sample) -> dict[str, object]:
     return {
         "id": sample.id,
         "vertex_id": str(sample.vertex_id),
-        "run_use_id": sample.run_use_id,
-        "chain_use_id": str(sample.chain_use_id),
-        "patch_chain_id": str(sample.chain_use_id),
+        "directional_evidence_id": sample.directional_evidence_id,
+        "patch_chain_id": str(sample.patch_chain_id),
         "patch_id": str(sample.patch_id),
         "endpoint_role": str(sample.endpoint_role.value),
         "tangent_away_from_vertex": list(sample.tangent_away_from_vertex),
@@ -333,8 +317,8 @@ def _endpoint_relation_to_dict(relation) -> dict[str, object]:
         "vertex_id": str(relation.vertex_id),
         "first_sample_id": relation.first_sample_id,
         "second_sample_id": relation.second_sample_id,
-        "first_run_use_id": relation.first_run_use_id,
-        "second_run_use_id": relation.second_run_use_id,
+        "first_directional_evidence_id": relation.first_directional_evidence_id,
+        "second_directional_evidence_id": relation.second_directional_evidence_id,
         "direction_dot": relation.direction_dot,
         "normal_dot": relation.normal_dot,
         "direction_relation": str(relation.direction_relation.value),
@@ -357,7 +341,7 @@ def describe_active_blender_mesh_topology(context: object) -> str:
         f"shells: {len(model.shells)}",
         f"patches: {len(model.patches)}",
         f"chains: {len(model.chains)}",
-        f"chain uses: {len(model.chain_uses)}",
+        f"patch chains: {len(model.patch_chains)}",
     ]
     lines.extend(
         f"shell {shell.id}: patches {tuple(str(patch_id) for patch_id in shell.patch_ids)}"
@@ -371,13 +355,13 @@ def describe_active_blender_mesh_topology(context: object) -> str:
     )
     lines.extend(
         f"chain {chain.id}: edges {tuple(str(edge_id) for edge_id in chain.source_edge_ids)} "
-        f"uses {len(chain_uses_for_chain(model, chain.id))}"
+        f"uses {len(patch_chains_for_chain(model, chain.id))}"
         for chain in model.chains.values()
     )
     lines.extend(
-        f"chain use {use.id}: chain {use.chain_id} patch {use.patch_id} "
+        f"patch chain {use.id}: chain {use.chain_id} patch {use.patch_id} "
         f"loop {use.loop_id} orientation {use.orientation_sign}"
-        for use in model.chain_uses.values()
+        for use in model.patch_chains.values()
     )
     lines.extend(
         f"{diagnostic.severity} {diagnostic.code} "
@@ -402,15 +386,8 @@ def _patch_to_dict(
                 "kind": str(loop.kind.value),
                 "loop_index": loop.loop_index,
                 "patch_chains": [
-                    _chain_use_to_dict(model, model.chain_uses[use_id], source)
-                    for use_id in sorted(loop.chain_use_ids, key=lambda item: model.chain_uses[item].position_in_loop)
-                ],
-                "chain_uses": [
-                    {
-                        **_chain_use_to_dict(model, model.chain_uses[use_id], source),
-                        "legacy_name": "chain_use",
-                    }
-                    for use_id in sorted(loop.chain_use_ids, key=lambda item: model.chain_uses[item].position_in_loop)
+                    _patch_chain_to_dict(model, model.patch_chains[use_id], source)
+                    for use_id in sorted(loop.patch_chain_ids, key=lambda item: model.patch_chains[item].position_in_loop)
                 ],
             }
             for loop in sorted(
@@ -421,13 +398,13 @@ def _patch_to_dict(
     }
 
 
-def _chain_use_to_dict(
+def _patch_chain_to_dict(
     model: SurfaceModel,
     use: PatchChain,
     source: SourceMeshSnapshot | None,
 ) -> InspectionDict:
     chain = model.chains[use.chain_id]
-    use_start_vertex_id, use_end_vertex_id = chain_use_vertices(model, use.id)
+    use_start_vertex_id, use_end_vertex_id = patch_chain_vertices(model, use.id)
     start_vertex = model.vertices[chain.start_vertex_id]
     end_vertex = model.vertices[chain.end_vertex_id]
     chain_data: InspectionDict = {

@@ -3,7 +3,7 @@ Layer: 3 - Relations
 
 Rules:
 - Build pairwise relations between patch-local PatchChain endpoint samples.
-- Use only derived junction samples and measured vectors.
+- Use only derived endpoint samples and measured vectors.
 - Do not mutate lower-layer topology or geometry.
 - Do not build world-facing semantics or solve data.
 """
@@ -16,8 +16,8 @@ from scaffold_core.core.evidence import Evidence
 from scaffold_core.ids import VertexId
 from scaffold_core.layer_2_geometry.measures import EPSILON, dot, length, normalize
 from scaffold_core.layer_3_relations.model import (
-    JunctionDirectionRelationKind,
-    JunctionRunUseRelationKind,
+    EndpointDirectionRelationKind,
+    PatchChainEndpointRelationKind,
     PatchChainEndpointRelation,
     PatchChainEndpointSample,
 )
@@ -68,8 +68,8 @@ def _relation(
         vertex_id=vertex_id,
         first_sample_id=first.id,
         second_sample_id=second.id,
-        first_run_use_id=first.run_use_id,
-        second_run_use_id=second.run_use_id,
+        first_directional_evidence_id=first.directional_evidence_id,
+        second_directional_evidence_id=second.directional_evidence_id,
         direction_dot=direction_dot,
         normal_dot=normal_dot,
         direction_relation=direction_relation,
@@ -85,43 +85,43 @@ def _direction_relation(
     first_tangent,
     second_tangent,
     direction_dot: float,
-) -> JunctionDirectionRelationKind:
+) -> EndpointDirectionRelationKind:
     if (
         first.confidence <= 0.0
         or second.confidence <= 0.0
         or length(first_tangent) <= EPSILON
         or length(second_tangent) <= EPSILON
     ):
-        return JunctionDirectionRelationKind.DEGENERATE
+        return EndpointDirectionRelationKind.DEGENERATE
     if direction_dot <= OPPOSITE_COLLINEAR_MAX_DOT:
-        return JunctionDirectionRelationKind.OPPOSITE_COLLINEAR
+        return EndpointDirectionRelationKind.OPPOSITE_COLLINEAR
     if direction_dot >= SAME_RAY_COLLINEAR_MIN_DOT:
-        return JunctionDirectionRelationKind.SAME_RAY_COLLINEAR
+        return EndpointDirectionRelationKind.SAME_RAY_COLLINEAR
     if abs(direction_dot) <= ORTHOGONAL_MAX_ABS_DOT:
-        return JunctionDirectionRelationKind.ORTHOGONAL
-    return JunctionDirectionRelationKind.OBLIQUE
+        return EndpointDirectionRelationKind.ORTHOGONAL
+    return EndpointDirectionRelationKind.OBLIQUE
 
 
 def _relation_kind(
-    direction_relation: JunctionDirectionRelationKind,
-) -> JunctionRunUseRelationKind:
-    if direction_relation is JunctionDirectionRelationKind.OPPOSITE_COLLINEAR:
-        return JunctionRunUseRelationKind.CONTINUATION_CANDIDATE
-    if direction_relation is JunctionDirectionRelationKind.ORTHOGONAL:
-        return JunctionRunUseRelationKind.CORNER_CONNECTOR
-    if direction_relation is JunctionDirectionRelationKind.OBLIQUE:
-        return JunctionRunUseRelationKind.OBLIQUE_CONNECTOR
-    if direction_relation is JunctionDirectionRelationKind.SAME_RAY_COLLINEAR:
-        return JunctionRunUseRelationKind.AMBIGUOUS
-    return JunctionRunUseRelationKind.DEGENERATE
+    direction_relation: EndpointDirectionRelationKind,
+) -> PatchChainEndpointRelationKind:
+    if direction_relation is EndpointDirectionRelationKind.OPPOSITE_COLLINEAR:
+        return PatchChainEndpointRelationKind.CONTINUATION_CANDIDATE
+    if direction_relation is EndpointDirectionRelationKind.ORTHOGONAL:
+        return PatchChainEndpointRelationKind.CORNER_CONNECTOR
+    if direction_relation is EndpointDirectionRelationKind.OBLIQUE:
+        return PatchChainEndpointRelationKind.OBLIQUE_CONNECTOR
+    if direction_relation is EndpointDirectionRelationKind.SAME_RAY_COLLINEAR:
+        return PatchChainEndpointRelationKind.AMBIGUOUS
+    return PatchChainEndpointRelationKind.DEGENERATE
 
 
 def _confidence(
-    first: ChainDirectionalRunUseJunctionSample,
-    second: ChainDirectionalRunUseJunctionSample,
-    direction_relation: JunctionDirectionRelationKind,
+    first: PatchChainEndpointSample,
+    second: PatchChainEndpointSample,
+    direction_relation: EndpointDirectionRelationKind,
 ) -> float:
-    if direction_relation is JunctionDirectionRelationKind.DEGENERATE:
+    if direction_relation is EndpointDirectionRelationKind.DEGENERATE:
         return 0.0
     return min(first.confidence, second.confidence)
 
@@ -133,7 +133,7 @@ def _evidence(
     normal_dot: float,
 ) -> Evidence:
     return Evidence(
-        source="layer_3_relations.junction_relations",
+        source="layer_3_relations.patch_chain_endpoint_relations",
         summary="pairwise relation between PatchChain endpoint samples at one Vertex",
         data={
             "policy": POLICY_NAME,
@@ -145,6 +145,3 @@ def _evidence(
             "second_owner_normal_source": second.owner_normal_source.value,
         },
     )
-
-
-build_junction_run_use_relations = build_patch_chain_endpoint_relations

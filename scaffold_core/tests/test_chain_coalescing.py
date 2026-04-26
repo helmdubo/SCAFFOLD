@@ -11,7 +11,7 @@ from __future__ import annotations
 from scaffold_core.ids import ChainId, SourceEdgeId
 from scaffold_core.layer_1_topology.build import build_topology_snapshot
 from scaffold_core.layer_1_topology.invariants import validate_loop_closure
-from scaffold_core.layer_1_topology.queries import chain_uses_for_chain
+from scaffold_core.layer_1_topology.queries import patch_chains_for_chain
 from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_boundary_loop_source
 from scaffold_core.tests.fixtures.l_shape import make_two_patch_source_with_two_edge_seam_run
 
@@ -20,7 +20,7 @@ def test_two_edge_shared_boundary_coalesces_to_one_chain() -> None:
     model = build_topology_snapshot(make_two_patch_source_with_two_edge_seam_run())
 
     shared_chain = model.chains[ChainId("chain:e1:e2")]
-    uses = chain_uses_for_chain(model, shared_chain.id)
+    uses = patch_chains_for_chain(model, shared_chain.id)
 
     assert shared_chain.source_edge_ids == (SourceEdgeId("e1"), SourceEdgeId("e2"))
     assert len(uses) == 2
@@ -36,11 +36,11 @@ def test_closed_seam_loop_coalesces_to_one_shared_chain() -> None:
     model = build_topology_snapshot(make_closed_shared_boundary_loop_source())
 
     shared_chain = model.chains[ChainId("chain:e10:e9:e6:e7")]
-    uses = chain_uses_for_chain(model, shared_chain.id)
+    uses = patch_chains_for_chain(model, shared_chain.id)
 
     assert len(model.patches) == 2
     assert len(model.chains) == 1
-    assert len(model.chain_uses) == 2
+    assert len(model.patch_chains) == 2
     assert shared_chain.source_edge_ids == (
         SourceEdgeId("e10"),
         SourceEdgeId("e9"),

@@ -2,7 +2,7 @@
 Layer: tests
 
 Rules:
-- Layer 3 junction sample tests only.
+- Layer 3 PatchChain endpoint sample tests only.
 - Tests may import Scaffold Core but must not define production logic.
 """
 
@@ -16,8 +16,8 @@ from scaffold_core.ids import PatchId, SourceVertexId, VertexId
 from scaffold_core.layer_1_topology.build import build_topology_snapshot
 from scaffold_core.layer_2_geometry.build import build_geometry_facts
 from scaffold_core.layer_3_relations.build import build_relation_snapshot
-from scaffold_core.layer_3_relations.junction_samples import build_junction_samples
-from scaffold_core.layer_3_relations.model import OwnerNormalSource, RunUseEndpointRole
+from scaffold_core.layer_3_relations.patch_chain_endpoint_samples import build_patch_chain_endpoint_samples
+from scaffold_core.layer_3_relations.model import OwnerNormalSource, PatchChainEndpointRole
 from scaffold_core.pipeline.inspection import inspect_pipeline_context
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_boundary_loop_source
@@ -27,7 +27,7 @@ from scaffold_core.tests.fixtures.cylinder_tube import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-JUNCTION_SAMPLES_MODULE = ROOT / "layer_3_relations" / "junction_samples.py"
+PATCH_CHAIN_ENDPOINT_SAMPLES_MODULE = ROOT / "layer_3_relations" / "patch_chain_endpoint_samples.py"
 FORBIDDEN_TOKENS = frozenset({
     "H_FRAME",
     "V_FRAME",
@@ -45,63 +45,63 @@ FORBIDDEN_TOKENS = frozenset({
 })
 
 
-def test_junction_samples_are_built_for_each_run_use_endpoint() -> None:
+def test_patch_chain_endpoint_samples_are_built_for_each_directional_evidence_endpoint() -> None:
     source = make_closed_shared_boundary_loop_source()
     topology = build_topology_snapshot(source)
     geometry = build_geometry_facts(source, topology)
     snapshot = build_relation_snapshot(topology, geometry)
 
-    samples = snapshot.junction_samples
+    samples = snapshot.patch_chain_endpoint_samples
 
-    assert len(snapshot.chain_directional_run_uses) == 8
+    assert len(snapshot.patch_chain_directional_evidence) == 8
     assert len(samples) == 16
     assert {sample.endpoint_role for sample in samples} == {
-        RunUseEndpointRole.START,
-        RunUseEndpointRole.END,
+        PatchChainEndpointRole.START,
+        PatchChainEndpointRole.END,
     }
-    assert {sample.run_use_id for sample in samples} == {
-        run_use.id for run_use in snapshot.chain_directional_run_uses
+    assert {sample.directional_evidence_id for sample in samples} == {
+        directional_evidence.id for directional_evidence in snapshot.patch_chain_directional_evidence
     }
 
 
-def test_junction_sample_tangent_points_away_from_endpoint() -> None:
+def test_patch_chain_endpoint_sample_tangent_points_away_from_endpoint() -> None:
     source = make_closed_shared_boundary_loop_source()
     topology = build_topology_snapshot(source)
     geometry = build_geometry_facts(source, topology)
     snapshot = build_relation_snapshot(topology, geometry)
-    run_use = next(
+    directional_evidence = next(
         item
-        for item in snapshot.chain_directional_run_uses
+        for item in snapshot.patch_chain_directional_evidence
         if item.patch_id == PatchId("patch:seed:f0")
         and item.start_source_vertex_id == SourceVertexId("v0")
         and item.end_source_vertex_id == SourceVertexId("v1")
     )
 
-    start_sample = _sample(snapshot.junction_samples, run_use.id, RunUseEndpointRole.START)
-    end_sample = _sample(snapshot.junction_samples, run_use.id, RunUseEndpointRole.END)
+    start_sample = _sample(snapshot.patch_chain_endpoint_samples, directional_evidence.id, PatchChainEndpointRole.START)
+    end_sample = _sample(snapshot.patch_chain_endpoint_samples, directional_evidence.id, PatchChainEndpointRole.END)
 
     assert start_sample.vertex_id == VertexId("vertex:v0")
     assert end_sample.vertex_id == VertexId("vertex:v1")
-    assert start_sample.tangent_away_from_vertex == run_use.direction
+    assert start_sample.tangent_away_from_vertex == directional_evidence.direction
     assert end_sample.tangent_away_from_vertex == (
-        -run_use.direction[0],
-        -run_use.direction[1],
-        -run_use.direction[2],
+        -directional_evidence.direction[0],
+        -directional_evidence.direction[1],
+        -directional_evidence.direction[2],
     )
 
 
-def test_junction_sample_owner_normal_prefers_local_face_fan_normal() -> None:
+def test_patch_chain_endpoint_sample_owner_normal_prefers_local_face_fan_normal() -> None:
     source = make_closed_shared_boundary_loop_source()
     topology = build_topology_snapshot(source)
     geometry = build_geometry_facts(source, topology)
     snapshot = build_relation_snapshot(topology, geometry)
 
-    for sample in snapshot.junction_samples:
+    for sample in snapshot.patch_chain_endpoint_samples:
         assert sample.owner_normal_source is OwnerNormalSource.LOCAL_FACE_FAN_NORMAL
         assert sample.confidence == 1.0
 
 
-def test_cylinder_junction_samples_use_nonzero_local_face_fan_normals() -> None:
+def test_cylinder_patch_chain_endpoint_samples_use_nonzero_local_face_fan_normals() -> None:
     context = run_pass_1_relations(
         run_pass_0(make_segmented_cylinder_tube_without_caps_with_one_seam_source())
     )
@@ -112,32 +112,32 @@ def test_cylinder_junction_samples_use_nonzero_local_face_fan_normals() -> None:
     assert geometry is not None
     assert snapshot is not None
     assert next(iter(geometry.patch_facts.values())).normal == (0.0, 0.0, 0.0)
-    assert snapshot.junction_samples
+    assert snapshot.patch_chain_endpoint_samples
     assert {
         sample.owner_normal_source
-        for sample in snapshot.junction_samples
+        for sample in snapshot.patch_chain_endpoint_samples
     } == {OwnerNormalSource.LOCAL_FACE_FAN_NORMAL}
-    assert all(sample.owner_normal != (0.0, 0.0, 0.0) for sample in snapshot.junction_samples)
-    assert all(sample.confidence > 0.0 for sample in snapshot.junction_samples)
+    assert all(sample.owner_normal != (0.0, 0.0, 0.0) for sample in snapshot.patch_chain_endpoint_samples)
+    assert all(sample.confidence > 0.0 for sample in snapshot.patch_chain_endpoint_samples)
 
 
-def test_junction_samples_do_not_change_layer_1_identity() -> None:
+def test_patch_chain_endpoint_samples_do_not_change_layer_1_identity() -> None:
     source = make_closed_shared_boundary_loop_source()
     topology = build_topology_snapshot(source)
     original_chains = dict(topology.chains)
-    original_chain_uses = dict(topology.chain_uses)
+    original_patch_chains = dict(topology.patch_chains)
     original_vertices = dict(topology.vertices)
     geometry = build_geometry_facts(source, topology)
     snapshot = build_relation_snapshot(topology, geometry)
 
-    build_junction_samples(topology, geometry, snapshot.chain_directional_run_uses)
+    build_patch_chain_endpoint_samples(topology, geometry, snapshot.patch_chain_directional_evidence)
 
     assert dict(topology.chains) == original_chains
-    assert dict(topology.chain_uses) == original_chain_uses
+    assert dict(topology.patch_chains) == original_patch_chains
     assert dict(topology.vertices) == original_vertices
 
 
-def test_inspection_json_includes_junction_samples() -> None:
+def test_inspection_json_includes_patch_chain_endpoint_samples() -> None:
     context = run_pass_1_relations(
         run_pass_0(make_closed_shared_boundary_loop_source())
     )
@@ -146,20 +146,19 @@ def test_inspection_json_includes_junction_samples() -> None:
 
     json.dumps(report)
     relations = report["relations"]
-    assert relations["junction_sample_count"] == 16
     assert relations["patch_chain_endpoint_sample_count"] == 16
     first_sample = relations["patch_chain_endpoint_samples"][0]
     assert first_sample["id"].startswith("patch_chain_endpoint_sample:")
     assert first_sample["vertex_id"].startswith("vertex:")
-    assert first_sample["run_use_id"].startswith("directional_run_use:")
+    assert first_sample["directional_evidence_id"].startswith("patch_chain_directional_evidence:")
     assert first_sample["endpoint_role"] in ("START", "END")
     assert first_sample["owner_normal_source"] == "LOCAL_FACE_FAN_NORMAL"
     assert "tangent_away_from_vertex" in first_sample
     assert "owner_normal" in first_sample
 
 
-def test_junction_samples_code_does_not_introduce_deferred_semantic_terms() -> None:
-    tree = ast.parse(JUNCTION_SAMPLES_MODULE.read_text(encoding="utf-8"))
+def test_patch_chain_endpoint_samples_code_does_not_introduce_deferred_semantic_terms() -> None:
+    tree = ast.parse(PATCH_CHAIN_ENDPOINT_SAMPLES_MODULE.read_text(encoding="utf-8"))
     identifiers: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Name):
@@ -178,9 +177,9 @@ def test_junction_samples_code_does_not_introduce_deferred_semantic_terms() -> N
     assert not identifiers & FORBIDDEN_TOKENS
 
 
-def _sample(samples, run_use_id: str, role: RunUseEndpointRole):
+def _sample(samples, directional_evidence_id: str, role: PatchChainEndpointRole):
     return next(
         sample
         for sample in samples
-        if sample.run_use_id == run_use_id and sample.endpoint_role is role
+        if sample.directional_evidence_id == directional_evidence_id and sample.endpoint_role is role
     )

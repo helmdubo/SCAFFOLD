@@ -14,7 +14,7 @@ from collections import defaultdict
 from scaffold_core.core.diagnostics import Diagnostic, DiagnosticSeverity
 from scaffold_core.ids import ChainId
 from scaffold_core.layer_1_topology.model import BoundaryLoopKind, SurfaceModel
-from scaffold_core.layer_1_topology.queries import chain_use_vertices
+from scaffold_core.layer_1_topology.queries import patch_chain_vertices
 
 
 def validate_topology(model: SurfaceModel) -> tuple[Diagnostic, ...]:
@@ -28,32 +28,32 @@ def validate_topology(model: SurfaceModel) -> tuple[Diagnostic, ...]:
 
 
 def validate_loop_closure(model: SurfaceModel) -> tuple[Diagnostic, ...]:
-    """Validate that ChainUses in every loop form a closed oriented cycle."""
+    """Validate that PatchChains in every loop form a closed oriented cycle."""
 
     diagnostics: list[Diagnostic] = []
     for loop in model.loops.values():
-        if not loop.chain_use_ids:
+        if not loop.patch_chain_ids:
             diagnostics.append(
                 Diagnostic(
                     code="TOPOLOGY_LOOP_EMPTY",
                     severity=DiagnosticSeverity.BLOCKING,
-                    message="BoundaryLoop has no ChainUses.",
+                    message="BoundaryLoop has no PatchChains.",
                     source="layer_1_topology.invariants.validate_loop_closure",
                     entity_ids=(str(loop.id),),
                 )
             )
             continue
 
-        for index, use_id in enumerate(loop.chain_use_ids):
-            next_use_id = loop.chain_use_ids[(index + 1) % len(loop.chain_use_ids)]
-            _start, end = chain_use_vertices(model, use_id)
-            next_start, _next_end = chain_use_vertices(model, next_use_id)
+        for index, use_id in enumerate(loop.patch_chain_ids):
+            next_use_id = loop.patch_chain_ids[(index + 1) % len(loop.patch_chain_ids)]
+            _start, end = patch_chain_vertices(model, use_id)
+            next_start, _next_end = patch_chain_vertices(model, next_use_id)
             if end != next_start:
                 diagnostics.append(
                     Diagnostic(
                         code="TOPOLOGY_LOOP_NOT_CLOSED",
                         severity=DiagnosticSeverity.BLOCKING,
-                        message="BoundaryLoop ChainUses do not form a closed oriented cycle.",
+                        message="BoundaryLoop PatchChains do not form a closed oriented cycle.",
                         source="layer_1_topology.invariants.validate_loop_closure",
                         entity_ids=(str(loop.id), str(use_id), str(next_use_id)),
                         evidence={"end_vertex": str(end), "next_start_vertex": str(next_start)},
@@ -63,13 +63,13 @@ def validate_loop_closure(model: SurfaceModel) -> tuple[Diagnostic, ...]:
 
 
 def validate_chain_cardinality(model: SurfaceModel) -> tuple[Diagnostic, ...]:
-    """Validate and classify ChainUse cardinality cases."""
+    """Validate and classify PatchChain cardinality cases."""
 
     diagnostics: list[Diagnostic] = []
     uses_by_chain: dict[ChainId, list[str]] = defaultdict(list)
     patches_by_chain: dict[ChainId, list[str]] = defaultdict(list)
 
-    for use in model.chain_uses.values():
+    for use in model.patch_chains.values():
         uses_by_chain[use.chain_id].append(str(use.id))
         patches_by_chain[use.chain_id].append(str(use.patch_id))
 
@@ -84,7 +84,7 @@ def validate_chain_cardinality(model: SurfaceModel) -> tuple[Diagnostic, ...]:
                 Diagnostic(
                     code="TOPOLOGY_CHAIN_UNUSED",
                     severity=DiagnosticSeverity.DEGRADED,
-                    message="Chain has no ChainUses.",
+                    message="Chain has no PatchChains.",
                     source="layer_1_topology.invariants.validate_chain_cardinality",
                     entity_ids=(str(chain_id),),
                 )
@@ -124,7 +124,7 @@ def validate_chain_cardinality(model: SurfaceModel) -> tuple[Diagnostic, ...]:
                 Diagnostic(
                     code="TOPOLOGY_CHAIN_NON_MANIFOLD",
                     severity=DiagnosticSeverity.DEGRADED,
-                    message="Chain has more than two ChainUses.",
+                    message="Chain has more than two PatchChains.",
                     source="layer_1_topology.invariants.validate_chain_cardinality",
                     entity_ids=(str(chain_id), *use_ids),
                     evidence={"use_count": use_count},

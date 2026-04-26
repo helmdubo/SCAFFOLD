@@ -87,7 +87,7 @@ task_routes:
     - docs/phases/G3_derived_relations.md
     - docs/agent_handoff.md
     - docs/architecture/design_decisions.md
-  junction_run_use_relations:
+  patch_chain_endpoint_relations:
     - docs/phases/G3_derived_relations.md
     - docs/architecture/design_decisions.md
     - docs/layers/layer_1_topology.md

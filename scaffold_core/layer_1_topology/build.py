@@ -19,7 +19,7 @@ from enum import Enum
 from scaffold_core.ids import (
     BoundaryLoopId,
     ChainId,
-    ChainUseId,
+    PatchChainId,
     PatchId,
     ShellId,
     SourceEdgeId,
@@ -34,7 +34,7 @@ from scaffold_core.layer_1_topology.model import (
     BoundaryLoop,
     BoundaryLoopKind,
     Chain,
-    ChainUse,
+    PatchChain,
     Patch,
     Shell,
     SurfaceModel,
@@ -306,7 +306,7 @@ def _materialized_vertex_ids_by_face(
                 key=lambda component: str(component[0]),
             )
             for component_index, component in enumerate(sorted_components):
-                vertex_id = VertexId(f"vertex:{source_vertex_id}:use:{patch_id}:{component_index}")
+                vertex_id = VertexId(f"vertex:{source_vertex_id}:patch_chain:{patch_id}:{component_index}")
                 vertices.setdefault(
                     vertex_id,
                     Vertex(
@@ -452,7 +452,7 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
     }
 
     chains: dict[ChainId, Chain] = {}
-    chain_uses: dict[ChainUseId, ChainUse] = {}
+    patch_chains: dict[PatchChainId, PatchChain] = {}
     loops: dict[BoundaryLoopId, BoundaryLoop] = {}
     patches: dict[PatchId, Patch] = {}
     shells: dict[ShellId, Shell] = {}
@@ -562,7 +562,7 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
 
         for loop_index, (cycle, closed) in enumerate(sorted_cycles):
             loop_id = BoundaryLoopId(f"loop:{patch_id}:{loop_index}")
-            use_ids: list[ChainUseId] = []
+            use_ids: list[PatchChainId] = []
             boundary_runs = _coalesce_boundary_runs(cycle, edge_patch_contexts)
 
             for position_in_loop, run in enumerate(boundary_runs):
@@ -580,8 +580,8 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
                 else:
                     chain_id = chain_ids_by_key[chain_key]
 
-                use_id = ChainUseId(f"use:{patch_id}:{loop_index}:{position_in_loop}")
-                chain_uses[use_id] = ChainUse(
+                use_id = PatchChainId(f"patch_chain:{patch_id}:{loop_index}:{position_in_loop}")
+                patch_chains[use_id] = PatchChain(
                     id=use_id,
                     chain_id=chain_id,
                     patch_id=patch_id,
@@ -604,7 +604,7 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
                 id=loop_id,
                 patch_id=patch_id,
                 kind=loop_kind,
-                chain_use_ids=tuple(use_ids),
+                patch_chain_ids=tuple(use_ids),
                 loop_index=loop_index,
             )
             patch_loop_ids[patch_id].append(loop_id)
@@ -622,6 +622,6 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
         patches=patches,
         loops=loops,
         chains=chains,
-        chain_uses=chain_uses,
+        patch_chains=patch_chains,
         vertices=vertices,
     )

@@ -115,7 +115,7 @@ Shell
 Patch
 BoundaryLoop
 Chain
-ChainUse
+PatchChain
 Vertex
 GeometryFactSnapshot
 PatchGeometryFacts
@@ -127,25 +127,33 @@ DiagnosticReport
 Evidence
 ```
 
-Preferred terminology reset:
+Current terminology:
 
 ```text
-Current / legacy term                   New / preferred term
-ChainUse                                PatchChain
-ChainDirectionalRunUse                  PatchChain measurement / directional evidence
-ChainDirectionalRunUseJunctionSample    PatchChainEndpointSample
-JunctionRunUseRelation                  PatchChainEndpointRelation
-VertexFanGeometryFacts                  LocalFaceFanGeometryFacts
-Junction                                ScaffoldJunction
+PatchChain:
+  final patch-local oriented occurrence of a Chain in a BoundaryLoop.
+
+PatchChainDirectionalEvidence:
+  derived directional measurement for a PatchChain.
+
+PatchChainEndpointSample:
+  endpoint ray/evidence sample for a PatchChain directional measurement.
+
+PatchChainEndpointRelation:
+  pairwise local relation between endpoint samples at one Vertex.
+
+LocalFaceFanGeometryFacts:
+  local owner-normal geometry evidence.
+
+LoopCorner:
+  patch-local transition between adjacent PatchChains in one BoundaryLoop.
+
+ScaffoldJunction:
+  future graph-level ScaffoldNode classification for branch/seam/cross-patch structures.
 ```
 
-`PatchChainEndpointSample` is not a Junction.
-`PatchChainEndpointRelation` is not a Junction.
-`LocalFaceFanGeometryFacts` is not a Junction.
-
-`ScaffoldJunction` is the graph-level node classification for 3+ meaningful
-PatchChains, seam pairs, cross-patch links, branches, or similar structural
-junction evidence.
+Endpoint samples, endpoint relations and LocalFaceFanGeometryFacts are evidence
+or measurements; they are not graph nodes.
 
 Implemented baseline functions:
 
@@ -169,7 +177,7 @@ the old fixture baseline:
 - Patch flood fill blocked by mesh/selection border, selected non-manifold edge,
   explicit Scaffold boundary mark and Blender UV Seam;
 - Blender Sharp is read as a source mark but ignored by default Patch segmentation;
-- BoundaryLoops, Chains and ChainUses are built from real Patch boundary uses.
+- BoundaryLoops, Chains and PatchChains are built from real Patch boundary uses.
 ```
 
 Layer 1 Chain coalescing is implemented for materialized boundary runs:
@@ -181,7 +189,7 @@ Layer 1 Chain coalescing is implemented for materialized boundary runs:
   are coalesced into one Chain.
 - Chain.source_edge_ids stores source edges in run order.
 - ChainId is built from source_edge_ids in run order.
-- Lookup remains orientation-independent so opposite ChainUses resolve to the
+- Lookup remains orientation-independent so opposite PatchChains resolve to the
   same Chain.
 ```
 
@@ -195,9 +203,9 @@ NON_MANIFOLD_RUN
 ```
 
 SEAM_SELF loops may materialize duplicate topology Vertex occurrences so one
-source vertex can appear on both sides of a seam cut. `ChainUse` may carry
+source vertex can appear on both sides of a seam cut. `PatchChain` may carry
 materialized start/end vertices for the patch-local occurrence. These are
-topology/provenance only; normals are not stored on Layer 1 ChainUse.
+topology/provenance only; normals are not stored on Layer 1 PatchChain.
 
 Current Chain coalescing limitation:
 
@@ -226,7 +234,7 @@ Closed seam loop of 4 source edges between two Patches:
   expected:
     1 Chain
     Chain.source_edge_ids = (e10, e9, e6, e7)
-    2 ChainUses, one per Patch loop
+    2 PatchChains, one per Patch loop
 ```
 
 Example:
@@ -237,7 +245,7 @@ Cylinder tube without caps and one seam cut:
     1 Patch
     1 materialized BoundaryLoop
     3 Chains
-    4 ChainUses
+    4 PatchChains
 
   Chains:
     top border run
@@ -299,11 +307,11 @@ scaffold_core/layer_3_relations/build.py
 
 G3a builds `PatchAdjacency` from normal shared two-Patch Chains, stores
 `DihedralKind` on the adjacency record, computes signed dihedral using both
-ChainUse orientations, skips border / SEAM_SELF / non-manifold Chains for
+PatchChain orientations, skips border / SEAM_SELF / non-manifold Chains for
 normal adjacency, and exposes `run_pass_1_relations()` in the pipeline.
 
-G3b1 implements Junction incidence queries as derived views over Vertex.
-It does not introduce a Junction entity.
+G3b1 implements PatchChain incidence queries as derived views over Vertex.
+It does not introduce a ScaffoldJunction entity.
 It does not implement disk-cycle ordering.
 It does not implement ChainContinuationRelation.
 
@@ -334,10 +342,10 @@ This is a partial OQ-11 decision for straight/turning polygonal Chains only.
 Curved, sawtooth tuning, user split marks, closed-loop wrap merge, advanced
 corner detection and relation to disk-cycle ordering remain unresolved.
 
-G3c1 implemented ChainDirectionalRunUse:
+G3c1 implemented PatchChainDirectionalEvidence:
 
 ```text
-ChainDirectionalRunUse is a patch-local directional occurrence of
+PatchChainDirectionalEvidence is a patch-local directional occurrence of
 ChainDirectionalRun.
 This is the bridge between topology-level Chain refinement and future
 AlignmentClass.
@@ -348,7 +356,7 @@ PatchAxes is still not implemented.
 G3c2 AlignmentClass v0 is implemented:
 
 ```text
-AlignmentClass consumes ChainDirectionalRunUse, not Chain.
+AlignmentClass consumes PatchChainDirectionalEvidence, not Chain.
 It groups patch-local directional run uses into sign-insensitive direction
 families.
 PatchAxes remains deferred.
@@ -378,10 +386,10 @@ LoopCorners.
 Current implemented chain:
 
 ```text
-Layer 1 Chain / ChainUse
+Layer 1 Chain / PatchChain
 -> Layer 2 ChainSegmentGeometryFacts
 -> Layer 3 ChainDirectionalRun
--> Layer 3 ChainDirectionalRunUse
+-> Layer 3 PatchChainDirectionalEvidence
 -> Layer 3 AlignmentClass
 -> Layer 3 PatchAxes
 ```
@@ -406,7 +414,7 @@ This is the basis for future ScaffoldGraph / ScaffoldTrace.
 
 Do not implement ScaffoldGraph yet.
 Do not use U/V labels, H/V labels, WORLD_UP, WorldOrientation or runtime solve.
-Do not store normals on Layer 1 ChainUse.
+Do not store normals on Layer 1 PatchChain.
 
 G3c4 PatchChainEndpointSample is implemented:
 
@@ -417,7 +425,7 @@ tangent_away_from_vertex is oriented away from the endpoint Vertex.
 owner_normal prefers Layer 2 LocalFaceFanGeometryFacts.normal with
 owner_normal_source = LOCAL_FACE_FAN_NORMAL, falling back to PatchGeometryFacts.normal
 when a non-zero fan normal is unavailable.
-Layer 1 ChainUse still stores topology only.
+Layer 1 PatchChain still stores topology only.
 Endpoint samples do not themselves classify pairwise relations.
 ScaffoldGraph is still not implemented.
 ```
@@ -463,7 +471,7 @@ Implemented tests:
 ```text
 test_forbidden_imports.py
 test_module_docstrings.py
-test_chainuse_orientation.py
+test_patch_chain_orientation.py
 test_layer_1_invariants.py
 test_seam_self.py
 test_pipeline_pass0.py
@@ -506,7 +514,7 @@ Commit 61b5cd7 builds coalesced Chain ids from source_edge_ids in run order.
 Full local verification at the time of handoff: python -m pytest scaffold_core/tests
 Result: 46 passed.
 Blender smoke test: cube with all faces selected and seam loop around one face produced
-1 Shell, 2 Patches, 1 Chain and 2 ChainUses.
+1 Shell, 2 Patches, 1 Chain and 2 PatchChains.
 ```
 
 ---
@@ -547,11 +555,9 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 ### Layer 1 / Chain refinement still open
 
 - OQ-11 is partially resolved for straight/turning polygonal Chains through
-  ChainDirectionalRun and ChainDirectionalRunUse.
+  ChainDirectionalRun and PatchChainDirectionalEvidence.
 - Curved-chain handling, sawtooth tuning, user split marks, closed-loop wrap
   merge remain unresolved.
-- Current code may still use legacy `ChainUse`; conceptually this is
-  PatchChain.
 
 ### G3 relation work still open
 

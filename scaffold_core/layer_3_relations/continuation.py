@@ -11,9 +11,9 @@ Rules:
 from __future__ import annotations
 
 from scaffold_core.core.evidence import Evidence
-from scaffold_core.ids import ChainUseId, VertexId
-from scaffold_core.layer_1_topology.model import ChainUse, SurfaceModel
-from scaffold_core.layer_3_relations.junction import incident_chain_uses_for_vertex
+from scaffold_core.ids import PatchChainId, VertexId
+from scaffold_core.layer_1_topology.model import PatchChain, SurfaceModel
+from scaffold_core.layer_3_relations.patch_chain_incidence import incident_patch_chains_for_vertex
 from scaffold_core.layer_3_relations.model import (
     ChainContinuationRelation,
     ContinuationKind,
@@ -27,11 +27,11 @@ POLICY_NAME = "conservative_g3b2"
 def build_chain_continuations(
     topology: SurfaceModel,
 ) -> tuple[ChainContinuationRelation, ...]:
-    """Build conservative TERMINUS/SPLIT relations for Layer 1 ChainUses."""
+    """Build conservative TERMINUS/SPLIT relations for Layer 1 PatchChains."""
 
     relations: list[ChainContinuationRelation] = []
     for vertex_id in sorted(topology.vertices, key=str):
-        incident_uses = incident_chain_uses_for_vertex(topology, vertex_id)
+        incident_uses = incident_patch_chains_for_vertex(topology, vertex_id)
         for source_use in incident_uses:
             candidates = tuple(use for use in incident_uses if use.id != source_use.id)
             if len(candidates) >= 2:
@@ -43,27 +43,27 @@ def build_chain_continuations(
 
 def continuations_for_source_use(
     snapshot: RelationSnapshot,
-    chain_use_id: ChainUseId,
+    patch_chain_id: PatchChainId,
 ) -> tuple[ChainContinuationRelation, ...]:
-    """Return continuation relations for one source ChainUse."""
+    """Return continuation relations for one source PatchChain."""
 
     return tuple(
         relation
         for relation in snapshot.chain_continuations
-        if relation.source_chain_use_id == chain_use_id
+        if relation.source_patch_chain_id == patch_chain_id
     )
 
 
 def _terminus_relation(
     vertex_id: VertexId,
-    source_use: ChainUse,
-    incident_uses: tuple[ChainUse, ...],
-    candidates: tuple[ChainUse, ...],
+    source_use: PatchChain,
+    incident_uses: tuple[PatchChain, ...],
+    candidates: tuple[PatchChain, ...],
 ) -> ChainContinuationRelation:
     return ChainContinuationRelation(
-        junction_vertex_id=vertex_id,
-        source_chain_use_id=source_use.id,
-        target_chain_use_id=None,
+        vertex_id=vertex_id,
+        source_patch_chain_id=source_use.id,
+        target_patch_chain_id=None,
         kind=ContinuationKind.TERMINUS,
         confidence=1.0,
         evidence=(_evidence(incident_uses, candidates),),
@@ -72,14 +72,14 @@ def _terminus_relation(
 
 def _split_relation(
     vertex_id: VertexId,
-    source_use: ChainUse,
-    incident_uses: tuple[ChainUse, ...],
-    candidates: tuple[ChainUse, ...],
+    source_use: PatchChain,
+    incident_uses: tuple[PatchChain, ...],
+    candidates: tuple[PatchChain, ...],
 ) -> ChainContinuationRelation:
     return ChainContinuationRelation(
-        junction_vertex_id=vertex_id,
-        source_chain_use_id=source_use.id,
-        target_chain_use_id=None,
+        vertex_id=vertex_id,
+        source_patch_chain_id=source_use.id,
+        target_patch_chain_id=None,
         kind=ContinuationKind.SPLIT,
         confidence=1.0,
         evidence=(_evidence(incident_uses, candidates),),
@@ -87,12 +87,12 @@ def _split_relation(
 
 
 def _evidence(
-    incident_uses: tuple[ChainUse, ...],
-    candidates: tuple[ChainUse, ...],
+    incident_uses: tuple[PatchChain, ...],
+    candidates: tuple[PatchChain, ...],
 ) -> Evidence:
     return Evidence(
         source="layer_3_relations.continuation",
-        summary="conservative ChainUse continuation policy",
+        summary="conservative PatchChain continuation policy",
         data={
             "incident_count": len(incident_uses),
             "candidate_count": len(candidates),

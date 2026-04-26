@@ -15,8 +15,8 @@ from pathlib import Path
 from scaffold_core.ids import ChainId, SourceEdgeId
 from scaffold_core.layer_1_topology.build import build_topology_snapshot
 from scaffold_core.layer_1_topology.invariants import validate_loop_closure
-from scaffold_core.layer_1_topology.model import ChainUse
-from scaffold_core.layer_1_topology.queries import chain_uses_for_chain
+from scaffold_core.layer_1_topology.model import PatchChain
+from scaffold_core.layer_1_topology.queries import patch_chains_for_chain
 from scaffold_core.layer_2_geometry.build import build_geometry_facts
 from scaffold_core.layer_3_relations.chain_refinement import build_chain_directional_runs
 from scaffold_core.tests.fixtures.cylinder_tube import (
@@ -42,16 +42,16 @@ FORBIDDEN_TOKENS = frozenset({
 })
 
 
-def test_cylinder_tube_one_seam_materializes_one_loop_with_four_chain_uses() -> None:
+def test_cylinder_tube_one_seam_materializes_one_loop_with_four_patch_chains() -> None:
     model = build_topology_snapshot(make_cylinder_tube_without_caps_with_one_seam_source())
 
     assert len(model.patches) == 1
     assert len(model.loops) == 1
     assert len(model.chains) == 3
-    assert len(model.chain_uses) == 4
+    assert len(model.patch_chains) == 4
     assert validate_loop_closure(model) == ()
     loop = next(iter(model.loops.values()))
-    assert len(loop.chain_use_ids) == 4
+    assert len(loop.patch_chain_ids) == 4
 
 
 def test_cylinder_tube_coalesces_top_bottom_and_seam_runs() -> None:
@@ -84,7 +84,7 @@ def test_cylinder_tube_coalesces_top_bottom_and_seam_runs() -> None:
 def test_cylinder_tube_seam_chain_has_two_uses_in_same_patch() -> None:
     model = build_topology_snapshot(make_cylinder_tube_without_caps_with_one_seam_source())
 
-    seam_uses = chain_uses_for_chain(model, ChainId("chain:e_v0"))
+    seam_uses = patch_chains_for_chain(model, ChainId("chain:e_v0"))
 
     assert len(seam_uses) == 2
     assert {use.patch_id for use in seam_uses} == {next(iter(model.patches))}
@@ -115,7 +115,7 @@ def test_segmented_cylinder_seam_path_materializes_one_loop() -> None:
     assert len(model.patches) == 1
     assert len(model.loops) == 1
     assert len(model.chains) == 3
-    assert len(model.chain_uses) == 4
+    assert len(model.patch_chains) == 4
     assert validate_loop_closure(model) == ()
 
 
@@ -123,7 +123,7 @@ def test_segmented_cylinder_seam_path_has_one_chain_with_two_uses() -> None:
     model = build_topology_snapshot(make_segmented_cylinder_tube_without_caps_with_one_seam_source())
 
     seam_chain = model.chains[ChainId("chain:e_va_top:e_va_bot")]
-    seam_uses = chain_uses_for_chain(model, seam_chain.id)
+    seam_uses = patch_chains_for_chain(model, seam_chain.id)
 
     assert seam_chain.source_edge_ids == (
         SourceEdgeId("e_va_top"),
@@ -159,8 +159,8 @@ def test_chain_directional_runs_still_split_turning_border_rings_downstream() ->
     assert all(len(run.source_edge_ids) == 1 for run in bottom_runs + top_runs)
 
 
-def test_layer_1_chain_use_has_no_geometry_normal_fields() -> None:
-    field_names = {field.name for field in fields(ChainUse)}
+def test_layer_1_patch_chain_has_no_geometry_normal_fields() -> None:
+    field_names = {field.name for field in fields(PatchChain)}
 
     assert "normal" not in field_names
     assert "owner_normal" not in field_names

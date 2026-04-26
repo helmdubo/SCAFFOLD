@@ -93,13 +93,13 @@ A topology snapshot that can represent:
 - Patch
 - BoundaryLoop
 - Chain
-- ChainUse
-- Vertex / Junction
+- PatchChain
+- Vertex / ScaffoldJunction
 
 with diagnostics for:
 
 - loop closure;
-- ChainUse orientation;
+- PatchChain orientation;
 - border chains;
 - normal shared chains;
 - SEAM_SELF;

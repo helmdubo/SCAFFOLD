@@ -12,12 +12,12 @@ import ast
 import json
 from pathlib import Path
 
-from scaffold_core.ids import BoundaryLoopId, ChainId, ChainUseId, PatchId, SourceVertexId
+from scaffold_core.ids import BoundaryLoopId, ChainId, PatchChainId, PatchId, SourceVertexId
 from scaffold_core.layer_2_geometry.facts import Vector3
 from scaffold_core.layer_3_relations.alignment import build_alignment_classes
 from scaffold_core.layer_3_relations.model import (
     AlignmentClassKind,
-    ChainDirectionalRunUse,
+    PatchChainDirectionalEvidence,
 )
 from scaffold_core.pipeline.inspection import inspect_pipeline_context
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
@@ -48,7 +48,7 @@ def test_closed_square_seam_produces_two_alignment_direction_families() -> None:
 
     snapshot = context.relation_snapshot
     assert snapshot is not None
-    assert len(snapshot.chain_directional_run_uses) == 8
+    assert len(snapshot.patch_chain_directional_evidence) == 8
     assert len(snapshot.alignment_classes) == 2
     assert {alignment.kind for alignment in snapshot.alignment_classes} == {
         AlignmentClassKind.LINEAR
@@ -60,36 +60,36 @@ def test_closed_square_seam_produces_two_alignment_direction_families() -> None:
 
 
 def test_opposite_directions_group_into_one_alignment_class() -> None:
-    run_uses = (
-        _run_use("run_use:a", (1.0, 0.0, 0.0), PatchId("patch:a")),
-        _run_use("run_use:b", (-1.0, 0.0, 0.0), PatchId("patch:b")),
+    directional_evidence_items = (
+        _directional_evidence("directional_evidence:a", (1.0, 0.0, 0.0), PatchId("patch:a")),
+        _directional_evidence("directional_evidence:b", (-1.0, 0.0, 0.0), PatchId("patch:b")),
     )
 
-    alignment_classes = build_alignment_classes(run_uses)
+    alignment_classes = build_alignment_classes(directional_evidence_items)
 
     assert len(alignment_classes) == 1
     alignment_class = alignment_classes[0]
     assert alignment_class.kind is AlignmentClassKind.LINEAR
-    assert alignment_class.member_run_use_ids == ("run_use:a", "run_use:b")
+    assert alignment_class.member_directional_evidence_ids == ("directional_evidence:a", "directional_evidence:b")
     assert alignment_class.patch_ids == (PatchId("patch:a"), PatchId("patch:b"))
     assert alignment_class.dominant_direction == (1.0, 0.0, 0.0)
 
 
-def test_alignment_members_are_directional_run_use_ids() -> None:
+def test_alignment_members_are_patch_chain_directional_evidence_ids() -> None:
     context = run_pass_1_relations(
         run_pass_0(make_closed_shared_boundary_loop_source())
     )
 
     snapshot = context.relation_snapshot
     assert snapshot is not None
-    run_use_ids = {run_use.id for run_use in snapshot.chain_directional_run_uses}
-    chain_ids = {str(run_use.parent_chain_id) for run_use in snapshot.chain_directional_run_uses}
-    directional_run_ids = {run_use.directional_run_id for run_use in snapshot.chain_directional_run_uses}
+    directional_evidence_ids = {directional_evidence.id for directional_evidence in snapshot.patch_chain_directional_evidence}
+    chain_ids = {str(directional_evidence.parent_chain_id) for directional_evidence in snapshot.patch_chain_directional_evidence}
+    directional_run_ids = {directional_evidence.directional_run_id for directional_evidence in snapshot.patch_chain_directional_evidence}
 
     for alignment_class in snapshot.alignment_classes:
-        assert set(alignment_class.member_run_use_ids) <= run_use_ids
-        assert not set(alignment_class.member_run_use_ids) & chain_ids
-        assert not set(alignment_class.member_run_use_ids) & directional_run_ids
+        assert set(alignment_class.member_directional_evidence_ids) <= directional_evidence_ids
+        assert not set(alignment_class.member_directional_evidence_ids) & chain_ids
+        assert not set(alignment_class.member_directional_evidence_ids) & directional_run_ids
 
 
 def test_relation_snapshot_does_not_expose_world_orientation() -> None:
@@ -116,11 +116,11 @@ def test_inspection_json_includes_alignment_classes() -> None:
     assert first_alignment == {
         "id": "alignment:0",
         "kind": "LINEAR",
-        "member_run_use_ids": [
-            "directional_run_use:use:patch:seed:f0:0:0:0",
-            "directional_run_use:use:patch:seed:f0:0:0:2",
-            "directional_run_use:use:patch:seed:f1:0:0:0",
-            "directional_run_use:use:patch:seed:f1:0:0:2",
+        "member_directional_evidence_ids": [
+            "patch_chain_directional_evidence:patch_chain:patch:seed:f0:0:0:0",
+            "patch_chain_directional_evidence:patch_chain:patch:seed:f0:0:0:2",
+            "patch_chain_directional_evidence:patch_chain:patch:seed:f1:0:0:0",
+            "patch_chain_directional_evidence:patch_chain:patch:seed:f1:0:0:2",
         ],
         "patch_ids": ["patch:seed:f0", "patch:seed:f1"],
         "dominant_direction": [1.0, 0.0, 0.0],
@@ -148,16 +148,16 @@ def test_alignment_code_does_not_introduce_deferred_semantic_terms() -> None:
     assert not identifiers & FORBIDDEN_TOKENS
 
 
-def _run_use(
-    run_use_id: str,
+def _directional_evidence(
+    directional_evidence_id: str,
     direction: Vector3,
     patch_id: PatchId,
-) -> ChainDirectionalRunUse:
-    return ChainDirectionalRunUse(
-        id=run_use_id,
-        directional_run_id=f"directional:{run_use_id}",
+) -> PatchChainDirectionalEvidence:
+    return PatchChainDirectionalEvidence(
+        id=directional_evidence_id,
+        directional_run_id=f"directional:{directional_evidence_id}",
         parent_chain_id=ChainId("chain:test"),
-        chain_use_id=ChainUseId(f"use:{run_use_id}"),
+        patch_chain_id=PatchChainId(f"patch_chain:{directional_evidence_id}"),
         patch_id=patch_id,
         loop_id=BoundaryLoopId(f"loop:{patch_id}"),
         position_in_loop=0,

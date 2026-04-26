@@ -44,5 +44,5 @@ def test_inspection_json_includes_loop_corners() -> None:
     assert relations["loop_corner_count"] == 4
     first_corner = relations["loop_corners"][0]
     assert first_corner["id"].startswith("loop_corner:")
-    assert first_corner["previous_patch_chain_id"].startswith("use:")
-    assert first_corner["next_patch_chain_id"].startswith("use:")
+    assert first_corner["previous_patch_chain_id"].startswith("patch_chain:")
+    assert first_corner["next_patch_chain_id"].startswith("patch_chain:")

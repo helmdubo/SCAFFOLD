@@ -81,12 +81,12 @@ def test_describe_active_blender_mesh_topology_reports_g1_counts() -> None:
     assert "shells: 1" in report
     assert "patches: 1" in report
     assert "chains: 1" in report
-    assert "chain uses: 1" in report
+    assert "patch chains: 1" in report
     assert "shell shell:0: patches ('patch:seed:f0',)" in report
     assert "patch patch:seed:f0: shell shell:0 faces ('f0',) loops ('loop:patch:seed:f0:0',)" in report
     assert "chain chain:e0:e1:e2:e3: edges ('e0', 'e1', 'e2', 'e3') uses 1" in report
     assert (
-        "chain use use:patch:seed:f0:0:0: chain chain:e0:e1:e2:e3 "
+        "patch chain patch_chain:patch:seed:f0:0:0: chain chain:e0:e1:e2:e3 "
         "patch patch:seed:f0 loop loop:patch:seed:f0:0 orientation 1"
     ) in report
 
@@ -101,15 +101,15 @@ def test_inspect_pipeline_context_reports_single_patch_topology_tree() -> None:
     shell = surface["shells"][0]
     patch = shell["patches"][0]
     loop = patch["loops"][0]
-    chain_use = loop["chain_uses"][0]
-    chain = chain_use["chain"]
+    patch_chain = loop["patch_chains"][0]
+    chain = patch_chain["chain"]
     assert surface["id"] == "surface:single_quad"
     assert shell["id"] == "shell:0"
     assert patch["source_face_ids"] == ["f0"]
     assert loop["kind"] == "OUTER"
-    assert chain_use["orientation_sign"] in (-1, 1)
-    assert chain_use["start_vertex_id"] == "vertex:v0"
-    assert chain_use["end_vertex_id"] == "vertex:v0"
+    assert patch_chain["orientation_sign"] in (-1, 1)
+    assert patch_chain["start_vertex_id"] == "vertex:v0"
+    assert patch_chain["end_vertex_id"] == "vertex:v0"
     assert chain["start_vertex_id"].startswith("vertex:")
     assert chain["start_source_vertex_ids"]
     assert chain["source_edge_count"] == 4
@@ -134,11 +134,11 @@ def test_inspect_pipeline_context_reports_relations_and_coalesced_chain() -> Non
     assert relations["patch_adjacencies"][0]["dihedral_kind"] == "COPLANAR"
     assert relations["chain_continuations"]
     assert any(
-        len(chain_use["chain"]["source_edge_ids"]) > 1
+        len(patch_chain["chain"]["source_edge_ids"]) > 1
         for shell in report["surface_model"]["shells"]
         for patch in shell["patches"]
         for loop in patch["loops"]
-        for chain_use in loop["chain_uses"]
+        for patch_chain in loop["patch_chains"]
     )
     assert relations["chain_continuations"][0]["evidence"]
     assert relations["chain_continuations"][0]["evidence"][0]["data"]["policy"] == "conservative_g3b2"
@@ -153,11 +153,11 @@ def test_inspection_marks_closed_coalesced_chain_and_vertex_run() -> None:
 
     json.dumps(report)
     chains = [
-        chain_use["chain"]
+        patch_chain["chain"]
         for shell in report["surface_model"]["shells"]
         for patch in shell["patches"]
         for loop in patch["loops"]
-        for chain_use in loop["chain_uses"]
+        for patch_chain in loop["patch_chains"]
     ]
     closed_chain = next(chain for chain in chains if chain["is_closed"])
     geometry_chain = next(
@@ -201,18 +201,18 @@ def test_inspection_default_output_is_compact() -> None:
         "chain_count": 1,
         "vertex_count": 8,
         "local_face_fan_count": 12,
-        "vertex_fan_count": 12,
+        "local_face_fan_count": 12,
     }
     assert report["relations"] == {
         "patch_adjacency_count": 1,
         "chain_continuation_count": 2,
         "chain_directional_run_count": 4,
-        "chain_directional_run_use_count": 8,
+        "patch_chain_directional_evidence_count": 8,
         "loop_corner_count": 2,
         "patch_chain_endpoint_sample_count": 16,
         "patch_chain_endpoint_relation_count": 24,
-        "junction_sample_count": 16,
-        "junction_run_use_relation_count": 24,
+        "patch_chain_endpoint_sample_count": 16,
+        "patch_chain_endpoint_relation_count": 24,
         "alignment_class_count": 2,
         "patch_axes_count": 2,
     }

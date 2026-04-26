@@ -22,7 +22,7 @@ from scaffold_core.layer_0_source.snapshot import (
 
 
 def make_two_quad_l_source() -> SourceMeshSnapshot:
-    """Return two quads sharing one edge, enough to exercise shared ChainUses."""
+    """Return two quads sharing one edge, enough to exercise shared PatchChains."""
 
     v0 = SourceVertexId("v0")
     v1 = SourceVertexId("v1")

@@ -14,7 +14,7 @@ from scaffold_core.core.diagnostics import DiagnosticSeverity
 from scaffold_core.ids import (
     BoundaryLoopId,
     ChainId,
-    ChainUseId,
+    PatchChainId,
     PatchId,
     ShellId,
     SourceEdgeId,
@@ -35,7 +35,7 @@ from scaffold_core.layer_1_topology.model import (
     BoundaryLoop,
     BoundaryLoopKind,
     Chain,
-    ChainUse,
+    PatchChain,
     Patch,
     Shell,
     SurfaceModel,
@@ -106,8 +106,8 @@ def test_local_face_fan_geometry_splits_materialized_seam_occurrences() -> None:
     )
     assert len(seam_top_fans) == 2
     assert {fan.vertex_id for fan in seam_top_fans} == {
-        VertexId("vertex:v_a_t:use:patch:seed:f_ab_top:0"),
-        VertexId("vertex:v_a_t:use:patch:seed:f_ab_top:1"),
+        VertexId("vertex:v_a_t:patch_chain:patch:seed:f_ab_top:0"),
+        VertexId("vertex:v_a_t:patch_chain:patch:seed:f_ab_top:1"),
     }
     assert all(fan.normal != (0.0, 0.0, 0.0) for fan in seam_top_fans)
     assert {len(fan.source_face_ids) for fan in seam_top_fans} == {1}
@@ -203,7 +203,7 @@ def _make_broken_chain_order_source_and_topology() -> tuple[SourceMeshSnapshot, 
     e1 = SourceEdgeId("e1")
     f0 = SourceFaceId("f0")
     chain_id = ChainId("chain:broken")
-    use_id = ChainUseId("use:broken")
+    use_id = PatchChainId("patch_chain:broken")
     vertex_0 = VertexId("vertex:v0")
     vertex_3 = VertexId("vertex:v3")
     patch_id = PatchId("patch:broken")
@@ -235,7 +235,7 @@ def _make_broken_chain_order_source_and_topology() -> tuple[SourceMeshSnapshot, 
                 id=loop_id,
                 patch_id=patch_id,
                 kind=BoundaryLoopKind.DEGRADED,
-                chain_use_ids=(use_id,),
+                patch_chain_ids=(use_id,),
                 loop_index=0,
             )
         },
@@ -247,8 +247,8 @@ def _make_broken_chain_order_source_and_topology() -> tuple[SourceMeshSnapshot, 
                 source_edge_ids=(e0, e1),
             )
         },
-        chain_uses={
-            use_id: ChainUse(
+        patch_chains={
+            use_id: PatchChain(
                 id=use_id,
                 chain_id=chain_id,
                 patch_id=patch_id,

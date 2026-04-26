@@ -5,7 +5,6 @@ Rules:
 - No geometry facts here.
 - No H/V, WALL/FLOOR/SLOPE, feature, or runtime roles here.
 - PatchChain is the preferred term for the final oriented boundary-use entity.
-  The legacy implementation class name is ChainUse.
 - This module may import ids and standard library only.
 """
 
@@ -18,7 +17,7 @@ from typing import Mapping, Sequence
 from scaffold_core.ids import (
     BoundaryLoopId,
     ChainId,
-    ChainUseId,
+    PatchChainId,
     PatchId,
     ShellId,
     SourceEdgeId,
@@ -52,10 +51,10 @@ class Chain:
 
 
 @dataclass(frozen=True)
-class ChainUse:
-    """Final PatchChain, using the legacy implementation class name."""
+class PatchChain:
+    """Final patch-local oriented occurrence of a Chain in a BoundaryLoop."""
 
-    id: ChainUseId
+    id: PatchChainId
     chain_id: ChainId
     patch_id: PatchId
     loop_id: BoundaryLoopId
@@ -66,10 +65,7 @@ class ChainUse:
 
     def __post_init__(self) -> None:
         if self.orientation_sign not in (-1, 1):
-            raise ValueError("ChainUse.orientation_sign must be +1 or -1")
-
-
-PatchChain = ChainUse
+            raise ValueError("PatchChain.orientation_sign must be +1 or -1")
 
 
 @dataclass(frozen=True)
@@ -77,7 +73,7 @@ class BoundaryLoop:
     id: BoundaryLoopId
     patch_id: PatchId
     kind: BoundaryLoopKind
-    chain_use_ids: tuple[ChainUseId, ...]
+    patch_chain_ids: tuple[PatchChainId, ...]
     loop_index: int
 
 
@@ -102,5 +98,5 @@ class SurfaceModel:
     patches: Mapping[PatchId, Patch] = field(default_factory=dict)
     loops: Mapping[BoundaryLoopId, BoundaryLoop] = field(default_factory=dict)
     chains: Mapping[ChainId, Chain] = field(default_factory=dict)
-    chain_uses: Mapping[ChainUseId, ChainUse] = field(default_factory=dict)
+    patch_chains: Mapping[PatchChainId, PatchChain] = field(default_factory=dict)
     vertices: Mapping[VertexId, Vertex] = field(default_factory=dict)

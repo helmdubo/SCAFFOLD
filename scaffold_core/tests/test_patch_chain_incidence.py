@@ -13,11 +13,11 @@ from pathlib import Path
 
 from scaffold_core.ids import VertexId
 from scaffold_core.layer_1_topology.build import build_topology_snapshot
-from scaffold_core.layer_1_topology.queries import chain_use_vertices
-from scaffold_core.layer_3_relations.junction import (
-    incident_chain_uses_for_vertex,
-    is_junction_like,
-    junction_valence,
+from scaffold_core.layer_1_topology.queries import patch_chain_vertices
+from scaffold_core.layer_3_relations.patch_chain_incidence import (
+    has_branching_patch_chain_incidence,
+    incident_patch_chains_for_vertex,
+    patch_chain_incidence_valence,
 )
 from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_boundary_loop_source
 from scaffold_core.tests.fixtures.l_shape import make_two_quad_l_source_with_seam_on_shared_edge
@@ -26,7 +26,7 @@ from scaffold_core.tests.fixtures.single_patch import make_single_quad_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
-JUNCTION_MODULE = ROOT / "layer_3_relations" / "junction.py"
+PATCH_CHAIN_INCIDENCE_MODULE = ROOT / "layer_3_relations" / "patch_chain_incidence.py"
 FORBIDDEN_TOKENS = frozenset({
     "H_FRAME",
     "V_FRAME",
@@ -52,28 +52,28 @@ def test_single_quad_corner_vertex_has_deterministic_incident_uses() -> None:
     topology = build_topology_snapshot(make_single_quad_source())
     vertex_id = VertexId("vertex:v0")
 
-    uses = incident_chain_uses_for_vertex(topology, vertex_id)
+    uses = incident_patch_chains_for_vertex(topology, vertex_id)
     use_ids = [str(use.id) for use in uses]
 
     assert len(uses) == 1
-    assert junction_valence(topology, vertex_id) == 1
-    assert not is_junction_like(topology, vertex_id)
+    assert patch_chain_incidence_valence(topology, vertex_id) == 1
+    assert not has_branching_patch_chain_incidence(topology, vertex_id)
     _assert_deterministic_order(use_ids)
-    assert all(vertex_id in chain_use_vertices(topology, use.id) for use in uses)
+    assert all(vertex_id in patch_chain_vertices(topology, use.id) for use in uses)
 
 
 def test_two_patch_shared_vertex_returns_all_relevant_uses() -> None:
     topology = build_topology_snapshot(make_two_quad_l_source_with_seam_on_shared_edge())
     vertex_id = VertexId("vertex:v1")
 
-    uses = incident_chain_uses_for_vertex(topology, vertex_id)
+    uses = incident_patch_chains_for_vertex(topology, vertex_id)
     use_ids = [str(use.id) for use in uses]
 
     assert len(uses) >= 3
-    assert junction_valence(topology, vertex_id) == len(uses)
-    assert is_junction_like(topology, vertex_id)
+    assert patch_chain_incidence_valence(topology, vertex_id) == len(uses)
+    assert has_branching_patch_chain_incidence(topology, vertex_id)
     _assert_deterministic_order(use_ids)
-    assert all(vertex_id in chain_use_vertices(topology, use.id) for use in uses)
+    assert all(vertex_id in patch_chain_vertices(topology, use.id) for use in uses)
 
 
 def test_closed_seam_loop_query_does_not_assume_chain_direction_stability() -> None:
@@ -81,12 +81,12 @@ def test_closed_seam_loop_query_does_not_assume_chain_direction_stability() -> N
     closed_chain = next(iter(topology.chains.values()))
     vertex_id = closed_chain.start_vertex_id
 
-    uses = incident_chain_uses_for_vertex(topology, vertex_id)
+    uses = incident_patch_chains_for_vertex(topology, vertex_id)
     use_ids = [str(use.id) for use in uses]
 
     assert closed_chain.start_vertex_id == closed_chain.end_vertex_id
     assert len(uses) == 1
-    assert junction_valence(topology, vertex_id) == 1
+    assert patch_chain_incidence_valence(topology, vertex_id) == 1
     _assert_deterministic_order(use_ids)
     assert all(use.chain_id == closed_chain.id for use in uses)
 
@@ -95,17 +95,17 @@ def test_non_manifold_vertex_incidence_is_represented_without_correction() -> No
     topology = make_non_manifold_chain_model()
     vertex_id = VertexId("vertex:0")
 
-    uses = incident_chain_uses_for_vertex(topology, vertex_id)
+    uses = incident_patch_chains_for_vertex(topology, vertex_id)
     use_ids = [str(use.id) for use in uses]
 
     assert len(uses) == 3
-    assert junction_valence(topology, vertex_id) == 3
-    assert is_junction_like(topology, vertex_id)
+    assert patch_chain_incidence_valence(topology, vertex_id) == 3
+    assert has_branching_patch_chain_incidence(topology, vertex_id)
     _assert_deterministic_order(use_ids)
 
 
-def test_junction_queries_do_not_introduce_deferred_semantic_terms() -> None:
-    tree = ast.parse(JUNCTION_MODULE.read_text(encoding="utf-8"))
+def test_patch_chain_incidence_queries_do_not_introduce_deferred_semantic_terms() -> None:
+    tree = ast.parse(PATCH_CHAIN_INCIDENCE_MODULE.read_text(encoding="utf-8"))
     identifiers: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Name):

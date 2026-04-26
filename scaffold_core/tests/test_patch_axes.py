@@ -16,7 +16,7 @@ from pathlib import Path
 from scaffold_core.ids import (
     BoundaryLoopId,
     ChainId,
-    ChainUseId,
+    PatchChainId,
     PatchId,
     ShellId,
     SourceVertexId,
@@ -28,7 +28,7 @@ from scaffold_core.layer_3_relations.alignment import build_patch_axes
 from scaffold_core.layer_3_relations.model import (
     AlignmentClass,
     AlignmentClassKind,
-    ChainDirectionalRunUse,
+    PatchChainDirectionalEvidence,
     PatchAxes,
     PatchAxisSource,
 )
@@ -87,12 +87,12 @@ def test_patch_axes_model_has_no_coordinate_label_fields() -> None:
 
 def test_single_alignment_patch_axes() -> None:
     patch_id = PatchId("patch:single")
-    run_use = _run_use("run_use:single", patch_id, (1.0, 0.0, 0.0), 2.0)
-    alignment_class = _alignment_class("alignment:single", (run_use.id,), (patch_id,), (1.0, 0.0, 0.0))
+    directional_evidence = _directional_evidence("directional_evidence:single", patch_id, (1.0, 0.0, 0.0), 2.0)
+    alignment_class = _alignment_class("alignment:single", (directional_evidence.id,), (patch_id,), (1.0, 0.0, 0.0))
 
     patch_axes = build_patch_axes(
         _topology_with_patch(patch_id),
-        (run_use,),
+        (directional_evidence,),
         (alignment_class,),
     )[patch_id]
 
@@ -127,20 +127,20 @@ def test_no_alignment_patch_axes() -> None:
 
 def test_patch_axes_evidence_marks_candidate_rejection_reasons() -> None:
     patch_id = PatchId("patch:candidates")
-    primary_run_use = _run_use("run_use:primary", patch_id, (1.0, 0.0, 0.0), 2.0)
-    secondary_run_use = _run_use("run_use:secondary", patch_id, (0.0, 1.0, 0.0), 1.5)
-    parallel_run_use = _run_use("run_use:parallel", patch_id, (1.0, 0.0, 0.0), 1.0)
-    zero_patch_run_use = _run_use("run_use:zero", PatchId("patch:other"), (0.0, 0.0, 1.0), 3.0)
+    primary_directional_evidence = _directional_evidence("directional_evidence:primary", patch_id, (1.0, 0.0, 0.0), 2.0)
+    secondary_directional_evidence = _directional_evidence("directional_evidence:secondary", patch_id, (0.0, 1.0, 0.0), 1.5)
+    parallel_directional_evidence = _directional_evidence("directional_evidence:parallel", patch_id, (1.0, 0.0, 0.0), 1.0)
+    zero_patch_directional_evidence = _directional_evidence("directional_evidence:zero", PatchId("patch:other"), (0.0, 0.0, 1.0), 3.0)
     alignment_classes = (
-        _alignment_class("alignment:primary", (primary_run_use.id,), (patch_id,), (1.0, 0.0, 0.0)),
-        _alignment_class("alignment:secondary", (secondary_run_use.id,), (patch_id,), (0.0, 1.0, 0.0)),
-        _alignment_class("alignment:parallel", (parallel_run_use.id,), (patch_id,), (1.0, 0.0, 0.0)),
-        _alignment_class("alignment:zero", (zero_patch_run_use.id,), (PatchId("patch:other"),), (0.0, 0.0, 1.0)),
+        _alignment_class("alignment:primary", (primary_directional_evidence.id,), (patch_id,), (1.0, 0.0, 0.0)),
+        _alignment_class("alignment:secondary", (secondary_directional_evidence.id,), (patch_id,), (0.0, 1.0, 0.0)),
+        _alignment_class("alignment:parallel", (parallel_directional_evidence.id,), (patch_id,), (1.0, 0.0, 0.0)),
+        _alignment_class("alignment:zero", (zero_patch_directional_evidence.id,), (PatchId("patch:other"),), (0.0, 0.0, 1.0)),
     )
 
     patch_axes = build_patch_axes(
         _topology_with_patch(patch_id),
-        (primary_run_use, secondary_run_use, parallel_run_use, zero_patch_run_use),
+        (primary_directional_evidence, secondary_directional_evidence, parallel_directional_evidence, zero_patch_directional_evidence),
         alignment_classes,
     )[patch_id]
 
@@ -233,17 +233,17 @@ def _candidate_scores(patch_axes: PatchAxes) -> list[dict[str, object]]:
     return list(patch_axes.evidence[0].data["candidate_scores"])
 
 
-def _run_use(
-    run_use_id: str,
+def _directional_evidence(
+    directional_evidence_id: str,
     patch_id: PatchId,
     direction: Vector3,
     length: float,
-) -> ChainDirectionalRunUse:
-    return ChainDirectionalRunUse(
-        id=run_use_id,
-        directional_run_id=f"directional:{run_use_id}",
+) -> PatchChainDirectionalEvidence:
+    return PatchChainDirectionalEvidence(
+        id=directional_evidence_id,
+        directional_run_id=f"directional:{directional_evidence_id}",
         parent_chain_id=ChainId("chain:test"),
-        chain_use_id=ChainUseId(f"use:{run_use_id}"),
+        patch_chain_id=PatchChainId(f"patch_chain:{directional_evidence_id}"),
         patch_id=patch_id,
         loop_id=BoundaryLoopId(f"loop:{patch_id}"),
         position_in_loop=0,
@@ -260,13 +260,13 @@ def _run_use(
 
 def _alignment_class(
     alignment_class_id: str,
-    member_run_use_ids: tuple[str, ...],
+    member_directional_evidence_ids: tuple[str, ...],
     patch_ids: tuple[PatchId, ...],
     dominant_direction: Vector3,
 ) -> AlignmentClass:
     return AlignmentClass(
         id=alignment_class_id,
-        member_run_use_ids=member_run_use_ids,
+        member_directional_evidence_ids=member_directional_evidence_ids,
         patch_ids=patch_ids,
         dominant_direction=dominant_direction,
         kind=AlignmentClassKind.LINEAR,

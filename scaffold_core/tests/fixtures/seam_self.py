@@ -9,12 +9,12 @@ Rules:
 
 from __future__ import annotations
 
-from scaffold_core.ids import BoundaryLoopId, ChainId, ChainUseId, PatchId, ShellId, SurfaceModelId, VertexId
+from scaffold_core.ids import BoundaryLoopId, ChainId, PatchChainId, PatchId, ShellId, SurfaceModelId, VertexId
 from scaffold_core.layer_1_topology.model import (
     BoundaryLoop,
     BoundaryLoopKind,
     Chain,
-    ChainUse,
+    PatchChain,
     Patch,
     Shell,
     SurfaceModel,
@@ -31,8 +31,8 @@ def make_seam_self_model() -> SurfaceModel:
     chain_id = ChainId("chain:self")
     v0 = VertexId("vertex:0")
     v1 = VertexId("vertex:1")
-    use_a = ChainUseId("use:self:0")
-    use_b = ChainUseId("use:self:1")
+    use_a = PatchChainId("patch_chain:self:0")
+    use_b = PatchChainId("patch_chain:self:1")
 
     return SurfaceModel(
         id=SurfaceModelId("surface:seam_self"),
@@ -43,13 +43,13 @@ def make_seam_self_model() -> SurfaceModel:
                 id=loop_id,
                 patch_id=patch_id,
                 kind=BoundaryLoopKind.OUTER,
-                chain_use_ids=(use_a, use_b),
+                patch_chain_ids=(use_a, use_b),
                 loop_index=0,
             )
         },
         chains={chain_id: Chain(id=chain_id, start_vertex_id=v0, end_vertex_id=v1)},
-        chain_uses={
-            use_a: ChainUse(
+        patch_chains={
+            use_a: PatchChain(
                 id=use_a,
                 chain_id=chain_id,
                 patch_id=patch_id,
@@ -57,7 +57,7 @@ def make_seam_self_model() -> SurfaceModel:
                 orientation_sign=1,
                 position_in_loop=0,
             ),
-            use_b: ChainUse(
+            use_b: PatchChain(
                 id=use_b,
                 chain_id=chain_id,
                 patch_id=patch_id,

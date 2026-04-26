@@ -81,10 +81,6 @@ class LocalFaceFanGeometryFacts:
     area: float
     normal: Vector3
 
-
-VertexFanGeometryFacts = LocalFaceFanGeometryFacts
-
-
 @dataclass(frozen=True)
 class GeometryFactSnapshot:
     patch_facts: Mapping[PatchId, PatchGeometryFacts] = field(default_factory=dict)
@@ -92,9 +88,3 @@ class GeometryFactSnapshot:
     vertex_facts: Mapping[VertexId, VertexGeometryFacts] = field(default_factory=dict)
     local_face_fan_facts: Mapping[str, LocalFaceFanGeometryFacts] = field(default_factory=dict)
     diagnostics: tuple[Diagnostic, ...] = ()
-
-    @property
-    def vertex_fan_facts(self) -> Mapping[str, LocalFaceFanGeometryFacts]:
-        """Legacy name for local_face_fan_facts."""
-
-        return self.local_face_fan_facts

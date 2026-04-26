@@ -83,9 +83,6 @@ Final G1 topology building should follow this order:
 10. Emit diagnostics for border, SEAM_SELF and non-manifold cardinality cases.
 ```
 
-Current code may still use the legacy implementation name `ChainUse`.
-Conceptually, this is the final `PatchChain`.
-
 Current G1/G3 Chain coalescing is topology/context-based only.
 Geometry-based Chain splitting or refinement is deferred.
 

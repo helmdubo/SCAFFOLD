@@ -14,7 +14,7 @@ from pathlib import Path
 from scaffold_core.ids import (
     BoundaryLoopId,
     ChainId,
-    ChainUseId,
+    PatchChainId,
     PatchId,
     ShellId,
     SurfaceModelId,
@@ -25,7 +25,7 @@ from scaffold_core.layer_1_topology.model import (
     BoundaryLoop,
     BoundaryLoopKind,
     Chain,
-    ChainUse,
+    PatchChain,
     Patch,
     Shell,
     SurfaceModel,
@@ -71,11 +71,11 @@ def test_single_quad_corner_uses_conservative_terminus_for_one_candidate() -> No
     corner_relations = tuple(
         relation
         for relation in snapshot.chain_continuations
-        if relation.junction_vertex_id == VertexId("vertex:v0")
+        if relation.vertex_id == VertexId("vertex:v0")
     )
     assert len(corner_relations) == 1
     assert {relation.kind for relation in corner_relations} == {ContinuationKind.TERMINUS}
-    assert all(relation.target_chain_use_id is None for relation in corner_relations)
+    assert all(relation.target_patch_chain_id is None for relation in corner_relations)
     assert _evidence_values(corner_relations[0]) == {
         "incident_count": 1,
         "candidate_count": 0,
@@ -83,22 +83,22 @@ def test_single_quad_corner_uses_conservative_terminus_for_one_candidate() -> No
     }
 
 
-def test_isolated_chain_use_without_candidate_produces_terminus() -> None:
+def test_isolated_patch_chain_without_candidate_produces_terminus() -> None:
     topology = _make_single_use_model()
 
     continuations = build_chain_continuations(topology)
 
     assert len(continuations) == 2
-    assert {relation.junction_vertex_id for relation in continuations} == {
+    assert {relation.vertex_id for relation in continuations} == {
         VertexId("vertex:0"),
         VertexId("vertex:1"),
     }
     assert {relation.kind for relation in continuations} == {ContinuationKind.TERMINUS}
-    assert all(relation.target_chain_use_id is None for relation in continuations)
+    assert all(relation.target_patch_chain_id is None for relation in continuations)
     assert all(_evidence_values(relation)["candidate_count"] == 0 for relation in continuations)
 
 
-def test_ambiguous_junction_produces_one_split_relation_per_source_use() -> None:
+def test_ambiguous_patch_chain_incidence_produces_one_split_relation_per_source_patch_chain() -> None:
     source = make_two_quad_l_source_with_seam_on_shared_edge()
     topology = build_topology_snapshot(source)
     geometry = build_geometry_facts(source, topology)
@@ -107,12 +107,12 @@ def test_ambiguous_junction_produces_one_split_relation_per_source_use() -> None
     split_relations = tuple(
         relation
         for relation in snapshot.chain_continuations
-        if relation.junction_vertex_id == VertexId("vertex:v1")
+        if relation.vertex_id == VertexId("vertex:v1")
     )
 
     assert split_relations
     assert {relation.kind for relation in split_relations} == {ContinuationKind.SPLIT}
-    assert all(relation.target_chain_use_id is None for relation in split_relations)
+    assert all(relation.target_patch_chain_id is None for relation in split_relations)
     assert all(_evidence_values(relation)["candidate_count"] >= 2 for relation in split_relations)
 
 
@@ -123,7 +123,7 @@ def test_non_manifold_incidence_becomes_split_not_false_smooth_or_turn() -> None
 
     assert continuations
     assert {relation.kind for relation in continuations} == {ContinuationKind.SPLIT}
-    assert all(relation.target_chain_use_id is None for relation in continuations)
+    assert all(relation.target_patch_chain_id is None for relation in continuations)
 
 
 def test_continuations_for_source_use_filters_snapshot_relations() -> None:
@@ -131,12 +131,12 @@ def test_continuations_for_source_use_filters_snapshot_relations() -> None:
     topology = build_topology_snapshot(source)
     geometry = build_geometry_facts(source, topology)
     snapshot = build_relation_snapshot(topology, geometry)
-    source_use_id = next(iter(topology.chain_uses))
+    source_use_id = next(iter(topology.patch_chains))
 
     relations = continuations_for_source_use(snapshot, source_use_id)
 
     assert relations
-    assert all(relation.source_chain_use_id == source_use_id for relation in relations)
+    assert all(relation.source_patch_chain_id == source_use_id for relation in relations)
 
 
 def test_conservative_continuation_does_not_emit_smooth_or_turn() -> None:
@@ -180,7 +180,7 @@ def _make_single_use_model() -> SurfaceModel:
     patch_id = PatchId("patch:0")
     loop_id = BoundaryLoopId("loop:0")
     chain_id = ChainId("chain:0")
-    use_id = ChainUseId("use:0")
+    use_id = PatchChainId("patch_chain:0")
     v0 = VertexId("vertex:0")
     v1 = VertexId("vertex:1")
 
@@ -193,13 +193,13 @@ def _make_single_use_model() -> SurfaceModel:
                 id=loop_id,
                 patch_id=patch_id,
                 kind=BoundaryLoopKind.DEGRADED,
-                chain_use_ids=(use_id,),
+                patch_chain_ids=(use_id,),
                 loop_index=0,
             )
         },
         chains={chain_id: Chain(id=chain_id, start_vertex_id=v0, end_vertex_id=v1)},
-        chain_uses={
-            use_id: ChainUse(
+        patch_chains={
+            use_id: PatchChain(
                 id=use_id,
                 chain_id=chain_id,
                 patch_id=patch_id,

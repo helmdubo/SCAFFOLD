@@ -22,7 +22,7 @@ Layer 1 is intentionally ignorant of:
 - `Patch`
 - `BoundaryLoop`
 - `Chain`
-- `PatchChain` / legacy code name `ChainUse`
+- `PatchChain`
 - `Vertex`
 - topology invariants
 - topology queries
@@ -77,14 +77,12 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 ## PatchChain rule
 
-`PatchChain` is mandatory. Current code may still use the legacy class name
-`ChainUse`; conceptually this is the final PatchChain.
+`PatchChain` is mandatory and is the final patch-local oriented occurrence of
+a `Chain` inside a `BoundaryLoop`.
 
 A `Chain` is the shared boundary entity.
-A `PatchChain` is the oriented use of a `Chain` inside a BoundaryLoop/Patch.
 
-All orientation-sensitive logic must use `PatchChain` / `ChainUse`, not raw
-`Chain`.
+All orientation-sensitive logic must use `PatchChain`, not raw `Chain`.
 
 `PatchChain` may carry materialized start/end topology vertices for seam-cut
 loop occurrences. These vertices are still Layer 1 topology/provenance and do
@@ -143,7 +141,7 @@ PATCH_ADJACENCY_RUN:
   boundary between different Patches
 
 SEAM_SELF_RUN:
-  seam cut materialized as two ChainUses in the same Patch
+  seam cut materialized as two PatchChains in the same Patch
 
 NON_MANIFOLD_RUN:
   represented and diagnosed, not silently fixed
@@ -156,7 +154,7 @@ Long seam of 4 source edges between two Patches:
   expected:
     1 Chain
     Chain.source_edge_ids = (e10, e9, e6, e7)
-    2 ChainUses
+    2 PatchChains
 ```
 
 Cylinder tube without caps and with one seam cut:
@@ -209,7 +207,7 @@ See DD-29, DD-30, OQ-11.
 
 ## Cardinality cases
 
-| Case | Chain has PatchChains / ChainUses | Meaning |
+| Case | Chain has PatchChains | Meaning |
 |---|---:|---|
 | Mesh border | 1 | Boundary of model or selection. |
 | Normal shared boundary | 2, different patches | Standard adjacency. |

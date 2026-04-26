@@ -2,7 +2,7 @@
 Layer: 3 - Relations
 
 Rules:
-- Build conservative alignment classes from ChainDirectionalRunUse records.
+- Build conservative alignment classes from PatchChainDirectionalEvidence records.
 - Use direction-family grouping only.
 - Do not mutate lower-layer snapshots.
 - Do not build world-facing semantics.
@@ -18,7 +18,7 @@ from scaffold_core.layer_2_geometry.measures import EPSILON, dot, normalize
 from scaffold_core.layer_3_relations.model import (
     AlignmentClass,
     AlignmentClassKind,
-    ChainDirectionalRunUse,
+    PatchChainDirectionalEvidence,
     PatchAxes,
     PatchAxisSource,
 )
@@ -31,20 +31,20 @@ PATCH_AXES_POLICY_NAME = "patch_axes_v0_no_world_bias"
 
 
 def build_alignment_classes(
-    run_uses: tuple[ChainDirectionalRunUse, ...],
+    directional_evidence_items: tuple[PatchChainDirectionalEvidence, ...],
 ) -> tuple[AlignmentClass, ...]:
     """Group directional run uses into sign-insensitive direction families."""
 
-    groups: list[list[ChainDirectionalRunUse]] = []
-    for run_use in sorted(run_uses, key=lambda item: item.id):
-        if not _is_eligible(run_use):
+    groups: list[list[PatchChainDirectionalEvidence]] = []
+    for directional_evidence in sorted(directional_evidence_items, key=lambda item: item.id):
+        if not _is_eligible(directional_evidence):
             continue
         for group in groups:
-            if _is_direction_compatible(run_use.direction, group[0].direction):
-                group.append(run_use)
+            if _is_direction_compatible(directional_evidence.direction, group[0].direction):
+                group.append(directional_evidence)
                 break
         else:
-            groups.append([run_use])
+            groups.append([directional_evidence])
 
     classes = tuple(_alignment_class(index, tuple(group)) for index, group in enumerate(groups))
     return tuple(sorted(classes, key=lambda item: item.id))
@@ -52,23 +52,23 @@ def build_alignment_classes(
 
 def build_patch_axes(
     topology: SurfaceModel,
-    run_uses: tuple[ChainDirectionalRunUse, ...],
+    directional_evidence_items: tuple[PatchChainDirectionalEvidence, ...],
     alignment_classes: tuple[AlignmentClass, ...],
 ) -> dict[PatchId, PatchAxes]:
     """Select up to two dominant alignment classes per Patch."""
 
-    run_use_by_id = {run_use.id: run_use for run_use in run_uses}
+    directional_evidence_by_id = {directional_evidence.id: directional_evidence for directional_evidence in directional_evidence_items}
     return {
-        patch_id: _patch_axes_for_patch(patch_id, run_use_by_id, alignment_classes)
+        patch_id: _patch_axes_for_patch(patch_id, directional_evidence_by_id, alignment_classes)
         for patch_id in sorted(topology.patches, key=str)
     }
 
 
-def _is_eligible(run_use: ChainDirectionalRunUse) -> bool:
+def _is_eligible(directional_evidence: PatchChainDirectionalEvidence) -> bool:
     return (
-        run_use.length > EPSILON
-        and run_use.confidence > 0.0
-        and normalize(run_use.direction) != (0.0, 0.0, 0.0)
+        directional_evidence.length > EPSILON
+        and directional_evidence.confidence > 0.0
+        and normalize(directional_evidence.direction) != (0.0, 0.0, 0.0)
     )
 
 
@@ -82,7 +82,7 @@ def _is_direction_compatible(left: Vector3, right: Vector3) -> bool:
 
 def _alignment_class(
     index: int,
-    members: tuple[ChainDirectionalRunUse, ...],
+    members: tuple[PatchChainDirectionalEvidence, ...],
 ) -> AlignmentClass:
     dominant_direction = _dominant_direction(members)
     confidence = _confidence(members, dominant_direction)
@@ -93,7 +93,7 @@ def _alignment_class(
     )
     return AlignmentClass(
         id=f"alignment:{index}",
-        member_run_use_ids=tuple(member.id for member in members),
+        member_directional_evidence_ids=tuple(member.id for member in members),
         patch_ids=tuple(sorted({member.patch_id for member in members}, key=str)),
         dominant_direction=dominant_direction,
         kind=kind,
@@ -102,7 +102,7 @@ def _alignment_class(
     )
 
 
-def _dominant_direction(members: tuple[ChainDirectionalRunUse, ...]) -> Vector3:
+def _dominant_direction(members: tuple[PatchChainDirectionalEvidence, ...]) -> Vector3:
     reference = normalize(members[0].direction)
     weighted = (0.0, 0.0, 0.0)
     for member in members:
@@ -128,7 +128,7 @@ def _canonicalize_direction(direction: Vector3) -> Vector3:
 
 
 def _confidence(
-    members: tuple[ChainDirectionalRunUse, ...],
+    members: tuple[PatchChainDirectionalEvidence, ...],
     dominant_direction: Vector3,
 ) -> float:
     if not members or dominant_direction == (0.0, 0.0, 0.0):
@@ -136,7 +136,7 @@ def _confidence(
     return min(abs(dot(normalize(member.direction), dominant_direction)) for member in members)
 
 
-def _evidence(members: tuple[ChainDirectionalRunUse, ...]) -> Evidence:
+def _evidence(members: tuple[PatchChainDirectionalEvidence, ...]) -> Evidence:
     return Evidence(
         source="layer_3_relations.alignment",
         summary="sign-insensitive direction-family grouping",
@@ -150,13 +150,13 @@ def _evidence(members: tuple[ChainDirectionalRunUse, ...]) -> Evidence:
 
 def _patch_axes_for_patch(
     patch_id: PatchId,
-    run_use_by_id: dict[str, ChainDirectionalRunUse],
+    directional_evidence_by_id: dict[str, PatchChainDirectionalEvidence],
     alignment_classes: tuple[AlignmentClass, ...],
 ) -> PatchAxes:
     scored = tuple(
         item
         for item in (
-            _patch_alignment_score(patch_id, alignment_class, run_use_by_id)
+            _patch_alignment_score(patch_id, alignment_class, directional_evidence_by_id)
             for alignment_class in alignment_classes
         )
     )
@@ -194,15 +194,15 @@ def _patch_axes_for_patch(
 def _patch_alignment_score(
     patch_id: PatchId,
     alignment_class: AlignmentClass,
-    run_use_by_id: dict[str, ChainDirectionalRunUse],
+    directional_evidence_by_id: dict[str, PatchChainDirectionalEvidence],
 ) -> tuple[AlignmentClass, float]:
     return (
         alignment_class,
         sum(
-            run_use.length
-            for run_use_id in alignment_class.member_run_use_ids
-            for run_use in (run_use_by_id[run_use_id],)
-            if run_use.patch_id == patch_id
+            directional_evidence.length
+            for directional_evidence_id in alignment_class.member_directional_evidence_ids
+            for directional_evidence in (directional_evidence_by_id[directional_evidence_id],)
+            if directional_evidence.patch_id == patch_id
         ),
     )
 

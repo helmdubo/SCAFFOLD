@@ -9,14 +9,14 @@ Rules:
 
 from __future__ import annotations
 
-from scaffold_core.ids import BoundaryLoopId, ChainId, ChainUseId, PatchId, VertexId
-from scaffold_core.layer_1_topology.model import ChainUse, SurfaceModel
+from scaffold_core.ids import BoundaryLoopId, ChainId, PatchChainId, PatchId, VertexId
+from scaffold_core.layer_1_topology.model import PatchChain, SurfaceModel
 
 
-def chain_uses_for_chain(model: SurfaceModel, chain_id: ChainId) -> tuple[ChainUse, ...]:
-    """Return all ChainUses referencing a Chain."""
+def patch_chains_for_chain(model: SurfaceModel, chain_id: ChainId) -> tuple[PatchChain, ...]:
+    """Return all PatchChains referencing a Chain."""
 
-    return tuple(use for use in model.chain_uses.values() if use.chain_id == chain_id)
+    return tuple(use for use in model.patch_chains.values() if use.chain_id == chain_id)
 
 
 def loops_for_patch(model: SurfaceModel, patch_id: PatchId) -> tuple[BoundaryLoopId, ...]:
@@ -25,17 +25,17 @@ def loops_for_patch(model: SurfaceModel, patch_id: PatchId) -> tuple[BoundaryLoo
     return model.patches[patch_id].loop_ids
 
 
-def chain_uses_in_loop(model: SurfaceModel, loop_id: BoundaryLoopId) -> tuple[ChainUse, ...]:
-    """Return ChainUses in loop order."""
+def patch_chains_in_loop(model: SurfaceModel, loop_id: BoundaryLoopId) -> tuple[PatchChain, ...]:
+    """Return PatchChains in loop order."""
 
     loop = model.loops[loop_id]
-    return tuple(model.chain_uses[use_id] for use_id in loop.chain_use_ids)
+    return tuple(model.patch_chains[use_id] for use_id in loop.patch_chain_ids)
 
 
-def chain_use_vertices(model: SurfaceModel, chain_use_id: ChainUseId) -> tuple[VertexId, VertexId]:
-    """Return materialized start/end vertices for a ChainUse."""
+def patch_chain_vertices(model: SurfaceModel, patch_chain_id: PatchChainId) -> tuple[VertexId, VertexId]:
+    """Return materialized start/end vertices for a PatchChain."""
 
-    use = model.chain_uses[chain_use_id]
+    use = model.patch_chains[patch_chain_id]
     if use.start_vertex_id is not None and use.end_vertex_id is not None:
         return use.start_vertex_id, use.end_vertex_id
 
@@ -45,12 +45,12 @@ def chain_use_vertices(model: SurfaceModel, chain_use_id: ChainUseId) -> tuple[V
     return chain.end_vertex_id, chain.start_vertex_id
 
 
-def incident_uses_for_vertex(model: SurfaceModel, vertex_id: VertexId) -> tuple[ChainUse, ...]:
-    """Return ChainUses whose oriented start or end touches a Vertex."""
+def incident_patch_chains_for_vertex(model: SurfaceModel, vertex_id: VertexId) -> tuple[PatchChain, ...]:
+    """Return PatchChains whose oriented start or end touches a Vertex."""
 
-    incident: list[ChainUse] = []
-    for use in model.chain_uses.values():
-        start, end = chain_use_vertices(model, use.id)
+    incident: list[PatchChain] = []
+    for use in model.patch_chains.values():
+        start, end = patch_chain_vertices(model, use.id)
         if vertex_id in (start, end):
             incident.append(use)
     return tuple(incident)

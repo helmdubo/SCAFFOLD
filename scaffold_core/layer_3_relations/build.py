@@ -12,20 +12,22 @@ from __future__ import annotations
 from math import atan2
 
 from scaffold_core.ids import ChainId
-from scaffold_core.layer_1_topology.model import ChainUse, SurfaceModel
-from scaffold_core.layer_1_topology.queries import chain_use_vertices, chain_uses_for_chain
+from scaffold_core.layer_1_topology.model import PatchChain, SurfaceModel
+from scaffold_core.layer_1_topology.queries import patch_chain_vertices, patch_chains_for_chain
 from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot, Vector3
 from scaffold_core.layer_2_geometry.measures import cross, dot, length, normalize, subtract
 from scaffold_core.layer_3_relations.alignment import build_alignment_classes, build_patch_axes
 from scaffold_core.layer_3_relations.chain_refinement import (
-    build_chain_directional_run_uses,
+    build_patch_chain_directional_evidence,
     build_chain_directional_runs,
 )
 from scaffold_core.layer_3_relations.continuation import build_chain_continuations
-from scaffold_core.layer_3_relations.junction_relations import build_patch_chain_endpoint_relations
-from scaffold_core.layer_3_relations.junction_samples import build_patch_chain_endpoint_samples
 from scaffold_core.layer_3_relations.loop_corners import build_loop_corners
 from scaffold_core.layer_3_relations.model import DihedralKind, PatchAdjacency, RelationSnapshot
+from scaffold_core.layer_3_relations.patch_chain_endpoint_relations import (
+    build_patch_chain_endpoint_relations,
+)
+from scaffold_core.layer_3_relations.patch_chain_endpoint_samples import build_patch_chain_endpoint_samples
 
 
 ANGLE_TOLERANCE_RADIANS = 1.0e-6
@@ -39,7 +41,7 @@ def build_relation_snapshot(
 
     patch_adjacencies: dict[str, PatchAdjacency] = {}
     for chain_id in topology.chains:
-        uses = chain_uses_for_chain(topology, chain_id)
+        uses = patch_chains_for_chain(topology, chain_id)
         if not _is_normal_patch_adjacency(uses):
             continue
 
@@ -54,7 +56,7 @@ def build_relation_snapshot(
         patch_adjacencies[adjacency.id] = adjacency
 
     chain_directional_runs = build_chain_directional_runs(topology, geometry)
-    chain_directional_run_uses = build_chain_directional_run_uses(
+    patch_chain_directional_evidence = build_patch_chain_directional_evidence(
         topology,
         chain_directional_runs,
     )
@@ -62,28 +64,28 @@ def build_relation_snapshot(
     patch_chain_endpoint_samples = build_patch_chain_endpoint_samples(
         topology,
         geometry,
-        chain_directional_run_uses,
+        patch_chain_directional_evidence,
     )
     patch_chain_endpoint_relations = build_patch_chain_endpoint_relations(patch_chain_endpoint_samples)
-    alignment_classes = build_alignment_classes(chain_directional_run_uses)
+    alignment_classes = build_alignment_classes(patch_chain_directional_evidence)
     return RelationSnapshot(
         patch_adjacencies=patch_adjacencies,
         chain_continuations=build_chain_continuations(topology),
         chain_directional_runs=chain_directional_runs,
-        chain_directional_run_uses=chain_directional_run_uses,
+        patch_chain_directional_evidence=patch_chain_directional_evidence,
         loop_corners=loop_corners,
         patch_chain_endpoint_samples=patch_chain_endpoint_samples,
         patch_chain_endpoint_relations=patch_chain_endpoint_relations,
         alignment_classes=alignment_classes,
         patch_axes=build_patch_axes(
             topology,
-            chain_directional_run_uses,
+            patch_chain_directional_evidence,
             alignment_classes,
         ),
     )
 
 
-def _is_normal_patch_adjacency(uses: tuple[ChainUse, ...]) -> bool:
+def _is_normal_patch_adjacency(uses: tuple[PatchChain, ...]) -> bool:
     return len(uses) == 2 and uses[0].patch_id != uses[1].patch_id
 
 
@@ -91,8 +93,8 @@ def _build_patch_adjacency(
     topology: SurfaceModel,
     geometry: GeometryFactSnapshot,
     chain_id: ChainId,
-    first_use: ChainUse,
-    second_use: ChainUse,
+    first_use: PatchChain,
+    second_use: PatchChain,
 ) -> PatchAdjacency:
     first_normal = geometry.patch_facts[first_use.patch_id].normal
     second_normal = geometry.patch_facts[second_use.patch_id].normal
@@ -110,20 +112,20 @@ def _build_patch_adjacency(
         first_patch_id=first_use.patch_id,
         second_patch_id=second_use.patch_id,
         chain_id=chain_id,
-        first_chain_use_id=first_use.id,
-        second_chain_use_id=second_use.id,
+        first_patch_chain_id=first_use.id,
+        second_patch_chain_id=second_use.id,
         shared_length=geometry.chain_facts[chain_id].length,
         signed_angle_radians=signed_angle,
         dihedral_kind=dihedral_kind,
     )
 
 
-def _chain_use_direction(
+def _patch_chain_direction(
     topology: SurfaceModel,
     geometry: GeometryFactSnapshot,
-    use: ChainUse,
+    use: PatchChain,
 ) -> Vector3:
-    start_vertex_id, end_vertex_id = chain_use_vertices(topology, use.id)
+    start_vertex_id, end_vertex_id = patch_chain_vertices(topology, use.id)
     start = geometry.vertex_facts[start_vertex_id].position
     end = geometry.vertex_facts[end_vertex_id].position
     return normalize(subtract(end, start))
@@ -132,11 +134,11 @@ def _chain_use_direction(
 def _chain_pair_direction(
     topology: SurfaceModel,
     geometry: GeometryFactSnapshot,
-    first_use: ChainUse,
-    second_use: ChainUse,
+    first_use: PatchChain,
+    second_use: PatchChain,
 ) -> Vector3:
-    first_direction = _chain_use_direction(topology, geometry, first_use)
-    second_direction = _chain_use_direction(topology, geometry, second_use)
+    first_direction = _patch_chain_direction(topology, geometry, first_use)
+    second_direction = _patch_chain_direction(topology, geometry, second_use)
     return normalize(subtract(first_direction, second_direction))
 
 

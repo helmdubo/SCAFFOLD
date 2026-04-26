@@ -2,7 +2,7 @@
 Layer: tests
 
 Rules:
-- Layer 3 ChainDirectionalRunUse tests only.
+- Layer 3 PatchChainDirectionalEvidence tests only.
 - Tests may import Scaffold Core but must not define production logic.
 """
 
@@ -17,7 +17,7 @@ from scaffold_core.layer_1_topology.build import build_topology_snapshot
 from scaffold_core.layer_2_geometry.build import build_geometry_facts
 from scaffold_core.layer_3_relations.build import build_relation_snapshot
 from scaffold_core.layer_3_relations.chain_refinement import (
-    build_chain_directional_run_uses,
+    build_patch_chain_directional_evidence,
     build_chain_directional_runs,
 )
 from scaffold_core.pipeline.inspection import inspect_pipeline_context
@@ -44,27 +44,27 @@ FORBIDDEN_TOKENS = frozenset({
 })
 
 
-def test_shared_closed_loop_builds_patch_local_directional_run_uses() -> None:
+def test_shared_closed_loop_builds_patch_local_patch_chain_directional_evidences() -> None:
     source = make_closed_shared_boundary_loop_source()
     topology = build_topology_snapshot(source)
     geometry = build_geometry_facts(source, topology)
     directional_runs = build_chain_directional_runs(topology, geometry)
 
-    run_uses = build_chain_directional_run_uses(topology, directional_runs)
+    directional_evidence_items = build_patch_chain_directional_evidence(topology, directional_runs)
 
     assert len(directional_runs) == 4
-    assert len(topology.chain_uses) == 2
-    assert len(run_uses) == 8
-    assert {run_use.parent_chain_id for run_use in run_uses} == {
+    assert len(topology.patch_chains) == 2
+    assert len(directional_evidence_items) == 8
+    assert {directional_evidence.parent_chain_id for directional_evidence in directional_evidence_items} == {
         ChainId("chain:e10:e9:e6:e7")
     }
     assert {
-        run_use.directional_run_id
-        for run_use in run_uses
+        directional_evidence.directional_run_id
+        for directional_evidence in directional_evidence_items
     } == {run.id for run in directional_runs}
 
 
-def test_opposite_chain_use_orientation_reverses_direction_and_endpoints() -> None:
+def test_opposite_patch_chain_orientation_reverses_direction_and_endpoints() -> None:
     source = make_closed_shared_boundary_loop_source()
     topology = build_topology_snapshot(source)
     geometry = build_geometry_facts(source, topology)
@@ -76,14 +76,14 @@ def test_opposite_chain_use_orientation_reverses_direction_and_endpoints() -> No
     )
 
     uses = tuple(
-        run_use
-        for run_use in snapshot.chain_directional_run_uses
-        if run_use.directional_run_id == parent_run.id
+        directional_evidence
+        for directional_evidence in snapshot.patch_chain_directional_evidence
+        if directional_evidence.directional_run_id == parent_run.id
     )
 
     assert len(uses) == 2
-    plus_use = next(run_use for run_use in uses if run_use.orientation_sign == 1)
-    minus_use = next(run_use for run_use in uses if run_use.orientation_sign == -1)
+    plus_use = next(directional_evidence for directional_evidence in uses if directional_evidence.orientation_sign == 1)
+    minus_use = next(directional_evidence for directional_evidence in uses if directional_evidence.orientation_sign == -1)
     assert plus_use.direction == parent_run.direction
     assert minus_use.direction == (-parent_run.direction[0], -parent_run.direction[1], -parent_run.direction[2])
     assert plus_use.start_source_vertex_id == SourceVertexId("v0")
@@ -92,27 +92,27 @@ def test_opposite_chain_use_orientation_reverses_direction_and_endpoints() -> No
     assert minus_use.end_source_vertex_id == SourceVertexId("v0")
 
 
-def test_directional_run_use_keeps_patch_local_fields() -> None:
+def test_patch_chain_directional_evidence_keeps_patch_local_fields() -> None:
     source = make_closed_shared_boundary_loop_source()
     topology = build_topology_snapshot(source)
     geometry = build_geometry_facts(source, topology)
     snapshot = build_relation_snapshot(topology, geometry)
 
-    for run_use in snapshot.chain_directional_run_uses:
-        chain_use = topology.chain_uses[run_use.chain_use_id]
-        assert run_use.patch_id == chain_use.patch_id
-        assert run_use.loop_id == chain_use.loop_id
-        assert run_use.position_in_loop == chain_use.position_in_loop
-        assert run_use.orientation_sign == chain_use.orientation_sign
-        assert run_use.source_edge_ids
-        assert run_use.segment_indices
+    for directional_evidence in snapshot.patch_chain_directional_evidence:
+        patch_chain = topology.patch_chains[directional_evidence.patch_chain_id]
+        assert directional_evidence.patch_id == patch_chain.patch_id
+        assert directional_evidence.loop_id == patch_chain.loop_id
+        assert directional_evidence.position_in_loop == patch_chain.position_in_loop
+        assert directional_evidence.orientation_sign == patch_chain.orientation_sign
+        assert directional_evidence.source_edge_ids
+        assert directional_evidence.segment_indices
 
 
-def test_directional_run_uses_do_not_change_layer_1_identity() -> None:
+def test_patch_chain_directional_evidences_do_not_change_layer_1_identity() -> None:
     source = make_closed_shared_boundary_loop_source()
     topology = build_topology_snapshot(source)
     original_chains = dict(topology.chains)
-    original_chain_uses = dict(topology.chain_uses)
+    original_patch_chains = dict(topology.patch_chains)
     original_loops = dict(topology.loops)
     original_patches = dict(topology.patches)
     geometry = build_geometry_facts(source, topology)
@@ -120,12 +120,12 @@ def test_directional_run_uses_do_not_change_layer_1_identity() -> None:
     build_relation_snapshot(topology, geometry)
 
     assert dict(topology.chains) == original_chains
-    assert dict(topology.chain_uses) == original_chain_uses
+    assert dict(topology.patch_chains) == original_patch_chains
     assert dict(topology.loops) == original_loops
     assert dict(topology.patches) == original_patches
 
 
-def test_inspection_json_includes_chain_directional_run_uses() -> None:
+def test_inspection_json_includes_patch_chain_directional_evidence() -> None:
     context = run_pass_1_relations(
         run_pass_0(make_closed_shared_boundary_loop_source())
     )
@@ -135,20 +135,20 @@ def test_inspection_json_includes_chain_directional_run_uses() -> None:
     json.dumps(report)
     relations = report["relations"]
     assert relations["chain_directional_run_count"] == 4
-    assert relations["chain_directional_run_use_count"] == 8
-    first_run_use = relations["chain_directional_run_uses"][0]
-    assert first_run_use["id"].startswith("directional_run_use:")
-    assert first_run_use["directional_run_id"].startswith("directional_run:chain:e10:e9:e6:e7:")
-    assert first_run_use["parent_chain_id"] == "chain:e10:e9:e6:e7"
-    assert first_run_use["source_edge_ids"] == ["e10"]
-    assert first_run_use["segment_indices"] == [0]
-    assert first_run_use["length"] == 1.0
-    assert first_run_use["orientation_sign"] in (-1, 1)
-    assert "patch_id" in first_run_use
-    assert "loop_id" in first_run_use
+    assert relations["patch_chain_directional_evidence_count"] == 8
+    first_directional_evidence = relations["patch_chain_directional_evidence"][0]
+    assert first_directional_evidence["id"].startswith("patch_chain_directional_evidence:")
+    assert first_directional_evidence["directional_run_id"].startswith("directional_run:chain:e10:e9:e6:e7:")
+    assert first_directional_evidence["parent_chain_id"] == "chain:e10:e9:e6:e7"
+    assert first_directional_evidence["source_edge_ids"] == ["e10"]
+    assert first_directional_evidence["segment_indices"] == [0]
+    assert first_directional_evidence["length"] == 1.0
+    assert first_directional_evidence["orientation_sign"] in (-1, 1)
+    assert "patch_id" in first_directional_evidence
+    assert "loop_id" in first_directional_evidence
 
 
-def test_chain_refinement_code_does_not_introduce_deferred_semantic_terms_for_run_uses() -> None:
+def test_chain_refinement_code_does_not_introduce_deferred_semantic_terms_for_directional_evidence_items() -> None:
     tree = ast.parse(CHAIN_REFINEMENT_MODULE.read_text(encoding="utf-8"))
     identifiers: set[str] = set()
     for node in ast.walk(tree):

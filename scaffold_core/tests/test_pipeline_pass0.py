@@ -21,7 +21,7 @@ def test_pass_0_builds_topology_snapshot() -> None:
     assert context.geometry_facts is not None
     assert len(context.topology_snapshot.patches) == 1
     assert len(context.topology_snapshot.chains) == 1
-    assert len(context.topology_snapshot.chain_uses) == 1
+    assert len(context.topology_snapshot.patch_chains) == 1
     assert len(context.geometry_facts.patch_facts) == 1
     assert len(context.geometry_facts.chain_facts) == 1
 

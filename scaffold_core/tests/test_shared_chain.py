@@ -2,7 +2,7 @@
 Layer: tests
 
 Rules:
-- Shared Chain / ChainUse tests only.
+- Shared Chain / PatchChain tests only.
 - Tests may import Scaffold Core but must not define production logic.
 """
 

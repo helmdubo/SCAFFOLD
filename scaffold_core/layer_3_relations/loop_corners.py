@@ -2,7 +2,7 @@
 Layer: 3 - Relations
 
 Rules:
-- Build patch-local LoopCorner records from final PatchChains / ChainUses.
+- Build patch-local LoopCorner records from final PatchChains.
 - Do not mutate Layer 1 topology.
 - Do not build ScaffoldGraph, ScaffoldNode, feature, runtime, solve or UV data.
 """
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from scaffold_core.core.evidence import Evidence
 from scaffold_core.layer_1_topology.model import SurfaceModel
-from scaffold_core.layer_1_topology.queries import chain_use_vertices
+from scaffold_core.layer_1_topology.queries import patch_chain_vertices
 from scaffold_core.layer_3_relations.model import LoopCorner
 
 
@@ -23,12 +23,12 @@ def build_loop_corners(topology: SurfaceModel) -> tuple[LoopCorner, ...]:
 
     corners: list[LoopCorner] = []
     for loop in sorted(topology.loops.values(), key=lambda item: str(item.id)):
-        if not loop.chain_use_ids:
+        if not loop.patch_chain_ids:
             continue
-        for position, next_patch_chain_id in enumerate(loop.chain_use_ids):
-            previous_patch_chain_id = loop.chain_use_ids[position - 1]
-            _previous_start, previous_end = chain_use_vertices(topology, previous_patch_chain_id)
-            next_start, _next_end = chain_use_vertices(topology, next_patch_chain_id)
+        for position, next_patch_chain_id in enumerate(loop.patch_chain_ids):
+            previous_patch_chain_id = loop.patch_chain_ids[position - 1]
+            _previous_start, previous_end = patch_chain_vertices(topology, previous_patch_chain_id)
+            next_start, _next_end = patch_chain_vertices(topology, next_patch_chain_id)
             vertex_id = next_start if next_start == previous_end else next_start
             corners.append(
                 LoopCorner(

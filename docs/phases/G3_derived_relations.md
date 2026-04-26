@@ -49,7 +49,7 @@ G3 may introduce:
 - `PatchAdjacency`
 - `DihedralKind`
 - `ChainContinuationRelation`
-- Junction relations
+- PatchChain endpoint relations
 - `AlignmentClass`
 - `PatchAxes`
 - WorldOrientation relations
@@ -67,7 +67,7 @@ Deferred G3 slices:
 
 ```text
 G3b:
-  junction relations
+  endpoint relations
   ChainContinuationRelation
 
 G3c:
@@ -78,31 +78,27 @@ G3d:
   WorldOrientation
 ```
 
-## Terminology reset
+## Terminology
 
-Preferred terminology for the final boundary graph model:
+Current terminology for the final boundary graph model:
 
-| Current / legacy term | New / preferred term |
+| Term | Meaning |
 |---|---|
-| `ChainUse` | `PatchChain` |
-| `ChainDirectionalRunUse` | PatchChain measurement / directional evidence |
-| `ChainDirectionalRunUseJunctionSample` | `PatchChainEndpointSample` |
-| `JunctionRunUseRelation` | `PatchChainEndpointRelation` |
-| `VertexFanGeometryFacts` | `LocalFaceFanGeometryFacts` |
-| Junction | `ScaffoldJunction` |
+| `PatchChain` | Final patch-local oriented occurrence of a Chain in a BoundaryLoop. |
+| `PatchChainDirectionalEvidence` | Derived directional measurement for a PatchChain. |
+| `PatchChainEndpointSample` | Endpoint ray/evidence sample for a PatchChain directional measurement. |
+| `PatchChainEndpointRelation` | Pairwise local relation between endpoint samples at one Vertex. |
+| `LocalFaceFanGeometryFacts` | Local owner-normal geometry evidence. |
+| `LoopCorner` | Patch-local transition between adjacent PatchChains in one BoundaryLoop. |
+| `ScaffoldJunction` | Future graph-level ScaffoldNode classification for branch/seam/cross-patch structures. |
 
-`PatchChainEndpointSample` is not a Junction.
-`PatchChainEndpointRelation` is not a Junction.
-`LocalFaceFanGeometryFacts` is not a Junction.
+Endpoint samples, endpoint relations and LocalFaceFanGeometryFacts are evidence
+or measurements; they are not graph nodes.
 
-`ScaffoldJunction` is the graph-level node classification for places where
-3+ meaningful PatchChains, seam pairs, cross-patch links, branches, or other
-structural junction evidence meet.
+## G3b1 PatchChain incidence
 
-## G3b1 Junction incidence
-
-G3b1 implements Junction incidence queries as derived views over Vertex.
-It does not introduce a Junction entity.
+G3b1 implements PatchChain incidence queries as derived views over Vertex.
+It does not introduce a ScaffoldJunction entity.
 It does not implement disk-cycle ordering.
 It does not implement ChainContinuationRelation.
 
@@ -110,7 +106,7 @@ It does not implement ChainContinuationRelation.
 
 Scope:
 - Define continuation relations at topology vertices.
-- Use G3b1 junction incidence queries as input.
+- Use G3b1 PatchChain incidence queries as input.
 - Implement conservative TERMINUS / SPLIT first.
 - SMOOTH / TURN are allowed only for trivial synthetic fixtures in Task E.
 - Do not solve OQ-11.
@@ -122,17 +118,17 @@ Scope:
 Concept:
 
 ```text
-At this Vertex, does this ChainUse continue into another ChainUse?
+At this Vertex, does this PatchChain continue into another PatchChain?
 ```
 
 Conservative kinds for Task E:
 
 ```text
 TERMINUS:
-  A ChainUse reaches a Vertex and has no safe continuation candidate.
+  A PatchChain reaches a Vertex and has no safe continuation candidate.
 
 SPLIT:
-  A ChainUse reaches a Vertex and multiple continuation candidates exist,
+  A PatchChain reaches a Vertex and multiple continuation candidates exist,
   but G3b2 cannot choose one safely.
 
 SMOOTH:
@@ -152,16 +148,16 @@ Proposed future model contract for Task E:
 ```python
 @dataclass(frozen=True)
 class ChainContinuationRelation:
-    junction_vertex_id: VertexId
-    source_chain_use_id: ChainUseId
-    target_chain_use_id: ChainUseId | None
+    vertex_id: VertexId
+    source_patch_chain_id: PatchChainId
+    target_patch_chain_id: PatchChainId | None
     kind: ContinuationKind
     confidence: float
     evidence: tuple[Evidence, ...] = ()
 ```
 
 Notes:
-- `target_chain_use_id = None` for TERMINUS.
+- `target_patch_chain_id = None` for TERMINUS.
 - SPLIT is represented as one relation from the source use with no selected
   target. Candidate count is retained in evidence.
 - No ContinuationId is required in the first implementation.
@@ -197,26 +193,26 @@ G3c0 does not implement AlignmentClass or PatchAxes.
 
 ## G3c1 - Chain directional PatchChain evidence
 
-G3c1 implements `ChainDirectionalRunUse` as a patch-local directional
-occurrence derived from `ChainDirectionalRun` plus Layer 1 `ChainUse`.
+G3c1 implements `PatchChainDirectionalEvidence` as a patch-local directional
+occurrence derived from `ChainDirectionalRun` plus Layer 1 `PatchChain`.
 
 Scope:
-- Preserve per-ChainUse membership needed by future AlignmentClass.
-- Reverse direction and source endpoints for negatively oriented ChainUses.
-- Preserve Layer 1 Chain, ChainUse, BoundaryLoop and Patch identity.
+- Preserve per-PatchChain membership needed by future AlignmentClass.
+- Reverse direction and source endpoints for negatively oriented PatchChains.
+- Preserve Layer 1 Chain, PatchChain, BoundaryLoop and Patch identity.
 - Do not implement AlignmentClass or PatchAxes.
-- `ChainDirectionalRunUse` is derived directional evidence for a PatchChain.
+- `PatchChainDirectionalEvidence` is derived directional evidence for a PatchChain.
   It is not a competing PatchChain identity.
 
 ## G3c2 - AlignmentClass v0
 
 G3c2 implements `AlignmentClass` v0 as sign-insensitive direction-family
-groups over `ChainDirectionalRunUse` records.
+groups over `PatchChainDirectionalEvidence` records.
 
 Scope:
-- Consume `ChainDirectionalRunUse`, not Layer 1 Chain directly.
+- Consume `PatchChainDirectionalEvidence`, not Layer 1 Chain directly.
 - Group by direction similarity only.
-- Preserve per-ChainUse membership through `member_run_use_ids`.
+- Preserve per-PatchChain membership through `member_directional_evidence_ids`.
 - Do not implement PatchAxes, CoordinateHint, WORLD_UP bias, H/V labels,
   or WorldOrientation.
 
@@ -239,9 +235,9 @@ topology vertices.
 Purpose:
 - represent a patch-local directional run as a ray leaving or entering a
   PatchChain endpoint;
-- provide tangent-away-from-junction vectors;
+- provide tangent-away-from-endpoint vectors;
 - attach owner surface normal evidence;
-- prepare pairwise junction relations.
+- prepare pairwise endpoint relations.
 
 This does not introduce U/V labels, H/V labels, WORLD_UP, WorldOrientation,
 solve, UV or ScaffoldGraph.
@@ -249,7 +245,7 @@ solve, UV or ScaffoldGraph.
 Model concept:
 
 ```text
-ChainDirectionalRunUse
+PatchChainDirectionalEvidence
   -> endpoint sample at START vertex
   -> endpoint sample at END vertex
 ```
@@ -257,9 +253,9 @@ ChainDirectionalRunUse
 Each sample stores:
 
 - vertex_id;
-- run_use_id;
+- directional_evidence_id;
 - patch_id;
-- chain_use_id;
+- patch_chain_id;
 - endpoint_role: START / END;
 - tangent_away_from_vertex;
 - owner_normal;
@@ -268,15 +264,15 @@ Each sample stores:
 
 Owner normals prefer Layer 2 `LocalFaceFanGeometryFacts.normal` with
 `owner_normal_source = LOCAL_FACE_FAN_NORMAL`. If no non-zero fan normal is
-available, junction samples may fall back to `PatchGeometryFacts.normal` with
+available, endpoint samples may fall back to `PatchGeometryFacts.normal` with
 `owner_normal_source = PATCH_AGGREGATE_NORMAL`.
 
-Layer 1 `ChainUse` must not store normals.
+Layer 1 `PatchChain` must not store normals.
 
 Implementation status:
 - `PatchChainEndpointSample` is implemented as a Layer 3 derived relation.
-- Legacy code/name references may still mention
-  `ChainDirectionalRunUseJunctionSample`; those are deprecated.
+- Current code uses
+  `PatchChainEndpointSample`; those are current names.
 - Samples are emitted for START and END run-use endpoints.
 - `tangent_away_from_vertex` points away from the sampled topology Vertex.
 - Owner normals prefer LocalFaceFan normals and fall back to Patch aggregate
@@ -323,8 +319,8 @@ Rules:
 
 Implementation status:
 - `PatchChainEndpointRelation` is implemented as a Layer 3 derived relation.
-- Legacy code/name references may still mention `JunctionRunUseRelation`;
-  those are deprecated.
+- Current code uses `PatchChainEndpointRelation`;
+  those are current names.
 - Relations are unordered sample pairs at the same Vertex.
 - v0 classifies direction relation as OPPOSITE_COLLINEAR,
   SAME_RAY_COLLINEAR, ORTHOGONAL, OBLIQUE or DEGENERATE.
@@ -389,7 +385,7 @@ Blender UI
 A query by Chain must return a list of adjacency records, not a single
 dihedral value.
 
-Signed dihedral computation must use both ChainUse orientations.
+Signed dihedral computation must use both PatchChain orientations.
 
 WorldOrientation labels must not feed base Alignment.
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 from scaffold_core.ids import (
     BoundaryLoopId,
     ChainId,
-    ChainUseId,
+    PatchChainId,
     PatchId,
     ShellId,
     SourceEdgeId,
@@ -32,7 +32,7 @@ from scaffold_core.layer_1_topology.model import (
     BoundaryLoop,
     BoundaryLoopKind,
     Chain,
-    ChainUse,
+    PatchChain,
     Patch,
     Shell,
     SurfaceModel,
@@ -101,7 +101,7 @@ def make_three_quad_non_manifold_source() -> SourceMeshSnapshot:
 
 
 def make_non_manifold_chain_model() -> SurfaceModel:
-    """Return a model where one Chain has three ChainUses."""
+    """Return a model where one Chain has three PatchChains."""
 
     shell_id = ShellId("shell:0")
     chain_id = ChainId("chain:shared")
@@ -110,23 +110,23 @@ def make_non_manifold_chain_model() -> SurfaceModel:
 
     patches = {}
     loops = {}
-    chain_uses = {}
+    patch_chains = {}
     patch_ids: list[PatchId] = []
 
     for index in range(3):
         patch_id = PatchId(f"patch:{index}")
         loop_id = BoundaryLoopId(f"loop:{index}:0")
-        use_id = ChainUseId(f"use:{index}:0")
+        use_id = PatchChainId(f"patch_chain:{index}:0")
         patch_ids.append(patch_id)
         patches[patch_id] = Patch(id=patch_id, shell_id=shell_id, loop_ids=(loop_id,))
         loops[loop_id] = BoundaryLoop(
             id=loop_id,
             patch_id=patch_id,
             kind=BoundaryLoopKind.OUTER,
-            chain_use_ids=(use_id,),
+            patch_chain_ids=(use_id,),
             loop_index=0,
         )
-        chain_uses[use_id] = ChainUse(
+        patch_chains[use_id] = PatchChain(
             id=use_id,
             chain_id=chain_id,
             patch_id=patch_id,
@@ -141,6 +141,6 @@ def make_non_manifold_chain_model() -> SurfaceModel:
         patches=patches,
         loops=loops,
         chains={chain_id: Chain(id=chain_id, start_vertex_id=v0, end_vertex_id=v1)},
-        chain_uses=chain_uses,
+        patch_chains=patch_chains,
         vertices={v0: Vertex(id=v0), v1: Vertex(id=v1)},
     )

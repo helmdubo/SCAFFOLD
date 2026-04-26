@@ -2,9 +2,9 @@
 Layer: 3 - Relations
 
 Rules:
-- Build patch-local PatchChain endpoint samples from ChainDirectionalRunUse records.
+- Build patch-local PatchChain endpoint samples from PatchChainDirectionalEvidence records.
 - Use Layer 2 geometry facts as derived evidence.
-- Do not mutate Layer 1 topology or store normals on ChainUse.
+- Do not mutate Layer 1 topology or store normals on PatchChain.
 - Do not build world-facing semantics or runtime solve data.
 """
 
@@ -13,14 +13,14 @@ from __future__ import annotations
 from scaffold_core.core.evidence import Evidence
 from scaffold_core.ids import PatchId, SourceVertexId, VertexId
 from scaffold_core.layer_1_topology.model import SurfaceModel
-from scaffold_core.layer_1_topology.queries import chain_use_vertices
+from scaffold_core.layer_1_topology.queries import patch_chain_vertices
 from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot, LocalFaceFanGeometryFacts, Vector3
 from scaffold_core.layer_2_geometry.measures import EPSILON, length, normalize
 from scaffold_core.layer_3_relations.model import (
-    ChainDirectionalRunUse,
+    PatchChainDirectionalEvidence,
     OwnerNormalSource,
     PatchChainEndpointSample,
-    RunUseEndpointRole,
+    PatchChainEndpointRole,
 )
 
 
@@ -30,9 +30,9 @@ POLICY_NAME = "g3c4_patch_chain_endpoint_samples"
 def build_patch_chain_endpoint_samples(
     topology: SurfaceModel,
     geometry: GeometryFactSnapshot,
-    run_uses: tuple[ChainDirectionalRunUse, ...],
+    directional_evidence_items: tuple[PatchChainDirectionalEvidence, ...],
 ) -> tuple[PatchChainEndpointSample, ...]:
-    """Build endpoint samples for patch-local directional run uses."""
+    """Build endpoint samples for patch-local directional evidence."""
 
     source_vertex_to_vertices = _source_vertex_to_vertices(topology)
     local_face_fans_by_patch_vertex = {
@@ -40,11 +40,11 @@ def build_patch_chain_endpoint_samples(
         for fan in geometry.local_face_fan_facts.values()
     }
     samples: list[PatchChainEndpointSample] = []
-    for run_use in sorted(run_uses, key=lambda item: item.id):
+    for directional_evidence in sorted(directional_evidence_items, key=lambda item: item.id):
         samples.extend(
-            _samples_for_run_use(
+            _samples_for_directional_evidence(
                 topology,
-                run_use,
+                directional_evidence,
                 geometry,
                 source_vertex_to_vertices,
                 local_face_fans_by_patch_vertex,
@@ -53,9 +53,9 @@ def build_patch_chain_endpoint_samples(
     return tuple(samples)
 
 
-def _samples_for_run_use(
+def _samples_for_directional_evidence(
     topology: SurfaceModel,
-    run_use: ChainDirectionalRunUse,
+    directional_evidence: PatchChainDirectionalEvidence,
     geometry: GeometryFactSnapshot,
     source_vertex_to_vertices: dict[SourceVertexId, tuple[VertexId, ...]],
     local_face_fans_by_patch_vertex: dict[tuple[PatchId, VertexId], LocalFaceFanGeometryFacts],
@@ -65,20 +65,20 @@ def _samples_for_run_use(
         for sample in (
             _sample(
                 topology=topology,
-                run_use=run_use,
-                role=RunUseEndpointRole.START,
-                source_vertex_id=run_use.start_source_vertex_id,
-                tangent_away_from_vertex=run_use.direction,
+                directional_evidence=directional_evidence,
+                role=PatchChainEndpointRole.START,
+                source_vertex_id=directional_evidence.start_source_vertex_id,
+                tangent_away_from_vertex=directional_evidence.direction,
                 geometry=geometry,
                 source_vertex_to_vertices=source_vertex_to_vertices,
                 local_face_fans_by_patch_vertex=local_face_fans_by_patch_vertex,
             ),
             _sample(
                 topology=topology,
-                run_use=run_use,
-                role=RunUseEndpointRole.END,
-                source_vertex_id=run_use.end_source_vertex_id,
-                tangent_away_from_vertex=_reverse(run_use.direction),
+                directional_evidence=directional_evidence,
+                role=PatchChainEndpointRole.END,
+                source_vertex_id=directional_evidence.end_source_vertex_id,
+                tangent_away_from_vertex=_reverse(directional_evidence.direction),
                 geometry=geometry,
                 source_vertex_to_vertices=source_vertex_to_vertices,
                 local_face_fans_by_patch_vertex=local_face_fans_by_patch_vertex,
@@ -90,8 +90,8 @@ def _samples_for_run_use(
 
 def _sample(
     topology: SurfaceModel,
-    run_use: ChainDirectionalRunUse,
-    role: RunUseEndpointRole,
+    directional_evidence: PatchChainDirectionalEvidence,
+    role: PatchChainEndpointRole,
     source_vertex_id: SourceVertexId,
     tangent_away_from_vertex: Vector3,
     geometry: GeometryFactSnapshot,
@@ -100,7 +100,7 @@ def _sample(
 ) -> PatchChainEndpointSample | None:
     vertex_id = _endpoint_vertex_id(
         topology,
-        run_use,
+        directional_evidence,
         role,
         source_vertex_id,
         source_vertex_to_vertices,
@@ -109,41 +109,41 @@ def _sample(
         return None
 
     owner_normal, owner_normal_source, owner_data = _owner_normal(
-        run_use,
+        directional_evidence,
         geometry,
         vertex_id,
         local_face_fans_by_patch_vertex,
     )
     tangent = normalize(tangent_away_from_vertex)
     normal = normalize(owner_normal)
-    confidence = run_use.confidence
+    confidence = directional_evidence.confidence
     if tangent == (0.0, 0.0, 0.0) or owner_normal_source is OwnerNormalSource.UNKNOWN:
         confidence = 0.0
     elif normal == (0.0, 0.0, 0.0):
         confidence *= 0.5
 
     return PatchChainEndpointSample(
-        id=f"patch_chain_endpoint_sample:{run_use.id}:{role.value}",
+        id=f"patch_chain_endpoint_sample:{directional_evidence.id}:{role.value}",
         vertex_id=vertex_id,
-        run_use_id=run_use.id,
-        chain_use_id=run_use.chain_use_id,
-        patch_id=run_use.patch_id,
+        directional_evidence_id=directional_evidence.id,
+        patch_chain_id=directional_evidence.patch_chain_id,
+        patch_id=directional_evidence.patch_id,
         endpoint_role=role,
         tangent_away_from_vertex=tangent,
         owner_normal=normal,
         owner_normal_source=owner_normal_source,
         confidence=confidence,
-        evidence=(_evidence(run_use, source_vertex_id, owner_normal_source, owner_data),),
+        evidence=(_evidence(directional_evidence, source_vertex_id, owner_normal_source, owner_data),),
     )
 
 
 def _owner_normal(
-    run_use: ChainDirectionalRunUse,
+    directional_evidence: PatchChainDirectionalEvidence,
     geometry: GeometryFactSnapshot,
     vertex_id: VertexId,
     local_face_fans_by_patch_vertex: dict[tuple[PatchId, VertexId], LocalFaceFanGeometryFacts],
 ) -> tuple[Vector3, OwnerNormalSource, dict[str, object]]:
-    local_face_fan = local_face_fans_by_patch_vertex.get((run_use.patch_id, vertex_id))
+    local_face_fan = local_face_fans_by_patch_vertex.get((directional_evidence.patch_id, vertex_id))
     if local_face_fan is not None and length(local_face_fan.normal) > EPSILON:
         return (
             local_face_fan.normal,
@@ -151,7 +151,7 @@ def _owner_normal(
             {"local_face_fan_id": local_face_fan.id},
         )
 
-    patch_facts = geometry.patch_facts.get(run_use.patch_id)
+    patch_facts = geometry.patch_facts.get(directional_evidence.patch_id)
     if patch_facts is None:
         return (0.0, 0.0, 0.0), OwnerNormalSource.UNKNOWN, {}
     source = (
@@ -164,19 +164,19 @@ def _owner_normal(
 
 def _endpoint_vertex_id(
     topology: SurfaceModel,
-    run_use: ChainDirectionalRunUse,
-    role: RunUseEndpointRole,
+    directional_evidence: PatchChainDirectionalEvidence,
+    role: PatchChainEndpointRole,
     source_vertex_id: SourceVertexId,
     source_vertex_to_vertices: dict[SourceVertexId, tuple[VertexId, ...]],
 ) -> VertexId | None:
-    chain_use = topology.chain_uses.get(run_use.chain_use_id)
-    if chain_use is not None:
-        start_vertex_id, end_vertex_id = chain_use_vertices(topology, chain_use.id)
+    patch_chain = topology.patch_chains.get(directional_evidence.patch_chain_id)
+    if patch_chain is not None:
+        start_vertex_id, end_vertex_id = patch_chain_vertices(topology, patch_chain.id)
         start_sources = topology.vertices[start_vertex_id].source_vertex_ids
         end_sources = topology.vertices[end_vertex_id].source_vertex_ids
-        if role is RunUseEndpointRole.START and source_vertex_id in start_sources:
+        if role is PatchChainEndpointRole.START and source_vertex_id in start_sources:
             return start_vertex_id
-        if role is RunUseEndpointRole.END and source_vertex_id in end_sources:
+        if role is PatchChainEndpointRole.END and source_vertex_id in end_sources:
             return end_vertex_id
 
     vertex_ids = source_vertex_to_vertices.get(source_vertex_id, ())
@@ -201,22 +201,19 @@ def _reverse(vector: Vector3) -> Vector3:
 
 
 def _evidence(
-    run_use: ChainDirectionalRunUse,
+    directional_evidence: PatchChainDirectionalEvidence,
     source_vertex_id: SourceVertexId,
     owner_normal_source: OwnerNormalSource,
     owner_data: dict[str, object],
 ) -> Evidence:
     return Evidence(
         source="layer_3_relations.patch_chain_endpoint_samples",
-        summary="endpoint sample derived from ChainDirectionalRunUse",
+        summary="endpoint sample derived from PatchChainDirectionalEvidence",
         data={
             "policy": POLICY_NAME,
-            "run_use_id": run_use.id,
+            "directional_evidence_id": directional_evidence.id,
             "source_vertex_id": str(source_vertex_id),
             "owner_normal_source": owner_normal_source.value,
             **owner_data,
         },
     )
-
-
-build_junction_samples = build_patch_chain_endpoint_samples
