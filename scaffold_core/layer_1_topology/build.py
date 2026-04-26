@@ -232,39 +232,92 @@ def _boundary_run_kind(
 
 
 def _boundary_endpoint_vertex_id(
-    source: SourceMeshSnapshot,
     face_id: SourceFaceId,
     patch_id: PatchId,
     source_vertex_id: SourceVertexId,
+    materialized_vertex_ids: dict[tuple[PatchId, SourceFaceId, SourceVertexId], VertexId],
+) -> VertexId:
+    return materialized_vertex_ids.get(
+        (patch_id, face_id, source_vertex_id),
+        VertexId(f"vertex:{source_vertex_id}"),
+    )
+
+
+def _materialized_vertex_ids_by_face(
+    source: SourceMeshSnapshot,
+    patch_face_ids: dict[PatchId, tuple[SourceFaceId, ...]],
+    face_to_patch_id: dict[SourceFaceId, PatchId],
     edge_incidence: dict[SourceEdgeId, tuple[SourceFaceId, ...]],
-    edge_patch_contexts: dict[SourceEdgeId, tuple[PatchId, ...]],
     boundary_mark_edge_ids: set[SourceEdgeId],
     vertices: dict[VertexId, Vertex],
-) -> VertexId:
-    seam_self_edge_ids = tuple(
-        edge_id
-        for edge_id in source.faces[face_id].edge_ids
-        if source_vertex_id in source.edges[edge_id].vertex_ids
-        and _boundary_run_kind(
-            edge_id,
-            edge_incidence[edge_id],
-            edge_patch_contexts[edge_id],
-            boundary_mark_edge_ids,
-        ) is _BoundaryRunKind.SEAM_SELF_RUN
-    )
-    if not seam_self_edge_ids:
-        return VertexId(f"vertex:{source_vertex_id}")
+) -> dict[tuple[PatchId, SourceFaceId, SourceVertexId], VertexId]:
+    materialized: dict[tuple[PatchId, SourceFaceId, SourceVertexId], VertexId] = {}
+    for patch_id, face_ids in patch_face_ids.items():
+        faces_by_vertex: dict[SourceVertexId, list[SourceFaceId]] = defaultdict(list)
+        for face_id in face_ids:
+            for source_vertex_id in source.faces[face_id].vertex_ids:
+                faces_by_vertex[source_vertex_id].append(face_id)
 
-    seam_edge_id = min(seam_self_edge_ids, key=str)
-    vertex_id = VertexId(f"vertex:{source_vertex_id}:use:{patch_id}:{seam_edge_id}:{face_id}")
-    vertices.setdefault(
-        vertex_id,
-        Vertex(
-            id=vertex_id,
-            source_vertex_ids=(source_vertex_id,),
-        ),
-    )
-    return vertex_id
+        for source_vertex_id, vertex_face_ids in faces_by_vertex.items():
+            face_set = set(vertex_face_ids)
+            if len(face_set) <= 1:
+                continue
+
+            parents = {face_id: face_id for face_id in face_set}
+
+            def find(face_id: SourceFaceId) -> SourceFaceId:
+                while parents[face_id] != face_id:
+                    parents[face_id] = parents[parents[face_id]]
+                    face_id = parents[face_id]
+                return face_id
+
+            def union(first: SourceFaceId, second: SourceFaceId) -> None:
+                first_root = find(first)
+                second_root = find(second)
+                if first_root != second_root:
+                    parents[second_root] = first_root
+
+            for edge_id, source_edge in source.edges.items():
+                if source_vertex_id not in source_edge.vertex_ids:
+                    continue
+                if is_patch_boundary_edge(
+                    edge_id,
+                    edge_incidence.get(edge_id, ()),
+                    boundary_mark_edge_ids,
+                ):
+                    continue
+                incident_patch_face_ids = [
+                    incident_face_id
+                    for incident_face_id in edge_incidence.get(edge_id, ())
+                    if incident_face_id in face_set
+                    and face_to_patch_id[incident_face_id] == patch_id
+                ]
+                for incident_face_id in incident_patch_face_ids[1:]:
+                    union(incident_patch_face_ids[0], incident_face_id)
+
+            components: dict[SourceFaceId, list[SourceFaceId]] = defaultdict(list)
+            for vertex_face_id in face_set:
+                components[find(vertex_face_id)].append(vertex_face_id)
+            if len(components) <= 1:
+                continue
+
+            sorted_components = sorted(
+                (tuple(sorted(component, key=str)) for component in components.values()),
+                key=lambda component: str(component[0]),
+            )
+            for component_index, component in enumerate(sorted_components):
+                vertex_id = VertexId(f"vertex:{source_vertex_id}:use:{patch_id}:{component_index}")
+                vertices.setdefault(
+                    vertex_id,
+                    Vertex(
+                        id=vertex_id,
+                        source_vertex_ids=(source_vertex_id,),
+                    ),
+                )
+                for component_face_id in component:
+                    materialized[(patch_id, component_face_id, source_vertex_id)] = vertex_id
+
+    return materialized
 
 
 def _run_start_vertex_id(run: _BoundaryRun) -> VertexId:
@@ -433,6 +486,14 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
 
     boundary_sides_by_patch: dict[PatchId, list[_BoundarySide]] = defaultdict(list)
     edge_patch_contexts = _edge_patch_contexts(edge_incidence, face_to_patch_id)
+    materialized_vertex_ids = _materialized_vertex_ids_by_face(
+        source,
+        patch_face_ids,
+        face_to_patch_id,
+        edge_incidence,
+        boundary_mark_edge_ids,
+        vertices,
+    )
 
     for face_id in face_ids:
         face = source.faces[face_id]
@@ -458,24 +519,16 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
                 side_end_source_vertex_id = source_edge.vertex_ids[0]
 
             side_start_vertex_id = _boundary_endpoint_vertex_id(
-                source,
                 face_id,
                 patch_id,
                 side_start_source_vertex_id,
-                edge_incidence,
-                edge_patch_contexts,
-                boundary_mark_edge_ids,
-                vertices,
+                materialized_vertex_ids,
             )
             side_end_vertex_id = _boundary_endpoint_vertex_id(
-                source,
                 face_id,
                 patch_id,
                 side_end_source_vertex_id,
-                edge_incidence,
-                edge_patch_contexts,
-                boundary_mark_edge_ids,
-                vertices,
+                materialized_vertex_ids,
             )
 
             boundary_sides_by_patch[patch_id].append(

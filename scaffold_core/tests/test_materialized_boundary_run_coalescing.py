@@ -19,7 +19,10 @@ from scaffold_core.layer_1_topology.model import ChainUse
 from scaffold_core.layer_1_topology.queries import chain_uses_for_chain
 from scaffold_core.layer_2_geometry.build import build_geometry_facts
 from scaffold_core.layer_3_relations.chain_refinement import build_chain_directional_runs
-from scaffold_core.tests.fixtures.cylinder_tube import make_cylinder_tube_without_caps_with_one_seam_source
+from scaffold_core.tests.fixtures.cylinder_tube import (
+    make_cylinder_tube_without_caps_with_one_seam_source,
+    make_segmented_cylinder_tube_without_caps_with_one_seam_source,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -104,6 +107,34 @@ def test_cylinder_tube_border_rings_are_not_one_edge_chains() -> None:
     }
 
     assert not any(chain.source_edge_ids in one_edge_cap_chains for chain in model.chains.values())
+
+
+def test_segmented_cylinder_seam_path_materializes_one_loop() -> None:
+    model = build_topology_snapshot(make_segmented_cylinder_tube_without_caps_with_one_seam_source())
+
+    assert len(model.patches) == 1
+    assert len(model.loops) == 1
+    assert len(model.chains) == 3
+    assert len(model.chain_uses) == 4
+    assert validate_loop_closure(model) == ()
+
+
+def test_segmented_cylinder_seam_path_has_one_chain_with_two_uses() -> None:
+    model = build_topology_snapshot(make_segmented_cylinder_tube_without_caps_with_one_seam_source())
+
+    seam_chain = model.chains[ChainId("chain:e_va_top:e_va_bot")]
+    seam_uses = chain_uses_for_chain(model, seam_chain.id)
+
+    assert seam_chain.source_edge_ids == (
+        SourceEdgeId("e_va_top"),
+        SourceEdgeId("e_va_bot"),
+    )
+    assert len(seam_uses) == 2
+    assert {use.orientation_sign for use in seam_uses} == {-1, 1}
+    assert not any(
+        len(chain.source_edge_ids) != len(set(chain.source_edge_ids))
+        for chain in model.chains.values()
+    )
 
 
 def test_chain_directional_runs_still_split_turning_border_rings_downstream() -> None:
