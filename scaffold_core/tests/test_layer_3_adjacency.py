@@ -87,7 +87,12 @@ def test_dihedral_is_undefined_when_chain_use_orientations_do_not_pair() -> None
         if use.chain_id == ChainId("chain:e1")
     )
     chain_uses = dict(topology.chain_uses)
-    chain_uses[uses[1].id] = replace(uses[1], orientation_sign=uses[0].orientation_sign)
+    chain_uses[uses[1].id] = replace(
+        uses[1],
+        orientation_sign=uses[0].orientation_sign,
+        start_vertex_id=uses[0].start_vertex_id,
+        end_vertex_id=uses[0].end_vertex_id,
+    )
     topology = replace(topology, chain_uses=chain_uses)
     geometry = build_geometry_facts(source, topology)
 

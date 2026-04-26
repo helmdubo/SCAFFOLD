@@ -17,7 +17,7 @@ from scaffold_core.layer_0_source.snapshot import SourceMeshSnapshot
 from scaffold_core.layer_1_topology.build import build_topology_snapshot
 from scaffold_core.layer_1_topology.invariants import validate_topology
 from scaffold_core.layer_1_topology.model import ChainUse, SurfaceModel
-from scaffold_core.layer_1_topology.queries import chain_uses_for_chain
+from scaffold_core.layer_1_topology.queries import chain_use_vertices, chain_uses_for_chain
 from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot
 from scaffold_core.layer_3_relations.model import RelationSnapshot
 from scaffold_core.pipeline.context import PipelineContext
@@ -368,6 +368,7 @@ def _chain_use_to_dict(
     source: SourceMeshSnapshot | None,
 ) -> InspectionDict:
     chain = model.chains[use.chain_id]
+    use_start_vertex_id, use_end_vertex_id = chain_use_vertices(model, use.id)
     start_vertex = model.vertices[chain.start_vertex_id]
     end_vertex = model.vertices[chain.end_vertex_id]
     chain_data: InspectionDict = {
@@ -393,6 +394,8 @@ def _chain_use_to_dict(
         "id": str(use.id),
         "orientation_sign": use.orientation_sign,
         "position_in_loop": use.position_in_loop,
+        "start_vertex_id": str(use_start_vertex_id),
+        "end_vertex_id": str(use_end_vertex_id),
         "chain": chain_data,
     }
 

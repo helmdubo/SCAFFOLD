@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
+from enum import Enum
 
 from scaffold_core.ids import (
     BoundaryLoopId,
@@ -41,6 +42,13 @@ from scaffold_core.layer_1_topology.model import (
 )
 
 
+class _BoundaryRunKind(str, Enum):
+    BORDER_RUN = "BORDER_RUN"
+    PATCH_ADJACENCY_RUN = "PATCH_ADJACENCY_RUN"
+    SEAM_SELF_RUN = "SEAM_SELF_RUN"
+    NON_MANIFOLD_RUN = "NON_MANIFOLD_RUN"
+
+
 @dataclass(frozen=True)
 class _BoundarySide:
     face_id: SourceFaceId
@@ -48,12 +56,14 @@ class _BoundarySide:
     edge_index: int
     start_vertex_id: VertexId
     end_vertex_id: VertexId
+    run_kind: _BoundaryRunKind
 
 
 @dataclass(frozen=True)
 class _BoundaryRun:
     sides: tuple[_BoundarySide, ...]
     patch_context: tuple[PatchId, ...]
+    run_kind: _BoundaryRunKind
 
 
 def selected_face_ids(source: SourceMeshSnapshot) -> tuple[SourceFaceId, ...]:
@@ -200,8 +210,61 @@ def _edge_patch_contexts(
 def _can_merge_boundary_contexts(
     first: tuple[PatchId, ...],
     second: tuple[PatchId, ...],
+    first_kind: _BoundaryRunKind,
+    second_kind: _BoundaryRunKind,
 ) -> bool:
-    return len(first) > 1 and first == second
+    return first_kind is second_kind and first == second
+
+
+def _boundary_run_kind(
+    edge_id: SourceEdgeId,
+    selected_incident_face_ids: tuple[SourceFaceId, ...],
+    patch_context: tuple[PatchId, ...],
+    boundary_mark_edge_ids: set[SourceEdgeId],
+) -> _BoundaryRunKind:
+    if len(selected_incident_face_ids) > 2:
+        return _BoundaryRunKind.NON_MANIFOLD_RUN
+    if len(selected_incident_face_ids) == 1:
+        return _BoundaryRunKind.BORDER_RUN
+    if edge_id in boundary_mark_edge_ids and len(patch_context) == 1:
+        return _BoundaryRunKind.SEAM_SELF_RUN
+    return _BoundaryRunKind.PATCH_ADJACENCY_RUN
+
+
+def _boundary_endpoint_vertex_id(
+    source: SourceMeshSnapshot,
+    face_id: SourceFaceId,
+    patch_id: PatchId,
+    source_vertex_id: SourceVertexId,
+    edge_incidence: dict[SourceEdgeId, tuple[SourceFaceId, ...]],
+    edge_patch_contexts: dict[SourceEdgeId, tuple[PatchId, ...]],
+    boundary_mark_edge_ids: set[SourceEdgeId],
+    vertices: dict[VertexId, Vertex],
+) -> VertexId:
+    seam_self_edge_ids = tuple(
+        edge_id
+        for edge_id in source.faces[face_id].edge_ids
+        if source_vertex_id in source.edges[edge_id].vertex_ids
+        and _boundary_run_kind(
+            edge_id,
+            edge_incidence[edge_id],
+            edge_patch_contexts[edge_id],
+            boundary_mark_edge_ids,
+        ) is _BoundaryRunKind.SEAM_SELF_RUN
+    )
+    if not seam_self_edge_ids:
+        return VertexId(f"vertex:{source_vertex_id}")
+
+    seam_edge_id = min(seam_self_edge_ids, key=str)
+    vertex_id = VertexId(f"vertex:{source_vertex_id}:use:{patch_id}:{seam_edge_id}:{face_id}")
+    vertices.setdefault(
+        vertex_id,
+        Vertex(
+            id=vertex_id,
+            source_vertex_ids=(source_vertex_id,),
+        ),
+    )
+    return vertex_id
 
 
 def _run_start_vertex_id(run: _BoundaryRun) -> VertexId:
@@ -222,25 +285,41 @@ def _coalesce_boundary_runs(
     runs: list[_BoundaryRun] = []
     current_sides = [cycle[0]]
     current_context = edge_patch_contexts[cycle[0].edge_id]
+    current_kind = cycle[0].run_kind
 
     for side in cycle[1:]:
         side_context = edge_patch_contexts[side.edge_id]
-        if _can_merge_boundary_contexts(current_context, side_context):
+        if _can_merge_boundary_contexts(current_context, side_context, current_kind, side.run_kind):
             current_sides.append(side)
             continue
-        runs.append(_BoundaryRun(sides=tuple(current_sides), patch_context=current_context))
+        runs.append(_BoundaryRun(
+            sides=tuple(current_sides),
+            patch_context=current_context,
+            run_kind=current_kind,
+        ))
         current_sides = [side]
         current_context = side_context
+        current_kind = side.run_kind
 
-    runs.append(_BoundaryRun(sides=tuple(current_sides), patch_context=current_context))
+    runs.append(_BoundaryRun(
+        sides=tuple(current_sides),
+        patch_context=current_context,
+        run_kind=current_kind,
+    ))
 
     if len(runs) == 1:
         return tuple(runs)
 
-    if _can_merge_boundary_contexts(runs[-1].patch_context, runs[0].patch_context):
+    if _can_merge_boundary_contexts(
+        runs[-1].patch_context,
+        runs[0].patch_context,
+        runs[-1].run_kind,
+        runs[0].run_kind,
+    ):
         runs[0] = _BoundaryRun(
             sides=runs[-1].sides + runs[0].sides,
             patch_context=runs[0].patch_context,
+            run_kind=runs[0].run_kind,
         )
         runs.pop()
 
@@ -274,7 +353,11 @@ def _matches_cyclic_order(
     )
 
 
-def _orientation_sign_for_run(chain: Chain, run: _BoundaryRun) -> int:
+def _orientation_sign_for_run(
+    chain: Chain,
+    run: _BoundaryRun,
+    vertices: dict[VertexId, Vertex],
+) -> int:
     run_start = _run_start_vertex_id(run)
     run_end = _run_end_vertex_id(run)
     run_source_edge_ids = _run_source_edge_ids(run)
@@ -287,6 +370,14 @@ def _orientation_sign_for_run(chain: Chain, run: _BoundaryRun) -> int:
     if chain.start_vertex_id == run_start and chain.end_vertex_id == run_end:
         return 1
     if chain.start_vertex_id == run_end and chain.end_vertex_id == run_start:
+        return -1
+    chain_start_sources = set(vertices[chain.start_vertex_id].source_vertex_ids)
+    chain_end_sources = set(vertices[chain.end_vertex_id].source_vertex_ids)
+    run_start_sources = set(vertices[run_start].source_vertex_ids)
+    run_end_sources = set(vertices[run_end].source_vertex_ids)
+    if chain_start_sources & run_start_sources and chain_end_sources & run_end_sources:
+        return 1
+    if chain_start_sources & run_end_sources and chain_end_sources & run_start_sources:
         return -1
     return 1
 
@@ -356,18 +447,36 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
                 continue
 
             source_edge = source.edges[source_edge_id]
-            start_vertex_id = VertexId(f"vertex:{source_edge.vertex_ids[0]}")
-            end_vertex_id = VertexId(f"vertex:{source_edge.vertex_ids[1]}")
-
             face_start = face.vertex_ids[edge_index]
             face_end = face.vertex_ids[(edge_index + 1) % len(face.vertex_ids)]
             orientation_sign = _source_edge_orientation_sign(source_edge.vertex_ids, face_start, face_end)
             if orientation_sign == 1:
-                side_start_vertex_id = start_vertex_id
-                side_end_vertex_id = end_vertex_id
+                side_start_source_vertex_id = source_edge.vertex_ids[0]
+                side_end_source_vertex_id = source_edge.vertex_ids[1]
             else:
-                side_start_vertex_id = end_vertex_id
-                side_end_vertex_id = start_vertex_id
+                side_start_source_vertex_id = source_edge.vertex_ids[1]
+                side_end_source_vertex_id = source_edge.vertex_ids[0]
+
+            side_start_vertex_id = _boundary_endpoint_vertex_id(
+                source,
+                face_id,
+                patch_id,
+                side_start_source_vertex_id,
+                edge_incidence,
+                edge_patch_contexts,
+                boundary_mark_edge_ids,
+                vertices,
+            )
+            side_end_vertex_id = _boundary_endpoint_vertex_id(
+                source,
+                face_id,
+                patch_id,
+                side_end_source_vertex_id,
+                edge_incidence,
+                edge_patch_contexts,
+                boundary_mark_edge_ids,
+                vertices,
+            )
 
             boundary_sides_by_patch[patch_id].append(
                 _BoundarySide(
@@ -376,6 +485,12 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
                     edge_index=edge_index,
                     start_vertex_id=side_start_vertex_id,
                     end_vertex_id=side_end_vertex_id,
+                    run_kind=_boundary_run_kind(
+                        source_edge_id,
+                        selected_incident_face_ids,
+                        edge_patch_contexts[source_edge_id],
+                        boundary_mark_edge_ids,
+                    ),
                 )
             )
 
@@ -418,8 +533,10 @@ def build_topology_snapshot(source: SourceMeshSnapshot) -> SurfaceModel:
                     chain_id=chain_id,
                     patch_id=patch_id,
                     loop_id=loop_id,
-                    orientation_sign=_orientation_sign_for_run(chains[chain_id], run),
+                    orientation_sign=_orientation_sign_for_run(chains[chain_id], run, vertices),
                     position_in_loop=position_in_loop,
+                    start_vertex_id=_run_start_vertex_id(run),
+                    end_vertex_id=_run_end_vertex_id(run),
                 )
                 use_ids.append(use_id)
 

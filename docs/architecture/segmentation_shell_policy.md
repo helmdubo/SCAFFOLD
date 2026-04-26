@@ -74,13 +74,25 @@ Final G1 topology building should follow this order:
 5. Build Chain / ChainUse cardinality from Patch boundary uses:
    - collect atomic boundary sides;
    - order them into BoundaryLoops;
-   - coalesce consecutive sides with the same adjacency context into Chains;
+   - materialize seam-cut vertex occurrences when a source vertex appears on
+     two sides of one Patch loop;
+   - coalesce consecutive sides with the same boundary run kind and Patch
+     context into Chains;
    - create one ChainUse per Chain occurrence in a Patch loop.
 6. Emit diagnostics for border, SEAM_SELF and non-manifold cardinality cases.
 ```
 
 Current G1/G3 Chain coalescing is topology/context-based only.
 Geometry-based Chain splitting or refinement is deferred.
+
+Layer 1 boundary run kinds:
+
+```text
+BORDER_RUN
+PATCH_ADJACENCY_RUN
+SEAM_SELF_RUN
+NON_MANIFOLD_RUN
+```
 
 ## Coalescing scope
 

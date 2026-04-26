@@ -33,9 +33,12 @@ def chain_uses_in_loop(model: SurfaceModel, loop_id: BoundaryLoopId) -> tuple[Ch
 
 
 def chain_use_vertices(model: SurfaceModel, chain_use_id: ChainUseId) -> tuple[VertexId, VertexId]:
-    """Return start/end vertices for a ChainUse according to orientation_sign."""
+    """Return materialized start/end vertices for a ChainUse."""
 
     use = model.chain_uses[chain_use_id]
+    if use.start_vertex_id is not None and use.end_vertex_id is not None:
+        return use.start_vertex_id, use.end_vertex_id
+
     chain = model.chains[use.chain_id]
     if use.orientation_sign == 1:
         return chain.start_vertex_id, chain.end_vertex_id

@@ -58,6 +58,8 @@ class ChainUse:
     loop_id: BoundaryLoopId
     orientation_sign: int
     position_in_loop: int
+    start_vertex_id: VertexId | None = None
+    end_vertex_id: VertexId | None = None
 
     def __post_init__(self) -> None:
         if self.orientation_sign not in (-1, 1):

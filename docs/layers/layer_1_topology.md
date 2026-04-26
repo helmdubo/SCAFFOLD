@@ -84,6 +84,10 @@ A `ChainUse` is the oriented use of a `Chain` inside a loop/patch.
 
 All orientation-sensitive logic must use `ChainUse`, not raw `Chain`.
 
+`ChainUse` may carry materialized start/end topology vertices for seam-cut
+loop occurrences. These vertices are still Layer 1 topology/provenance and do
+not store normals or geometry semantics.
+
 ## Chain coalescing
 
 Layer 1 distinguishes atomic boundary segments from topology Chains:
@@ -103,8 +107,24 @@ ChainUse:
 Current G1/G3 implementation rule:
 
 ```text
-Merge consecutive boundary segments when they have the same multi-Patch
-adjacency context and are continuous in loop order.
+Merge consecutive boundary segments when they have the same boundary run kind,
+the same Patch context and are continuous in final materialized loop order.
+```
+
+Boundary run kinds:
+
+```text
+BORDER_RUN:
+  source mesh / selected-region border
+
+PATCH_ADJACENCY_RUN:
+  boundary between different Patches
+
+SEAM_SELF_RUN:
+  seam cut materialized as two ChainUses in the same Patch
+
+NON_MANIFOLD_RUN:
+  represented and diagnosed, not silently fixed
 ```
 
 Example:
@@ -120,7 +140,6 @@ Long seam of 4 source edges between two Patches:
 ## Current limitations
 
 - Coalescing is topology/context-based only.
-- Border boundary runs are not guaranteed to coalesce yet.
 - Geometry-based Chain split/refinement by tangent, angle, normal or user split
   is deferred.
 

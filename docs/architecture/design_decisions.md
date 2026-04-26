@@ -34,11 +34,15 @@ Agents may read this file for quick lookup. If it disagrees with `G0.md`, `G0.md
 - **DD-26 — FeatureConstraint is first-class.** FeatureConstraint is the only channel from accepted features into solve.
 - **DD-27 — G1 Patch segmentation is seam-only by default.** Patch flood fill is blocked by border, non-manifold selected edge, explicit Scaffold boundary mark, and Blender UV Seam. Blender Sharp is not a default boundary source.
 - **DD-28 — G1 Shell detection ignores Patch boundaries.** Shells are selected-face edge-connected components. Seams and explicit Patch boundaries may split Patches but do not split Shells. Vertex-only contact does not connect Shells.
-- **DD-29 — Chain coalescing is staged.** G1 / G3a does shared topology
-  coalescing only. Border edges remain atomic by default. Closed, turning,
-  or direction-ambiguous Chains require Layer 2 geometry-based refinement
-  before Alignment. Coalescing and refinement are scoped to one ordered
-  atomic boundary cycle that materializes as one final BoundaryLoop.
+- **DD-29 — Chain coalescing is staged.** G1 / G3a uses
+  topology/materialization context only. Consecutive boundary sides with the
+  same boundary run kind and Patch context may coalesce into logical Chains,
+  including border runs. Seam cuts may materialize duplicate topology Vertex
+  occurrences so one source vertex can appear on both sides of a Patch loop.
+  Closed, turning, or direction-ambiguous Chains require Layer 2
+  geometry-based refinement before Alignment. Coalescing and refinement are
+  scoped to one ordered atomic boundary cycle that materializes as one final
+  BoundaryLoop.
 - **DD-30 — Chain refinement does not change Layer 1 Chain identity.**
   Layer 1 Chain identity is topology-only. Geometry-driven refinement
   lives in Layer 3 and produces derived sub-chain entities or alignment

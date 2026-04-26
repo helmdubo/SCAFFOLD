@@ -807,9 +807,12 @@ The authoritative compact DD register is also mirrored in `docs/architecture/des
 ## DD-29 — Chain coalescing is staged
 
 G1 / G3a:
-- Shared boundary coalescing may use topology adjacency context.
-- Border boundary coalescing is not performed by default.
-- Border source edges remain atomic Chains.
+- Boundary coalescing uses topology/materialization context only.
+- Consecutive boundary sides with the same boundary run kind and Patch context
+  may coalesce into logical Chains.
+- Border runs may coalesce into ordered Chains.
+- Seam cuts may materialize duplicate topology Vertex occurrences so one
+  source vertex can appear on both sides of a Patch loop.
 
 Before Alignment / PatchAxes:
 - Chains that are closed, turning, or direction-ambiguous must be refined

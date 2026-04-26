@@ -73,12 +73,12 @@ def test_single_quad_corner_uses_conservative_terminus_for_one_candidate() -> No
         for relation in snapshot.chain_continuations
         if relation.junction_vertex_id == VertexId("vertex:v0")
     )
-    assert len(corner_relations) == 2
+    assert len(corner_relations) == 1
     assert {relation.kind for relation in corner_relations} == {ContinuationKind.TERMINUS}
     assert all(relation.target_chain_use_id is None for relation in corner_relations)
     assert _evidence_values(corner_relations[0]) == {
-        "incident_count": 2,
-        "candidate_count": 1,
+        "incident_count": 1,
+        "candidate_count": 0,
         "policy": "conservative_g3b2",
     }
 

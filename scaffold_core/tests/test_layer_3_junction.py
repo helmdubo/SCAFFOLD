@@ -55,8 +55,8 @@ def test_single_quad_corner_vertex_has_deterministic_incident_uses() -> None:
     uses = incident_chain_uses_for_vertex(topology, vertex_id)
     use_ids = [str(use.id) for use in uses]
 
-    assert len(uses) == 2
-    assert junction_valence(topology, vertex_id) == 2
+    assert len(uses) == 1
+    assert junction_valence(topology, vertex_id) == 1
     assert not is_junction_like(topology, vertex_id)
     _assert_deterministic_order(use_ids)
     assert all(vertex_id in chain_use_vertices(topology, use.id) for use in uses)
@@ -85,8 +85,8 @@ def test_closed_seam_loop_query_does_not_assume_chain_direction_stability() -> N
     use_ids = [str(use.id) for use in uses]
 
     assert closed_chain.start_vertex_id == closed_chain.end_vertex_id
-    assert len(uses) == 2
-    assert junction_valence(topology, vertex_id) == 2
+    assert len(uses) == 1
+    assert junction_valence(topology, vertex_id) == 1
     _assert_deterministic_order(use_ids)
     assert all(use.chain_id == closed_chain.id for use in uses)
 

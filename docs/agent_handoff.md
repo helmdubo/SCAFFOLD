@@ -152,25 +152,37 @@ the old fixture baseline:
 - BoundaryLoops, Chains and ChainUses are built from real Patch boundary uses.
 ```
 
-Layer 1 Chain coalescing is implemented for shared boundary runs:
+Layer 1 Chain coalescing is implemented for materialized boundary runs:
 
 ```text
 - Chain is no longer always one source edge.
 - Atomic boundary sides are ordered into BoundaryLoops.
-- Consecutive shared boundary sides with the same Patch adjacency context are
-  coalesced into one Chain.
+- Consecutive boundary sides with the same boundary run kind and Patch context
+  are coalesced into one Chain.
 - Chain.source_edge_ids stores source edges in run order.
 - ChainId is built from source_edge_ids in run order.
 - Lookup remains orientation-independent so opposite ChainUses resolve to the
   same Chain.
 ```
 
-Current Chain coalescing limitations:
+Layer 1 boundary run kinds:
 
-- Coalescing is topology/context-based only.
-- Border chains are not guaranteed to coalesce yet.
-- Geometry-based split/refinement by tangent, angle, normal or user split
-  future work.
+```text
+BORDER_RUN
+PATCH_ADJACENCY_RUN
+SEAM_SELF_RUN
+NON_MANIFOLD_RUN
+```
+
+SEAM_SELF loops may materialize duplicate topology Vertex occurrences so one
+source vertex can appear on both sides of a seam cut. `ChainUse` may carry
+materialized start/end vertices for the patch-local occurrence. These are
+topology/provenance only; normals are not stored on Layer 1 ChainUse.
+
+Current Chain coalescing limitation:
+
+- Geometry-based split/refinement by tangent, angle, normal or user split is
+  future Layer 3 work.
 
 Chain refinement is staged (DD-29):
 
@@ -195,6 +207,22 @@ Closed seam loop of 4 source edges between two Patches:
     1 Chain
     Chain.source_edge_ids = (e10, e9, e6, e7)
     2 ChainUses, one per Patch loop
+```
+
+Example:
+
+```text
+Cylinder tube without caps and one seam cut:
+  expected:
+    1 Patch
+    1 materialized BoundaryLoop
+    3 Chains
+    4 ChainUses
+
+  Chains:
+    top border run
+    bottom border run
+    seam Chain with two uses in the same Patch
 ```
 
 `validate_chain_cardinality()` classifies all G1 Chain cardinality cases:
@@ -484,7 +512,6 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 ### Layer 1 / Chain refinement still open
 
-- Decide whether border boundary runs should coalesce into Chains.
 - OQ-11 is partially resolved for straight/turning polygonal Chains through
   ChainDirectionalRun and ChainDirectionalRunUse.
 - Curved-chain handling, sawtooth tuning, user split marks, closed-loop wrap

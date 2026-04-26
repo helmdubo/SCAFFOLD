@@ -80,12 +80,13 @@ def test_describe_active_blender_mesh_topology_reports_g1_counts() -> None:
     assert "selected faces: 1" in report
     assert "shells: 1" in report
     assert "patches: 1" in report
-    assert "chains: 4" in report
+    assert "chains: 1" in report
+    assert "chain uses: 1" in report
     assert "shell shell:0: patches ('patch:seed:f0',)" in report
     assert "patch patch:seed:f0: shell shell:0 faces ('f0',) loops ('loop:patch:seed:f0:0',)" in report
-    assert "chain chain:e0: edges ('e0',) uses 1" in report
+    assert "chain chain:e0:e1:e2:e3: edges ('e0', 'e1', 'e2', 'e3') uses 1" in report
     assert (
-        "chain use use:patch:seed:f0:0:0: chain chain:e0 "
+        "chain use use:patch:seed:f0:0:0: chain chain:e0:e1:e2:e3 "
         "patch patch:seed:f0 loop loop:patch:seed:f0:0 orientation 1"
     ) in report
 
@@ -107,11 +108,13 @@ def test_inspect_pipeline_context_reports_single_patch_topology_tree() -> None:
     assert patch["source_face_ids"] == ["f0"]
     assert loop["kind"] == "OUTER"
     assert chain_use["orientation_sign"] in (-1, 1)
+    assert chain_use["start_vertex_id"] == "vertex:v0"
+    assert chain_use["end_vertex_id"] == "vertex:v0"
     assert chain["start_vertex_id"].startswith("vertex:")
     assert chain["start_source_vertex_ids"]
-    assert chain["source_edge_count"] == 1
-    assert not chain["is_closed"]
-    assert chain["source_vertex_run"] == ["v0", "v1"]
+    assert chain["source_edge_count"] == 4
+    assert chain["is_closed"]
+    assert chain["source_vertex_run"] == ["v0", "v1", "v2", "v3", "v0"]
     assert report["geometry"]["patch_count"] == 1
     assert report["diagnostics"]
     assert report["diagnostics"][0]["code"] == "TOPOLOGY_CHAIN_BORDER"

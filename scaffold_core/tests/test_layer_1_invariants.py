@@ -35,7 +35,7 @@ def test_single_quad_border_chains_are_reported_as_info() -> None:
     diagnostics = validate_chain_cardinality(model)
     border_codes = [d.code for d in diagnostics]
 
-    assert border_codes.count("TOPOLOGY_CHAIN_BORDER") == 4
+    assert border_codes.count("TOPOLOGY_CHAIN_BORDER") == 1
 
 
 def test_loop_closure_passes_for_single_quad() -> None:

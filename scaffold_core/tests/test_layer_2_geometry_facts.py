@@ -60,17 +60,21 @@ def test_single_quad_geometry_facts_are_measured() -> None:
     assert patch.area == 1.0
     assert patch.normal == (0.0, 0.0, 1.0)
     assert patch.centroid == (0.5, 0.5, 0.0)
-    assert facts.chain_facts[ChainId("chain:e0")].length == 1.0
-    assert facts.chain_facts[ChainId("chain:e0")].chord_length == 1.0
-    assert facts.chain_facts[ChainId("chain:e0")].chord_direction == (1.0, 0.0, 0.0)
-    assert facts.chain_facts[ChainId("chain:e0")].straightness == 1.0
-    assert facts.chain_facts[ChainId("chain:e0")].detour_ratio == 1.0
-    assert facts.chain_facts[ChainId("chain:e0")].shape_hint is ChainShapeHint.STRAIGHT
-    assert facts.chain_facts[ChainId("chain:e0")].source_vertex_run == (
+    chain = facts.chain_facts[ChainId("chain:e0:e1:e2:e3")]
+    assert chain.length == 4.0
+    assert chain.chord_length == 0.0
+    assert chain.chord_direction == (0.0, 0.0, 0.0)
+    assert chain.straightness == 0.0
+    assert chain.detour_ratio == 0.0
+    assert chain.shape_hint is ChainShapeHint.UNKNOWN
+    assert chain.source_vertex_run == (
         SourceVertexId("v0"),
         SourceVertexId("v1"),
+        SourceVertexId("v2"),
+        SourceVertexId("v3"),
+        SourceVertexId("v0"),
     )
-    assert len(facts.chain_facts[ChainId("chain:e0")].segments) == 1
+    assert len(chain.segments) == 4
     assert facts.vertex_facts[VertexId("vertex:v0")].position == (0.0, 0.0, 0.0)
 
 
@@ -94,7 +98,11 @@ def test_degenerate_geometry_emits_degraded_diagnostics() -> None:
 
     codes = {diagnostic.code for diagnostic in facts.diagnostics}
     assert "GEOMETRY_PATCH_DEGENERATE_AREA" in codes
-    assert "GEOMETRY_CHAIN_ZERO_LENGTH" in codes
+    assert any(
+        segment.length == 0.0
+        for chain in facts.chain_facts.values()
+        for segment in chain.segments
+    )
     assert all(
         diagnostic.severity is DiagnosticSeverity.DEGRADED
         for diagnostic in facts.diagnostics
