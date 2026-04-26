@@ -293,6 +293,15 @@ Rules:
 - relations are derived from Layer 1 topology, Layer 2 geometry and Layer 3
   run-use data.
 
+Implementation status:
+- `JunctionRunUseRelation` is implemented as a Layer 3 derived relation.
+- Relations are unordered sample pairs at the same Vertex.
+- v0 classifies direction relation as OPPOSITE_COLLINEAR,
+  SAME_RAY_COLLINEAR, ORTHOGONAL, OBLIQUE or DEGENERATE.
+- v0 maps those measurements to continuation candidate, corner connector,
+  oblique connector, ambiguous or degenerate relation kinds.
+- ScaffoldGraph / ScaffoldTrace remain deferred.
+
 ## Future - ScaffoldGraph / ScaffoldTrace
 
 A future slice may build `ScaffoldGraph` from `JunctionRunUseRelation`.

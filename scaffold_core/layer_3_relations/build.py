@@ -22,6 +22,7 @@ from scaffold_core.layer_3_relations.chain_refinement import (
     build_chain_directional_runs,
 )
 from scaffold_core.layer_3_relations.continuation import build_chain_continuations
+from scaffold_core.layer_3_relations.junction_relations import build_junction_run_use_relations
 from scaffold_core.layer_3_relations.junction_samples import build_junction_samples
 from scaffold_core.layer_3_relations.model import DihedralKind, PatchAdjacency, RelationSnapshot
 
@@ -61,6 +62,7 @@ def build_relation_snapshot(
         geometry,
         chain_directional_run_uses,
     )
+    junction_run_use_relations = build_junction_run_use_relations(junction_samples)
     alignment_classes = build_alignment_classes(chain_directional_run_uses)
     return RelationSnapshot(
         patch_adjacencies=patch_adjacencies,
@@ -68,6 +70,7 @@ def build_relation_snapshot(
         chain_directional_runs=chain_directional_runs,
         chain_directional_run_uses=chain_directional_run_uses,
         junction_samples=junction_samples,
+        junction_run_use_relations=junction_run_use_relations,
         alignment_classes=alignment_classes,
         patch_axes=build_patch_axes(
             topology,

@@ -75,6 +75,26 @@ class OwnerNormalSource(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+class JunctionDirectionRelationKind(str, Enum):
+    """Directional relation between two endpoint samples at one Vertex."""
+
+    OPPOSITE_COLLINEAR = "OPPOSITE_COLLINEAR"
+    SAME_RAY_COLLINEAR = "SAME_RAY_COLLINEAR"
+    ORTHOGONAL = "ORTHOGONAL"
+    OBLIQUE = "OBLIQUE"
+    DEGENERATE = "DEGENERATE"
+
+
+class JunctionRunUseRelationKind(str, Enum):
+    """Structural relation between two endpoint samples at one Vertex."""
+
+    CONTINUATION_CANDIDATE = "CONTINUATION_CANDIDATE"
+    CORNER_CONNECTOR = "CORNER_CONNECTOR"
+    OBLIQUE_CONNECTOR = "OBLIQUE_CONNECTOR"
+    AMBIGUOUS = "AMBIGUOUS"
+    DEGENERATE = "DEGENERATE"
+
+
 @dataclass(frozen=True)
 class PatchAdjacency:
     id: str
@@ -172,12 +192,29 @@ class ChainDirectionalRunUseJunctionSample:
 
 
 @dataclass(frozen=True)
+class JunctionRunUseRelation:
+    id: str
+    vertex_id: VertexId
+    first_sample_id: str
+    second_sample_id: str
+    first_run_use_id: str
+    second_run_use_id: str
+    direction_dot: float
+    normal_dot: float
+    direction_relation: JunctionDirectionRelationKind
+    kind: JunctionRunUseRelationKind
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
     chain_continuations: tuple[ChainContinuationRelation, ...] = ()
     chain_directional_runs: tuple[ChainDirectionalRun, ...] = ()
     chain_directional_run_uses: tuple[ChainDirectionalRunUse, ...] = ()
     junction_samples: tuple[ChainDirectionalRunUseJunctionSample, ...] = ()
+    junction_run_use_relations: tuple[JunctionRunUseRelation, ...] = ()
     alignment_classes: tuple[AlignmentClass, ...] = ()
     patch_axes: Mapping[PatchId, PatchAxes] = field(default_factory=dict)
     diagnostics: tuple[Diagnostic, ...] = ()

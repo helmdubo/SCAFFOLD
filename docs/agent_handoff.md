@@ -367,8 +367,20 @@ tangent_away_from_vertex is oriented away from the endpoint Vertex.
 owner_normal uses PatchGeometryFacts.normal with
 owner_normal_source = PATCH_AGGREGATE_NORMAL.
 Layer 1 ChainUse still stores topology only.
-JunctionRunUseRelation is still not implemented.
+Endpoint samples do not themselves classify pairwise relations.
 ScaffoldGraph is still not implemented.
+```
+
+G3c5 JunctionRunUseRelation v0 is implemented:
+
+```text
+Layer 3 now exposes junction_run_use_relations as unordered pairwise relations
+between junction_samples at the same topology Vertex.
+direction_relation records OPPOSITE_COLLINEAR, SAME_RAY_COLLINEAR,
+ORTHOGONAL, OBLIQUE or DEGENERATE.
+kind records CONTINUATION_CANDIDATE, CORNER_CONNECTOR, OBLIQUE_CONNECTOR,
+AMBIGUOUS or DEGENERATE.
+ScaffoldGraph / ScaffoldTrace are still not implemented.
 ```
 
 Implemented test fixtures:
@@ -483,7 +495,6 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 - Add relation queries when consumers appear, e.g. `adjacencies_for_chain()` or
   `adjacency_between_patches()`.
-- Implement G3c5 JunctionRunUseRelation v0.
 - Implement future ScaffoldGraph / ScaffoldTrace only after
   JunctionRunUseRelation exists.
 - WorldOrientation.
@@ -498,13 +509,11 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 ## Recommended next task
 
-G3c5 JunctionRunUseRelation v0.
+Review full inspection JSON for `junction_run_use_relations`.
 
 ```text
-Derive pairwise relations between junction_samples at the same Vertex.
-Classify direction_relation and scaffold relation kind.
-Use tangent_away_from_vertex and owner_normal evidence.
-Do not implement ScaffoldGraph yet.
+Confirm local relation output on cube/seam and any cylinder-like fixtures
+before starting ScaffoldGraph / ScaffoldTrace v0.
 ```
 
 ---
