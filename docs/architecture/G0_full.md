@@ -1023,15 +1023,18 @@ Distinct class or FeatureRule variant?
 How do Layer 2 geometry facts split or merge topology Chains before
 Alignment?
 
-Sub-questions:
+OQ-11 is partially resolved for straight/turning polygonal Chains through
+Layer 3 `ChainDirectionalRun` and `ChainDirectionalRunUse`.
 
-- tangent angle threshold for corner detection;
-- closed-chain handling (start == end);
-- turning-chain handling (multiple direction segments);
+Still unresolved:
+
 - curved-chain handling;
-- user split mark priority.
-
-Resolution required before G3c AlignmentClass implementation begins.
+- sawtooth tuning;
+- user split marks;
+- closed-loop wrap merge;
+- advanced corner detection;
+- local face-normal refinement;
+- relation to JunctionRunUseRelation / ScaffoldGraph.
 
 ---
 

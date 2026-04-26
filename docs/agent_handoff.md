@@ -473,31 +473,25 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 ### Layer 1 / Chain refinement still open
 
 - Decide whether border boundary runs should coalesce into Chains.
-- Add geometry-based Chain split/refinement before AlignmentClass,
-  ChainContinuationRelation or continuation-heavy work.
+- OQ-11 is partially resolved for straight/turning polygonal Chains through
+  ChainDirectionalRun and ChainDirectionalRunUse.
+- Curved-chain handling, sawtooth tuning, user split marks, closed-loop wrap
+  merge and local face-normal refinement remain unresolved.
 - Consider `ChainUse` -> `PatchChain` naming separately, if desired.
 
 ### G3 relation work still open
 
 - Add relation queries when consumers appear, e.g. `adjacencies_for_chain()` or
   `adjacency_between_patches()`.
-- Implement G3b2 Conservative ChainContinuationRelation using TERMINUS / SPLIT
-  as the safe baseline.
-- Add diagnostics for skipped Chains in `build_relation_snapshot()` only after
-  there is a clear reporting requirement.
-- Continue with G3b only after Chain coalescing/refinement assumptions are
-  stable enough for continuation and junction relations.
-
-### Explicitly not part of G3a
-
-- AlignmentClass.
-- PatchAxes.
+- Implement G3c5 JunctionRunUseRelation v0.
+- Implement future ScaffoldGraph / ScaffoldTrace only after
+  JunctionRunUseRelation exists.
 - WorldOrientation.
-- ChainContinuationRelation.
-- Junction relations.
+- Add diagnostics for skipped relation inputs only after there is a clear
+  reporting requirement.
 - Feature Grammar.
-- Skeleton solve.
-- UV transfer.
+- Runtime/Solve.
+- UV.
 - Blender UI.
 
 ---

@@ -71,5 +71,9 @@ That future option should convert sharp information into seam/boundary input bef
 
 ## Open questions
 
-- **OQ-11 — Geometry-based Chain refinement policy.** Open. Must be
-  resolved before G3c AlignmentClass implementation. See `G0.md` Section 6.
+- **OQ-11 — Geometry-based Chain refinement policy.** Partially resolved for
+  straight/turning polygonal Chains through Layer 3 `ChainDirectionalRun` and
+  `ChainDirectionalRunUse`. Curved-chain handling, sawtooth tuning, user split
+  marks, closed-loop wrap merge, local face-normal refinement and relation to
+  JunctionRunUseRelation / ScaffoldGraph remain unresolved. See `G0.md`
+  Section 6.
