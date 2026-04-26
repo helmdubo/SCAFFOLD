@@ -197,6 +197,17 @@ Scope:
 - Do not implement PatchAxes, CoordinateHint, WORLD_UP bias, H/V labels,
   or WorldOrientation.
 
+## G3c3 - PatchAxes v0
+
+G3c3 implements `PatchAxes` v0 as primary/secondary AlignmentClass selection
+per Patch.
+
+Scope:
+- Derive PatchAxes from AlignmentClasses and patch-local run-use length scores.
+- Use primary/secondary naming only.
+- Do not introduce U/V labels, WORLD_UP fallback, H/V labels,
+  WorldOrientation, UV placement or runtime solve.
+
 ## Rules
 
 Layer 3 is derived from:

@@ -32,7 +32,6 @@ FORBIDDEN_TOKENS = frozenset({
     "WALL",
     "FLOOR",
     "SLOPE",
-    "PatchAxes",
     "WorldOrientation",
     "WORLD_UP",
     "Feature",
@@ -93,14 +92,14 @@ def test_alignment_members_are_directional_run_use_ids() -> None:
         assert not set(alignment_class.member_run_use_ids) & directional_run_ids
 
 
-def test_relation_snapshot_does_not_expose_patch_axes() -> None:
+def test_relation_snapshot_does_not_expose_world_orientation() -> None:
     context = run_pass_1_relations(
         run_pass_0(make_closed_shared_boundary_loop_source())
     )
 
     snapshot = context.relation_snapshot
     assert snapshot is not None
-    assert not hasattr(snapshot, "patch_axes")
+    assert not hasattr(snapshot, "world_orientation")
 
 
 def test_inspection_json_includes_alignment_classes() -> None:

@@ -306,6 +306,14 @@ families.
 PatchAxes remains deferred.
 ```
 
+G3c3 PatchAxes v0 is implemented:
+
+```text
+PatchAxes selects primary/secondary AlignmentClass ids per Patch.
+It does not use U/V labels.
+WORLD_UP fallback remains deferred.
+```
+
 Implemented test fixtures:
 
 ```text

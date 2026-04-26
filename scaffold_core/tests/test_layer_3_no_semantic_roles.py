@@ -20,7 +20,6 @@ FORBIDDEN_TOKENS = frozenset({
     "WALL",
     "FLOOR",
     "SLOPE",
-    "PatchAxes",
     "WorldOrientation",
     "WORLD_UP",
     "Junction",

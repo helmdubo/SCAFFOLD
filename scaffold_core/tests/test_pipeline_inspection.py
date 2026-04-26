@@ -204,6 +204,7 @@ def test_inspection_default_output_is_compact() -> None:
         "chain_directional_run_count": 4,
         "chain_directional_run_use_count": 8,
         "alignment_class_count": 2,
+        "patch_axes_count": 2,
     }
 
 

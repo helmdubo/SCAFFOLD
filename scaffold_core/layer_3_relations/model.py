@@ -52,6 +52,14 @@ class AlignmentClassKind(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+class PatchAxisSource(str, Enum):
+    """Conservative G3c3 patch-axis selection source."""
+
+    DUAL_ALIGNMENT = "DUAL_ALIGNMENT"
+    SINGLE_ALIGNMENT = "SINGLE_ALIGNMENT"
+    NO_ALIGNMENT = "NO_ALIGNMENT"
+
+
 @dataclass(frozen=True)
 class PatchAdjacency:
     id: str
@@ -122,10 +130,23 @@ class AlignmentClass:
 
 
 @dataclass(frozen=True)
+class PatchAxes:
+    patch_id: PatchId
+    primary_alignment_class_id: str | None
+    secondary_alignment_class_id: str | None
+    primary_direction: Vector3
+    secondary_direction: Vector3
+    source: PatchAxisSource
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
     chain_continuations: tuple[ChainContinuationRelation, ...] = ()
     chain_directional_runs: tuple[ChainDirectionalRun, ...] = ()
     chain_directional_run_uses: tuple[ChainDirectionalRunUse, ...] = ()
     alignment_classes: tuple[AlignmentClass, ...] = ()
+    patch_axes: Mapping[PatchId, PatchAxes] = field(default_factory=dict)
     diagnostics: tuple[Diagnostic, ...] = ()

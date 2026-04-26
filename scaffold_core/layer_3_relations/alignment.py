@@ -5,23 +5,29 @@ Rules:
 - Build conservative alignment classes from ChainDirectionalRunUse records.
 - Use direction-family grouping only.
 - Do not mutate lower-layer snapshots.
-- Do not build patch axes or world-facing semantics.
+- Do not build world-facing semantics.
 """
 
 from __future__ import annotations
 
 from scaffold_core.core.evidence import Evidence
+from scaffold_core.ids import PatchId
+from scaffold_core.layer_1_topology.model import SurfaceModel
 from scaffold_core.layer_2_geometry.facts import Vector3
 from scaffold_core.layer_2_geometry.measures import EPSILON, dot, normalize
 from scaffold_core.layer_3_relations.model import (
     AlignmentClass,
     AlignmentClassKind,
     ChainDirectionalRunUse,
+    PatchAxes,
+    PatchAxisSource,
 )
 
 
 ALIGNMENT_DIRECTION_COS_TOLERANCE = 0.996
+PATCH_AXES_NON_PARALLEL_MAX_DOT = 0.2
 POLICY_NAME = "g3c2_alignment_classes"
+PATCH_AXES_POLICY_NAME = "patch_axes_v0_no_world_bias"
 
 
 def build_alignment_classes(
@@ -42,6 +48,20 @@ def build_alignment_classes(
 
     classes = tuple(_alignment_class(index, tuple(group)) for index, group in enumerate(groups))
     return tuple(sorted(classes, key=lambda item: item.id))
+
+
+def build_patch_axes(
+    topology: SurfaceModel,
+    run_uses: tuple[ChainDirectionalRunUse, ...],
+    alignment_classes: tuple[AlignmentClass, ...],
+) -> dict[PatchId, PatchAxes]:
+    """Select up to two dominant alignment classes per Patch."""
+
+    run_use_by_id = {run_use.id: run_use for run_use in run_uses}
+    return {
+        patch_id: _patch_axes_for_patch(patch_id, run_use_by_id, alignment_classes)
+        for patch_id in sorted(topology.patches, key=str)
+    }
 
 
 def _is_eligible(run_use: ChainDirectionalRunUse) -> bool:
@@ -124,5 +144,131 @@ def _evidence(members: tuple[ChainDirectionalRunUse, ...]) -> Evidence:
             "policy": POLICY_NAME,
             "member_count": len(members),
             "cos_tolerance": ALIGNMENT_DIRECTION_COS_TOLERANCE,
+        },
+    )
+
+
+def _patch_axes_for_patch(
+    patch_id: PatchId,
+    run_use_by_id: dict[str, ChainDirectionalRunUse],
+    alignment_classes: tuple[AlignmentClass, ...],
+) -> PatchAxes:
+    scored = tuple(
+        item
+        for item in (
+            _patch_alignment_score(patch_id, alignment_class, run_use_by_id)
+            for alignment_class in alignment_classes
+        )
+        if item[1] > EPSILON
+    )
+    if not scored:
+        return _patch_axes(
+            patch_id=patch_id,
+            primary=None,
+            secondary=None,
+            candidate_count=0,
+            primary_score=0.0,
+            secondary_score=0.0,
+        )
+
+    ordered = tuple(sorted(scored, key=lambda item: (-item[1], item[0].id)))
+    primary = ordered[0]
+    secondary = next(
+        (
+            candidate
+            for candidate in ordered[1:]
+            if _non_parallel(primary[0].dominant_direction, candidate[0].dominant_direction)
+        ),
+        None,
+    )
+    return _patch_axes(
+        patch_id=patch_id,
+        primary=primary,
+        secondary=secondary,
+        candidate_count=len(scored),
+        primary_score=primary[1],
+        secondary_score=secondary[1] if secondary is not None else 0.0,
+    )
+
+
+def _patch_alignment_score(
+    patch_id: PatchId,
+    alignment_class: AlignmentClass,
+    run_use_by_id: dict[str, ChainDirectionalRunUse],
+) -> tuple[AlignmentClass, float]:
+    return (
+        alignment_class,
+        sum(
+            run_use.length
+            for run_use_id in alignment_class.member_run_use_ids
+            for run_use in (run_use_by_id[run_use_id],)
+            if run_use.patch_id == patch_id
+        ),
+    )
+
+
+def _non_parallel(first: Vector3, second: Vector3) -> bool:
+    return abs(dot(normalize(first), normalize(second))) <= PATCH_AXES_NON_PARALLEL_MAX_DOT
+
+
+def _patch_axes(
+    patch_id: PatchId,
+    primary: tuple[AlignmentClass, float] | None,
+    secondary: tuple[AlignmentClass, float] | None,
+    candidate_count: int,
+    primary_score: float,
+    secondary_score: float,
+) -> PatchAxes:
+    if primary is None:
+        source = PatchAxisSource.NO_ALIGNMENT
+        confidence = 0.0
+        primary_direction = (0.0, 0.0, 0.0)
+        secondary_direction = (0.0, 0.0, 0.0)
+    elif secondary is None:
+        source = PatchAxisSource.SINGLE_ALIGNMENT
+        confidence = 0.5 * primary[0].confidence
+        primary_direction = primary[0].dominant_direction
+        secondary_direction = (0.0, 0.0, 0.0)
+    else:
+        source = PatchAxisSource.DUAL_ALIGNMENT
+        confidence = min(
+            primary[0].confidence,
+            secondary[0].confidence,
+            1.0 - abs(dot(primary[0].dominant_direction, secondary[0].dominant_direction)),
+        )
+        primary_direction = primary[0].dominant_direction
+        secondary_direction = secondary[0].dominant_direction
+
+    return PatchAxes(
+        patch_id=patch_id,
+        primary_alignment_class_id=primary[0].id if primary is not None else None,
+        secondary_alignment_class_id=secondary[0].id if secondary is not None else None,
+        primary_direction=primary_direction,
+        secondary_direction=secondary_direction,
+        source=source,
+        confidence=confidence,
+        evidence=(
+            _patch_axes_evidence(
+                candidate_count=candidate_count,
+                primary_score=primary_score,
+                secondary_score=secondary_score,
+            ),
+        ),
+    )
+
+
+def _patch_axes_evidence(
+    candidate_count: int,
+    primary_score: float,
+    secondary_score: float,
+) -> Evidence:
+    return Evidence(
+        source="layer_3_relations.alignment",
+        summary="PatchAxes selected from AlignmentClass length scores",
+        data={
+            "policy": PATCH_AXES_POLICY_NAME,
+            "candidate_count": candidate_count,
+            "primary_score": primary_score,
+            "secondary_score": secondary_score,
         },
     )

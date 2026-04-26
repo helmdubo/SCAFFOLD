@@ -126,6 +126,7 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         "chain_directional_run_count": len(relations.chain_directional_runs),
         "chain_directional_run_use_count": len(relations.chain_directional_run_uses),
         "alignment_class_count": len(relations.alignment_classes),
+        "patch_axes_count": len(relations.patch_axes),
     }
     if detail != "full":
         return summary
@@ -223,6 +224,21 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
             for alignment_class in sorted(
                 relations.alignment_classes,
                 key=lambda item: item.id,
+            )
+        ],
+        "patch_axes": [
+            {
+                "patch_id": str(patch_axes.patch_id),
+                "source": str(patch_axes.source.value),
+                "primary_alignment_class_id": patch_axes.primary_alignment_class_id,
+                "secondary_alignment_class_id": patch_axes.secondary_alignment_class_id,
+                "primary_direction": list(patch_axes.primary_direction),
+                "secondary_direction": list(patch_axes.secondary_direction),
+                "confidence": patch_axes.confidence,
+            }
+            for patch_axes in sorted(
+                relations.patch_axes.values(),
+                key=lambda item: str(item.patch_id),
             )
         ],
     })
