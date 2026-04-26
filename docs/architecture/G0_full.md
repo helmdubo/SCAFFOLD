@@ -161,8 +161,8 @@ Core entities:
 - `Patch`
 - `BoundaryLoop`
 - `Chain`
-- `ChainUse`
-- `Vertex` / `Junction`
+- `PatchChain` / legacy implementation name `ChainUse`
+- `Vertex`
 
 Layer 1 stores incidence, ownership, loop order and orientation.
 
@@ -215,6 +215,26 @@ Layer 4 must not write new Layer 3 relations.
 
 Feature-local alignment is expressed as `FeatureConstraint`, not as newly registered `AlignmentClass`.
 
+## 3.7 Terminology reset
+
+Preferred terminology for the final boundary graph model:
+
+| Current / legacy term | New / preferred term |
+|---|---|
+| `ChainUse` | `PatchChain` |
+| `ChainDirectionalRunUse` | PatchChain measurement / directional evidence |
+| `ChainDirectionalRunUseJunctionSample` | `PatchChainEndpointSample` |
+| `JunctionRunUseRelation` | `PatchChainEndpointRelation` |
+| `VertexFanGeometryFacts` | `LocalFaceFanGeometryFacts` |
+| Junction | `ScaffoldJunction` |
+
+`PatchChainEndpointSample` is not a Junction. `PatchChainEndpointRelation`
+is not a Junction. `LocalFaceFanGeometryFacts` is not a Junction.
+
+`ScaffoldJunction` is the real graph-level node classification where 3+
+meaningful PatchChains, seam pairs, cross-patch links, branch-like structures
+or similar graph-level evidence meet.
+
 ## 3.5 Layer 4 — Feature Grammar
 
 Graph-pattern feature recognition.
@@ -254,8 +274,8 @@ Conceptual mapping, not literal CAD implementation.
 | Face | `Patch` | Polygonal surface region. |
 | Loop / Wire | `BoundaryLoop` | Outer or inner patch boundary. |
 | Edge | `Chain` | Shared boundary curve/polyline entity. |
-| Coedge / Edge-use | `ChainUse` | Oriented use of a Chain by one Loop. Mandatory. |
-| Vertex | `Vertex` / `Junction` | Topological point; junction view derives incident-use structure. |
+| Coedge / Edge-use | `PatchChain` / legacy `ChainUse` | Oriented use of a Chain by one Loop. Mandatory. |
+| Vertex | `Vertex` | Topological point; graph-level ScaffoldJunction is derived later. |
 | Face adjacency graph | Patch dual graph | Layer 3 `adjacency.*`. |
 | Feature recognition | Feature grammar | Layer 4 graph-pattern recognition. |
 | Attributed Adjacency Graph | `PatchAdjacency` | Dihedral, continuity, shared length, evidence. |
@@ -293,7 +313,7 @@ SurfaceModel
   └── Shell
         └── Patch
               └── BoundaryLoop
-                    └── ChainUse
+                    └── PatchChain
                           └── Chain
                                 └── Vertex endpoints
 ```
@@ -306,19 +326,23 @@ SurfaceModel
 
 `Patch` is a polygonal surface region. It owns boundary loops and belongs to exactly one shell.
 
-`BoundaryLoop` is an ordered loop of oriented `ChainUse` records.
+`BoundaryLoop` is an ordered loop of final oriented `PatchChain` records.
+Current code may still use the legacy implementation class name `ChainUse`.
 
 `Chain` is a shared topological boundary entity. It is not patch-local.
 
-`ChainUse` is the oriented use of a `Chain` in a `BoundaryLoop`. It has `orientation_sign: +1 | -1`, start/end vertices and position in loop order.
+`PatchChain` is the oriented use of a `Chain` in a `BoundaryLoop`. It has
+`orientation_sign: +1 | -1`, start/end vertices and position in loop order.
+Legacy code name: `ChainUse`.
 
-`Vertex` is a topological endpoint. `Junction` is the local incident-use structure around a vertex.
+`Vertex` is a topological endpoint. `ScaffoldJunction` is a future graph-level
+classification, not every topology Vertex.
 
-## 5.4 Chain / ChainUse cardinality cases
+## 5.4 Chain / PatchChain cardinality cases
 
 Layer 1 must explicitly support all four cases.
 
-| Case | Chain has N ChainUses | Meaning |
+| Case | Chain has N PatchChains / ChainUses | Meaning |
 |---|---:|---|
 | Mesh border | 1 | Boundary of model or selected region; no opposite patch use. |
 | Normal shared boundary | 2, different patches | Standard patch adjacency. |
@@ -330,8 +354,8 @@ Layer 1 must explicitly support all four cases.
 - Every entity has a snapshot-local id.
 - Every `Patch` belongs to exactly one `Shell`.
 - Every `BoundaryLoop` belongs to exactly one `Patch`.
-- Every `ChainUse` belongs to exactly one `BoundaryLoop`.
-- Every `ChainUse` references exactly one `Chain`.
+- Every `PatchChain` / `ChainUse` belongs to exactly one `BoundaryLoop`.
+- Every `PatchChain` / `ChainUse` references exactly one `Chain`.
 - Every `Chain` references two endpoint vertices unless explicitly marked degenerate.
 - BoundaryLoop ChainUses form a closed cycle or emit degraded/blocking diagnostic.
 - Chain cardinality cases are explicit.
@@ -504,18 +528,19 @@ Continuation is a Layer 3 relation, not a topology primitive.
 `junction.*` contains derived local relations around topology Vertices.
 
 Junction relations do not create new Layer 1 topology. They are derived views
-over Vertex, ChainUse, ChainDirectionalRunUse and Layer 2 geometry facts.
+over Vertex, PatchChain / legacy ChainUse, PatchChain directional evidence
+and Layer 2 geometry facts.
 
 The primary low-level unit is a patch-local directional endpoint sample:
 
 ```text
-ChainDirectionalRunUseJunctionSample
+PatchChainEndpointSample
 ```
 
 Pairwise relations between samples answer:
 
 ```text
-At this Vertex, how does this directional run-use relate to another?
+At this Vertex, how does this PatchChain endpoint relate to another?
 ```
 
 Relation kinds include:
@@ -538,6 +563,16 @@ These relations are axis-free:
 
 Future ScaffoldGraph / ScaffoldTrace may be derived from these junction
 relations.
+
+`PatchChainEndpointSample` is not a Junction.
+`PatchChainEndpointRelation` is not a Junction.
+`LocalFaceFanGeometryFacts` is not a Junction.
+
+`LoopCorner` is the patch-local transition between adjacent PatchChains inside
+one BoundaryLoop. It may later feed ScaffoldNode assembly.
+
+`ScaffoldJunction` is graph-level: a ScaffoldNode classified as junction-like,
+not every PatchChain endpoint sample or LoopCorner.
 
 ---
 
@@ -853,15 +888,38 @@ runtime solve output.
 Layer 1 `ChainUse` must not store face normals or averaged normals.
 
 Owner normals used by junction relations are derived from Layer 2 geometry or
-Layer 3 evidence. v0 may use Patch aggregate normal; future versions may use
-local face-normal averaging around the run-use.
+Layer 3 evidence. LocalFaceFanGeometryFacts may provide local endpoint
+normals; Patch aggregate normals are a fallback.
 
 ## DD-33 — ScaffoldGraph is derived from junction relations
 
 ScaffoldGraph / ScaffoldTrace are future Layer 3 derived structures built from
-`JunctionRunUseRelation`, not from raw Chain or world axes.
+`PatchChainEndpointRelation`, not from raw Chain or world axes.
 
-They must not be introduced before pairwise junction relations exist.
+They must not be introduced before pairwise endpoint relations exist.
+
+## DD-34 — Final PatchChain is the single source of truth
+
+BoundaryLoop contains final PatchChains. Raw boundary sides, atomic source
+edges and draft runs are builder internals.
+
+ScaffoldGraph must use final PatchChains as graph edges, not a parallel
+effective PatchChain layer.
+
+## DD-35 — LoopCorner is patch-local; ScaffoldJunction is graph-level
+
+LoopCorner is the local transition between adjacent PatchChains inside one
+BoundaryLoop. A LoopCorner may become a ScaffoldNode.
+
+It becomes a ScaffoldJunction only when graph-level classification says it is
+junction-like: 3+ incident PatchChains, seam pair, cross-patch connection,
+branch, or other structural junction.
+
+## DD-36 — LocalFaceFan is geometry evidence, not graph topology
+
+LocalFaceFanGeometryFacts provides local normals for endpoint evidence.
+
+It is not a Junction, not a ScaffoldNode and not a graph entity.
 
 ---
 
@@ -1036,8 +1094,7 @@ Still unresolved:
 - user split marks;
 - closed-loop wrap merge;
 - advanced corner detection;
-- local face-normal refinement;
-- relation to JunctionRunUseRelation / ScaffoldGraph.
+- relation to PatchChainEndpointRelation / ScaffoldGraph.
 
 ---
 

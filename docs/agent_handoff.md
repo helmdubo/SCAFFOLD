@@ -127,6 +127,26 @@ DiagnosticReport
 Evidence
 ```
 
+Preferred terminology reset:
+
+```text
+Current / legacy term                   New / preferred term
+ChainUse                                PatchChain
+ChainDirectionalRunUse                  PatchChain measurement / directional evidence
+ChainDirectionalRunUseJunctionSample    PatchChainEndpointSample
+JunctionRunUseRelation                  PatchChainEndpointRelation
+VertexFanGeometryFacts                  LocalFaceFanGeometryFacts
+Junction                                ScaffoldJunction
+```
+
+`PatchChainEndpointSample` is not a Junction.
+`PatchChainEndpointRelation` is not a Junction.
+`LocalFaceFanGeometryFacts` is not a Junction.
+
+`ScaffoldJunction` is the graph-level node classification for 3+ meaningful
+PatchChains, seam pairs, cross-patch links, branches, or similar structural
+junction evidence.
+
 Implemented baseline functions:
 
 ```text
@@ -352,7 +372,8 @@ The policy still uses geometry-only AlignmentClass length scores.
 
 ## Next architectural direction
 
-The next relation work should focus on Junction RunUse Relations.
+The graph-prep relation work should use PatchChain endpoint relations and
+LoopCorners.
 
 Current implemented chain:
 
@@ -365,11 +386,12 @@ Layer 1 Chain / ChainUse
 -> Layer 3 PatchAxes
 ```
 
-Next needed relation layer:
+Current graph-prep relation layer:
 
 ```text
-ChainDirectionalRunUseJunctionSample
--> JunctionRunUseRelation
+PatchChainEndpointSample
+-> PatchChainEndpointRelation
+-> LoopCorner
 ```
 
 Goal: classify local relations at a Vertex:
@@ -386,30 +408,41 @@ Do not implement ScaffoldGraph yet.
 Do not use U/V labels, H/V labels, WORLD_UP, WorldOrientation or runtime solve.
 Do not store normals on Layer 1 ChainUse.
 
-G3c4 ChainDirectionalRunUseJunctionSample is implemented:
+G3c4 PatchChainEndpointSample is implemented:
 
 ```text
-Layer 3 now exposes junction_samples for START and END endpoints of each
-ChainDirectionalRunUse.
+Layer 3 now exposes patch_chain_endpoint_samples for START and END endpoints
+of each PatchChain directional evidence record.
 tangent_away_from_vertex is oriented away from the endpoint Vertex.
-owner_normal prefers Layer 2 VertexFanGeometryFacts.normal with
-owner_normal_source = VERTEX_FAN_NORMAL, falling back to PatchGeometryFacts.normal
+owner_normal prefers Layer 2 LocalFaceFanGeometryFacts.normal with
+owner_normal_source = LOCAL_FACE_FAN_NORMAL, falling back to PatchGeometryFacts.normal
 when a non-zero fan normal is unavailable.
 Layer 1 ChainUse still stores topology only.
 Endpoint samples do not themselves classify pairwise relations.
 ScaffoldGraph is still not implemented.
 ```
 
-G3c5 JunctionRunUseRelation v0 is implemented:
+G3c5 PatchChainEndpointRelation v0 is implemented:
 
 ```text
-Layer 3 now exposes junction_run_use_relations as unordered pairwise relations
-between junction_samples at the same topology Vertex.
+Layer 3 now exposes patch_chain_endpoint_relations as unordered pairwise
+relations between patch_chain_endpoint_samples at the same topology Vertex.
 direction_relation records OPPOSITE_COLLINEAR, SAME_RAY_COLLINEAR,
 ORTHOGONAL, OBLIQUE or DEGENERATE.
 kind records CONTINUATION_CANDIDATE, CORNER_CONNECTOR, OBLIQUE_CONNECTOR,
 AMBIGUOUS or DEGENERATE.
 ScaffoldGraph / ScaffoldTrace are still not implemented.
+```
+
+G3c6 LoopCorner is the next patch-local bridge:
+
+```text
+LoopCorner = transition between previous PatchChain and next PatchChain
+inside one BoundaryLoop at one materialized Vertex occurrence.
+
+LoopCorner is patch-local.
+ScaffoldNode is graph-level.
+ScaffoldJunction is a ScaffoldNode kind, not every corner.
 ```
 
 Implemented test fixtures:
@@ -516,15 +549,16 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 - OQ-11 is partially resolved for straight/turning polygonal Chains through
   ChainDirectionalRun and ChainDirectionalRunUse.
 - Curved-chain handling, sawtooth tuning, user split marks, closed-loop wrap
-  merge and local face-normal refinement remain unresolved.
-- Consider `ChainUse` -> `PatchChain` naming separately, if desired.
+  merge remain unresolved.
+- Current code may still use legacy `ChainUse`; conceptually this is
+  PatchChain.
 
 ### G3 relation work still open
 
 - Add relation queries when consumers appear, e.g. `adjacencies_for_chain()` or
   `adjacency_between_patches()`.
 - Implement future ScaffoldGraph / ScaffoldTrace only after
-  JunctionRunUseRelation exists.
+  PatchChainEndpointRelation and LoopCorner data exist.
 - WorldOrientation.
 - Add diagnostics for skipped relation inputs only after there is a clear
   reporting requirement.
@@ -537,7 +571,8 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 ## Recommended next task
 
-Review full inspection JSON for `junction_run_use_relations`.
+Review full inspection JSON for `patch_chain_endpoint_relations` and
+`loop_corners`.
 
 ```text
 Confirm local relation output on cube/seam and any cylinder-like fixtures

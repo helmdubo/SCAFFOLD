@@ -2,7 +2,7 @@
 Layer: 3 - Relations
 
 Rules:
-- Build patch-local junction endpoint samples from ChainDirectionalRunUse records.
+- Build patch-local PatchChain endpoint samples from ChainDirectionalRunUse records.
 - Use Layer 2 geometry facts as derived evidence.
 - Do not mutate Layer 1 topology or store normals on ChainUse.
 - Do not build world-facing semantics or runtime solve data.
@@ -14,32 +14,32 @@ from scaffold_core.core.evidence import Evidence
 from scaffold_core.ids import PatchId, SourceVertexId, VertexId
 from scaffold_core.layer_1_topology.model import SurfaceModel
 from scaffold_core.layer_1_topology.queries import chain_use_vertices
-from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot, Vector3, VertexFanGeometryFacts
+from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot, LocalFaceFanGeometryFacts, Vector3
 from scaffold_core.layer_2_geometry.measures import EPSILON, length, normalize
 from scaffold_core.layer_3_relations.model import (
     ChainDirectionalRunUse,
-    ChainDirectionalRunUseJunctionSample,
     OwnerNormalSource,
+    PatchChainEndpointSample,
     RunUseEndpointRole,
 )
 
 
-POLICY_NAME = "g3c4_junction_samples"
+POLICY_NAME = "g3c4_patch_chain_endpoint_samples"
 
 
-def build_junction_samples(
+def build_patch_chain_endpoint_samples(
     topology: SurfaceModel,
     geometry: GeometryFactSnapshot,
     run_uses: tuple[ChainDirectionalRunUse, ...],
-) -> tuple[ChainDirectionalRunUseJunctionSample, ...]:
+) -> tuple[PatchChainEndpointSample, ...]:
     """Build endpoint samples for patch-local directional run uses."""
 
     source_vertex_to_vertices = _source_vertex_to_vertices(topology)
-    vertex_fans_by_patch_vertex = {
+    local_face_fans_by_patch_vertex = {
         (fan.patch_id, fan.vertex_id): fan
-        for fan in geometry.vertex_fan_facts.values()
+        for fan in geometry.local_face_fan_facts.values()
     }
-    samples: list[ChainDirectionalRunUseJunctionSample] = []
+    samples: list[PatchChainEndpointSample] = []
     for run_use in sorted(run_uses, key=lambda item: item.id):
         samples.extend(
             _samples_for_run_use(
@@ -47,7 +47,7 @@ def build_junction_samples(
                 run_use,
                 geometry,
                 source_vertex_to_vertices,
-                vertex_fans_by_patch_vertex,
+                local_face_fans_by_patch_vertex,
             )
         )
     return tuple(samples)
@@ -58,8 +58,8 @@ def _samples_for_run_use(
     run_use: ChainDirectionalRunUse,
     geometry: GeometryFactSnapshot,
     source_vertex_to_vertices: dict[SourceVertexId, tuple[VertexId, ...]],
-    vertex_fans_by_patch_vertex: dict[tuple[PatchId, VertexId], VertexFanGeometryFacts],
-) -> tuple[ChainDirectionalRunUseJunctionSample, ...]:
+    local_face_fans_by_patch_vertex: dict[tuple[PatchId, VertexId], LocalFaceFanGeometryFacts],
+) -> tuple[PatchChainEndpointSample, ...]:
     return tuple(
         sample
         for sample in (
@@ -71,7 +71,7 @@ def _samples_for_run_use(
                 tangent_away_from_vertex=run_use.direction,
                 geometry=geometry,
                 source_vertex_to_vertices=source_vertex_to_vertices,
-                vertex_fans_by_patch_vertex=vertex_fans_by_patch_vertex,
+                local_face_fans_by_patch_vertex=local_face_fans_by_patch_vertex,
             ),
             _sample(
                 topology=topology,
@@ -81,7 +81,7 @@ def _samples_for_run_use(
                 tangent_away_from_vertex=_reverse(run_use.direction),
                 geometry=geometry,
                 source_vertex_to_vertices=source_vertex_to_vertices,
-                vertex_fans_by_patch_vertex=vertex_fans_by_patch_vertex,
+                local_face_fans_by_patch_vertex=local_face_fans_by_patch_vertex,
             ),
         )
         if sample is not None
@@ -96,8 +96,8 @@ def _sample(
     tangent_away_from_vertex: Vector3,
     geometry: GeometryFactSnapshot,
     source_vertex_to_vertices: dict[SourceVertexId, tuple[VertexId, ...]],
-    vertex_fans_by_patch_vertex: dict[tuple[PatchId, VertexId], VertexFanGeometryFacts],
-) -> ChainDirectionalRunUseJunctionSample | None:
+    local_face_fans_by_patch_vertex: dict[tuple[PatchId, VertexId], LocalFaceFanGeometryFacts],
+) -> PatchChainEndpointSample | None:
     vertex_id = _endpoint_vertex_id(
         topology,
         run_use,
@@ -112,7 +112,7 @@ def _sample(
         run_use,
         geometry,
         vertex_id,
-        vertex_fans_by_patch_vertex,
+        local_face_fans_by_patch_vertex,
     )
     tangent = normalize(tangent_away_from_vertex)
     normal = normalize(owner_normal)
@@ -122,8 +122,8 @@ def _sample(
     elif normal == (0.0, 0.0, 0.0):
         confidence *= 0.5
 
-    return ChainDirectionalRunUseJunctionSample(
-        id=f"junction_sample:{run_use.id}:{role.value}",
+    return PatchChainEndpointSample(
+        id=f"patch_chain_endpoint_sample:{run_use.id}:{role.value}",
         vertex_id=vertex_id,
         run_use_id=run_use.id,
         chain_use_id=run_use.chain_use_id,
@@ -141,14 +141,14 @@ def _owner_normal(
     run_use: ChainDirectionalRunUse,
     geometry: GeometryFactSnapshot,
     vertex_id: VertexId,
-    vertex_fans_by_patch_vertex: dict[tuple[PatchId, VertexId], VertexFanGeometryFacts],
+    local_face_fans_by_patch_vertex: dict[tuple[PatchId, VertexId], LocalFaceFanGeometryFacts],
 ) -> tuple[Vector3, OwnerNormalSource, dict[str, object]]:
-    vertex_fan = vertex_fans_by_patch_vertex.get((run_use.patch_id, vertex_id))
-    if vertex_fan is not None and length(vertex_fan.normal) > EPSILON:
+    local_face_fan = local_face_fans_by_patch_vertex.get((run_use.patch_id, vertex_id))
+    if local_face_fan is not None and length(local_face_fan.normal) > EPSILON:
         return (
-            vertex_fan.normal,
-            OwnerNormalSource.VERTEX_FAN_NORMAL,
-            {"vertex_fan_id": vertex_fan.id},
+            local_face_fan.normal,
+            OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
+            {"local_face_fan_id": local_face_fan.id},
         )
 
     patch_facts = geometry.patch_facts.get(run_use.patch_id)
@@ -207,7 +207,7 @@ def _evidence(
     owner_data: dict[str, object],
 ) -> Evidence:
     return Evidence(
-        source="layer_3_relations.junction_samples",
+        source="layer_3_relations.patch_chain_endpoint_samples",
         summary="endpoint sample derived from ChainDirectionalRunUse",
         data={
             "policy": POLICY_NAME,
@@ -217,3 +217,6 @@ def _evidence(
             **owner_data,
         },
     )
+
+
+build_junction_samples = build_patch_chain_endpoint_samples

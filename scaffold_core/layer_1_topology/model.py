@@ -4,7 +4,8 @@ Layer: 1 — Topology
 Rules:
 - No geometry facts here.
 - No H/V, WALL/FLOOR/SLOPE, feature, or runtime roles here.
-- ChainUse is the only oriented boundary-use entity.
+- PatchChain is the preferred term for the final oriented boundary-use entity.
+  The legacy implementation class name is ChainUse.
 - This module may import ids and standard library only.
 """
 
@@ -52,6 +53,8 @@ class Chain:
 
 @dataclass(frozen=True)
 class ChainUse:
+    """Final PatchChain, using the legacy implementation class name."""
+
     id: ChainUseId
     chain_id: ChainId
     patch_id: PatchId
@@ -64,6 +67,9 @@ class ChainUse:
     def __post_init__(self) -> None:
         if self.orientation_sign not in (-1, 1):
             raise ValueError("ChainUse.orientation_sign must be +1 or -1")
+
+
+PatchChain = ChainUse
 
 
 @dataclass(frozen=True)

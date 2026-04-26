@@ -70,17 +70,21 @@ Final G1 topology building should follow this order:
 1. Build selected-face edge adjacency.
 2. Detect Shells as selected-face edge-connected components.
 3. Detect Patch components by flood fill blocked by the G1 boundary predicate.
-4. Build boundary loops per Patch.
-5. Build Chain / ChainUse cardinality from Patch boundary uses:
-   - collect atomic boundary sides;
-   - order them into BoundaryLoops;
-   - materialize seam-cut vertex occurrences when a source vertex appears on
-     two sides of one Patch loop;
-   - coalesce consecutive sides with the same boundary run kind and Patch
-     context into Chains;
-   - create one ChainUse per Chain occurrence in a Patch loop.
-6. Emit diagnostics for border, SEAM_SELF and non-manifold cardinality cases.
+4. Build Patch boundaries and raw boundary cycles.
+5. For every boundary edge, classify neighbour context:
+   - self patch neighbour / seam-self;
+   - other patch neighbour;
+   - no patch neighbour / open boundary;
+   - non-manifold.
+6. Build draft boundary runs internally.
+7. Redefine/coalesce/split draft runs according to policy.
+8. Materialize final BoundaryLoop with final PatchChains.
+9. Downstream systems use final PatchChains.
+10. Emit diagnostics for border, SEAM_SELF and non-manifold cardinality cases.
 ```
+
+Current code may still use the legacy implementation name `ChainUse`.
+Conceptually, this is the final `PatchChain`.
 
 Current G1/G3 Chain coalescing is topology/context-based only.
 Geometry-based Chain splitting or refinement is deferred.
@@ -106,3 +110,26 @@ Topology coalescing and any future geometry-based Chain refinement must:
 
 Refinement, if introduced, lives in Layer 3 and produces derived entities
 that AlignmentClass consumes. It does not rewrite Layer 1 Chains.
+
+## Cylinder sanity case
+
+For a cylinder tube without caps and with one seam cut, expected Layer 1
+result is:
+
+```text
+Patch count: 1
+BoundaryLoop count: 1 OUTER
+Chain count: 3
+PatchChain count: 4
+
+PatchChains:
+  1. seam side A
+  2. cap/border ring A
+  3. seam side B
+  4. cap/border ring B
+```
+
+Final PatchChain may be the same as the draft run, or may be split/coalesced.
+Do not create a public `PatchChainSpan`, `EffectivePatchChain` or
+`ScaffoldPatchChain` source-of-truth layer. Construction helpers must remain
+private/internal.

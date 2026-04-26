@@ -70,7 +70,7 @@ class RunUseEndpointRole(str, Enum):
 class OwnerNormalSource(str, Enum):
     """Source for a junction sample owner normal."""
 
-    VERTEX_FAN_NORMAL = "VERTEX_FAN_NORMAL"
+    LOCAL_FACE_FAN_NORMAL = "LOCAL_FACE_FAN_NORMAL"
     PATCH_AGGREGATE_NORMAL = "PATCH_AGGREGATE_NORMAL"
     LOCAL_FACE_NORMAL_AVERAGE = "LOCAL_FACE_NORMAL_AVERAGE"
     UNKNOWN = "UNKNOWN"
@@ -94,6 +94,9 @@ class JunctionRunUseRelationKind(str, Enum):
     OBLIQUE_CONNECTOR = "OBLIQUE_CONNECTOR"
     AMBIGUOUS = "AMBIGUOUS"
     DEGENERATE = "DEGENERATE"
+
+
+PatchChainEndpointRelationKind = JunctionRunUseRelationKind
 
 
 @dataclass(frozen=True)
@@ -136,6 +139,8 @@ class ChainDirectionalRun:
 
 @dataclass(frozen=True)
 class ChainDirectionalRunUse:
+    """Derived directional evidence for a PatchChain; not PatchChain identity."""
+
     id: str
     directional_run_id: str
     parent_chain_id: ChainId
@@ -178,7 +183,7 @@ class PatchAxes:
 
 
 @dataclass(frozen=True)
-class ChainDirectionalRunUseJunctionSample:
+class PatchChainEndpointSample:
     id: str
     vertex_id: VertexId
     run_use_id: str
@@ -193,7 +198,7 @@ class ChainDirectionalRunUseJunctionSample:
 
 
 @dataclass(frozen=True)
-class JunctionRunUseRelation:
+class PatchChainEndpointRelation:
     id: str
     vertex_id: VertexId
     first_sample_id: str
@@ -209,13 +214,42 @@ class JunctionRunUseRelation:
 
 
 @dataclass(frozen=True)
+class LoopCorner:
+    id: str
+    patch_id: PatchId
+    loop_id: BoundaryLoopId
+    vertex_id: VertexId
+    previous_patch_chain_id: ChainUseId
+    next_patch_chain_id: ChainUseId
+    position_in_loop: int
+    evidence: tuple[Evidence, ...] = ()
+
+
+ChainDirectionalRunUseJunctionSample = PatchChainEndpointSample
+JunctionRunUseRelation = PatchChainEndpointRelation
+
+
+@dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
     chain_continuations: tuple[ChainContinuationRelation, ...] = ()
     chain_directional_runs: tuple[ChainDirectionalRun, ...] = ()
     chain_directional_run_uses: tuple[ChainDirectionalRunUse, ...] = ()
-    junction_samples: tuple[ChainDirectionalRunUseJunctionSample, ...] = ()
-    junction_run_use_relations: tuple[JunctionRunUseRelation, ...] = ()
+    loop_corners: tuple[LoopCorner, ...] = ()
+    patch_chain_endpoint_samples: tuple[PatchChainEndpointSample, ...] = ()
+    patch_chain_endpoint_relations: tuple[PatchChainEndpointRelation, ...] = ()
     alignment_classes: tuple[AlignmentClass, ...] = ()
     patch_axes: Mapping[PatchId, PatchAxes] = field(default_factory=dict)
     diagnostics: tuple[Diagnostic, ...] = ()
+
+    @property
+    def junction_samples(self) -> tuple[PatchChainEndpointSample, ...]:
+        """Legacy name for patch_chain_endpoint_samples."""
+
+        return self.patch_chain_endpoint_samples
+
+    @property
+    def junction_run_use_relations(self) -> tuple[PatchChainEndpointRelation, ...]:
+        """Legacy name for patch_chain_endpoint_relations."""
+
+        return self.patch_chain_endpoint_relations

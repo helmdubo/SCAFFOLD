@@ -200,6 +200,7 @@ def test_inspection_default_output_is_compact() -> None:
         "patch_count": 2,
         "chain_count": 1,
         "vertex_count": 8,
+        "local_face_fan_count": 12,
         "vertex_fan_count": 12,
     }
     assert report["relations"] == {
@@ -207,6 +208,9 @@ def test_inspection_default_output_is_compact() -> None:
         "chain_continuation_count": 2,
         "chain_directional_run_count": 4,
         "chain_directional_run_use_count": 8,
+        "loop_corner_count": 2,
+        "patch_chain_endpoint_sample_count": 16,
+        "patch_chain_endpoint_relation_count": 24,
         "junction_sample_count": 16,
         "junction_run_use_relation_count": 24,
         "alignment_class_count": 2,

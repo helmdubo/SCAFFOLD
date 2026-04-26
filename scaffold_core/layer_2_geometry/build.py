@@ -23,7 +23,7 @@ from scaffold_core.layer_2_geometry.facts import (
     GeometryFactSnapshot,
     PatchGeometryFacts,
     Vector3,
-    VertexFanGeometryFacts,
+    LocalFaceFanGeometryFacts,
     VertexGeometryFacts,
 )
 from scaffold_core.layer_2_geometry.measures import (
@@ -62,12 +62,12 @@ def build_geometry_facts(
         vertex.id: _build_vertex_geometry_facts(source, vertex, diagnostics)
         for vertex in topology.vertices.values()
     }
-    vertex_fan_facts = _build_vertex_fan_geometry_facts(source, topology)
+    local_face_fan_facts = _build_local_face_fan_geometry_facts(source, topology)
     return GeometryFactSnapshot(
         patch_facts=patch_facts,
         chain_facts=chain_facts,
         vertex_facts=vertex_facts,
-        vertex_fan_facts=vertex_fan_facts,
+        local_face_fan_facts=local_face_fan_facts,
         diagnostics=tuple(diagnostics),
     )
 
@@ -323,10 +323,10 @@ def _build_vertex_geometry_facts(
     return VertexGeometryFacts(vertex_id=vertex.id, position=average(points))
 
 
-def _build_vertex_fan_geometry_facts(
+def _build_local_face_fan_geometry_facts(
     source: SourceMeshSnapshot,
     topology: SurfaceModel,
-) -> dict[str, VertexFanGeometryFacts]:
+) -> dict[str, LocalFaceFanGeometryFacts]:
     face_to_patch_id = {
         source_face_id: patch.id
         for patch in topology.patches.values()
@@ -336,7 +336,7 @@ def _build_vertex_fan_geometry_facts(
     edge_incidence = _selected_edge_incidence(source, selected_face_ids)
     boundary_mark_edge_ids = _marked_patch_boundary_edge_ids(source)
 
-    facts: dict[str, VertexFanGeometryFacts] = {}
+    facts: dict[str, LocalFaceFanGeometryFacts] = {}
     for patch in topology.patches.values():
         faces_by_vertex: dict[SourceVertexId, list[SourceFaceId]] = defaultdict(list)
         for source_face_id in patch.source_face_ids:
@@ -362,8 +362,8 @@ def _build_vertex_fan_geometry_facts(
                     len(components),
                 )
                 area, normal = _face_fan_area_normal(source, component_face_ids)
-                fan_id = f"vertex_fan:{patch.id}:{vertex_id}"
-                facts[fan_id] = VertexFanGeometryFacts(
+                fan_id = f"local_face_fan:{patch.id}:{vertex_id}"
+                facts[fan_id] = LocalFaceFanGeometryFacts(
                     id=fan_id,
                     patch_id=patch.id,
                     vertex_id=vertex_id,

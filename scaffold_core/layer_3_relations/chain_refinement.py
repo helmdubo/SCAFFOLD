@@ -46,7 +46,7 @@ def build_chain_directional_run_uses(
     topology: SurfaceModel,
     directional_runs: tuple[ChainDirectionalRun, ...],
 ) -> tuple[ChainDirectionalRunUse, ...]:
-    """Build patch-local uses for chain-level directional runs."""
+    """Build patch-local directional evidence for final PatchChains."""
 
     runs_by_chain: dict[ChainId, list[ChainDirectionalRun]] = {}
     for run in directional_runs:

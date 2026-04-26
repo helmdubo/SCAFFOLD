@@ -2,7 +2,7 @@
 Layer: 3 - Relations
 
 Rules:
-- Build pairwise relations between patch-local run-use endpoint samples.
+- Build pairwise relations between patch-local PatchChain endpoint samples.
 - Use only derived junction samples and measured vectors.
 - Do not mutate lower-layer topology or geometry.
 - Do not build world-facing semantics or solve data.
@@ -16,29 +16,29 @@ from scaffold_core.core.evidence import Evidence
 from scaffold_core.ids import VertexId
 from scaffold_core.layer_2_geometry.measures import EPSILON, dot, length, normalize
 from scaffold_core.layer_3_relations.model import (
-    ChainDirectionalRunUseJunctionSample,
     JunctionDirectionRelationKind,
-    JunctionRunUseRelation,
     JunctionRunUseRelationKind,
+    PatchChainEndpointRelation,
+    PatchChainEndpointSample,
 )
 
 
 OPPOSITE_COLLINEAR_MAX_DOT = -0.996
 SAME_RAY_COLLINEAR_MIN_DOT = 0.996
 ORTHOGONAL_MAX_ABS_DOT = 0.2
-POLICY_NAME = "junction_run_use_relation_v0"
+POLICY_NAME = "patch_chain_endpoint_relation_v0"
 
 
-def build_junction_run_use_relations(
-    samples: tuple[ChainDirectionalRunUseJunctionSample, ...],
-) -> tuple[JunctionRunUseRelation, ...]:
+def build_patch_chain_endpoint_relations(
+    samples: tuple[PatchChainEndpointSample, ...],
+) -> tuple[PatchChainEndpointRelation, ...]:
     """Build unordered pairwise relations between samples at the same Vertex."""
 
-    samples_by_vertex: dict[VertexId, list[ChainDirectionalRunUseJunctionSample]] = {}
+    samples_by_vertex: dict[VertexId, list[PatchChainEndpointSample]] = {}
     for sample in samples:
         samples_by_vertex.setdefault(sample.vertex_id, []).append(sample)
 
-    relations: list[JunctionRunUseRelation] = []
+    relations: list[PatchChainEndpointRelation] = []
     for vertex_id in sorted(samples_by_vertex, key=str):
         vertex_samples = tuple(sorted(samples_by_vertex[vertex_id], key=lambda item: item.id))
         relations.extend(
@@ -50,9 +50,9 @@ def build_junction_run_use_relations(
 
 def _relation(
     vertex_id: VertexId,
-    first: ChainDirectionalRunUseJunctionSample,
-    second: ChainDirectionalRunUseJunctionSample,
-) -> JunctionRunUseRelation:
+    first: PatchChainEndpointSample,
+    second: PatchChainEndpointSample,
+) -> PatchChainEndpointRelation:
     first_tangent = normalize(first.tangent_away_from_vertex)
     second_tangent = normalize(second.tangent_away_from_vertex)
     first_normal = normalize(first.owner_normal)
@@ -63,8 +63,8 @@ def _relation(
     kind = _relation_kind(direction_relation)
     confidence = _confidence(first, second, direction_relation)
 
-    return JunctionRunUseRelation(
-        id=f"junction_run_use_relation:{vertex_id}:{first.id}:{second.id}",
+    return PatchChainEndpointRelation(
+        id=f"patch_chain_endpoint_relation:{vertex_id}:{first.id}:{second.id}",
         vertex_id=vertex_id,
         first_sample_id=first.id,
         second_sample_id=second.id,
@@ -80,8 +80,8 @@ def _relation(
 
 
 def _direction_relation(
-    first: ChainDirectionalRunUseJunctionSample,
-    second: ChainDirectionalRunUseJunctionSample,
+    first: PatchChainEndpointSample,
+    second: PatchChainEndpointSample,
     first_tangent,
     second_tangent,
     direction_dot: float,
@@ -127,14 +127,14 @@ def _confidence(
 
 
 def _evidence(
-    first: ChainDirectionalRunUseJunctionSample,
-    second: ChainDirectionalRunUseJunctionSample,
+    first: PatchChainEndpointSample,
+    second: PatchChainEndpointSample,
     direction_dot: float,
     normal_dot: float,
 ) -> Evidence:
     return Evidence(
         source="layer_3_relations.junction_relations",
-        summary="pairwise relation between endpoint samples at one Vertex",
+        summary="pairwise relation between PatchChain endpoint samples at one Vertex",
         data={
             "policy": POLICY_NAME,
             "direction_dot": direction_dot,
@@ -145,3 +145,6 @@ def _evidence(
             "second_owner_normal_source": second.owner_normal_source.value,
         },
     )
+
+
+build_junction_run_use_relations = build_patch_chain_endpoint_relations

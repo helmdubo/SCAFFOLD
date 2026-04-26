@@ -93,7 +93,7 @@ def test_two_quad_patch_geometry_aggregates_source_faces() -> None:
     assert patch.centroid == (1.0, 0.5, 0.0)
 
 
-def test_vertex_fan_geometry_splits_materialized_seam_occurrences() -> None:
+def test_local_face_fan_geometry_splits_materialized_seam_occurrences() -> None:
     source = make_segmented_cylinder_tube_without_caps_with_one_seam_source()
     topology = build_topology_snapshot(source)
 
@@ -101,7 +101,7 @@ def test_vertex_fan_geometry_splits_materialized_seam_occurrences() -> None:
 
     seam_top_fans = tuple(
         fan
-        for fan in facts.vertex_fan_facts.values()
+        for fan in facts.local_face_fan_facts.values()
         if fan.source_vertex_id == SourceVertexId("v_a_t")
     )
     assert len(seam_top_fans) == 2

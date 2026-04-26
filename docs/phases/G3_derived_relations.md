@@ -78,6 +78,27 @@ G3d:
   WorldOrientation
 ```
 
+## Terminology reset
+
+Preferred terminology for the final boundary graph model:
+
+| Current / legacy term | New / preferred term |
+|---|---|
+| `ChainUse` | `PatchChain` |
+| `ChainDirectionalRunUse` | PatchChain measurement / directional evidence |
+| `ChainDirectionalRunUseJunctionSample` | `PatchChainEndpointSample` |
+| `JunctionRunUseRelation` | `PatchChainEndpointRelation` |
+| `VertexFanGeometryFacts` | `LocalFaceFanGeometryFacts` |
+| Junction | `ScaffoldJunction` |
+
+`PatchChainEndpointSample` is not a Junction.
+`PatchChainEndpointRelation` is not a Junction.
+`LocalFaceFanGeometryFacts` is not a Junction.
+
+`ScaffoldJunction` is the graph-level node classification for places where
+3+ meaningful PatchChains, seam pairs, cross-patch links, branches, or other
+structural junction evidence meet.
+
 ## G3b1 Junction incidence
 
 G3b1 implements Junction incidence queries as derived views over Vertex.
@@ -174,7 +195,7 @@ advanced corner detection and relation to disk-cycle ordering remain unresolved.
 
 G3c0 does not implement AlignmentClass or PatchAxes.
 
-## G3c1 - Chain directional run uses
+## G3c1 - Chain directional PatchChain evidence
 
 G3c1 implements `ChainDirectionalRunUse` as a patch-local directional
 occurrence derived from `ChainDirectionalRun` plus Layer 1 `ChainUse`.
@@ -184,6 +205,8 @@ Scope:
 - Reverse direction and source endpoints for negatively oriented ChainUses.
 - Preserve Layer 1 Chain, ChainUse, BoundaryLoop and Patch identity.
 - Do not implement AlignmentClass or PatchAxes.
+- `ChainDirectionalRunUse` is derived directional evidence for a PatchChain.
+  It is not a competing PatchChain identity.
 
 ## G3c2 - AlignmentClass v0
 
@@ -208,14 +231,14 @@ Scope:
 - Do not introduce U/V labels, WORLD_UP fallback, H/V labels,
   WorldOrientation, UV placement or runtime solve.
 
-## G3c4 - Junction RunUse Samples
+## G3c4 - PatchChainEndpointSample
 
-G3c4 introduces endpoint samples for `ChainDirectionalRunUse` at topology
-vertices.
+G3c4 introduces endpoint samples for PatchChain directional evidence at
+topology vertices.
 
 Purpose:
 - represent a patch-local directional run as a ray leaving or entering a
-  Junction;
+  PatchChain endpoint;
 - provide tangent-away-from-junction vectors;
 - attach owner surface normal evidence;
 - prepare pairwise junction relations.
@@ -243,24 +266,26 @@ Each sample stores:
 - owner_normal_source;
 - confidence / evidence.
 
-Owner normals prefer Layer 2 `VertexFanGeometryFacts.normal` with
-`owner_normal_source = VERTEX_FAN_NORMAL`. If no non-zero fan normal is
+Owner normals prefer Layer 2 `LocalFaceFanGeometryFacts.normal` with
+`owner_normal_source = LOCAL_FACE_FAN_NORMAL`. If no non-zero fan normal is
 available, junction samples may fall back to `PatchGeometryFacts.normal` with
 `owner_normal_source = PATCH_AGGREGATE_NORMAL`.
 
 Layer 1 `ChainUse` must not store normals.
 
 Implementation status:
-- `ChainDirectionalRunUseJunctionSample` is implemented as a Layer 3 derived
-  relation.
+- `PatchChainEndpointSample` is implemented as a Layer 3 derived relation.
+- Legacy code/name references may still mention
+  `ChainDirectionalRunUseJunctionSample`; those are deprecated.
 - Samples are emitted for START and END run-use endpoints.
 - `tangent_away_from_vertex` points away from the sampled topology Vertex.
-- Owner normals prefer VertexFan normals and fall back to Patch aggregate
+- Owner normals prefer LocalFaceFan normals and fall back to Patch aggregate
   normals when needed.
 
-## G3c5 - Junction RunUse Relations
+## G3c5 - PatchChainEndpointRelation
 
-G3c5 derives pairwise relations between endpoint samples at the same Vertex.
+G3c5 derives pairwise relations between PatchChain endpoint samples at the
+same Vertex.
 
 Purpose:
 - identify continuation candidates;
@@ -297,7 +322,9 @@ Rules:
   run-use data.
 
 Implementation status:
-- `JunctionRunUseRelation` is implemented as a Layer 3 derived relation.
+- `PatchChainEndpointRelation` is implemented as a Layer 3 derived relation.
+- Legacy code/name references may still mention `JunctionRunUseRelation`;
+  those are deprecated.
 - Relations are unordered sample pairs at the same Vertex.
 - v0 classifies direction relation as OPPOSITE_COLLINEAR,
   SAME_RAY_COLLINEAR, ORTHOGONAL, OBLIQUE or DEGENERATE.
@@ -305,9 +332,21 @@ Implementation status:
   oblique connector, ambiguous or degenerate relation kinds.
 - ScaffoldGraph / ScaffoldTrace remain deferred.
 
+## G3c6 - LoopCorner
+
+G3c6 introduces `LoopCorner` as the patch-local transition between adjacent
+PatchChains inside one BoundaryLoop at one materialized Vertex occurrence.
+
+LoopCorner is patch-local. It is not a ScaffoldNode and not a ScaffoldJunction
+by itself.
+
+For a cylinder tube with one OUTER BoundaryLoop and four PatchChains, expected
+LoopCorner count is four.
+
 ## Future - ScaffoldGraph / ScaffoldTrace
 
-A future slice may build `ScaffoldGraph` from `JunctionRunUseRelation`.
+A future slice may build `ScaffoldGraph` from `PatchChainEndpointRelation` and
+LoopCorner data.
 
 `ScaffoldTrace` is a connected component over continuation-like relations.
 It may later be classified as:
@@ -322,7 +361,8 @@ AMBIGUOUS_TRACE
 Cylinder-like cases may produce closed traces/circuits around cap boundaries.
 These traces can later inform conditional axes or UV orientation.
 
-Do not implement ScaffoldGraph before JunctionRunUseRelation is available.
+Do not implement ScaffoldGraph before PatchChainEndpointRelation and
+LoopCorner data are available.
 
 ## Rules
 

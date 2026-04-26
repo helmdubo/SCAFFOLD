@@ -137,7 +137,7 @@ def test_pipeline_builds_closed_loop_junction_run_use_relations() -> None:
     }
 
 
-def test_cylinder_junction_relations_use_vertex_fan_normals() -> None:
+def test_cylinder_endpoint_relations_use_local_face_fan_normals() -> None:
     context = run_pass_1_relations(
         run_pass_0(make_segmented_cylinder_tube_without_caps_with_one_seam_source())
     )
@@ -161,8 +161,9 @@ def test_inspection_json_includes_junction_run_use_relations() -> None:
     json.dumps(report)
     relations = report["relations"]
     assert relations["junction_run_use_relation_count"] == 24
-    first_relation = relations["junction_run_use_relations"][0]
-    assert first_relation["id"].startswith("junction_run_use_relation:")
+    assert relations["patch_chain_endpoint_relation_count"] == 24
+    first_relation = relations["patch_chain_endpoint_relations"][0]
+    assert first_relation["id"].startswith("patch_chain_endpoint_relation:")
     assert first_relation["vertex_id"].startswith("vertex:")
     assert first_relation["first_run_use_id"].startswith("directional_run_use:")
     assert first_relation["second_run_use_id"].startswith("directional_run_use:")

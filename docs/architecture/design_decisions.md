@@ -4,6 +4,25 @@ This file mirrors the authoritative DD register in `G0.md`.
 
 Agents may read this file for quick lookup. If it disagrees with `G0.md`, `G0.md` wins.
 
+## Terminology reset
+
+Preferred terminology for the final boundary graph model:
+
+| Current / legacy term | New / preferred term |
+|---|---|
+| `ChainUse` | `PatchChain` |
+| `ChainDirectionalRunUse` | PatchChain measurement / directional evidence |
+| `ChainDirectionalRunUseJunctionSample` | `PatchChainEndpointSample` |
+| `JunctionRunUseRelation` | `PatchChainEndpointRelation` |
+| `VertexFanGeometryFacts` | `LocalFaceFanGeometryFacts` |
+| Junction | `ScaffoldJunction` |
+
+`PatchChainEndpointSample` is not a Junction. `PatchChainEndpointRelation`
+is not a Junction. `LocalFaceFanGeometryFacts` is geometry evidence, not a
+Junction. `ScaffoldJunction` is the graph-level node classification for
+places where 3+ meaningful PatchChains, seam pairs, cross-patch links,
+branches, or similar structures meet.
+
 ## Core decisions
 
 - **DD-01 — Topology is immutable snapshot.** Scaffold Core does not mutate topology in place.
@@ -56,12 +75,25 @@ Agents may read this file for quick lookup. If it disagrees with `G0.md`, `G0.md
 - **DD-32 — Surface normals for ChainUse are derived facts, not Layer 1
   topology.** Layer 1 `ChainUse` must not store face normals or averaged
   normals. Owner normals used by junction relations are derived from Layer 2
-  geometry or Layer 3 evidence. v0 may use Patch aggregate normal; future
-  versions may use local face-normal averaging around the run-use.
+  geometry or Layer 3 evidence. LocalFaceFanGeometryFacts may provide local
+  endpoint normals; Patch aggregate normals are a fallback.
 - **DD-33 — ScaffoldGraph is derived from junction relations.**
   ScaffoldGraph / ScaffoldTrace are future Layer 3 derived structures built
-  from `JunctionRunUseRelation`, not from raw Chain or world axes. They must
-  not be introduced before pairwise junction relations exist.
+  from `PatchChainEndpointRelation`, not from raw Chain or world axes. They
+  must not be introduced before pairwise endpoint relations exist.
+- **DD-34 — Final PatchChain is the single source of truth.**
+  BoundaryLoop contains final PatchChains. Raw boundary sides, atomic source
+  edges and draft runs are builder internals. ScaffoldGraph must use final
+  PatchChains as graph edges, not a parallel effective PatchChain layer.
+- **DD-35 — LoopCorner is patch-local; ScaffoldJunction is graph-level.**
+  LoopCorner is the local transition between adjacent PatchChains inside one
+  BoundaryLoop. A LoopCorner may become a ScaffoldNode. It becomes a
+  ScaffoldJunction only when graph-level classification says it is
+  junction-like: 3+ incident PatchChains, seam pair, cross-patch connection,
+  branch, or other structural junction.
+- **DD-36 — LocalFaceFan is geometry evidence, not graph topology.**
+  LocalFaceFanGeometryFacts provides local normals for endpoint evidence. It
+  is not a Junction, not a ScaffoldNode and not a graph entity.
 
 ## Future policy notes
 
@@ -78,6 +110,5 @@ That future option should convert sharp information into seam/boundary input bef
 - **OQ-11 — Geometry-based Chain refinement policy.** Partially resolved for
   straight/turning polygonal Chains through Layer 3 `ChainDirectionalRun` and
   `ChainDirectionalRunUse`. Curved-chain handling, sawtooth tuning, user split
-  marks, closed-loop wrap merge, local face-normal refinement and relation to
-  JunctionRunUseRelation / ScaffoldGraph remain unresolved. See `G0.md`
-  Section 6.
+  marks, closed-loop wrap merge and relation to PatchChainEndpointRelation /
+  ScaffoldGraph remain unresolved. See `G0.md` Section 6.

@@ -22,8 +22,8 @@ Layer 1 is intentionally ignorant of:
 - `Patch`
 - `BoundaryLoop`
 - `Chain`
-- `ChainUse`
-- `Vertex` / `Junction`
+- `PatchChain` / legacy code name `ChainUse`
+- `Vertex`
 - topology invariants
 - topology queries
 
@@ -75,16 +75,18 @@ Vertex-only contact does not connect Shells.
 
 Non-manifold edge connectivity keeps faces in the same Shell candidate, but emits a degraded non-manifold diagnostic.
 
-## ChainUse rule
+## PatchChain rule
 
-`ChainUse` is mandatory.
+`PatchChain` is mandatory. Current code may still use the legacy class name
+`ChainUse`; conceptually this is the final PatchChain.
 
 A `Chain` is the shared boundary entity.
-A `ChainUse` is the oriented use of a `Chain` inside a loop/patch.
+A `PatchChain` is the oriented use of a `Chain` inside a BoundaryLoop/Patch.
 
-All orientation-sensitive logic must use `ChainUse`, not raw `Chain`.
+All orientation-sensitive logic must use `PatchChain` / `ChainUse`, not raw
+`Chain`.
 
-`ChainUse` may carry materialized start/end topology vertices for seam-cut
+`PatchChain` may carry materialized start/end topology vertices for seam-cut
 loop occurrences. These vertices are still Layer 1 topology/provenance and do
 not store normals or geometry semantics.
 
@@ -100,8 +102,8 @@ Chain:
   shared topological boundary run built from one or more atomic boundary
   segments.
 
-ChainUse:
-  oriented patch-local use of a Chain inside a BoundaryLoop.
+PatchChain:
+  final oriented patch-local use of a Chain inside a BoundaryLoop.
 ```
 
 Current G1/G3 implementation rule:
@@ -110,6 +112,26 @@ Current G1/G3 implementation rule:
 Merge consecutive boundary segments when they have the same boundary run kind,
 the same Patch context and are continuous in final materialized loop order.
 ```
+
+Intended boundary construction pipeline:
+
+```text
+1. Flood fill selected faces until boundary edges.
+2. Build Patch boundaries and raw boundary cycles.
+3. For every boundary edge, classify neighbour context:
+   - self patch neighbour / seam-self;
+   - other patch neighbour;
+   - no patch neighbour / open boundary;
+   - non-manifold.
+4. Build draft boundary runs internally.
+5. Redefine/coalesce/split draft runs according to policy.
+6. Materialize final BoundaryLoop with final PatchChains.
+7. Downstream systems use final PatchChains.
+```
+
+Raw boundary sides, atomic source edges and draft runs are builder internals.
+Do not create a public `PatchChainSpan`, `EffectivePatchChain` or
+`ScaffoldPatchChain` layer.
 
 Boundary run kinds:
 
@@ -136,6 +158,27 @@ Long seam of 4 source edges between two Patches:
     Chain.source_edge_ids = (e10, e9, e6, e7)
     2 ChainUses
 ```
+
+Cylinder tube without caps and with one seam cut:
+
+```text
+Patch count: 1
+BoundaryLoop count: 1 OUTER
+Chain count: 3
+PatchChain count: 4
+
+PatchChains:
+  1. seam side A
+  2. cap/border ring A
+  3. seam side B
+  4. cap/border ring B
+```
+
+Final PatchChain may be the same as the draft run, or may be split/coalesced.
+For example, a cap ring can remain one PatchChain if policy says it is one
+structural boundary side, a long L-shaped open boundary can become several
+PatchChains, and a seam side can be one PatchChain used twice through
+SEAM_SELF.
 
 ## Current limitations
 
@@ -166,7 +209,7 @@ See DD-29, DD-30, OQ-11.
 
 ## Cardinality cases
 
-| Case | Chain has ChainUses | Meaning |
+| Case | Chain has PatchChains / ChainUses | Meaning |
 |---|---:|---|
 | Mesh border | 1 | Boundary of model or selection. |
 | Normal shared boundary | 2, different patches | Standard adjacency. |

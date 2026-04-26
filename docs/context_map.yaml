@@ -92,6 +92,16 @@ task_routes:
     - docs/architecture/design_decisions.md
     - docs/layers/layer_1_topology.md
     - docs/agent_handoff.md
+  patch_chain:
+    - docs/layers/layer_1_topology.md
+    - docs/architecture/segmentation_shell_policy.md
+    - docs/architecture/design_decisions.md
+    - docs/agent_handoff.md
+  loop_corner:
+    - docs/phases/G3_derived_relations.md
+    - docs/architecture/design_decisions.md
+    - docs/layers/layer_1_topology.md
+    - docs/agent_handoff.md
   scaffold_graph:
     - docs/phases/G3_derived_relations.md
     - docs/architecture/design_decisions.md

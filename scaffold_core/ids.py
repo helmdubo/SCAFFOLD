@@ -15,6 +15,7 @@ PatchId = NewType("PatchId", str)
 BoundaryLoopId = NewType("BoundaryLoopId", str)
 ChainId = NewType("ChainId", str)
 ChainUseId = NewType("ChainUseId", str)
+PatchChainId = ChainUseId
 VertexId = NewType("VertexId", str)
 SourceMeshId = NewType("SourceMeshId", str)
 SourceFaceId = NewType("SourceFaceId", str)

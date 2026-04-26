@@ -90,18 +90,18 @@ def test_junction_sample_tangent_points_away_from_endpoint() -> None:
     )
 
 
-def test_junction_sample_owner_normal_prefers_vertex_fan_normal() -> None:
+def test_junction_sample_owner_normal_prefers_local_face_fan_normal() -> None:
     source = make_closed_shared_boundary_loop_source()
     topology = build_topology_snapshot(source)
     geometry = build_geometry_facts(source, topology)
     snapshot = build_relation_snapshot(topology, geometry)
 
     for sample in snapshot.junction_samples:
-        assert sample.owner_normal_source is OwnerNormalSource.VERTEX_FAN_NORMAL
+        assert sample.owner_normal_source is OwnerNormalSource.LOCAL_FACE_FAN_NORMAL
         assert sample.confidence == 1.0
 
 
-def test_cylinder_junction_samples_use_nonzero_vertex_fan_normals() -> None:
+def test_cylinder_junction_samples_use_nonzero_local_face_fan_normals() -> None:
     context = run_pass_1_relations(
         run_pass_0(make_segmented_cylinder_tube_without_caps_with_one_seam_source())
     )
@@ -116,7 +116,7 @@ def test_cylinder_junction_samples_use_nonzero_vertex_fan_normals() -> None:
     assert {
         sample.owner_normal_source
         for sample in snapshot.junction_samples
-    } == {OwnerNormalSource.VERTEX_FAN_NORMAL}
+    } == {OwnerNormalSource.LOCAL_FACE_FAN_NORMAL}
     assert all(sample.owner_normal != (0.0, 0.0, 0.0) for sample in snapshot.junction_samples)
     assert all(sample.confidence > 0.0 for sample in snapshot.junction_samples)
 
@@ -147,12 +147,13 @@ def test_inspection_json_includes_junction_samples() -> None:
     json.dumps(report)
     relations = report["relations"]
     assert relations["junction_sample_count"] == 16
-    first_sample = relations["junction_samples"][0]
-    assert first_sample["id"].startswith("junction_sample:")
+    assert relations["patch_chain_endpoint_sample_count"] == 16
+    first_sample = relations["patch_chain_endpoint_samples"][0]
+    assert first_sample["id"].startswith("patch_chain_endpoint_sample:")
     assert first_sample["vertex_id"].startswith("vertex:")
     assert first_sample["run_use_id"].startswith("directional_run_use:")
     assert first_sample["endpoint_role"] in ("START", "END")
-    assert first_sample["owner_normal_source"] == "VERTEX_FAN_NORMAL"
+    assert first_sample["owner_normal_source"] == "LOCAL_FACE_FAN_NORMAL"
     assert "tangent_away_from_vertex" in first_sample
     assert "owner_normal" in first_sample
 
