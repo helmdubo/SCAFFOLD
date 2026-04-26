@@ -101,6 +101,14 @@ def test_single_alignment_patch_axes() -> None:
     assert patch_axes.secondary_alignment_class_id is None
     assert patch_axes.primary_direction == (1.0, 0.0, 0.0)
     assert patch_axes.secondary_direction == (0.0, 0.0, 0.0)
+    assert _candidate_scores(patch_axes) == [
+        {
+            "alignment_class_id": "alignment:single",
+            "patch_length_score": 2.0,
+            "dot_with_primary": None,
+            "selected_as": "PRIMARY",
+        }
+    ]
 
 
 def test_no_alignment_patch_axes() -> None:
@@ -114,6 +122,54 @@ def test_no_alignment_patch_axes() -> None:
     assert patch_axes.primary_direction == (0.0, 0.0, 0.0)
     assert patch_axes.secondary_direction == (0.0, 0.0, 0.0)
     assert patch_axes.confidence == 0.0
+    assert _candidate_scores(patch_axes) == []
+
+
+def test_patch_axes_evidence_marks_candidate_rejection_reasons() -> None:
+    patch_id = PatchId("patch:candidates")
+    primary_run_use = _run_use("run_use:primary", patch_id, (1.0, 0.0, 0.0), 2.0)
+    secondary_run_use = _run_use("run_use:secondary", patch_id, (0.0, 1.0, 0.0), 1.5)
+    parallel_run_use = _run_use("run_use:parallel", patch_id, (1.0, 0.0, 0.0), 1.0)
+    zero_patch_run_use = _run_use("run_use:zero", PatchId("patch:other"), (0.0, 0.0, 1.0), 3.0)
+    alignment_classes = (
+        _alignment_class("alignment:primary", (primary_run_use.id,), (patch_id,), (1.0, 0.0, 0.0)),
+        _alignment_class("alignment:secondary", (secondary_run_use.id,), (patch_id,), (0.0, 1.0, 0.0)),
+        _alignment_class("alignment:parallel", (parallel_run_use.id,), (patch_id,), (1.0, 0.0, 0.0)),
+        _alignment_class("alignment:zero", (zero_patch_run_use.id,), (PatchId("patch:other"),), (0.0, 0.0, 1.0)),
+    )
+
+    patch_axes = build_patch_axes(
+        _topology_with_patch(patch_id),
+        (primary_run_use, secondary_run_use, parallel_run_use, zero_patch_run_use),
+        alignment_classes,
+    )[patch_id]
+
+    assert _candidate_scores(patch_axes) == [
+        {
+            "alignment_class_id": "alignment:primary",
+            "patch_length_score": 2.0,
+            "dot_with_primary": None,
+            "selected_as": "PRIMARY",
+        },
+        {
+            "alignment_class_id": "alignment:secondary",
+            "patch_length_score": 1.5,
+            "dot_with_primary": 0.0,
+            "selected_as": "SECONDARY",
+        },
+        {
+            "alignment_class_id": "alignment:parallel",
+            "patch_length_score": 1.0,
+            "dot_with_primary": 1.0,
+            "selected_as": "REJECTED_PARALLEL",
+        },
+        {
+            "alignment_class_id": "alignment:zero",
+            "patch_length_score": 0,
+            "dot_with_primary": 0.0,
+            "selected_as": "REJECTED_ZERO_PATCH_LENGTH",
+        },
+    ]
 
 
 def test_inspection_json_includes_patch_axes() -> None:
@@ -132,6 +188,11 @@ def test_inspection_json_includes_patch_axes() -> None:
     assert first_axes["secondary_alignment_class_id"] is not None
     assert first_axes["primary_direction"] in ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0])
     assert first_axes["secondary_direction"] in ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0])
+    assert first_axes["candidate_scores"]
+    assert {candidate["selected_as"] for candidate in first_axes["candidate_scores"]} == {
+        "PRIMARY",
+        "SECONDARY",
+    }
 
 
 def test_alignment_code_does_not_introduce_deferred_semantic_terms_for_patch_axes() -> None:
@@ -165,6 +226,11 @@ def _topology_with_patch(patch_id: PatchId) -> SurfaceModel:
             )
         },
     )
+
+
+def _candidate_scores(patch_axes: PatchAxes) -> list[dict[str, object]]:
+    assert patch_axes.evidence
+    return list(patch_axes.evidence[0].data["candidate_scores"])
 
 
 def _run_use(

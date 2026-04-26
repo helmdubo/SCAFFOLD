@@ -159,19 +159,19 @@ def _patch_axes_for_patch(
             _patch_alignment_score(patch_id, alignment_class, run_use_by_id)
             for alignment_class in alignment_classes
         )
-        if item[1] > EPSILON
     )
-    if not scored:
+    viable = tuple(item for item in scored if item[1] > EPSILON)
+    if not viable:
         return _patch_axes(
             patch_id=patch_id,
             primary=None,
             secondary=None,
-            candidate_count=0,
+            scored=scored,
             primary_score=0.0,
             secondary_score=0.0,
         )
 
-    ordered = tuple(sorted(scored, key=lambda item: (-item[1], item[0].id)))
+    ordered = tuple(sorted(viable, key=lambda item: (-item[1], item[0].id)))
     primary = ordered[0]
     secondary = next(
         (
@@ -185,7 +185,7 @@ def _patch_axes_for_patch(
         patch_id=patch_id,
         primary=primary,
         secondary=secondary,
-        candidate_count=len(scored),
+        scored=scored,
         primary_score=primary[1],
         secondary_score=secondary[1] if secondary is not None else 0.0,
     )
@@ -215,7 +215,7 @@ def _patch_axes(
     patch_id: PatchId,
     primary: tuple[AlignmentClass, float] | None,
     secondary: tuple[AlignmentClass, float] | None,
-    candidate_count: int,
+    scored: tuple[tuple[AlignmentClass, float], ...],
     primary_score: float,
     secondary_score: float,
 ) -> PatchAxes:
@@ -249,7 +249,9 @@ def _patch_axes(
         confidence=confidence,
         evidence=(
             _patch_axes_evidence(
-                candidate_count=candidate_count,
+                scored=scored,
+                primary=primary,
+                secondary=secondary,
                 primary_score=primary_score,
                 secondary_score=secondary_score,
             ),
@@ -258,7 +260,9 @@ def _patch_axes(
 
 
 def _patch_axes_evidence(
-    candidate_count: int,
+    scored: tuple[tuple[AlignmentClass, float], ...],
+    primary: tuple[AlignmentClass, float] | None,
+    secondary: tuple[AlignmentClass, float] | None,
     primary_score: float,
     secondary_score: float,
 ) -> Evidence:
@@ -267,8 +271,49 @@ def _patch_axes_evidence(
         summary="PatchAxes selected from AlignmentClass length scores",
         data={
             "policy": PATCH_AXES_POLICY_NAME,
-            "candidate_count": candidate_count,
+            "candidate_count": len(tuple(item for item in scored if item[1] > EPSILON)),
             "primary_score": primary_score,
             "secondary_score": secondary_score,
+            "candidate_scores": _candidate_scores(scored, primary, secondary),
         },
     )
+
+
+def _candidate_scores(
+    scored: tuple[tuple[AlignmentClass, float], ...],
+    primary: tuple[AlignmentClass, float] | None,
+    secondary: tuple[AlignmentClass, float] | None,
+) -> tuple[dict[str, object], ...]:
+    primary_class = primary[0] if primary is not None else None
+    secondary_class = secondary[0] if secondary is not None else None
+    ordered = tuple(sorted(scored, key=lambda item: (-item[1], item[0].id)))
+    return tuple(
+        {
+            "alignment_class_id": alignment_class.id,
+            "patch_length_score": score,
+            "dot_with_primary": (
+                None
+                if primary_class is None or alignment_class.id == primary_class.id
+                else abs(dot(alignment_class.dominant_direction, primary_class.dominant_direction))
+            ),
+            "selected_as": _candidate_selection(alignment_class, score, primary_class, secondary_class),
+        }
+        for alignment_class, score in ordered
+    )
+
+
+def _candidate_selection(
+    alignment_class: AlignmentClass,
+    score: float,
+    primary: AlignmentClass | None,
+    secondary: AlignmentClass | None,
+) -> str:
+    if score <= EPSILON:
+        return "REJECTED_ZERO_PATCH_LENGTH"
+    if primary is not None and alignment_class.id == primary.id:
+        return "PRIMARY"
+    if secondary is not None and alignment_class.id == secondary.id:
+        return "SECONDARY"
+    if primary is not None and not _non_parallel(alignment_class.dominant_direction, primary.dominant_direction):
+        return "REJECTED_PARALLEL"
+    return "REJECTED_LOWER_SCORE"

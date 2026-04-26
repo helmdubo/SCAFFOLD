@@ -235,6 +235,7 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
                 "primary_direction": list(patch_axes.primary_direction),
                 "secondary_direction": list(patch_axes.secondary_direction),
                 "confidence": patch_axes.confidence,
+                "candidate_scores": _patch_axes_candidate_scores(patch_axes),
             }
             for patch_axes in sorted(
                 relations.patch_axes.values(),
@@ -243,6 +244,12 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         ],
     })
     return summary
+
+
+def _patch_axes_candidate_scores(patch_axes) -> list[dict[str, object]]:
+    if not patch_axes.evidence:
+        return []
+    return list(patch_axes.evidence[0].data.get("candidate_scores", ()))
 
 
 def describe_active_blender_mesh_topology(context: object) -> str:
