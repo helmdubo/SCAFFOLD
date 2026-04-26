@@ -60,6 +60,21 @@ class PatchAxisSource(str, Enum):
     NO_ALIGNMENT = "NO_ALIGNMENT"
 
 
+class RunUseEndpointRole(str, Enum):
+    """Endpoint role for a patch-local directional run-use sample."""
+
+    START = "START"
+    END = "END"
+
+
+class OwnerNormalSource(str, Enum):
+    """Source for a junction sample owner normal."""
+
+    PATCH_AGGREGATE_NORMAL = "PATCH_AGGREGATE_NORMAL"
+    LOCAL_FACE_NORMAL_AVERAGE = "LOCAL_FACE_NORMAL_AVERAGE"
+    UNKNOWN = "UNKNOWN"
+
+
 @dataclass(frozen=True)
 class PatchAdjacency:
     id: str
@@ -142,11 +157,27 @@ class PatchAxes:
 
 
 @dataclass(frozen=True)
+class ChainDirectionalRunUseJunctionSample:
+    id: str
+    vertex_id: VertexId
+    run_use_id: str
+    chain_use_id: ChainUseId
+    patch_id: PatchId
+    endpoint_role: RunUseEndpointRole
+    tangent_away_from_vertex: Vector3
+    owner_normal: Vector3
+    owner_normal_source: OwnerNormalSource
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
     chain_continuations: tuple[ChainContinuationRelation, ...] = ()
     chain_directional_runs: tuple[ChainDirectionalRun, ...] = ()
     chain_directional_run_uses: tuple[ChainDirectionalRunUse, ...] = ()
+    junction_samples: tuple[ChainDirectionalRunUseJunctionSample, ...] = ()
     alignment_classes: tuple[AlignmentClass, ...] = ()
     patch_axes: Mapping[PatchId, PatchAxes] = field(default_factory=dict)
     diagnostics: tuple[Diagnostic, ...] = ()

@@ -248,6 +248,13 @@ In v0, owner_normal may use `PatchGeometryFacts.normal` with
 
 Layer 1 `ChainUse` must not store normals.
 
+Implementation status:
+- `ChainDirectionalRunUseJunctionSample` is implemented as a Layer 3 derived
+  relation.
+- Samples are emitted for START and END run-use endpoints.
+- `tangent_away_from_vertex` points away from the sampled topology Vertex.
+- Owner normals use Patch aggregate normals in v0.
+
 ## G3c5 - Junction RunUse Relations
 
 G3c5 derives pairwise relations between endpoint samples at the same Vertex.

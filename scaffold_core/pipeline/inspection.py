@@ -125,6 +125,7 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         "chain_continuation_count": len(relations.chain_continuations),
         "chain_directional_run_count": len(relations.chain_directional_runs),
         "chain_directional_run_use_count": len(relations.chain_directional_run_uses),
+        "junction_sample_count": len(relations.junction_samples),
         "alignment_class_count": len(relations.alignment_classes),
         "patch_axes_count": len(relations.patch_axes),
     }
@@ -223,6 +224,24 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
             }
             for alignment_class in sorted(
                 relations.alignment_classes,
+                key=lambda item: item.id,
+            )
+        ],
+        "junction_samples": [
+            {
+                "id": sample.id,
+                "vertex_id": str(sample.vertex_id),
+                "run_use_id": sample.run_use_id,
+                "chain_use_id": str(sample.chain_use_id),
+                "patch_id": str(sample.patch_id),
+                "endpoint_role": str(sample.endpoint_role.value),
+                "tangent_away_from_vertex": list(sample.tangent_away_from_vertex),
+                "owner_normal": list(sample.owner_normal),
+                "owner_normal_source": str(sample.owner_normal_source.value),
+                "confidence": sample.confidence,
+            }
+            for sample in sorted(
+                relations.junction_samples,
                 key=lambda item: item.id,
             )
         ],

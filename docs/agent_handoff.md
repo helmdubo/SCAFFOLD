@@ -358,6 +358,19 @@ Do not implement ScaffoldGraph yet.
 Do not use U/V labels, H/V labels, WORLD_UP, WorldOrientation or runtime solve.
 Do not store normals on Layer 1 ChainUse.
 
+G3c4 ChainDirectionalRunUseJunctionSample is implemented:
+
+```text
+Layer 3 now exposes junction_samples for START and END endpoints of each
+ChainDirectionalRunUse.
+tangent_away_from_vertex is oriented away from the endpoint Vertex.
+owner_normal uses PatchGeometryFacts.normal with
+owner_normal_source = PATCH_AGGREGATE_NORMAL.
+Layer 1 ChainUse still stores topology only.
+JunctionRunUseRelation is still not implemented.
+ScaffoldGraph is still not implemented.
+```
+
 Implemented test fixtures:
 
 ```text
@@ -491,12 +504,12 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 ## Recommended next task
 
-G3c4 ChainDirectionalRunUseJunctionSample.
+G3c5 JunctionRunUseRelation v0.
 
 ```text
-Derive endpoint samples from ChainDirectionalRunUse.
-Keep owner normals as Layer 2 / Layer 3 derived evidence.
-Do not store normals on Layer 1 ChainUse.
+Derive pairwise relations between junction_samples at the same Vertex.
+Classify direction_relation and scaffold relation kind.
+Use tangent_away_from_vertex and owner_normal evidence.
 Do not implement ScaffoldGraph yet.
 ```
 
