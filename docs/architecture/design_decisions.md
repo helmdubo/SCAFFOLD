@@ -43,6 +43,21 @@ Agents may read this file for quick lookup. If it disagrees with `G0.md`, `G0.md
   Layer 1 Chain identity is topology-only. Geometry-driven refinement
   lives in Layer 3 and produces derived sub-chain entities or alignment
   groupings. It must not split, rewrite, or re-id Layer 1 Chains.
+- **DD-31 — Junction relations are local and axis-free.** Junction relations
+  are Layer 3 derived relations between patch-local `ChainDirectionalRunUse`
+  endpoint samples at the same Vertex. They classify local structural
+  relations such as continuation candidate, corner connector, oblique
+  connector, ambiguous and degenerate. They must not use U/V labels, H/V
+  labels, WORLD_UP, WorldOrientation labels or runtime solve output.
+- **DD-32 — Surface normals for ChainUse are derived facts, not Layer 1
+  topology.** Layer 1 `ChainUse` must not store face normals or averaged
+  normals. Owner normals used by junction relations are derived from Layer 2
+  geometry or Layer 3 evidence. v0 may use Patch aggregate normal; future
+  versions may use local face-normal averaging around the run-use.
+- **DD-33 — ScaffoldGraph is derived from junction relations.**
+  ScaffoldGraph / ScaffoldTrace are future Layer 3 derived structures built
+  from `JunctionRunUseRelation`, not from raw Chain or world axes. They must
+  not be introduced before pairwise junction relations exist.
 
 ## Future policy notes
 

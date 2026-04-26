@@ -314,6 +314,50 @@ It does not use U/V labels.
 WORLD_UP fallback remains deferred.
 ```
 
+G3c3 PatchAxes candidate evidence is implemented:
+
+```text
+PatchAxes evidence exposes candidate_scores for explainable primary/secondary
+selection.
+The policy still uses geometry-only AlignmentClass length scores.
+```
+
+## Next architectural direction
+
+The next relation work should focus on Junction RunUse Relations.
+
+Current implemented chain:
+
+```text
+Layer 1 Chain / ChainUse
+-> Layer 2 ChainSegmentGeometryFacts
+-> Layer 3 ChainDirectionalRun
+-> Layer 3 ChainDirectionalRunUse
+-> Layer 3 AlignmentClass
+-> Layer 3 PatchAxes
+```
+
+Next needed relation layer:
+
+```text
+ChainDirectionalRunUseJunctionSample
+-> JunctionRunUseRelation
+```
+
+Goal: classify local relations at a Vertex:
+
+- continuation candidate;
+- corner connector;
+- oblique connector;
+- ambiguous;
+- degenerate.
+
+This is the basis for future ScaffoldGraph / ScaffoldTrace.
+
+Do not implement ScaffoldGraph yet.
+Do not use U/V labels, H/V labels, WORLD_UP, WorldOrientation or runtime solve.
+Do not store normals on Layer 1 ChainUse.
+
 Implemented test fixtures:
 
 ```text
@@ -447,13 +491,13 @@ Non-manifold edge connectivity keeps faces in the same Shell candidate, but emit
 
 ## Recommended next task
 
-G3b2 Conservative ChainContinuationRelation.
+G3c4 ChainDirectionalRunUseJunctionSample.
 
 ```text
-Use G3b1 deterministic incidence.
-Prefer TERMINUS / SPLIT over false SMOOTH / TURN.
-Do not solve OQ-11.
-Do not start AlignmentClass.
+Derive endpoint samples from ChainDirectionalRunUse.
+Keep owner normals as Layer 2 / Layer 3 derived evidence.
+Do not store normals on Layer 1 ChainUse.
+Do not implement ScaffoldGraph yet.
 ```
 
 ---

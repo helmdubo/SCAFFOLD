@@ -208,6 +208,103 @@ Scope:
 - Do not introduce U/V labels, WORLD_UP fallback, H/V labels,
   WorldOrientation, UV placement or runtime solve.
 
+## G3c4 - Junction RunUse Samples
+
+G3c4 introduces endpoint samples for `ChainDirectionalRunUse` at topology
+vertices.
+
+Purpose:
+- represent a patch-local directional run as a ray leaving or entering a
+  Junction;
+- provide tangent-away-from-junction vectors;
+- attach owner surface normal evidence;
+- prepare pairwise junction relations.
+
+This does not introduce U/V labels, H/V labels, WORLD_UP, WorldOrientation,
+solve, UV or ScaffoldGraph.
+
+Model concept:
+
+```text
+ChainDirectionalRunUse
+  -> endpoint sample at START vertex
+  -> endpoint sample at END vertex
+```
+
+Each sample stores:
+
+- vertex_id;
+- run_use_id;
+- patch_id;
+- chain_use_id;
+- endpoint_role: START / END;
+- tangent_away_from_vertex;
+- owner_normal;
+- owner_normal_source;
+- confidence / evidence.
+
+In v0, owner_normal may use `PatchGeometryFacts.normal` with
+`owner_normal_source = PATCH_AGGREGATE_NORMAL`.
+
+Layer 1 `ChainUse` must not store normals.
+
+## G3c5 - Junction RunUse Relations
+
+G3c5 derives pairwise relations between endpoint samples at the same Vertex.
+
+Purpose:
+- identify continuation candidates;
+- identify orthogonal/corner connectors;
+- identify oblique/ambiguous/degenerate relations;
+- provide structural input for future ScaffoldGraph.
+
+Relation vocabulary v0:
+
+```text
+Direction relation:
+  OPPOSITE_COLLINEAR
+  SAME_RAY_COLLINEAR
+  ORTHOGONAL
+  OBLIQUE
+  DEGENERATE
+
+Scaffold relation kind:
+  CONTINUATION_CANDIDATE
+  CORNER_CONNECTOR
+  OBLIQUE_CONNECTOR
+  AMBIGUOUS
+  DEGENERATE
+```
+
+Rules:
+- no U/V labels;
+- no H/V labels;
+- no WORLD_UP;
+- no WorldOrientation;
+- no solve/runtime/UV;
+- no Layer 1 mutation;
+- relations are derived from Layer 1 topology, Layer 2 geometry and Layer 3
+  run-use data.
+
+## Future - ScaffoldGraph / ScaffoldTrace
+
+A future slice may build `ScaffoldGraph` from `JunctionRunUseRelation`.
+
+`ScaffoldTrace` is a connected component over continuation-like relations.
+It may later be classified as:
+
+```text
+OPEN_TRACE
+CLOSED_TRACE
+BRANCHING_TRACE
+AMBIGUOUS_TRACE
+```
+
+Cylinder-like cases may produce closed traces/circuits around cap boundaries.
+These traces can later inform conditional axes or UV orientation.
+
+Do not implement ScaffoldGraph before JunctionRunUseRelation is available.
+
 ## Rules
 
 Layer 3 is derived from:

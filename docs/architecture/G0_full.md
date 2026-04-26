@@ -499,6 +499,46 @@ this ChainUse continues into that ChainUse through this Junction
 
 Continuation is a Layer 3 relation, not a topology primitive.
 
+## 12.1 Junction Relations
+
+`junction.*` contains derived local relations around topology Vertices.
+
+Junction relations do not create new Layer 1 topology. They are derived views
+over Vertex, ChainUse, ChainDirectionalRunUse and Layer 2 geometry facts.
+
+The primary low-level unit is a patch-local directional endpoint sample:
+
+```text
+ChainDirectionalRunUseJunctionSample
+```
+
+Pairwise relations between samples answer:
+
+```text
+At this Vertex, how does this directional run-use relate to another?
+```
+
+Relation kinds include:
+
+```text
+CONTINUATION_CANDIDATE
+CORNER_CONNECTOR
+OBLIQUE_CONNECTOR
+AMBIGUOUS
+DEGENERATE
+```
+
+These relations are axis-free:
+
+- no U/V;
+- no H/V;
+- no WORLD_UP;
+- no WALL/FLOOR/SLOPE;
+- no WorldOrientation dependency.
+
+Future ScaffoldGraph / ScaffoldTrace may be derived from these junction
+relations.
+
 ---
 
 # 13. WorldOrientation
@@ -793,6 +833,32 @@ re-id existing Layer 1 Chain records after Pass 0.
 
 This preserves stable Chain ids for downstream references and keeps
 geometry-driven decisions inside Layer 3.
+
+## DD-31 — Junction relations are local and axis-free
+
+Junction relations are Layer 3 derived relations between patch-local
+`ChainDirectionalRunUse` endpoint samples at the same Vertex.
+
+They classify local structural relations such as continuation candidate,
+corner connector, oblique connector, ambiguous and degenerate.
+
+They must not use U/V labels, H/V labels, WORLD_UP, WorldOrientation labels or
+runtime solve output.
+
+## DD-32 — Surface normals for ChainUse are derived facts, not Layer 1 topology
+
+Layer 1 `ChainUse` must not store face normals or averaged normals.
+
+Owner normals used by junction relations are derived from Layer 2 geometry or
+Layer 3 evidence. v0 may use Patch aggregate normal; future versions may use
+local face-normal averaging around the run-use.
+
+## DD-33 — ScaffoldGraph is derived from junction relations
+
+ScaffoldGraph / ScaffoldTrace are future Layer 3 derived structures built from
+`JunctionRunUseRelation`, not from raw Chain or world axes.
+
+They must not be introduced before pairwise junction relations exist.
 
 ---
 
