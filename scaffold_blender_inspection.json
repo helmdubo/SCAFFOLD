@@ -173,6 +173,7 @@
     "patch_count": 1,
     "chain_count": 3,
     "vertex_count": 30,
+    "vertex_fan_count": 27,
     "patches": [
       {
         "id": "patch:seed:f0",
@@ -463,6 +464,450 @@
           }
         ]
       }
+    ],
+    "vertex_fans": [
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v0",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v0",
+        "source_vertex_id": "v0",
+        "source_face_ids": [
+          "f14",
+          "f9"
+        ],
+        "area": 1.4240009427992248,
+        "normal": [
+          0.7071067811865475,
+          0.7071067811865475,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v1",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v1",
+        "source_vertex_id": "v1",
+        "source_face_ids": [
+          "f15",
+          "f8"
+        ],
+        "area": 1.4240009427992248,
+        "normal": [
+          0.7071067811865475,
+          0.7071067811865475,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v10",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v10",
+        "source_vertex_id": "v10",
+        "source_face_ids": [
+          "f14",
+          "f15",
+          "f8",
+          "f9"
+        ],
+        "area": 2.8480018855984497,
+        "normal": [
+          0.7071067811865475,
+          0.7071067811865475,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v11",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v11",
+        "source_vertex_id": "v11",
+        "source_face_ids": [
+          "f2",
+          "f3",
+          "f4",
+          "f5"
+        ],
+        "area": 2.8480018646698646,
+        "normal": [
+          -0.7071067696919531,
+          -0.7071067926811416,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v12:use:patch:seed:f0:0",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v12:use:patch:seed:f0:0",
+        "source_vertex_id": "v12",
+        "source_face_ids": [
+          "f0",
+          "f1"
+        ],
+        "area": 1.4240009218706398,
+        "normal": [
+          0.3511233681949926,
+          -0.9363292050915657,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v12:use:patch:seed:f0:1",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v12:use:patch:seed:f0:1",
+        "source_vertex_id": "v12",
+        "source_face_ids": [
+          "f10",
+          "f11"
+        ],
+        "area": 1.4240009427992248,
+        "normal": [
+          0.9363291913303057,
+          -0.351123404891693,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v13",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v13",
+        "source_vertex_id": "v13",
+        "source_face_ids": [
+          "f12",
+          "f13",
+          "f6",
+          "f7"
+        ],
+        "area": 2.8480018855984497,
+        "normal": [
+          -0.7071067811865475,
+          0.7071067811865475,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v14",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v14",
+        "source_vertex_id": "v14",
+        "source_face_ids": [
+          "f1",
+          "f2"
+        ],
+        "area": 1.4240009218706398,
+        "normal": [
+          0.0,
+          -0.9999999999999996,
+          -2.9802318834982044e-08
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v15",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v15",
+        "source_vertex_id": "v15",
+        "source_face_ids": [
+          "f10",
+          "f9"
+        ],
+        "area": 1.4240009427992248,
+        "normal": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v16",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v16",
+        "source_vertex_id": "v16",
+        "source_face_ids": [
+          "f0",
+          "f3"
+        ],
+        "area": 1.4240009218706398,
+        "normal": [
+          0.0,
+          -0.9999999999999996,
+          2.9802318834982044e-08
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v17",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v17",
+        "source_vertex_id": "v17",
+        "source_face_ids": [
+          "f5",
+          "f6"
+        ],
+        "area": 1.4240009427992248,
+        "normal": [
+          -1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v18",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v18",
+        "source_vertex_id": "v18",
+        "source_face_ids": [
+          "f13",
+          "f14"
+        ],
+        "area": 1.4240009427992248,
+        "normal": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v19",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v19",
+        "source_vertex_id": "v19",
+        "source_face_ids": [
+          "f11",
+          "f8"
+        ],
+        "area": 1.4240009427992248,
+        "normal": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v20",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v20",
+        "source_vertex_id": "v20",
+        "source_face_ids": [
+          "f0",
+          "f1",
+          "f2",
+          "f3"
+        ],
+        "area": 2.8480018437412795,
+        "normal": [
+          0.0,
+          -1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v21",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v21",
+        "source_vertex_id": "v21",
+        "source_face_ids": [
+          "f4",
+          "f5",
+          "f6",
+          "f7"
+        ],
+        "area": 2.8480018855984497,
+        "normal": [
+          -1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v22",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v22",
+        "source_vertex_id": "v22",
+        "source_face_ids": [
+          "f10",
+          "f11",
+          "f8",
+          "f9"
+        ],
+        "area": 2.8480018855984497,
+        "normal": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v23",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v23",
+        "source_vertex_id": "v23",
+        "source_face_ids": [
+          "f12",
+          "f13",
+          "f14",
+          "f15"
+        ],
+        "area": 2.8480018855984497,
+        "normal": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v2:use:patch:seed:f0:0",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v2:use:patch:seed:f0:0",
+        "source_vertex_id": "v2",
+        "source_face_ids": [
+          "f1"
+        ],
+        "area": 0.7120004609353199,
+        "normal": [
+          0.35112336819499246,
+          -0.9363292050915653,
+          -2.7904781504644135e-08
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v2:use:patch:seed:f0:1",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v2:use:patch:seed:f0:1",
+        "source_vertex_id": "v2",
+        "source_face_ids": [
+          "f10"
+        ],
+        "area": 0.7120004713996124,
+        "normal": [
+          0.9363291913303057,
+          -0.351123404891693,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v3:use:patch:seed:f0:0",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v3:use:patch:seed:f0:0",
+        "source_vertex_id": "v3",
+        "source_face_ids": [
+          "f0"
+        ],
+        "area": 0.7120004609353199,
+        "normal": [
+          0.35112336819499246,
+          -0.9363292050915653,
+          2.7904781504644135e-08
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v3:use:patch:seed:f0:1",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v3:use:patch:seed:f0:1",
+        "source_vertex_id": "v3",
+        "source_face_ids": [
+          "f11"
+        ],
+        "area": 0.7120004713996124,
+        "normal": [
+          0.9363291913303057,
+          -0.351123404891693,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v4",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v4",
+        "source_vertex_id": "v4",
+        "source_face_ids": [
+          "f13",
+          "f6"
+        ],
+        "area": 1.4240009427992248,
+        "normal": [
+          -0.7071067811865475,
+          0.7071067811865475,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v5",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v5",
+        "source_vertex_id": "v5",
+        "source_face_ids": [
+          "f12",
+          "f7"
+        ],
+        "area": 1.4240009427992248,
+        "normal": [
+          -0.7071067811865475,
+          0.7071067811865475,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v6",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v6",
+        "source_vertex_id": "v6",
+        "source_face_ids": [
+          "f2",
+          "f5"
+        ],
+        "area": 1.4240009323349323,
+        "normal": [
+          -0.7071067696919531,
+          -0.7071067926811415,
+          -1.53261256516335e-08
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v7",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v7",
+        "source_vertex_id": "v7",
+        "source_face_ids": [
+          "f3",
+          "f4"
+        ],
+        "area": 1.4240009323349323,
+        "normal": [
+          -0.7071067696919531,
+          -0.7071067926811415,
+          1.53261256516335e-08
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v8",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v8",
+        "source_vertex_id": "v8",
+        "source_face_ids": [
+          "f4",
+          "f7"
+        ],
+        "area": 1.4240009427992248,
+        "normal": [
+          -1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "vertex_fan:patch:seed:f0:vertex:v9",
+        "patch_id": "patch:seed:f0",
+        "vertex_id": "vertex:v9",
+        "source_vertex_id": "v9",
+        "source_face_ids": [
+          "f12",
+          "f15"
+        ],
+        "area": 1.4240009427992248,
+        "normal": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      }
     ]
   },
   "relations": {
@@ -471,7 +916,7 @@
     "chain_directional_run_count": 17,
     "chain_directional_run_use_count": 18,
     "junction_sample_count": 36,
-    "junction_run_use_relation_count": 26,
+    "junction_run_use_relation_count": 18,
     "alignment_class_count": 5,
     "patch_axes_count": 1,
     "patch_adjacencies": [],
@@ -1519,7 +1964,7 @@
     "junction_samples": [
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:0:0:END",
-        "vertex_id": "vertex:v2:use:patch:seed:f0:1",
+        "vertex_id": "vertex:v2:use:patch:seed:f0:0",
         "run_use_id": "directional_run_use:use:patch:seed:f0:0:0:0",
         "chain_use_id": "use:patch:seed:f0:0:0",
         "patch_id": "patch:seed:f0",
@@ -1530,16 +1975,16 @@
           -1.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
-          0.0
+          0.3511233681949925,
+          -0.9363292050915655,
+          -2.790478150464414e-08
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:0:0:START",
-        "vertex_id": "vertex:v3:use:patch:seed:f0:1",
+        "vertex_id": "vertex:v3:use:patch:seed:f0:0",
         "run_use_id": "directional_run_use:use:patch:seed:f0:0:0:0",
         "chain_use_id": "use:patch:seed:f0:0:0",
         "patch_id": "patch:seed:f0",
@@ -1550,12 +1995,12 @@
           1.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
-          0.0
+          0.3511233681949925,
+          -0.9363292050915655,
+          2.790478150464414e-08
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:0:END",
@@ -1571,15 +2016,15 @@
         ],
         "owner_normal": [
           0.0,
-          0.0,
-          0.0
+          -0.9999999999999996,
+          -2.9802318834982044e-08
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:0:START",
-        "vertex_id": "vertex:v2:use:patch:seed:f0:1",
+        "vertex_id": "vertex:v2:use:patch:seed:f0:0",
         "run_use_id": "directional_run_use:use:patch:seed:f0:0:1:0",
         "chain_use_id": "use:patch:seed:f0:0:1",
         "patch_id": "patch:seed:f0",
@@ -1590,12 +2035,12 @@
           0.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
-          0.0
+          0.3511233681949925,
+          -0.9363292050915655,
+          -2.790478150464414e-08
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:1:END",
@@ -1610,12 +2055,12 @@
           -0.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
-          0.0
+          -0.7071067696919532,
+          -0.7071067926811416,
+          -1.5326125651633502e-08
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:1:START",
@@ -1631,11 +2076,11 @@
         ],
         "owner_normal": [
           0.0,
-          0.0,
-          0.0
+          -0.9999999999999996,
+          -2.9802318834982044e-08
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:2:END",
@@ -1650,12 +2095,12 @@
           -0.0
         ],
         "owner_normal": [
-          0.0,
+          -1.0,
           0.0,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:2:START",
@@ -1670,12 +2115,12 @@
           0.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
-          0.0
+          -0.7071067696919532,
+          -0.7071067926811416,
+          -1.5326125651633502e-08
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:3:END",
@@ -1690,12 +2135,12 @@
           -0.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
+          -0.7071067811865476,
+          0.7071067811865476,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:3:START",
@@ -1710,12 +2155,12 @@
           0.0
         ],
         "owner_normal": [
-          0.0,
+          -1.0,
           0.0,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:4:END",
@@ -1731,11 +2176,11 @@
         ],
         "owner_normal": [
           0.0,
-          0.0,
+          1.0,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:4:START",
@@ -1750,12 +2195,12 @@
           0.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
+          -0.7071067811865476,
+          0.7071067811865476,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:5:END",
@@ -1770,12 +2215,12 @@
           -0.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
+          0.7071067811865476,
+          0.7071067811865476,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:5:START",
@@ -1791,11 +2236,11 @@
         ],
         "owner_normal": [
           0.0,
-          0.0,
+          1.0,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:6:END",
@@ -1810,12 +2255,12 @@
           -0.0
         ],
         "owner_normal": [
-          0.0,
+          1.0,
           0.0,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:6:START",
@@ -1830,12 +2275,12 @@
           0.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
+          0.7071067811865476,
+          0.7071067811865476,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:7:END",
@@ -1850,12 +2295,12 @@
           -0.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
+          0.9363291913303057,
+          -0.351123404891693,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:7:START",
@@ -1870,12 +2315,12 @@
           0.0
         ],
         "owner_normal": [
-          0.0,
+          1.0,
           0.0,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:2:0:END",
@@ -1890,12 +2335,12 @@
           1.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
+          0.9363291913303057,
+          -0.351123404891693,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:2:0:START",
@@ -1910,12 +2355,12 @@
           -1.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
+          0.9363291913303057,
+          -0.351123404891693,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:0:END",
@@ -1930,12 +2375,12 @@
           -0.0
         ],
         "owner_normal": [
-          0.0,
+          1.0,
           0.0,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:0:START",
@@ -1950,12 +2395,12 @@
           0.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
+          0.9363291913303057,
+          -0.351123404891693,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:1:END",
@@ -1970,12 +2415,12 @@
           -0.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
+          0.7071067811865476,
+          0.7071067811865476,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:1:START",
@@ -1990,12 +2435,12 @@
           0.0
         ],
         "owner_normal": [
-          0.0,
+          1.0,
           0.0,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:2:END",
@@ -2011,11 +2456,11 @@
         ],
         "owner_normal": [
           0.0,
-          0.0,
+          1.0,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:2:START",
@@ -2030,12 +2475,12 @@
           0.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
+          0.7071067811865476,
+          0.7071067811865476,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:3:END",
@@ -2050,12 +2495,12 @@
           -0.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
+          -0.7071067811865476,
+          0.7071067811865476,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:3:START",
@@ -2071,11 +2516,11 @@
         ],
         "owner_normal": [
           0.0,
-          0.0,
+          1.0,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:4:END",
@@ -2090,12 +2535,12 @@
           -0.0
         ],
         "owner_normal": [
-          0.0,
+          -1.0,
           0.0,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:4:START",
@@ -2110,12 +2555,12 @@
           0.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
+          -0.7071067811865476,
+          0.7071067811865476,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:5:END",
@@ -2130,12 +2575,12 @@
           -0.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
-          0.0
+          -0.7071067696919532,
+          -0.7071067926811416,
+          1.5326125651633502e-08
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:5:START",
@@ -2150,12 +2595,12 @@
           0.0
         ],
         "owner_normal": [
-          0.0,
+          -1.0,
           0.0,
           0.0
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:6:END",
@@ -2171,11 +2616,11 @@
         ],
         "owner_normal": [
           0.0,
-          0.0,
-          0.0
+          -0.9999999999999996,
+          2.9802318834982044e-08
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:6:START",
@@ -2190,16 +2635,16 @@
           0.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
-          0.0
+          -0.7071067696919532,
+          -0.7071067926811416,
+          1.5326125651633502e-08
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:7:END",
-        "vertex_id": "vertex:v3:use:patch:seed:f0:1",
+        "vertex_id": "vertex:v3:use:patch:seed:f0:0",
         "run_use_id": "directional_run_use:use:patch:seed:f0:0:3:7",
         "chain_use_id": "use:patch:seed:f0:0:3",
         "patch_id": "patch:seed:f0",
@@ -2210,12 +2655,12 @@
           -0.0
         ],
         "owner_normal": [
-          0.0,
-          0.0,
-          0.0
+          0.3511233681949925,
+          -0.9363292050915655,
+          2.790478150464414e-08
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       },
       {
         "id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:7:START",
@@ -2231,11 +2676,11 @@
         ],
         "owner_normal": [
           0.0,
-          0.0,
-          0.0
+          -0.9999999999999996,
+          2.9802318834982044e-08
         ],
-        "owner_normal_source": "UNKNOWN",
-        "confidence": 0.0
+        "owner_normal_source": "VERTEX_FAN_NORMAL",
+        "confidence": 1.0
       }
     ],
     "junction_run_use_relations": [
@@ -2247,10 +2692,10 @@
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:5",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:6",
         "direction_dot": -0.6575341875187649,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0000000000000002,
+        "direction_relation": "OBLIQUE",
+        "kind": "OBLIQUE_CONNECTOR",
+        "confidence": 1.0
       },
       {
         "id": "junction_run_use_relation:vertex:v14:junction_sample:directional_run_use:use:patch:seed:f0:0:1:0:END:junction_sample:directional_run_use:use:patch:seed:f0:0:1:1:START",
@@ -2260,10 +2705,10 @@
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:0",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:1",
         "direction_dot": -0.7534247090745285,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0,
+        "direction_relation": "OBLIQUE",
+        "kind": "OBLIQUE_CONNECTOR",
+        "confidence": 1.0
       },
       {
         "id": "junction_run_use_relation:vertex:v15:junction_sample:directional_run_use:use:patch:seed:f0:0:1:6:END:junction_sample:directional_run_use:use:patch:seed:f0:0:1:7:START",
@@ -2273,10 +2718,10 @@
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:6",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:7",
         "direction_dot": -0.7534247090745285,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0,
+        "direction_relation": "OBLIQUE",
+        "kind": "OBLIQUE_CONNECTOR",
+        "confidence": 1.0
       },
       {
         "id": "junction_run_use_relation:vertex:v16:junction_sample:directional_run_use:use:patch:seed:f0:0:3:6:END:junction_sample:directional_run_use:use:patch:seed:f0:0:3:7:START",
@@ -2286,10 +2731,10 @@
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:6",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:7",
         "direction_dot": -0.7534247090745285,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0,
+        "direction_relation": "OBLIQUE",
+        "kind": "OBLIQUE_CONNECTOR",
+        "confidence": 1.0
       },
       {
         "id": "junction_run_use_relation:vertex:v17:junction_sample:directional_run_use:use:patch:seed:f0:0:1:2:END:junction_sample:directional_run_use:use:patch:seed:f0:0:1:3:START",
@@ -2299,10 +2744,10 @@
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:2",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:3",
         "direction_dot": -0.7534247090745285,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0,
+        "direction_relation": "OBLIQUE",
+        "kind": "OBLIQUE_CONNECTOR",
+        "confidence": 1.0
       },
       {
         "id": "junction_run_use_relation:vertex:v18:junction_sample:directional_run_use:use:patch:seed:f0:0:1:4:END:junction_sample:directional_run_use:use:patch:seed:f0:0:1:5:START",
@@ -2312,10 +2757,10 @@
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:4",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:5",
         "direction_dot": -0.7534247090745285,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0,
+        "direction_relation": "OBLIQUE",
+        "kind": "OBLIQUE_CONNECTOR",
+        "confidence": 1.0
       },
       {
         "id": "junction_run_use_relation:vertex:v19:junction_sample:directional_run_use:use:patch:seed:f0:0:3:0:END:junction_sample:directional_run_use:use:patch:seed:f0:0:3:1:START",
@@ -2325,10 +2770,10 @@
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:0",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:1",
         "direction_dot": -0.7534247090745285,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0,
+        "direction_relation": "OBLIQUE",
+        "kind": "OBLIQUE_CONNECTOR",
+        "confidence": 1.0
       },
       {
         "id": "junction_run_use_relation:vertex:v1:junction_sample:directional_run_use:use:patch:seed:f0:0:3:1:END:junction_sample:directional_run_use:use:patch:seed:f0:0:3:2:START",
@@ -2338,75 +2783,23 @@
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:1",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:2",
         "direction_dot": -0.6575341875187649,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0000000000000002,
+        "direction_relation": "OBLIQUE",
+        "kind": "OBLIQUE_CONNECTOR",
+        "confidence": 1.0
       },
       {
-        "id": "junction_run_use_relation:vertex:v2:use:patch:seed:f0:1:junction_sample:directional_run_use:use:patch:seed:f0:0:0:0:END:junction_sample:directional_run_use:use:patch:seed:f0:0:1:0:START",
-        "vertex_id": "vertex:v2:use:patch:seed:f0:1",
+        "id": "junction_run_use_relation:vertex:v2:use:patch:seed:f0:0:junction_sample:directional_run_use:use:patch:seed:f0:0:0:0:END:junction_sample:directional_run_use:use:patch:seed:f0:0:1:0:START",
+        "vertex_id": "vertex:v2:use:patch:seed:f0:0",
         "first_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:0:0:END",
         "second_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:0:START",
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:0:0",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:0",
         "direction_dot": 0.0,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
-      },
-      {
-        "id": "junction_run_use_relation:vertex:v2:use:patch:seed:f0:1:junction_sample:directional_run_use:use:patch:seed:f0:0:0:0:END:junction_sample:directional_run_use:use:patch:seed:f0:0:1:7:END",
-        "vertex_id": "vertex:v2:use:patch:seed:f0:1",
-        "first_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:0:0:END",
-        "second_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:7:END",
-        "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:0:0",
-        "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:7",
-        "direction_dot": 0.0,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
-      },
-      {
-        "id": "junction_run_use_relation:vertex:v2:use:patch:seed:f0:1:junction_sample:directional_run_use:use:patch:seed:f0:0:0:0:END:junction_sample:directional_run_use:use:patch:seed:f0:0:2:0:START",
-        "vertex_id": "vertex:v2:use:patch:seed:f0:1",
-        "first_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:0:0:END",
-        "second_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:2:0:START",
-        "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:0:0",
-        "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:2:0",
-        "direction_dot": 1.0,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
-      },
-      {
-        "id": "junction_run_use_relation:vertex:v2:use:patch:seed:f0:1:junction_sample:directional_run_use:use:patch:seed:f0:0:1:0:START:junction_sample:directional_run_use:use:patch:seed:f0:0:1:7:END",
-        "vertex_id": "vertex:v2:use:patch:seed:f0:1",
-        "first_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:0:START",
-        "second_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:7:END",
-        "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:0",
-        "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:7",
-        "direction_dot": -0.6575341875187649,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
-      },
-      {
-        "id": "junction_run_use_relation:vertex:v2:use:patch:seed:f0:1:junction_sample:directional_run_use:use:patch:seed:f0:0:1:0:START:junction_sample:directional_run_use:use:patch:seed:f0:0:2:0:START",
-        "vertex_id": "vertex:v2:use:patch:seed:f0:1",
-        "first_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:1:0:START",
-        "second_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:2:0:START",
-        "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:0",
-        "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:2:0",
-        "direction_dot": 0.0,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0000000000000004,
+        "direction_relation": "ORTHOGONAL",
+        "kind": "CORNER_CONNECTOR",
+        "confidence": 1.0
       },
       {
         "id": "junction_run_use_relation:vertex:v2:use:patch:seed:f0:1:junction_sample:directional_run_use:use:patch:seed:f0:0:1:7:END:junction_sample:directional_run_use:use:patch:seed:f0:0:2:0:START",
@@ -2416,49 +2809,23 @@
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:7",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:2:0",
         "direction_dot": 0.0,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0,
+        "direction_relation": "ORTHOGONAL",
+        "kind": "CORNER_CONNECTOR",
+        "confidence": 1.0
       },
       {
-        "id": "junction_run_use_relation:vertex:v3:use:patch:seed:f0:1:junction_sample:directional_run_use:use:patch:seed:f0:0:0:0:START:junction_sample:directional_run_use:use:patch:seed:f0:0:2:0:END",
-        "vertex_id": "vertex:v3:use:patch:seed:f0:1",
-        "first_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:0:0:START",
-        "second_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:2:0:END",
-        "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:0:0",
-        "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:2:0",
-        "direction_dot": 1.0,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
-      },
-      {
-        "id": "junction_run_use_relation:vertex:v3:use:patch:seed:f0:1:junction_sample:directional_run_use:use:patch:seed:f0:0:0:0:START:junction_sample:directional_run_use:use:patch:seed:f0:0:3:0:START",
-        "vertex_id": "vertex:v3:use:patch:seed:f0:1",
-        "first_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:0:0:START",
-        "second_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:0:START",
-        "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:0:0",
-        "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:0",
-        "direction_dot": 0.0,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
-      },
-      {
-        "id": "junction_run_use_relation:vertex:v3:use:patch:seed:f0:1:junction_sample:directional_run_use:use:patch:seed:f0:0:0:0:START:junction_sample:directional_run_use:use:patch:seed:f0:0:3:7:END",
-        "vertex_id": "vertex:v3:use:patch:seed:f0:1",
+        "id": "junction_run_use_relation:vertex:v3:use:patch:seed:f0:0:junction_sample:directional_run_use:use:patch:seed:f0:0:0:0:START:junction_sample:directional_run_use:use:patch:seed:f0:0:3:7:END",
+        "vertex_id": "vertex:v3:use:patch:seed:f0:0",
         "first_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:0:0:START",
         "second_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:7:END",
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:0:0",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:7",
         "direction_dot": -0.0,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0000000000000004,
+        "direction_relation": "ORTHOGONAL",
+        "kind": "CORNER_CONNECTOR",
+        "confidence": 1.0
       },
       {
         "id": "junction_run_use_relation:vertex:v3:use:patch:seed:f0:1:junction_sample:directional_run_use:use:patch:seed:f0:0:2:0:END:junction_sample:directional_run_use:use:patch:seed:f0:0:3:0:START",
@@ -2468,36 +2835,10 @@
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:2:0",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:0",
         "direction_dot": 0.0,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
-      },
-      {
-        "id": "junction_run_use_relation:vertex:v3:use:patch:seed:f0:1:junction_sample:directional_run_use:use:patch:seed:f0:0:2:0:END:junction_sample:directional_run_use:use:patch:seed:f0:0:3:7:END",
-        "vertex_id": "vertex:v3:use:patch:seed:f0:1",
-        "first_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:2:0:END",
-        "second_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:7:END",
-        "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:2:0",
-        "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:7",
-        "direction_dot": -0.0,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
-      },
-      {
-        "id": "junction_run_use_relation:vertex:v3:use:patch:seed:f0:1:junction_sample:directional_run_use:use:patch:seed:f0:0:3:0:START:junction_sample:directional_run_use:use:patch:seed:f0:0:3:7:END",
-        "vertex_id": "vertex:v3:use:patch:seed:f0:1",
-        "first_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:0:START",
-        "second_sample_id": "junction_sample:directional_run_use:use:patch:seed:f0:0:3:7:END",
-        "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:0",
-        "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:7",
-        "direction_dot": -0.6575341875187649,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0,
+        "direction_relation": "ORTHOGONAL",
+        "kind": "CORNER_CONNECTOR",
+        "confidence": 1.0
       },
       {
         "id": "junction_run_use_relation:vertex:v4:junction_sample:directional_run_use:use:patch:seed:f0:0:1:3:END:junction_sample:directional_run_use:use:patch:seed:f0:0:1:4:START",
@@ -2507,10 +2848,10 @@
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:3",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:4",
         "direction_dot": -0.6575341875187649,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0000000000000002,
+        "direction_relation": "OBLIQUE",
+        "kind": "OBLIQUE_CONNECTOR",
+        "confidence": 1.0
       },
       {
         "id": "junction_run_use_relation:vertex:v5:junction_sample:directional_run_use:use:patch:seed:f0:0:3:3:END:junction_sample:directional_run_use:use:patch:seed:f0:0:3:4:START",
@@ -2520,10 +2861,10 @@
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:3",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:4",
         "direction_dot": -0.6575341875187649,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0000000000000002,
+        "direction_relation": "OBLIQUE",
+        "kind": "OBLIQUE_CONNECTOR",
+        "confidence": 1.0
       },
       {
         "id": "junction_run_use_relation:vertex:v6:junction_sample:directional_run_use:use:patch:seed:f0:0:1:1:END:junction_sample:directional_run_use:use:patch:seed:f0:0:1:2:START",
@@ -2533,10 +2874,10 @@
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:1",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:1:2",
         "direction_dot": -0.6575341875187649,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0000000000000002,
+        "direction_relation": "OBLIQUE",
+        "kind": "OBLIQUE_CONNECTOR",
+        "confidence": 1.0
       },
       {
         "id": "junction_run_use_relation:vertex:v7:junction_sample:directional_run_use:use:patch:seed:f0:0:3:5:END:junction_sample:directional_run_use:use:patch:seed:f0:0:3:6:START",
@@ -2546,10 +2887,10 @@
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:5",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:6",
         "direction_dot": -0.6575341875187649,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0000000000000002,
+        "direction_relation": "OBLIQUE",
+        "kind": "OBLIQUE_CONNECTOR",
+        "confidence": 1.0
       },
       {
         "id": "junction_run_use_relation:vertex:v8:junction_sample:directional_run_use:use:patch:seed:f0:0:3:4:END:junction_sample:directional_run_use:use:patch:seed:f0:0:3:5:START",
@@ -2559,10 +2900,10 @@
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:4",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:5",
         "direction_dot": -0.7534247090745285,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0,
+        "direction_relation": "OBLIQUE",
+        "kind": "OBLIQUE_CONNECTOR",
+        "confidence": 1.0
       },
       {
         "id": "junction_run_use_relation:vertex:v9:junction_sample:directional_run_use:use:patch:seed:f0:0:3:2:END:junction_sample:directional_run_use:use:patch:seed:f0:0:3:3:START",
@@ -2572,10 +2913,10 @@
         "first_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:2",
         "second_run_use_id": "directional_run_use:use:patch:seed:f0:0:3:3",
         "direction_dot": -0.7534247090745285,
-        "normal_dot": 0.0,
-        "direction_relation": "DEGENERATE",
-        "kind": "DEGENERATE",
-        "confidence": 0.0
+        "normal_dot": 1.0,
+        "direction_relation": "OBLIQUE",
+        "kind": "OBLIQUE_CONNECTOR",
+        "confidence": 1.0
       }
     ],
     "patch_axes": [
