@@ -39,6 +39,8 @@ Do not create them during G3.
 
 The Blender add-on wrapper package `scaffold/` is also intentionally deferred during G3. Do not create it until an explicit UI/add-on phase begins, likely no earlier than G5 / UV transfer / UI integration work.
 
+Root `scaffold_blender_inspection.json` is a user-only debug artifact and may be stale. Do not use it as an architecture reference; use code, docs and tests instead.
+
 ---
 
 ## Essential reading order for a new agent

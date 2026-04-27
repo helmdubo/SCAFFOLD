@@ -221,6 +221,7 @@ class LoopCorner:
     position_in_loop: int
     evidence: tuple[Evidence, ...] = ()
 
+
 @dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
