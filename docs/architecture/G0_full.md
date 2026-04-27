@@ -227,7 +227,12 @@ Current terminology for the final boundary graph model:
 | `PatchChainEndpointRelation` | Pairwise local relation between endpoint samples at one Vertex. |
 | `LocalFaceFanGeometryFacts` | Local owner-normal geometry evidence. |
 | `LoopCorner` | Patch-local transition between adjacent PatchChains in one BoundaryLoop. |
+| `ScaffoldNode` | Future graph-level node assembled from LoopCorners and endpoint evidence. |
 | `ScaffoldJunction` | Future graph-level ScaffoldNode classification for branch/seam/cross-patch structures. |
+| `ScaffoldEdge` | Future graph-level view of a final PatchChain. |
+| `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
+| `ScaffoldCircuit` | Future closed ScaffoldTrace. |
+| `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
 
 Endpoint samples, endpoint relations and LocalFaceFanGeometryFacts are evidence
 or measurements; they are not graph nodes. A ScaffoldJunction is introduced
@@ -560,17 +565,21 @@ These relations are axis-free:
 - no WorldOrientation dependency.
 
 Future ScaffoldGraph / ScaffoldTrace may be derived from these endpoint
-relations.
+relations and LoopCorner data.
 
-`PatchChainEndpointSample` is not a ScaffoldJunction.
-`PatchChainEndpointRelation` is not a ScaffoldJunction.
-`LocalFaceFanGeometryFacts` is not a ScaffoldJunction.
+Endpoint samples, endpoint relations and LocalFaceFanGeometryFacts are evidence
+or measurements; they are not graph nodes.
 
 `LoopCorner` is the patch-local transition between adjacent PatchChains inside
 one BoundaryLoop. It may later feed ScaffoldNode assembly.
 
 `ScaffoldJunction` is graph-level: a ScaffoldNode classified as branch-like,
 not every PatchChain endpoint sample or LoopCorner.
+
+`ScaffoldEdge` is the graph-level view of a final PatchChain. `ScaffoldTrace`
+is a connected sequence of ScaffoldEdges through ScaffoldNodes.
+`ScaffoldCircuit` is a closed ScaffoldTrace. `ScaffoldRail` is a future
+direction-stable ScaffoldTrace usable as a conditional axis.
 
 ---
 
@@ -889,12 +898,14 @@ Owner normals used by endpoint relations are derived from Layer 2 geometry or
 Layer 3 evidence. LocalFaceFanGeometryFacts may provide local endpoint
 normals; Patch aggregate normals are a fallback.
 
-## DD-33 — ScaffoldGraph is derived from endpoint relations
+## DD-33 — ScaffoldGraph is derived from endpoint relations and LoopCorners
 
 ScaffoldGraph / ScaffoldTrace are future Layer 3 derived structures built from
-`PatchChainEndpointRelation`, not from raw Chain or world axes.
+`PatchChainEndpointRelation` and `LoopCorner`, not from raw Chain or world axes.
 
-They must not be introduced before pairwise endpoint relations exist.
+ScaffoldEdge must be a graph-level view of final PatchChain, not a competing
+PatchChain identity. ScaffoldGraph must not be introduced before pairwise
+endpoint relations and LoopCorner data exist.
 
 ## DD-34 — Final PatchChain is the single source of truth
 
@@ -910,8 +921,8 @@ LoopCorner is the local transition between adjacent PatchChains inside one
 BoundaryLoop. A LoopCorner may become a ScaffoldNode.
 
 It becomes a ScaffoldJunction only when graph-level classification says it is
-branch-like: 3+ incident PatchChains, seam pair, cross-patch connection,
-branch, or other structural ScaffoldJunction.
+structural: 3+ incident PatchChains, seam pair, cross-patch connection,
+branch, or other graph-level structure.
 
 ## DD-36 — LocalFaceFan is geometry evidence, not graph topology
 

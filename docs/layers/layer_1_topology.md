@@ -170,6 +170,16 @@ PatchChains:
   2. cap/border ring A
   3. seam side B
   4. cap/border ring B
+
+LocalFaceFanGeometryFacts:
+  many, not 2
+  local normal evidence, not scaffold graph nodes
+
+Future ScaffoldJunction:
+  likely 2 seam endpoint groups
+
+Future ScaffoldCircuit:
+  likely 2 cap/border circuits
 ```
 
 Final PatchChain may be the same as the draft run, or may be split/coalesced.

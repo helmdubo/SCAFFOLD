@@ -90,7 +90,12 @@ Current terminology for the final boundary graph model:
 | `PatchChainEndpointRelation` | Pairwise local relation between endpoint samples at one Vertex. |
 | `LocalFaceFanGeometryFacts` | Local owner-normal geometry evidence. |
 | `LoopCorner` | Patch-local transition between adjacent PatchChains in one BoundaryLoop. |
+| `ScaffoldNode` | Future graph-level node assembled from LoopCorners and endpoint evidence. |
 | `ScaffoldJunction` | Future graph-level ScaffoldNode classification for branch/seam/cross-patch structures. |
+| `ScaffoldEdge` | Future graph-level view of a final PatchChain. |
+| `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
+| `ScaffoldCircuit` | Future closed ScaffoldTrace. |
+| `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
 
 Endpoint samples, endpoint relations and LocalFaceFanGeometryFacts are evidence
 or measurements; they are not graph nodes.
@@ -344,8 +349,9 @@ LoopCorner count is four.
 A future slice may build `ScaffoldGraph` from `PatchChainEndpointRelation` and
 LoopCorner data.
 
-`ScaffoldTrace` is a connected component over continuation-like relations.
-It may later be classified as:
+`ScaffoldEdge` is the graph-level view of a final PatchChain. `ScaffoldTrace`
+is a connected sequence of ScaffoldEdges through ScaffoldNodes. It may later
+be classified as:
 
 ```text
 OPEN_TRACE
@@ -354,8 +360,11 @@ BRANCHING_TRACE
 AMBIGUOUS_TRACE
 ```
 
-Cylinder-like cases may produce closed traces/circuits around cap boundaries.
-These traces can later inform conditional axes or UV orientation.
+`ScaffoldCircuit` is a closed ScaffoldTrace. `ScaffoldRail` is a future
+direction-stable ScaffoldTrace usable as a conditional axis.
+
+Cylinder-like cases may produce ScaffoldCircuits around cap boundaries. These
+traces can later inform conditional axes or UV orientation.
 
 Do not implement ScaffoldGraph before PatchChainEndpointRelation and
 LoopCorner data are available.

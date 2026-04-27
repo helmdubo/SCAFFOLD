@@ -150,8 +150,23 @@ LocalFaceFanGeometryFacts:
 LoopCorner:
   patch-local transition between adjacent PatchChains in one BoundaryLoop.
 
+ScaffoldNode:
+  future graph-level node assembled from LoopCorners and endpoint evidence.
+
 ScaffoldJunction:
   future graph-level ScaffoldNode classification for branch/seam/cross-patch structures.
+
+ScaffoldEdge:
+  future graph-level view of a final PatchChain.
+
+ScaffoldTrace:
+  future connected sequence of ScaffoldEdges through ScaffoldNodes.
+
+ScaffoldCircuit:
+  future closed ScaffoldTrace.
+
+ScaffoldRail:
+  future direction-stable ScaffoldTrace usable as a conditional axis.
 ```
 
 Endpoint samples, endpoint relations and LocalFaceFanGeometryFacts are evidence
@@ -253,6 +268,16 @@ Cylinder tube without caps and one seam cut:
     top border run
     bottom border run
     seam Chain with two uses in the same Patch
+
+  LocalFaceFanGeometryFacts:
+    many, not 2
+    local normal evidence, not scaffold graph nodes
+
+  Future ScaffoldJunction:
+    likely 2 seam endpoint groups
+
+  Future ScaffoldCircuit:
+    likely 2 cap/border circuits
 ```
 
 `validate_chain_cardinality()` classifies all G1 Chain cardinality cases:
