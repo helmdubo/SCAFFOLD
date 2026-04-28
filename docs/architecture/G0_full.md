@@ -82,7 +82,8 @@ old:
 new:
   geometry facts are raw, uninterpreted
   topology is explicit, oriented, immutable
-  AlignmentClass derives axis-like structure
+  PatchChain is the final patch-local boundary edge source of truth
+  AlignmentClass derives axis-like structure from PatchChain directional evidence
   WorldOrientation is a parallel semantic overlay
   features are graph-pattern interpretations with evidence
   runtime roles are late, derived, and task-specific
@@ -113,10 +114,11 @@ Layer 5:
 And:
 
 ```text
-WorldOrientation is derived from topology + geometry + adjacency + WORLD_UP + overrides.
+WorldOrientation is a deferred parallel semantic overlay.
 WorldOrientation does not depend on skeleton solve.
-Alignment may use WORLD_UP vector as soft geometric bias.
-Alignment must not use SurfaceRole / WorldOrientation semantic labels.
+AlignmentClass and PatchAxes must not use WORLD_UP or WorldOrientation labels.
+WorldOrientation must not feed back into Layer 1 topology, PatchChain identity,
+AlignmentClass grouping or PatchAxes selection.
 ```
 
 ---
@@ -476,8 +478,7 @@ Layer 3 is computed from:
 
 - Layer 1 topology;
 - Layer 2 geometry;
-- Layer 0 overrides, where applicable;
-- WORLD_UP vector as raw geometric input where explicitly allowed.
+- Layer 0 overrides, where applicable.
 
 Layer 3 does not depend on Layer 5.
 
@@ -524,7 +525,7 @@ New model:
 
 ```text
 PatchChain belongs to AlignmentClass
-PatchAxes choose U/V-like axes from AlignmentClasses
+PatchAxes choose primary/secondary AlignmentClasses
 Runtime may expose H-like/V-like labels for debug
 ```
 
@@ -538,8 +539,8 @@ v1 direction clustering is conservative:
 - chord direction only;
 - fixed tolerance;
 - no adaptive widening;
-- WORLD_UP vector may be used as soft geometric bias;
-- WorldOrientation labels must not be used for alignment ranking.
+- no WORLD_UP bias;
+- no WorldOrientation labels.
 
 PatchAxes is Layer 3 classification, not solve output.
 
@@ -618,28 +619,21 @@ direction-stable ScaffoldTrace usable as a conditional axis.
 
 # 13. WorldOrientation
 
-WorldOrientation restores practical wall/floor/up/down semantics without polluting topology or solve.
+WorldOrientation is deferred. It may later restore practical wall/floor/up/down
+semantics without polluting topology or solve.
 
-There are two different uses of WORLD_UP:
-
-```text
-WORLD_UP vector:
-  raw geometric input
-  allowed as soft bias in alignment
-
-WorldOrientation labels:
-  derived semantics
-  not allowed as base alignment input
-```
-
-Therefore:
+WORLD_UP remains forbidden for current AlignmentClass and PatchAxes builders:
 
 ```text
-Alignment may use WORLD_UP vector.
-Alignment must not use SurfaceRole / WorldOrientation labels.
+AlignmentClass / PatchAxes:
+  no WORLD_UP vector bias
+  no SurfaceRole labels
+  no WorldOrientation labels
 ```
 
-Base WorldOrientation does not depend on skeleton solve, runtime UV, feature recognition or accepted FeatureInstances.
+Future WorldOrientation must remain a parallel semantic overlay. It must not
+depend on skeleton solve, runtime UV, feature recognition or accepted
+FeatureInstances.
 
 ---
 
@@ -718,8 +712,7 @@ Pass overview:
 
 ```text
 Pass 0    Source + topology + geometry
-Pass 0.5  Basic world orientation
-Pass 1    Relations + alignment + base solve
+Pass 1    Relations + alignment
 Pass 2    Features + optional second solve
 Pass 3    Final runtime outputs / reports / API
 ```
@@ -762,39 +755,17 @@ Pipeline halts only on `BLOCKING` topology errors.
 
 ---
 
-# 19. Pass 0.5 — Basic WorldOrientation
-
-Inputs:
-
-- Layer 2 patch normals;
-- Layer 2 chain directions;
-- WORLD_UP vector;
-- user world-orientation overrides.
-
-Outputs:
-
-- `PatchWorldOrientation`
-- `ChainWorldOrientation`
-
-Pass 0.5 does not feed SurfaceRole labels into alignment.
-
-Alignment may independently use WORLD_UP vector as geometric bias.
-
----
-
-# 20. Pass 1 — Relations, Alignment, Base Solve
+# 19. Pass 1 — Relations and Alignment
 
 Inputs:
 
 - Layer 1 topology;
 - Layer 2 geometry;
-- WORLD_UP vector;
 - user relation/alignment overrides.
 
 Outputs:
 
-- Layer 3 complete base relations;
-- Layer 5 skeleton solve pass 1.
+- Layer 3 complete base relations.
 
 Steps:
 
@@ -805,7 +776,6 @@ Steps:
 5. Build AlignmentClasses.
 6. Build PatchAxes.
 7. Freeze Layer 3.
-8. Run skeleton solve pass 1.
 
 Layer 3 is frozen after Pass 1.
 
@@ -813,7 +783,7 @@ Pass 2 must not add or rewrite Layer 3 records.
 
 ---
 
-# 21. Pass 2 — Feature Recognition and Optional Second Solve
+# 20. Pass 2 — Feature Recognition and Optional Second Solve
 
 Inputs:
 
@@ -838,7 +808,7 @@ Forbidden:
 
 ---
 
-# 22. User Overrides
+# 21. User Overrides
 
 User overrides are inputs, not mutations.
 
@@ -855,7 +825,7 @@ Overrides store structural fingerprint of the target entity.
 
 ---
 
-# 23. Rebuild Policy
+# 22. Rebuild Policy
 
 v1 uses full rebuild.
 
@@ -875,28 +845,34 @@ Layers 3, 4 and 5 always full rebuild in v1.
 
 ---
 
-# 24. Design Decisions Register
+# 23. Design Decisions Register
 
 The authoritative compact DD register is also mirrored in `docs/architecture/design_decisions.md`.
 
 ## DD-29 — Chain coalescing is staged
 
-G1 / G3a:
-- Boundary coalescing uses topology/materialization context only.
-- Consecutive boundary sides with the same boundary run kind and Patch context
-  may coalesce into logical Chains.
-- Border runs may coalesce into ordered Chains.
-- Seam cuts may materialize duplicate topology Vertex occurrences so one
-  source vertex can appear on both sides of a Patch loop.
+Layer 1 materializes final PatchChains from raw boundary elements.
 
-Before Alignment / PatchAxes:
-- Chains that are closed, turning, or direction-ambiguous must be refined
-  using Layer 2 geometry facts.
+Raw boundary sides, atomic source edges, draft boundary runs and raw boundary
+cycles are builder internals. They are not public model entities.
 
-Scope:
-- Coalescing/refinement is constrained to one ordered atomic boundary cycle
-  that materializes as one final BoundaryLoop.
-- Coalescing/refinement must not cross OUTER/INNER loop boundaries.
+Boundary coalescing uses topology/materialization context only:
+- boundary run kind;
+- Patch context;
+- seam/cut side;
+- neighbour context;
+- loop materialization.
+
+Border runs may coalesce into ordered Chains when materialization policy
+identifies them as one final PatchChain.
+
+Reason:
+Cylinder tube without caps + one seam cut showed that edge-atomic border Chains
+prevent correct materialized BoundaryLoop construction. Border ring runs must
+be allowed to coalesce into final PatchChains.
+
+Geometry may later describe or classify a final PatchChain, but it must not
+create a competing public PatchChain identity.
 
 ## DD-30 — Chain refinement does not change Layer 1 Chain identity
 
@@ -963,9 +939,54 @@ LocalFaceFanGeometryFacts provides local normals for endpoint evidence.
 
 It is not a ScaffoldNode and not a graph entity.
 
+## DD-37 — Seam cuts may materialize duplicate topology Vertex occurrences
+
+A seam cut may materialize multiple topology Vertex occurrences for one source
+vertex.
+
+One source vertex can appear on different sides of a materialized BoundaryLoop
+or seam cut. These occurrences may receive distinct topology VertexIds while
+retaining provenance to the same source vertex.
+
+Reason:
+Materialized UV-cut topology needs separate loop-side occurrences for the same
+source vertex. This is required for correct BoundaryLoop traversal, PatchChain
+construction, LoopCorner construction and future ScaffoldNode grouping.
+
+Implications:
+- VertexId equality is topology-occurrence equality, not source-vertex equality.
+- SourceVertexId equality is provenance equality.
+- Public queries that need source-space grouping must explicitly group by
+  SourceVertexId or structural provenance.
+- ScaffoldNode construction may aggregate multiple materialized Vertex
+  occurrences into one graph node.
+
+## PatchChain directional evidence
+
+Final PatchChain remains the public source of truth.
+
+Layer 3 may derive directional evidence from final PatchChains to support
+alignment, endpoint samples and future graph construction.
+
+Concepts:
+
+```text
+ChainDirectionalRun:
+  Direction-ready measured run derived from Chain / PatchChain geometry.
+
+PatchChainDirectionalEvidence:
+  Patch-local directional evidence derived from final PatchChain.
+  It may include source edges, segment indices, direction, length, confidence
+  and provenance.
+```
+
+These are evidence/views over final PatchChain. They are not competing
+PatchChain identities. They are not ScaffoldEdges. They must not replace final
+PatchChains as graph source of truth.
+
 ---
 
-# 25. Public Consumer APIs
+# 24. Public Consumer APIs
 
 G0 does not define exact signatures, but requires conceptual query groups:
 
@@ -980,7 +1001,7 @@ Detail/decal/wear systems consume Scaffold APIs but are not part of Scaffold Cor
 
 ---
 
-# 26. Roadmap after G0
+# 25. Roadmap after G0
 
 ## G1 — Topology Snapshot Prototype
 
@@ -1051,7 +1072,7 @@ Scope:
 
 ---
 
-# 27. Open Questions
+# 26. Open Questions
 
 ## OQ-01 — Patch segmentation policy
 
@@ -1121,26 +1142,31 @@ How is `PLANAR / CURVED / UNKNOWN` determined?
 
 Distinct class or FeatureRule variant?
 
-## OQ-11 — Geometry-based Chain refinement policy
+## OQ-11 — Geometry-based Chain / PatchChain refinement policy
 
-How do Layer 2 geometry facts split or merge topology Chains before
-Alignment?
+Status: partially resolved.
 
-OQ-11 is partially resolved for straight/turning polygonal Chains through
-Layer 3 `ChainDirectionalRun` and `PatchChainDirectionalEvidence`.
+Resolved:
+- Final PatchChain is the public source of truth.
+- Raw boundary elements are builder internals.
+- Layer 3 may derive directional evidence from final PatchChains.
+- Polygonal straight/turning Chains can be described by ChainDirectionalRun /
+  PatchChain directional evidence.
+- Directional evidence must not become a competing PatchChain identity.
 
 Still unresolved:
 
-- curved-chain handling;
+- curved-chain policy;
 - sawtooth tuning;
 - user split marks;
-- closed-loop wrap merge;
+- closed-loop wrap merge policy;
 - advanced corner detection;
-- relation to PatchChainEndpointRelation / ScaffoldGraph.
+- local face-fan refinement policy;
+- exact relationship between endpoint relations and ScaffoldGraph construction.
 
 ---
 
-# 28. Document Completion Criteria
+# 27. Document Completion Criteria
 
 G0 v1.1 is complete for G1 kickoff when:
 
@@ -1152,7 +1178,7 @@ G0 v1.1 is complete for G1 kickoff when:
 
 ---
 
-# 29. Canonical Mission Statement
+# 28. Canonical Mission Statement
 
 Scaffold Core is an immutable B-rep-inspired interpretation pipeline for topology-aware structural UV alignment.
 
