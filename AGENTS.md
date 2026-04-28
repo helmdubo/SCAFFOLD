@@ -146,22 +146,43 @@ Sawtooth/straightness work exists only as raw G2 geometry facts.
 
 Layer 3 stores derived relations over topology and geometry.
 
-Initial G3a scope:
+## G3 relations status
+
+Implemented in G3:
 
 ```text
 PatchAdjacency
 DihedralKind
 RelationSnapshot
+PatchChain incidence queries
+conservative ChainContinuationRelation (TERMINUS/SPLIT)
+ChainDirectionalRun
+PatchChainDirectionalEvidence
+AlignmentClass v0
+PatchAxes v0
+PatchChainEndpointSample
+PatchChainEndpointRelation v0
+LoopCorner v0
+LocalFaceFanGeometryFacts
 ```
 
-Deferred G3 slices:
+Deferred in G3:
 
 ```text
-ChainContinuationRelation
-Junction relations
-AlignmentClass
-PatchAxes
+ScaffoldNode / ScaffoldJunction / ScaffoldEdge
+ScaffoldGraph / ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 WorldOrientation
+```
+
+Forbidden during G3:
+
+```text
+Layer 4 Feature Grammar
+Layer 5 Runtime/Solve
+UV transfer
+API
+UI
+Blender add-on wrapper
 ```
 
 Layer 3 must not import or depend on Layer 4 features, Layer 5 runtime/solve,
