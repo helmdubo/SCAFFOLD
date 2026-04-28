@@ -118,6 +118,7 @@ Patch count: 1
 BoundaryLoop count: 1 OUTER
 Chain count: 3
 PatchChain count: 4
+LoopCorner count: 4
 
 PatchChains:
   1. seam side A
@@ -127,7 +128,8 @@ PatchChains:
 
 LocalFaceFanGeometryFacts:
   many, not 2
-  local normal evidence, not scaffold graph nodes
+  not ScaffoldJunctions
+  not expected to be 2
 
 Future ScaffoldJunction:
   likely 2 seam endpoint groups
