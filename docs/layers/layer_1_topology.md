@@ -128,8 +128,8 @@ Intended boundary construction pipeline:
 ```
 
 Raw boundary sides, atomic source edges and draft runs are builder internals.
-Do not create a public `PatchChainSpan`, `EffectivePatchChain` or
-`ScaffoldPatchChain` layer.
+Do not create an extra public span, effective-chain or scaffold-chain
+source-of-truth layer.
 
 Boundary run kinds:
 

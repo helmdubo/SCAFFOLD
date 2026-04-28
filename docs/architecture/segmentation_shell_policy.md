@@ -139,6 +139,5 @@ Future ScaffoldCircuit:
 ```
 
 Final PatchChain may be the same as the draft run, or may be split/coalesced.
-Do not create a public `PatchChainSpan`, `EffectivePatchChain` or
-`ScaffoldPatchChain` source-of-truth layer. Construction helpers must remain
-private/internal.
+Do not create an extra public span, effective-chain or scaffold-chain
+source-of-truth layer. Construction helpers must remain private/internal.
