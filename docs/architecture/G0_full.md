@@ -1026,16 +1026,26 @@ Scope:
 
 ## G3 — Derived Relations
 
-Scope:
+Implemented:
+- G3a - PatchAdjacency / DihedralKind
+- G3b - conservative ChainContinuationRelation
+- G3c0 - ChainDirectionalRun
+- G3c1 - PatchChainDirectionalEvidence
+- G3c2 - AlignmentClass v0
+- G3c3 - PatchAxes v0
+- G3c4 - PatchChainEndpointSample
+- G3c5 - PatchChainEndpointRelation
+- G3c6 - LoopCorner
 
-- PatchAdjacency;
-- DihedralKind;
-- ChainContinuationRelation;
-- PatchChain endpoint relations;
-- AlignmentClass;
-- PatchAxes;
-- WorldOrientation;
-- Layer 3 freeze after Pass 1.
+Next:
+- inspection review of PatchChainEndpointRelations and LoopCorners
+- ScaffoldNode v0
+- ScaffoldGraph / ScaffoldTrace v0
+
+Deferred:
+- WorldOrientation
+- Layer 4 Feature Grammar
+- Layer 5 Runtime / Solve
 
 ## G4 — Feature Grammar v0
 
@@ -1168,13 +1178,18 @@ Still unresolved:
 
 # 27. Document Completion Criteria
 
-G0 v1.1 is complete for G1 kickoff when:
+Historical G1 kickoff criteria were satisfied during G1.
 
-1. OQ-01 and OQ-02 are resolved.
-2. OQ-03 is at least directionally agreed before G3.
-3. Layer 1 invariants are implementation-ready.
-4. One independent review confirms no unresolved architectural contradictions.
-5. All Design Decisions are reflected in pipeline pass rules.
+For the current G3 documentation state, the active contract is complete when:
+
+- G0.md and G0_full.md are v1.2.
+- DD-29 includes border-coalescing rationale.
+- DD-37 documents seam-cut duplicate topology Vertex occurrences.
+- OQ-11 is marked partially resolved.
+- PatchChain / LocalFaceFan / EndpointSample / EndpointRelation terminology is consistent.
+- docs/phases/G3_derived_relations.md reflects current G3 subphases.
+- agent_handoff.md reflects current implementation status and next task.
+- AGENTS.md reflects current G3 status.
 
 ---
 
