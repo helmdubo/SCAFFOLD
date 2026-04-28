@@ -44,39 +44,32 @@ scaffold_core/ui/
 
 ## Layer 3 Relations
 
-G3 may introduce:
+Implemented:
 
-- `PatchAdjacency`
-- `DihedralKind`
-- `ChainContinuationRelation`
-- PatchChain endpoint relations
-- `AlignmentClass`
-- `PatchAxes`
-- WorldOrientation relations
-- relation diagnostics
+- G3a - PatchAdjacency / DihedralKind / RelationSnapshot
+- G3b1 - PatchChain incidence queries
+- G3b2 - conservative ChainContinuationRelation
+- G3c0 - ChainDirectionalRun
+- G3c1 - PatchChainDirectionalEvidence
+- G3c2 - AlignmentClass v0
+- G3c3 - PatchAxes v0
+- G3c4 - PatchChainEndpointSample
+- G3c5 - PatchChainEndpointRelation v0
+- G3c6 - LoopCorner v0
+- LocalFaceFanGeometryFacts as Layer 2 geometry evidence consumed by Layer 3
 
-Initial G3a scope:
+Next:
 
-```text
-PatchAdjacency
-DihedralKind
-RelationSnapshot
-```
+- inspection review of PatchChainEndpointRelations and LoopCorners
+- ScaffoldNode v0
+- ScaffoldGraph / ScaffoldTrace v0
 
-Deferred G3 slices:
+Deferred:
 
-```text
-G3b:
-  endpoint relations
-  ChainContinuationRelation
-
-G3c:
-  AlignmentClass
-  PatchAxes
-
-G3d:
-  WorldOrientation
-```
+- ScaffoldJunction / ScaffoldEdge / ScaffoldCircuit / ScaffoldRail
+- WorldOrientation
+- Layer 4 Feature Grammar
+- Layer 5 Runtime / Solve
 
 ## Terminology
 
@@ -232,7 +225,7 @@ Scope:
 - Do not introduce U/V labels, WORLD_UP fallback, H/V labels,
   WorldOrientation, UV placement or runtime solve.
 
-## G3c4 - PatchChainEndpointSample
+## G3c4 - PatchChain Endpoint Samples
 
 G3c4 introduces endpoint samples for PatchChain directional evidence at
 topology vertices.
@@ -276,14 +269,13 @@ Layer 1 `PatchChain` must not store normals.
 
 Implementation status:
 - `PatchChainEndpointSample` is implemented as a Layer 3 derived relation.
-- Current code uses
-  `PatchChainEndpointSample`; those are current names.
-- Samples are emitted for START and END run-use endpoints.
+- Code has adopted canonical `PatchChainEndpointSample` terminology.
+- Samples are emitted for START and END directional evidence endpoints.
 - `tangent_away_from_vertex` points away from the sampled topology Vertex.
 - Owner normals prefer LocalFaceFan normals and fall back to Patch aggregate
   normals when needed.
 
-## G3c5 - PatchChainEndpointRelation
+## G3c5 - PatchChain Endpoint Relations
 
 G3c5 derives pairwise relations between PatchChain endpoint samples at the
 same Vertex.
@@ -320,12 +312,11 @@ Rules:
 - no solve/runtime/UV;
 - no Layer 1 mutation;
 - relations are derived from Layer 1 topology, Layer 2 geometry and Layer 3
-  run-use data.
+  directional evidence data.
 
 Implementation status:
 - `PatchChainEndpointRelation` is implemented as a Layer 3 derived relation.
-- Current code uses `PatchChainEndpointRelation`;
-  those are current names.
+- Code has adopted canonical `PatchChainEndpointRelation` terminology.
 - Relations are unordered sample pairs at the same Vertex.
 - v0 classifies direction relation as OPPOSITE_COLLINEAR,
   SAME_RAY_COLLINEAR, ORTHOGONAL, OBLIQUE or DEGENERATE.
@@ -341,8 +332,11 @@ PatchChains inside one BoundaryLoop at one materialized Vertex occurrence.
 LoopCorner is patch-local. It is not a ScaffoldNode and not a ScaffoldJunction
 by itself.
 
-For a cylinder tube with one OUTER BoundaryLoop and four PatchChains, expected
-LoopCorner count is four.
+Implementation status:
+- LoopCorner is implemented as a Layer 3 derived relation.
+- One LoopCorner is built per BoundaryLoop position from final PatchChains.
+- For the cylinder tube fixture this produces exactly four LoopCorners.
+- ScaffoldNode and ScaffoldGraph remain deferred.
 
 ## Future - ScaffoldGraph / ScaffoldTrace
 
@@ -377,7 +371,6 @@ Layer 3 is derived from:
 Layer 1 topology
 Layer 2 geometry
 Layer 0 overrides, where explicitly supported
-WORLD_UP vector, where explicitly allowed
 ```
 
 Layer 3 must not depend on:
