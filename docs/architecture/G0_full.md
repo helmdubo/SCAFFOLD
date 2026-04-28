@@ -231,28 +231,45 @@ Layer 4 must not write new Layer 3 relations.
 
 Feature-local alignment is expressed as `FeatureConstraint`, not as newly registered `AlignmentClass`.
 
-## 3.7 Terminology
+## 3.7 Glossary
 
-Current terminology for the final boundary graph model:
+### Current / implemented or conceptually active
 
 | Term | Meaning |
 |---|---|
+| `Chain` | Shared/logical boundary run referenced by one or more PatchChains. |
 | `PatchChain` | Final patch-local oriented occurrence of a Chain in a BoundaryLoop. |
-| `PatchChainDirectionalEvidence` | Derived directional measurement for a PatchChain. |
-| `PatchChainEndpointSample` | Endpoint ray/evidence sample for a PatchChain directional measurement. |
-| `PatchChainEndpointRelation` | Pairwise local relation between endpoint samples at one Vertex. |
-| `LocalFaceFanGeometryFacts` | Local owner-normal geometry evidence. |
+| `BoundaryLoop` | Final ordered sequence of PatchChains. |
+| `LocalFaceFanGeometryFacts` | Local owner-normal geometry evidence; not graph topology. |
+| `ChainDirectionalRun` | Direction-ready measured run derived from Chain geometry. |
+| `PatchChainDirectionalEvidence` | Derived directional measurement for a PatchChain; not competing PatchChain identity. |
+| `PatchChainEndpointSample` | Endpoint ray/evidence sample for a PatchChain directional measurement; not a graph node. |
+| `PatchChainEndpointRelation` | Pairwise local relation between endpoint samples at one Vertex; not a graph node. |
 | `LoopCorner` | Patch-local transition between adjacent PatchChains in one BoundaryLoop. |
+| `AlignmentClass` | Implemented Layer 3 direction-family grouping over PatchChainDirectionalEvidence. |
+| `PatchAxes` | Implemented Layer 3 primary/secondary AlignmentClass selection per Patch. |
+
+Implementation status:
+Code has already adopted canonical terms for PatchChain,
+PatchChainEndpointSample, PatchChainEndpointRelation, LocalFaceFanGeometryFacts
+and LoopCorner. No code rename is required as part of this documentation
+cleanup.
+
+### Future / reserved nomenclature, not implemented yet
+
+| Term | Meaning |
+|---|---|
 | `ScaffoldNode` | Future graph-level node assembled from LoopCorners and endpoint evidence. |
 | `ScaffoldJunction` | Future graph-level ScaffoldNode classification for branch/seam/cross-patch structures. |
 | `ScaffoldEdge` | Future graph-level view of a final PatchChain. |
+| `ScaffoldGraph` | Future graph assembled from ScaffoldNodes and ScaffoldEdges. |
 | `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
+| `WorldOrientation` | Future/deferred parallel semantic overlay. |
 
-Endpoint samples, endpoint relations and LocalFaceFanGeometryFacts are evidence
-or measurements; they are not graph nodes. A ScaffoldJunction is introduced
-only after graph-level classification.
+Future terms reserve naming and constraints only. They must not be implemented
+during documentation cleanup.
 
 ## 3.5 Layer 4 — Feature Grammar
 
