@@ -72,6 +72,10 @@ Before coding, read only the routed docs needed for the task.
 | Task | Read |
 |---|---|
 | Any architecture question | `G0.md` |
+| Codex dense slice / prompt workflow | `docs/agent_rules/codex_workflow.md` |
+| Prompt templates | `docs/agent_rules/codex_prompt_library.md` |
+| CFTUV migration / bridge | `docs/migration/cftuv_lessons.md` + `docs/migration/cftuv_bridge.md` |
+| CFTUV parity fixtures | `docs/migration/cftuv_parity_fixtures.md` |
 | G1 topology work | `docs/phases/G1_topology_snapshot.md` + `docs/layers/layer_1_topology.md` + `docs/architecture/segmentation_shell_policy.md` |
 | G2 geometry facts | `docs/phases/G2_geometry_facts.md` + `docs/architecture/G0_full.md` |
 | G3 derived relations | `docs/phases/G3_derived_relations.md` + `docs/architecture/G0_full.md` |
