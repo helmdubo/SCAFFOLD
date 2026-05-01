@@ -53,3 +53,29 @@ bl_info = {
 ```
 
 `category = "UV"` is intentional because the primary workflow lives in UV space.
+
+## Headless validation
+
+Blender validation scripts may exist as validation tools, but they must not
+duplicate Scaffold Core logic.
+
+Allowed output:
+
+```text
+compact JSON/text report
+UV screenshot
+overlay screenshot
+failure summary
+```
+
+Avoid:
+
+```text
+dumping full mesh data into agent context
+implementing analysis logic in Blender scripts
+writing UV outside the G5 uv_transfer boundary
+```
+
+Use Blender smoke validation for key milestones, not for every core unit test.
+Pure Python tests and compact inspection reports should remain the default agent
+feedback loop.
