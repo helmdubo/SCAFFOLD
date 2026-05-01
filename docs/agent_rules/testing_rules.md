@@ -50,3 +50,39 @@ non_manifold.py
 ```
 
 Fixtures should not depend on large production assets.
+
+## Test tiers
+
+Use progressively heavier validation tiers. Do not run Blender for every small
+core change.
+
+```text
+Tier 0 - Architecture gates
+  forbidden imports
+  module docstrings
+  phase scope
+  forbidden future directories
+
+Tier 1 - Synthetic core tests
+  small explicit fixtures
+  pure Python only
+
+Tier 2 - Compact pipeline reports
+  inspection summaries
+  stable report fields
+  no Blender required
+
+Tier 3 - Headless Blender smoke
+  small .blend fixtures
+  compact JSON/text report
+  optional screenshot artifacts
+
+Tier 4 - Production regression
+  selected real meshes
+  screenshots / UV comparison
+  run manually or nightly
+```
+
+AI agents should prefer Tier 0-2 during ordinary core work. Use Tier 3 only when
+the slice touches Blender boundaries, mesh snapshot integration, geometry cases
+that cannot be represented synthetically, or runtime/UV behavior in later phases.
