@@ -337,7 +337,7 @@ Implementation status:
 - LoopCorner is implemented as a Layer 3 derived relation.
 - One LoopCorner is built per BoundaryLoop position from final PatchChains.
 - For the cylinder tube fixture this produces exactly four LoopCorners.
-- ScaffoldNode and ScaffoldGraph remain deferred.
+- ScaffoldGraph remains deferred.
 
 ## G3c7 - ScaffoldNode v0
 
