@@ -5,55 +5,81 @@ SCAFFOLD work.
 
 This mode is the project headquarters. It is not an implementation session.
 
-## Default simplified workflow
+## Default workflow
 
-Use this reduced chat model by default:
-
-```text
-1. Main Planning / Architect chat
-   Long-running project headquarters.
-   Owns roadmap, dense-slice selection, scope control and Codex prompts.
-
-2. Codex Work chat
-   One short-lived chat per dense slice.
-   May combine inspect -> plan -> implement -> tests -> inspection/report.
-```
-
-Use extra chats only when needed:
+Use this workflow for structured SCAFFOLD work:
 
 ```text
-Optional Scout chat:
-  Use only for unresolved architecture questions, DD/OQ conflicts or CFTUV
-  algorithm analysis that must be separated from implementation.
+User <-> Architect chat (persistent)
+          plans slices, writes Task Cards, handles strategy and blockers
 
-Optional Reviewer chat:
-  Use only for high-risk diffs: G0/DD changes, new layer contracts,
-  ScaffoldGraph/Feature/Runtime work, large diffs or uncertain implementation.
+User -> Codex Orchestrator session (disposable, one Task Card)
+        runs subagents internally: explorer -> worker -> reviewer
 
-Optional Blender Validation chat:
-  Use only for milestone visual checks or failures that compact reports cannot
-  explain.
+If reviewer PASS:
+  merge
+
+If reviewer WARNING / BLOCKER / UNCERTAIN:
+  return to Architect
 ```
 
-Do not create separate chats for Model, Builder, Tests, Inspection and
-Docs/routing by default. Those are usually one Codex Work dense slice.
+The important split is:
+
+```text
+Architect = persistent context and planning
+Codex Orchestrator = disposable Task Card execution coordinator
+Subagents = isolated Explorer / Worker / Reviewer threads inside Codex
+```
+
+Do not manually open separate Worker / Reviewer / Scout chats by default. Codex
+subagents replace those disposable chats when the Codex app/CLI supports them.
+
+## Slice vs Task Card
+
+A dense slice is a planning unit. A Task Card is an execution unit.
+
+```text
+Dense Slice:
+  coherent project capability or milestone step.
+  May contain 1-5 Task Cards.
+
+Task Card:
+  minimal self-contained work that can be reviewed as one PR/diff in one sitting.
+  Executed by one disposable Codex Orchestrator session.
+```
+
+A Task Card is not one function. It may include model, builder, tests,
+inspection and docs/routing when those are one coherent capability.
+
+A Task Card should pass these checks before opening Codex:
+
+```text
+- can be read aloud in about 30 seconds;
+- has no more than 7 acceptance points;
+- has no more than 6 allowed files unless explicitly justified;
+- can be diff-reviewed in one sitting;
+- changes one concept or one narrow pipeline path;
+- has clear stop conditions.
+```
+
+If two or more checks fail, it is probably a slice, not a Task Card. Split it
+inside Architect before starting Codex.
 
 ## Purpose
 
 The Planning / Architect session maintains project direction and turns broad
-intent into bounded Codex work.
+intent into bounded Task Cards.
 
 It owns:
 
 - vision and roadmap discussion;
 - milestone planning;
-- dense-slice selection;
+- dense-slice planning;
+- Task Card creation and sizing;
 - scope control;
-- deciding when a separate Scout session is needed;
-- deciding when a separate Reviewer session is needed;
 - deciding when a DD/OQ draft is needed;
-- interpreting Codex Work summaries, test reports and Blender reports;
-- preparing prompts for Codex Work sessions;
+- interpreting Codex summaries, reviewer findings, test reports and Blender reports;
+- preparing prompts for Codex Orchestrator sessions;
 - keeping CFTUV lessons aligned with SCAFFOLD architecture.
 
 It does not own production code implementation.
@@ -63,13 +89,12 @@ It does not own production code implementation.
 Planning / Architect should:
 
 1. Preserve SCAFFOLD layer boundaries.
-2. Prefer dense bounded slices over micro-task planning for greenfield work.
-3. Use the two-chat workflow unless risk justifies a separate Scout/Reviewer.
-4. Separate strategic vision from executable next slices.
-5. Detect unresolved architecture decisions before implementation starts.
-6. Keep the user focused on the next useful step.
-7. Produce Codex-ready prompts when a slice is selected.
-8. Prevent CFTUV behavior from being copied as architecture debt.
+2. Separate strategic vision from executable Task Cards.
+3. Prefer bounded Task Cards over micro-tasks and over broad implementation prompts.
+4. Detect unresolved architecture decisions before implementation starts.
+5. Treat Codex architecture questions as a signal that the Task Card was incomplete.
+6. Use reviewer output to decide merge, fix, reslice or escalate.
+7. Prevent CFTUV behavior from being copied as architecture debt.
 
 ## What this session may do
 
@@ -77,9 +102,10 @@ Allowed:
 
 - discuss architecture and trade-offs;
 - choose the next 1-3 dense slices;
+- break a slice into Task Cards;
 - write planning notes;
 - draft DD/OQ text;
-- draft prompts for Codex Work / optional Scout / optional Reviewer sessions;
+- draft prompts for Codex Orchestrator sessions;
 - update planning, migration, prompt, or routing docs when explicitly asked;
 - summarize project state after PRs or reports.
 
@@ -89,6 +115,7 @@ Forbidden by default:
 - modifying Layer 1/2/3/4/5 implementation files;
 - making G0 changes without explicit user approval;
 - mixing implementation with unresolved design decisions;
+- letting Codex decide architecture or task decomposition;
 - turning long-term vision into immediate scope without user approval.
 
 ## Inputs
@@ -97,9 +124,8 @@ A Planning / Architect session may receive:
 
 - user priorities;
 - latest PR summary or diff summary;
-- Codex Work summaries;
-- optional Scout reports;
-- optional Reviewer findings;
+- Codex Orchestrator summaries;
+- reviewer checklist output;
 - test results;
 - compact pipeline reports;
 - Blender screenshots or smoke reports;
@@ -123,29 +149,37 @@ NEXT DENSE SLICES
 
 RECOMMENDED NEXT SLICE
 - selected slice
+- why this slice now
+
+TASK CARDS
+1. <task card name> — reviewable bounded work
+2. <task card name> — reviewable bounded work
+
+RECOMMENDED NEXT TASK CARD
+- selected Task Card
 - reason
 - stop conditions
 
-CODEX WORK PROMPT
-<ready-to-copy prompt for the next Codex Work chat>
+CODEX ORCHESTRATOR PROMPT
+<ready-to-copy prompt for one disposable Codex session>
 
 RISKS / BLOCKERS
 - unresolved DD/OQ
 - missing tests/fixtures/reports
 ```
 
-For post-slice planning:
+For post-task planning:
 
 ```text
-AFTER SLICE STATE
-- what the slice changed
+AFTER TASK STATE
+- what Codex changed
 - what it did not change
-- whether roadmap changed
+- reviewer result: PASS / WARNING / BLOCKER / UNCERTAIN
 
 NEXT ACTION
-- merge / follow-up / optional reviewer / validation / next slice
+- merge / fix / reslice / validation / next Task Card
 
-NEXT CODEX WORK PROMPT
+NEXT CODEX PROMPT
 <ready-to-copy prompt if applicable>
 ```
 
@@ -158,113 +192,117 @@ UNCERTAINTY
 - affected docs/files
 
 DECISION PATH
-- separate Scout needed? yes/no
+- explorer-only Codex run needed? yes/no
 - DD/OQ needed? yes/no
 - implementation blocked? yes/no
 
-SCOUT PROMPT
-<ready-to-copy prompt, only if a separate Scout is justified>
+EXPLORER PROMPT
+<ready-to-copy prompt, only if a separate explorer-only Codex run is justified>
 ```
 
-## Relationship to other session modes
+## Codex Orchestrator session
 
-### Codex Work
+A Codex Orchestrator session is disposable and executes exactly one Task Card.
 
-Planning writes the dense-slice prompt. Codex Work performs the slice.
-
-A Codex Work chat may combine:
+It may spawn these subagents internally:
 
 ```text
-inspect -> short plan -> implement -> tests -> inspection/report -> summary
+scaffold_explorer:
+  read-only file/context discovery.
+
+scaffold_worker:
+  implementation and tests inside the assigned write set.
+
+scaffold_reviewer:
+  mandatory checklist review of the resulting diff.
 ```
 
-A dense slice should have:
+Codex Orchestrator must not:
 
-- one capability;
-- one layer owner or narrow pipeline path;
-- explicit forbidden scope;
-- stop conditions;
-- tests or report output.
+- decompose the slice into new tasks;
+- expand acceptance criteria;
+- make architecture decisions;
+- change G0/DD contracts unless explicitly authorized in the Task Card;
+- continue after a stop condition;
+- recursively delegate beyond direct child subagents.
 
-### Optional Scout
+If Codex encounters an architecture question, stop and return to Architect. The
+Task Card was incomplete, too broad, or blocked by a design decision.
 
-Planning asks a separate Scout only when the contract is unclear.
+## Reviewer gate
 
-Use separate Scout when:
+Reviewer is a mandatory checklist after every Worker diff inside the Codex
+Orchestrator session.
 
-- a DD/OQ conflict may exist;
-- a G0 amendment may be needed;
-- CFTUV behavior needs isolated analysis;
-- relevant files must be located before a risky implementation.
+Reviewer checks:
 
-Scout returns information. Planning decides what to do with it.
+- phase scope;
+- import boundaries;
+- future directories;
+- Layer 1 identity mutation;
+- semantic leakage into lower layers;
+- PatchChain source-of-truth preservation;
+- Feature/Runtime/UV leakage;
+- test coverage;
+- over-editing;
+- hidden effective layer;
+- direct CFTUV code copying.
 
-### Optional Reviewer
-
-Planning may start a separate Reviewer session after high-risk implementation.
-
-Reviewer checks the diff. Reviewer does not redesign unless the diff reveals a
-blocking architecture issue.
-
-Ordinary dense slices may use Codex Work self-check plus tests instead of a
-separate Reviewer chat.
-
-### Tests / Validation
-
-Planning decides which validation tier is needed.
-
-Do not require Blender smoke for ordinary pure-core changes.
-
-### Blender Inspection
-
-Planning uses Blender inspection only for key milestones or failures that cannot
-be understood from compact reports.
-
-## Dense slice selection rules
-
-A good next dense slice has:
+Reviewer returns:
 
 ```text
-one new concept
-one layer owner
-one inspection/report/test output
-no unresolved DD blocker
-clear stop conditions
+PASS
+WARNING
+BLOCKER
+UNCERTAIN
 ```
 
-Examples:
+If Reviewer returns WARNING/BLOCKER/UNCERTAIN, escalate to Architect before asking
+Codex to keep patching. The problem may be an oversized or underspecified Task
+Card, not just bad implementation.
 
-Good:
+## Optional explorer-only run
+
+Explorer-only Codex runs are not default. Use them only when Architect cannot
+write a safe Task Card yet.
+
+Use explorer-only runs for:
+
+- DD/OQ conflicts;
+- G0 amendment questions;
+- CFTUV algorithm analysis;
+- unknown relevant files;
+- risk that implementation would encode an unresolved design choice.
+
+Explorer produces facts/options. Architect decides next.
+
+## Tests / Validation
+
+Tests are part of Worker Task Cards when relevant.
+
+Reviewer verifies that the tests match the Task Card.
+
+Planning decides which validation tier is needed. Do not require Blender smoke for
+ordinary pure-core changes.
+
+Use Blender inspection only for key milestones or failures that cannot be
+understood from compact reports.
+
+## Task Card sizing signals
+
+Split a Task Card if at least two of these are true:
 
 ```text
-ScaffoldNode v0 docs/status sync:
-  update G3 docs + handoff + AGENTS status + DD note, no implementation code.
+- more than 7 acceptance points;
+- more than 6 allowed files;
+- core diff likely exceeds about 200 changed lines;
+- review requires understanding multiple contracts;
+- reviewer would likely mark multiple unrelated UNCERTAIN items;
+- the Task Card cannot be read aloud in about 30 seconds.
 ```
 
-Good implementation slice:
-
-```text
-ScaffoldNode v0:
-  model + builder + tests + inspection summary inside G3.
-```
-
-Bad:
-
-```text
-Make SCAFFOLD support bands like CFTUV.
-```
-
-## Stop conditions for Planning
-
-Planning should stop and request Scout/DD work when the next action requires:
-
-- changing `G0.md`;
-- resolving DD-34 / PatchChain / ScaffoldEdge semantics;
-- adding Layer 4/5 concepts during G3;
-- defining a new cross-layer contract;
-- changing `WORLD_UP` policy;
-- deciding how user-authored seam chains are represented;
-- porting CFTUV behavior without an Algorithm Card.
+Merge tiny tasks if they are only one coherent capability split into artificial
+micro-steps.
 
 ## CFTUV migration rule
 
@@ -282,20 +320,22 @@ CFTUV behavior
   -> implementation
 ```
 
-A separate Scout is recommended for CFTUV source reading. The Codex Work chat
-should normally implement from the Algorithm Card, not directly from CFTUV code.
+A separate explorer-only Codex run is recommended for CFTUV source reading.
+Worker should normally implement from the Algorithm Card, not directly from CFTUV
+code.
 
-## Recommended recurring planning loop
+## Recommended recurring loop
 
 ```text
-1. Review latest state.
-2. Identify whether design uncertainty exists.
-3. If uncertain, decide whether a separate Scout is worth it.
-4. If clear, choose one dense slice.
-5. Write Codex Work prompt.
-6. Codex Work performs inspect -> implement -> tests -> summary.
-7. Decide whether optional Reviewer or Blender validation is needed.
-8. Update next slices.
+1. Architect reviews latest state.
+2. Architect chooses the next dense slice.
+3. Architect breaks it into Task Cards.
+4. Architect selects one Task Card.
+5. Codex Orchestrator executes that Task Card through subagents.
+6. Reviewer subagent checks the PR/diff.
+7. If PASS, merge.
+8. If WARNING/BLOCKER/UNCERTAIN, return to Architect.
+9. Architect decides fix, reslice, explorer-only run, DD/OQ, validation or next Task Card.
 ```
 
 ## Prompt template for starting Planning / Architect
@@ -307,16 +347,19 @@ Do not implement production code.
 Your job:
 - maintain roadmap;
 - choose next dense slices;
-- decide when separate Scout/Reviewer chats are actually needed;
-- prepare Codex Work prompts;
+- break slices into Task Cards;
+- ensure each Task Card is reviewable in one sitting;
+- prepare Codex Orchestrator prompts;
 - keep G0/current phase boundaries in mind;
 - prevent scope creep;
 - keep CFTUV migration behavior-first.
 
 Default workflow:
-- one long Planning chat;
-- one Codex Work chat per dense slice;
-- optional Scout/Reviewer/Blender chats only for high-risk cases.
+- one long Architect chat;
+- one disposable Codex Orchestrator session per Task Card;
+- Codex Orchestrator spawns direct child subagents: explorer, worker, reviewer;
+- reviewer subagent is mandatory after every Worker diff;
+- optional explorer-only run only for unresolved design questions.
 
 Input:
 - latest PR summaries / reviewer notes / test reports / user priorities.
@@ -324,7 +367,8 @@ Input:
 Output:
 PROJECT STATE
 NEXT DENSE SLICES
-RECOMMENDED NEXT SLICE
-CODEX WORK PROMPT
+TASK CARDS
+RECOMMENDED NEXT TASK CARD
+CODEX ORCHESTRATOR PROMPT
 RISKS / BLOCKERS
 ```
