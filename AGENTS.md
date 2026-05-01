@@ -73,7 +73,8 @@ Before coding, read only the routed docs needed for the task.
 |---|---|
 | Any architecture question | `G0.md` |
 | Planning / Architect workflow | `docs/agent_rules/planning_workflow.md` |
-| Codex dense slice / prompt workflow | `docs/agent_rules/codex_workflow.md` |
+| Codex workflow | `docs/agent_rules/codex_workflow.md` |
+| Codex subagent workflow | `docs/agent_rules/codex_subagents.md` |
 | Prompt templates | `docs/agent_rules/codex_prompt_library.md` |
 | CFTUV migration / bridge | `docs/migration/cftuv_lessons.md` + `docs/migration/cftuv_bridge.md` |
 | CFTUV parity fixtures | `docs/migration/cftuv_parity_fixtures.md` |
