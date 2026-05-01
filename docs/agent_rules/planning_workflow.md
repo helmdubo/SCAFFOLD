@@ -5,6 +5,39 @@ SCAFFOLD work.
 
 This mode is the project headquarters. It is not an implementation session.
 
+## Default simplified workflow
+
+Use this reduced chat model by default:
+
+```text
+1. Main Planning / Architect chat
+   Long-running project headquarters.
+   Owns roadmap, dense-slice selection, scope control and Codex prompts.
+
+2. Codex Work chat
+   One short-lived chat per dense slice.
+   May combine inspect -> plan -> implement -> tests -> inspection/report.
+```
+
+Use extra chats only when needed:
+
+```text
+Optional Scout chat:
+  Use only for unresolved architecture questions, DD/OQ conflicts or CFTUV
+  algorithm analysis that must be separated from implementation.
+
+Optional Reviewer chat:
+  Use only for high-risk diffs: G0/DD changes, new layer contracts,
+  ScaffoldGraph/Feature/Runtime work, large diffs or uncertain implementation.
+
+Optional Blender Validation chat:
+  Use only for milestone visual checks or failures that compact reports cannot
+  explain.
+```
+
+Do not create separate chats for Model, Builder, Tests, Inspection and
+Docs/routing by default. Those are usually one Codex Work dense slice.
+
 ## Purpose
 
 The Planning / Architect session maintains project direction and turns broad
@@ -16,10 +49,11 @@ It owns:
 - milestone planning;
 - dense-slice selection;
 - scope control;
-- deciding when a Scout session is needed;
+- deciding when a separate Scout session is needed;
+- deciding when a separate Reviewer session is needed;
 - deciding when a DD/OQ draft is needed;
-- interpreting Scout, Reviewer, test and Blender reports;
-- preparing prompts for Codex Implementer sessions;
+- interpreting Codex Work summaries, test reports and Blender reports;
+- preparing prompts for Codex Work sessions;
 - keeping CFTUV lessons aligned with SCAFFOLD architecture.
 
 It does not own production code implementation.
@@ -30,11 +64,12 @@ Planning / Architect should:
 
 1. Preserve SCAFFOLD layer boundaries.
 2. Prefer dense bounded slices over micro-task planning for greenfield work.
-3. Separate strategic vision from executable next slices.
-4. Detect unresolved architecture decisions before implementation starts.
-5. Keep the user focused on the next useful step.
-6. Produce Codex-ready prompts when a slice is selected.
-7. Prevent CFTUV behavior from being copied as architecture debt.
+3. Use the two-chat workflow unless risk justifies a separate Scout/Reviewer.
+4. Separate strategic vision from executable next slices.
+5. Detect unresolved architecture decisions before implementation starts.
+6. Keep the user focused on the next useful step.
+7. Produce Codex-ready prompts when a slice is selected.
+8. Prevent CFTUV behavior from being copied as architecture debt.
 
 ## What this session may do
 
@@ -44,7 +79,7 @@ Allowed:
 - choose the next 1-3 dense slices;
 - write planning notes;
 - draft DD/OQ text;
-- draft prompts for Scout / Implementer / Reviewer sessions;
+- draft prompts for Codex Work / optional Scout / optional Reviewer sessions;
 - update planning, migration, prompt, or routing docs when explicitly asked;
 - summarize project state after PRs or reports.
 
@@ -62,8 +97,9 @@ A Planning / Architect session may receive:
 
 - user priorities;
 - latest PR summary or diff summary;
-- Scout reports;
-- Reviewer findings;
+- Codex Work summaries;
+- optional Scout reports;
+- optional Reviewer findings;
 - test results;
 - compact pipeline reports;
 - Blender screenshots or smoke reports;
@@ -90,26 +126,26 @@ RECOMMENDED NEXT SLICE
 - reason
 - stop conditions
 
-CODEX PROMPT
-<ready-to-copy prompt for the next agent session>
+CODEX WORK PROMPT
+<ready-to-copy prompt for the next Codex Work chat>
 
 RISKS / BLOCKERS
 - unresolved DD/OQ
 - missing tests/fixtures/reports
 ```
 
-For post-PR planning:
+For post-slice planning:
 
 ```text
-AFTER PR STATE
-- what the PR changed
+AFTER SLICE STATE
+- what the slice changed
 - what it did not change
 - whether roadmap changed
 
 NEXT ACTION
-- merge / follow-up / scout / review / validation
+- merge / follow-up / optional reviewer / validation / next slice
 
-NEXT CODEX PROMPT
+NEXT CODEX WORK PROMPT
 <ready-to-copy prompt if applicable>
 ```
 
@@ -122,32 +158,25 @@ UNCERTAINTY
 - affected docs/files
 
 DECISION PATH
-- Scout needed? yes/no
+- separate Scout needed? yes/no
 - DD/OQ needed? yes/no
 - implementation blocked? yes/no
 
 SCOUT PROMPT
-<ready-to-copy prompt>
+<ready-to-copy prompt, only if a separate Scout is justified>
 ```
 
 ## Relationship to other session modes
 
-### Scout
+### Codex Work
 
-Planning asks Scout sessions to answer local no-code questions.
+Planning writes the dense-slice prompt. Codex Work performs the slice.
 
-Use Scout when:
+A Codex Work chat may combine:
 
-- a contract is unclear;
-- a DD/OQ conflict may exist;
-- CFTUV behavior needs analysis;
-- relevant files must be located before implementation.
-
-Scout returns information. Planning decides what to do with it.
-
-### Dense Slice Implementer
-
-Planning writes the dense-slice prompt. Implementer writes code.
+```text
+inspect -> short plan -> implement -> tests -> inspection/report -> summary
+```
 
 A dense slice should have:
 
@@ -157,12 +186,28 @@ A dense slice should have:
 - stop conditions;
 - tests or report output.
 
-### Reviewer
+### Optional Scout
 
-Planning may start a Reviewer session after implementation.
+Planning asks a separate Scout only when the contract is unclear.
+
+Use separate Scout when:
+
+- a DD/OQ conflict may exist;
+- a G0 amendment may be needed;
+- CFTUV behavior needs isolated analysis;
+- relevant files must be located before a risky implementation.
+
+Scout returns information. Planning decides what to do with it.
+
+### Optional Reviewer
+
+Planning may start a separate Reviewer session after high-risk implementation.
 
 Reviewer checks the diff. Reviewer does not redesign unless the diff reveals a
 blocking architecture issue.
+
+Ordinary dense slices may use Codex Work self-check plus tests instead of a
+separate Reviewer chat.
 
 ### Tests / Validation
 
@@ -190,6 +235,13 @@ clear stop conditions
 Examples:
 
 Good:
+
+```text
+ScaffoldNode v0 docs/status sync:
+  update G3 docs + handoff + AGENTS status + DD note, no implementation code.
+```
+
+Good implementation slice:
 
 ```text
 ScaffoldNode v0:
@@ -230,19 +282,19 @@ CFTUV behavior
   -> implementation
 ```
 
-Planning should assign CFTUV source reading to Scout sessions, then hand the
-Algorithm Card to an Implementer session.
+A separate Scout is recommended for CFTUV source reading. The Codex Work chat
+should normally implement from the Algorithm Card, not directly from CFTUV code.
 
 ## Recommended recurring planning loop
 
 ```text
 1. Review latest state.
 2. Identify whether design uncertainty exists.
-3. If uncertain, create Scout prompt.
+3. If uncertain, decide whether a separate Scout is worth it.
 4. If clear, choose one dense slice.
-5. Write Codex Implementer prompt.
-6. After implementation, start Reviewer prompt.
-7. Decide validation tier.
+5. Write Codex Work prompt.
+6. Codex Work performs inspect -> implement -> tests -> summary.
+7. Decide whether optional Reviewer or Blender validation is needed.
 8. Update next slices.
 ```
 
@@ -255,12 +307,16 @@ Do not implement production code.
 Your job:
 - maintain roadmap;
 - choose next dense slices;
-- detect design uncertainty;
-- decide when Scout is needed;
-- prepare Codex prompts;
+- decide when separate Scout/Reviewer chats are actually needed;
+- prepare Codex Work prompts;
 - keep G0/current phase boundaries in mind;
 - prevent scope creep;
 - keep CFTUV migration behavior-first.
+
+Default workflow:
+- one long Planning chat;
+- one Codex Work chat per dense slice;
+- optional Scout/Reviewer/Blender chats only for high-risk cases.
 
 Input:
 - latest PR summaries / reviewer notes / test reports / user priorities.
@@ -269,6 +325,6 @@ Output:
 PROJECT STATE
 NEXT DENSE SLICES
 RECOMMENDED NEXT SLICE
-CODEX PROMPT
+CODEX WORK PROMPT
 RISKS / BLOCKERS
 ```
