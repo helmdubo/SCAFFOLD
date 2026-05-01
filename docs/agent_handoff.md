@@ -35,6 +35,33 @@ instead.
 
 ---
 
+## Agent workflow summary
+
+Default execution model:
+
+```text
+Architect chat (persistent)
+  plans slices and writes Task Cards
+
+Codex Orchestrator session (disposable, one Task Card)
+  spawns scaffold_explorer, scaffold_worker and scaffold_reviewer subagents
+
+Reviewer subagent gate
+  mandatory after every Worker diff
+```
+
+Read:
+
+```text
+docs/agent_rules/planning_workflow.md
+docs/agent_rules/codex_workflow.md
+docs/agent_rules/codex_subagents.md
+```
+
+Do not manually create separate Worker/Reviewer chats by default.
+
+---
+
 ## Essential reading order for a new agent
 
 1. `AGENTS.md`
@@ -46,6 +73,7 @@ instead.
 7. `docs/agent_rules/anti_overengineering.md`
 8. `docs/agent_rules/testing_rules.md`
 9. `docs/agent_rules/minimal_patch_protocol.md` if fixing existing code
+10. `docs/agent_rules/codex_subagents.md` if using Codex subagents
 
 Read `G0.md` when the task touches architecture or phase boundaries.
 
@@ -64,11 +92,11 @@ Implemented:
 - PatchChainEndpointSample
 - PatchChainEndpointRelation v0
 - LoopCorner v0
+- ScaffoldNode v0
 - LocalFaceFanGeometryFacts
 
 Not implemented:
 
-- ScaffoldNode
 - ScaffoldJunction
 - ScaffoldEdge
 - ScaffoldGraph
@@ -109,7 +137,9 @@ LoopCorner:
   patch-local transition between adjacent PatchChains in one BoundaryLoop.
 
 ScaffoldNode:
-  future graph-level node assembled from LoopCorners and endpoint evidence.
+  implemented G3c7 graph-level evidence node assembled from LoopCorners and
+  endpoint evidence. It is not Layer 1 identity and must not mutate Vertex,
+  Chain or PatchChain records.
 
 ScaffoldJunction:
   future ScaffoldNode classification for branch/seam/cross-patch structures.
@@ -126,9 +156,6 @@ ScaffoldCircuit:
 ScaffoldRail:
   future direction-stable ScaffoldTrace usable as a conditional axis.
 ```
-
-Future terms reserve naming and constraints only. They must not be implemented
-during documentation cleanup or unrelated G3 work.
 
 ---
 
@@ -174,6 +201,7 @@ Cylinder tube without caps + one seam cut:
   Chain count: 3
   PatchChain count: 4
   LoopCorner count: 4
+  ScaffoldNode count: 8
 
 PatchChains:
   1. seam side A
@@ -186,8 +214,12 @@ LocalFaceFanGeometryFacts:
   not ScaffoldJunctions
   not expected to be 2
 
+ScaffoldNode:
+  graph-level evidence nodes assembled from loop corners and endpoint evidence;
+  seam-side materialized Vertex occurrences may group by SourceVertexId.
+
 Future ScaffoldJunction:
-  likely two seam endpoint groups
+  likely two seam endpoint groups after graph-level classification
 
 Future ScaffoldCircuit:
   likely two cap / border circuits
@@ -212,6 +244,7 @@ Current graph-prep layer:
 PatchChainEndpointSample
 -> PatchChainEndpointRelation
 -> LoopCorner
+-> ScaffoldNode
 ```
 
 PatchChainEndpointRelation classifies local endpoint pairs as:
@@ -224,11 +257,22 @@ AMBIGUOUS
 DEGENERATE
 ```
 
-LoopCorner is patch-local. ScaffoldNode is graph-level. ScaffoldJunction is a
-ScaffoldNode kind, not every corner.
+LoopCorner is patch-local. ScaffoldNode is graph-level evidence. ScaffoldJunction
+is a future ScaffoldNode kind/classification, not every corner or node.
+
+ScaffoldNode v0 grouping policy:
+
+```text
+SourceVertexId grouping when provenance exists;
+VertexId fallback when no SourceVertexId exists.
+```
+
+This grouping is a Layer 3 derived view. It must not rewrite or merge Layer 1
+Vertex, Chain or PatchChain identity.
 
 Do not use U/V labels, H/V labels, WORLD_UP, WorldOrientation or runtime solve
-in Layer 3 AlignmentClass, PatchAxes, endpoint relations or LoopCorner.
+in Layer 3 AlignmentClass, PatchAxes, endpoint relations, LoopCorner or
+ScaffoldNode.
 Do not store normals on Layer 1 PatchChain.
 
 ---
@@ -245,6 +289,8 @@ Resolved:
 - Polygonal straight/turning Chains can be described by ChainDirectionalRun /
   PatchChain directional evidence.
 - Directional evidence must not become a competing PatchChain identity.
+- ScaffoldNode v0 may aggregate materialized Vertex occurrences as graph-level
+  evidence, but not as Layer 1 identity.
 
 Still unresolved:
 
@@ -254,20 +300,24 @@ Still unresolved:
 - closed-loop wrap merge policy;
 - advanced corner detection;
 - local face-fan refinement policy;
-- exact relationship between endpoint relations and ScaffoldGraph construction.
+- exact relationship between endpoint relations, ScaffoldNode and ScaffoldGraph construction.
 
 ---
 
 ## Recommended next task
 
-Review full inspection JSON for PatchChainEndpointRelations and LoopCorners.
-
-Goal:
-Validate that final PatchChains, LoopCorners and endpoint relations look stable
-on cylinder, cube and L-shape fixtures before starting ScaffoldNode.
+Review ScaffoldNode v0 inspection reports and grouping behavior on synthetic
+fixtures.
 
 After that:
-ScaffoldNode v0.
+
+```text
+Scout / design review for ScaffoldGraph and ScaffoldEdge v0 contract.
+```
+
+Do not start ScaffoldGraph implementation until the ScaffoldEdge / PatchChain
+contract is clear. ScaffoldGraph must not become a competing PatchChain identity
+layer.
 
 ---
 
@@ -278,7 +328,8 @@ ScaffoldNode v0.
 - Do not add `utils.py`, `helpers.py`, `manager.py`, `service.py`, `factory.py`, `registry.py`.
 - Do not put Feature, runtime solve, pin or UV facts in Layer 3.
 - Do not feed WorldOrientation labels into base Alignment.
-- Do not use WORLD_UP in AlignmentClass, PatchAxes or endpoint relations.
+- Do not use WORLD_UP in AlignmentClass, PatchAxes, endpoint relations,
+  LoopCorner or ScaffoldNode.
 - Do not import higher layers from lower layers.
 - Do not import `pipeline.passes` or `pipeline.validator` from layer code.
 - Do not touch `G0.md` unless the task is explicitly an architecture amendment.
