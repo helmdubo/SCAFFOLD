@@ -211,8 +211,7 @@ def test_inspection_default_output_is_compact() -> None:
         "loop_corner_count": 2,
         "patch_chain_endpoint_sample_count": 16,
         "patch_chain_endpoint_relation_count": 24,
-        "patch_chain_endpoint_sample_count": 16,
-        "patch_chain_endpoint_relation_count": 24,
+        "scaffold_node_count": 4,
         "alignment_class_count": 2,
         "patch_axes_count": 2,
     }

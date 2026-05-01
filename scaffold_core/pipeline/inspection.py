@@ -133,6 +133,7 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         "loop_corner_count": len(relations.loop_corners),
         "patch_chain_endpoint_sample_count": len(relations.patch_chain_endpoint_samples),
         "patch_chain_endpoint_relation_count": len(relations.patch_chain_endpoint_relations),
+        "scaffold_node_count": len(relations.scaffold_nodes),
         "alignment_class_count": len(relations.alignment_classes),
         "patch_axes_count": len(relations.patch_axes),
     }
@@ -246,6 +247,10 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
             _endpoint_relation_to_dict(relation)
             for relation in sorted(relations.patch_chain_endpoint_relations, key=lambda item: item.id)
         ],
+        "scaffold_nodes": [
+            _scaffold_node_to_dict(node)
+            for node in sorted(relations.scaffold_nodes, key=lambda item: item.id)
+        ],
         "patch_axes": [
             {
                 "patch_id": str(patch_axes.patch_id),
@@ -324,6 +329,23 @@ def _endpoint_relation_to_dict(relation) -> dict[str, object]:
         "direction_relation": str(relation.direction_relation.value),
         "kind": str(relation.kind.value),
         "confidence": relation.confidence,
+    }
+
+
+def _scaffold_node_to_dict(node) -> dict[str, object]:
+    return {
+        "id": node.id,
+        "vertex_ids": [str(vertex_id) for vertex_id in node.vertex_ids],
+        "source_vertex_ids": [str(source_vertex_id) for source_vertex_id in node.source_vertex_ids],
+        "loop_corner_ids": list(node.loop_corner_ids),
+        "patch_chain_endpoint_sample_ids": list(node.patch_chain_endpoint_sample_ids),
+        "patch_chain_endpoint_relation_ids": list(node.patch_chain_endpoint_relation_ids),
+        "incident_patch_chain_ids": [
+            str(patch_chain_id)
+            for patch_chain_id in node.incident_patch_chain_ids
+        ],
+        "patch_ids": [str(patch_id) for patch_id in node.patch_ids],
+        "confidence": node.confidence,
     }
 
 

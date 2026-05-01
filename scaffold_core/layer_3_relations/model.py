@@ -223,6 +223,22 @@ class LoopCorner:
 
 
 @dataclass(frozen=True)
+class ScaffoldNode:
+    """Graph-level node assembled from patch-local corner and endpoint evidence."""
+
+    id: str
+    vertex_ids: tuple[VertexId, ...]
+    source_vertex_ids: tuple[SourceVertexId, ...]
+    loop_corner_ids: tuple[str, ...]
+    patch_chain_endpoint_sample_ids: tuple[str, ...]
+    patch_chain_endpoint_relation_ids: tuple[str, ...]
+    incident_patch_chain_ids: tuple[PatchChainId, ...]
+    patch_ids: tuple[PatchId, ...]
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
     chain_continuations: tuple[ChainContinuationRelation, ...] = ()
@@ -231,6 +247,7 @@ class RelationSnapshot:
     loop_corners: tuple[LoopCorner, ...] = ()
     patch_chain_endpoint_samples: tuple[PatchChainEndpointSample, ...] = ()
     patch_chain_endpoint_relations: tuple[PatchChainEndpointRelation, ...] = ()
+    scaffold_nodes: tuple[ScaffoldNode, ...] = ()
     alignment_classes: tuple[AlignmentClass, ...] = ()
     patch_axes: Mapping[PatchId, PatchAxes] = field(default_factory=dict)
     diagnostics: tuple[Diagnostic, ...] = ()

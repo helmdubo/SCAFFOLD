@@ -28,6 +28,7 @@ from scaffold_core.layer_3_relations.patch_chain_endpoint_relations import (
     build_patch_chain_endpoint_relations,
 )
 from scaffold_core.layer_3_relations.patch_chain_endpoint_samples import build_patch_chain_endpoint_samples
+from scaffold_core.layer_3_relations.scaffold_nodes import build_scaffold_nodes
 
 
 ANGLE_TOLERANCE_RADIANS = 1.0e-6
@@ -67,6 +68,12 @@ def build_relation_snapshot(
         patch_chain_directional_evidence,
     )
     patch_chain_endpoint_relations = build_patch_chain_endpoint_relations(patch_chain_endpoint_samples)
+    scaffold_nodes = build_scaffold_nodes(
+        topology,
+        loop_corners,
+        patch_chain_endpoint_samples,
+        patch_chain_endpoint_relations,
+    )
     alignment_classes = build_alignment_classes(patch_chain_directional_evidence)
     return RelationSnapshot(
         patch_adjacencies=patch_adjacencies,
@@ -76,6 +83,7 @@ def build_relation_snapshot(
         loop_corners=loop_corners,
         patch_chain_endpoint_samples=patch_chain_endpoint_samples,
         patch_chain_endpoint_relations=patch_chain_endpoint_relations,
+        scaffold_nodes=scaffold_nodes,
         alignment_classes=alignment_classes,
         patch_axes=build_patch_axes(
             topology,
