@@ -58,17 +58,28 @@ task_routes:
   codex_workflow:
     - AGENTS.md
     - docs/agent_rules/codex_workflow.md
+    - docs/agent_rules/codex_subagents.md
     - docs/agent_rules/minimal_patch_protocol.md
+  codex_subagents:
+    - AGENTS.md
+    - docs/agent_rules/codex_subagents.md
+    - docs/agent_rules/codex_workflow.md
   codex_prompt_library:
     - docs/agent_rules/codex_prompt_library.md
+    - docs/agent_rules/codex_subagents.md
   dense_slice:
     - AGENTS.md
-    - docs/agent_rules/codex_workflow.md
+    - docs/agent_rules/planning_workflow.md
+    - docs/agent_rules/codex_subagents.md
     - docs/context_map.yaml
   cftuv_migration:
     - docs/migration/cftuv_lessons.md
     - docs/migration/cftuv_bridge.md
     - docs/architecture/design_decisions.md
+  cftuv_algorithm_card:
+    - docs/migration/cftuv_bridge.md
+    - docs/agent_rules/codex_subagents.md
+    - docs/reference/cftuv/AGENTS.md
   cftuv_parity:
     - docs/migration/cftuv_parity_fixtures.md
     - docs/migration/cftuv_lessons.md
