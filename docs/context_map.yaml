@@ -51,6 +51,27 @@ phase_forbidden_dirs:
 task_routes:
   architecture:
     - G0.md
+  codex_workflow:
+    - AGENTS.md
+    - docs/agent_rules/codex_workflow.md
+    - docs/agent_rules/minimal_patch_protocol.md
+  codex_prompt_library:
+    - docs/agent_rules/codex_prompt_library.md
+  dense_slice:
+    - AGENTS.md
+    - docs/agent_rules/codex_workflow.md
+    - docs/context_map.yaml
+  cftuv_migration:
+    - docs/migration/cftuv_lessons.md
+    - docs/migration/cftuv_bridge.md
+    - docs/architecture/design_decisions.md
+  cftuv_parity:
+    - docs/migration/cftuv_parity_fixtures.md
+    - docs/migration/cftuv_lessons.md
+  blender_regression:
+    - docs/agent_rules/blender_boundaries.md
+    - docs/agent_rules/testing_rules.md
+    - docs/agent_rules/codex_workflow.md
   design_decisions:
     - docs/architecture/design_decisions.md
   segmentation_shell_policy:
