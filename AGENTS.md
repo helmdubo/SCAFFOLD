@@ -72,6 +72,7 @@ Before coding, read only the routed docs needed for the task.
 | Task | Read |
 |---|---|
 | Any architecture question | `G0.md` |
+| Planning / Architect workflow | `docs/agent_rules/planning_workflow.md` |
 | Codex dense slice / prompt workflow | `docs/agent_rules/codex_workflow.md` |
 | Prompt templates | `docs/agent_rules/codex_prompt_library.md` |
 | CFTUV migration / bridge | `docs/migration/cftuv_lessons.md` + `docs/migration/cftuv_bridge.md` |
