@@ -51,6 +51,10 @@ phase_forbidden_dirs:
 task_routes:
   architecture:
     - G0.md
+  planning_workflow:
+    - AGENTS.md
+    - docs/agent_rules/planning_workflow.md
+    - docs/context_map.yaml
   codex_workflow:
     - AGENTS.md
     - docs/agent_rules/codex_workflow.md
