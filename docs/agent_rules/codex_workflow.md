@@ -6,19 +6,79 @@ The goal is speed without losing Scaffold's layer boundaries. Prefer dense,
 bounded work slices over tiny manual steps for approved greenfield work. Prefer
 minimal patches for bug fixes and regressions.
 
+## Default two-chat workflow
+
+Use two chats for most work:
+
+```text
+1. Main Planning / Architect chat
+   Long-running project headquarters.
+   Chooses dense slices, controls scope, prepares Codex prompts, interprets results.
+
+2. Codex Work chat
+   One chat per dense slice.
+   May combine inspect -> plan -> implement -> tests -> inspection summary.
+```
+
+Use extra chats only when needed:
+
+```text
+Optional Reviewer chat:
+  Only for high-risk diffs, architecture changes, G0/DD changes, new layers,
+  ScaffoldGraph/Feature/Runtime work, or when the user is unsure.
+
+Optional Scout chat:
+  Only for unresolved design questions, DD/OQ conflicts, or CFTUV algorithm
+  analysis that should be separated from implementation.
+
+Optional Blender Validation chat:
+  Only for milestone visual checks or failures that compact reports cannot explain.
+```
+
+Do not create a separate chat for every subtask such as Model, Builder, Tests,
+Inspection and Docs. Those are usually one Codex Work dense slice.
+
 ## Session modes
+
+These modes describe responsibilities. They do not always require separate chats.
+
+### Planning / Architect
+
+Long-running project planning. Do not implement production code.
+
+Owns:
+
+- roadmap and milestone discussion;
+- dense-slice selection;
+- scope control;
+- deciding whether Scout or Reviewer is needed;
+- preparing prompts for Codex Work chats;
+- interpreting tests, reports and Blender checks.
+
+### Codex Work
+
+Default implementation chat for one dense slice.
+
+A Codex Work chat may combine:
+
+```text
+Scout-lite -> implementation -> tests -> compact inspection/report -> summary
+```
+
+Use this combined mode when the slice contract is already clear and no DD/G0
+blocker is expected.
 
 ### Scout
 
 Read and report. Do not edit files.
 
-Use Scout sessions for:
+Use a separate Scout only for:
 
 - architecture uncertainty;
 - design-decision conflicts;
 - CFTUV algorithm analysis;
 - deciding whether a task needs a new DD/OQ;
-- locating relevant files before a dense implementation slice.
+- locating relevant files before a risky implementation slice.
 
 Scout output:
 
@@ -31,32 +91,12 @@ RECOMMENDATION
 NEXT SLICE
 ```
 
-### Dense Slice Implementer
-
-Implement one approved capability inside the current phase boundary.
-
-A dense slice may touch multiple allowed files when all are required by one
-capability, for example:
-
-```text
-model -> builder -> tests -> inspection -> docs/routing if needed
-```
-
-Dense slices are allowed for greenfield implementation. They are not the same as
-bug-fix patches.
-
-Dense slice output:
-
-```text
-PATCH SUMMARY
-TESTS RUN
-ARCHITECTURE CHECK
-RISKS / FOLLOW-UP
-```
-
 ### Reviewer
 
 Review a diff only. Do not redesign unless a blocking issue requires it.
+
+Use a separate Reviewer only for high-risk changes. Ordinary dense slices may use
+Codex Work self-check plus tests.
 
 Findings first. Focus on:
 
@@ -72,12 +112,16 @@ Findings first. Focus on:
 
 ### Tests / Validation
 
+Usually part of Codex Work.
+
 Own architecture gates, pure Python tests, compact pipeline reports and Blender
 smoke reports.
 
 Do not mix validation scripts with Scaffold Core logic.
 
 ### Docs / Routing
+
+Usually part of Codex Work when docs/routing are part of the dense slice.
 
 Own agent-facing docs, context routes, migration notes and prompt libraries.
 
@@ -103,6 +147,13 @@ A dense slice must have:
 - tests or report output.
 
 Good dense slice:
+
+```text
+ScaffoldNode v0 docs/status sync:
+  update G3 docs + handoff + AGENTS status + DD note, no implementation code.
+```
+
+Good implementation slice:
 
 ```text
 ScaffoldNode v0:
@@ -137,7 +188,8 @@ Use `docs/agent_rules/minimal_patch_protocol.md` for:
 - small corrections;
 - repairs to existing working behavior.
 
-Use dense slices for explicitly approved greenfield capabilities.
+Use dense slices for explicitly approved greenfield capabilities or docs/status
+sync work.
 
 Minimal Patch Protocol should not be used to artificially split one approved
 greenfield capability into many manual micro-tasks.
@@ -154,12 +206,11 @@ A dense slice may be internally organized as:
 5. Docs/routing if needed
 ```
 
-One Codex Implementer session may complete the whole stack when the contract is
-clear.
+One Codex Work session may complete the whole stack when the contract is clear.
 
-Use a Scout session first when the contract is not clear.
+Use a separate Scout only when the contract is unclear.
 
-Use a separate Reviewer session after implementation.
+Use a separate Reviewer only when the diff is high-risk.
 
 ## Prompt style
 
@@ -180,6 +231,39 @@ Task prompts should state:
 - forbidden scope;
 - stop conditions;
 - required final summary.
+
+## Codex Work prompt shape
+
+```text
+Read AGENTS.md and docs/context_map.yaml route: <route>.
+
+Dense slice:
+  <name>
+
+Mode:
+  Single Codex Work chat.
+
+Steps:
+  1. Inspect relevant files and produce a short plan.
+  2. If no blocker, implement the slice.
+  3. Run targeted tests.
+  4. Report architecture risks and follow-up needs.
+
+Allowed:
+  <files/dirs>
+
+Forbidden:
+  <hard forbidden concepts>
+
+Stop if:
+  <stop conditions>
+
+Final:
+  PATCH SUMMARY
+  TESTS RUN
+  ARCHITECTURE CHECK
+  RISKS / FOLLOW-UP
+```
 
 ## Final response format for dense slices
 
