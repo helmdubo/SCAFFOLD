@@ -168,13 +168,14 @@ PatchAxes v0
 PatchChainEndpointSample
 PatchChainEndpointRelation v0
 LoopCorner v0
+ScaffoldNode v0
 LocalFaceFanGeometryFacts
 ```
 
 Deferred in G3:
 
 ```text
-ScaffoldNode / ScaffoldJunction / ScaffoldEdge
+ScaffoldJunction / ScaffoldEdge
 ScaffoldGraph / ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 WorldOrientation
 ```
@@ -192,6 +193,10 @@ Blender add-on wrapper
 
 Layer 3 must not import or depend on Layer 4 features, Layer 5 runtime/solve,
 UV transfer, API, UI or Blender modules.
+
+ScaffoldNode v0 is graph-level evidence assembled from LoopCorners and endpoint
+evidence. It is not Layer 1 identity and must not mutate Vertex, Chain or
+PatchChain records.
 
 ---
 
