@@ -1,174 +1,119 @@
 # Codex Workflow
 
-Use this document when a task is intended for Codex Chat or another AI coding agent.
+Use this document when a task is intended for Codex app/CLI with subagent support.
 
-The goal is speed without losing Scaffold's layer boundaries. Prefer dense,
-bounded work slices over tiny manual steps for approved greenfield work. Prefer
-minimal patches for bug fixes and regressions.
+The goal is speed without losing Scaffold's layer boundaries. Prefer bounded
+Task Cards over manual micro-management and over broad implementation prompts.
 
-## Default two-chat workflow
+## Default workflow
 
-Use two chats for most work:
-
-```text
-1. Main Planning / Architect chat
-   Long-running project headquarters.
-   Chooses dense slices, controls scope, prepares Codex prompts, interprets results.
-
-2. Codex Work chat
-   One chat per dense slice.
-   May combine inspect -> plan -> implement -> tests -> inspection summary.
-```
-
-Use extra chats only when needed:
+Use this structure for ordinary SCAFFOLD work:
 
 ```text
-Optional Reviewer chat:
-  Only for high-risk diffs, architecture changes, G0/DD changes, new layers,
-  ScaffoldGraph/Feature/Runtime work, or when the user is unsure.
+Architect chat (persistent)
+  plans dense slices and writes Task Cards
 
-Optional Scout chat:
-  Only for unresolved design questions, DD/OQ conflicts, or CFTUV algorithm
-  analysis that should be separated from implementation.
+Codex Orchestrator session (disposable, one Task Card)
+  spawns subagents internally:
+    scaffold_explorer -> scaffold_worker -> scaffold_reviewer
 
-Optional Blender Validation chat:
-  Only for milestone visual checks or failures that compact reports cannot explain.
+Architect chat
+  receives consolidated result and decides merge / follow-up / next task
 ```
 
-Do not create a separate chat for every subtask such as Model, Builder, Tests,
-Inspection and Docs. Those are usually one Codex Work dense slice.
+Do not manually open separate Worker / Reviewer / Scout chats by default. Codex
+subagents replace those disposable chats.
 
-## Session modes
-
-These modes describe responsibilities. They do not always require separate chats.
+## Roles
 
 ### Planning / Architect
 
-Long-running project planning. Do not implement production code.
+Persistent project planning outside Codex Work.
 
 Owns:
 
 - roadmap and milestone discussion;
 - dense-slice selection;
+- Task Card creation and sizing;
 - scope control;
-- deciding whether Scout or Reviewer is needed;
-- preparing prompts for Codex Work chats;
-- interpreting tests, reports and Blender checks.
+- deciding whether a DD/OQ is needed;
+- preparing Codex Orchestrator prompts;
+- interpreting consolidated Codex results.
 
-### Codex Work
+Architect does not implement production code.
 
-Default implementation chat for one dense slice.
+### Codex Orchestrator
 
-A Codex Work chat may combine:
+Disposable parent session for one Task Card.
 
-```text
-Scout-lite -> implementation -> tests -> compact inspection/report -> summary
-```
+Responsibilities:
 
-Use this combined mode when the slice contract is already clear and no DD/G0
-blocker is expected.
+- read the Task Card and routed docs;
+- spawn requested subagents;
+- wait for subagent results;
+- return one consolidated response.
 
-### Scout
+The Orchestrator must not:
 
-Read and report. Do not edit files.
+- choose the next dense slice;
+- split a slice into new tasks;
+- expand acceptance criteria;
+- make architecture decisions;
+- silently amend G0/DD contracts;
+- recursively delegate beyond direct child subagents.
 
-Use a separate Scout only for:
+### scaffold_explorer
 
-- architecture uncertainty;
-- design-decision conflicts;
-- CFTUV algorithm analysis;
-- deciding whether a task needs a new DD/OQ;
-- locating relevant files before a risky implementation slice.
+Read-only discovery subagent.
 
-Scout output:
+Use for file discovery, contract checks, stale-doc detection, risk discovery and
+CFTUV Algorithm Cards.
 
-```text
-CURRENT CONTRACT
-RELEVANT FILES
-RISKS / STOP CONDITIONS
-OPTIONS
-RECOMMENDATION
-NEXT SLICE
-```
+### scaffold_worker
 
-### Reviewer
+Implementation subagent.
 
-Review a diff only. Do not redesign unless a blocking issue requires it.
+Executes only the assigned Task Card. Edits only the assigned write set. Runs the
+requested tests when possible.
 
-Use a separate Reviewer only for high-risk changes. Ordinary dense slices may use
-Codex Work self-check plus tests.
+### scaffold_reviewer
 
-Findings first. Focus on:
+Mandatory read-only checklist reviewer after every Worker diff.
 
-- phase/scope violations;
-- forbidden imports;
-- future-phase directory creation;
-- semantic leakage into lower layers;
-- PatchChain identity mutation;
-- hidden runtime/feature promotion;
-- missing tests;
-- over-editing;
-- direct CFTUV code copying.
+Returns PASS / WARNING / BLOCKER / UNCERTAIN.
 
-### Tests / Validation
-
-Usually part of Codex Work.
-
-Own architecture gates, pure Python tests, compact pipeline reports and Blender
-smoke reports.
-
-Do not mix validation scripts with Scaffold Core logic.
-
-### Docs / Routing
-
-Usually part of Codex Work when docs/routing are part of the dense slice.
-
-Own agent-facing docs, context routes, migration notes and prompt libraries.
-
-Docs/routing changes should not modify core implementation unless explicitly part
-of the same dense slice.
-
-### Blender Inspection
-
-Use only for key milestone validation or cases that cannot be represented by pure
-Python fixtures.
-
-Blender inspection should produce compact reports or screenshots, not large mesh
-dumps.
-
-## Dense slice rules
-
-A dense slice must have:
-
-- one capability;
-- one layer owner or one narrow pipeline path;
-- explicit forbidden scope;
-- stop conditions;
-- tests or report output.
-
-Good dense slice:
+## Dense Slice vs Task Card
 
 ```text
-ScaffoldNode v0 docs/status sync:
-  update G3 docs + handoff + AGENTS status + DD note, no implementation code.
+Dense Slice:
+  planning unit owned by Architect.
+  May contain 1-5 Task Cards.
+
+Task Card:
+  execution unit owned by one Codex Orchestrator session.
+  Must be reviewable as one PR/diff in one sitting.
 ```
 
-Good implementation slice:
+A Task Card is not one function. It may include model, builder, tests,
+inspection and docs/routing when those are one coherent capability.
+
+Task Card sizing guardrails:
 
 ```text
-ScaffoldNode v0:
-  model + builder + tests + inspection summary inside G3.
+- can be read aloud in about 30 seconds;
+- no more than 7 acceptance points;
+- no more than 6 allowed files unless explicitly justified;
+- diff-reviewable in one sitting;
+- changes one concept or one narrow pipeline path;
+- has clear stop conditions.
 ```
 
-Bad dense slice:
-
-```text
-Make SCAFFOLD support bands like CFTUV.
-```
+If two or more guardrails fail, split the task inside Architect before opening
+Codex.
 
 ## Stop conditions
 
-Stop and report instead of patching if the task requires:
+Stop and return to Architect if the task requires:
 
 - editing `G0.md` without explicit user approval;
 - creating future-phase directories;
@@ -179,7 +124,7 @@ Stop and report instead of patching if the task requires:
 - adding UI or Blender logic to core layers;
 - adding generic `utils.py`, `helpers.py`, `manager.py`, `service.py`, or `registry.py` modules.
 
-## Minimal Patch vs Dense Slice
+## Minimal Patch vs Task Card
 
 Use `docs/agent_rules/minimal_patch_protocol.md` for:
 
@@ -188,99 +133,80 @@ Use `docs/agent_rules/minimal_patch_protocol.md` for:
 - small corrections;
 - repairs to existing working behavior.
 
-Use dense slices for explicitly approved greenfield capabilities or docs/status
-sync work.
+Use Task Cards for approved greenfield capabilities, docs/status sync work, or
+multi-file changes that are still one coherent reviewable capability.
 
 Minimal Patch Protocol should not be used to artificially split one approved
-greenfield capability into many manual micro-tasks.
-
-## Commit-stack shape inside a dense slice
-
-A dense slice may be internally organized as:
-
-```text
-1. Model
-2. Builder
-3. Tests
-4. Inspection/report
-5. Docs/routing if needed
-```
-
-One Codex Work session may complete the whole stack when the contract is clear.
-
-Use a separate Scout only when the contract is unclear.
-
-Use a separate Reviewer only when the diff is high-risk.
+capability into many manual micro-tasks.
 
 ## Prompt style
 
-Keep Codex Chat prompts short. Persistent rules live in:
+Keep prompts short. Persistent rules live in:
 
 ```text
 AGENTS.md
 docs/context_map.yaml
 routed docs
+docs/agent_rules/codex_subagents.md
 ```
 
 Task prompts should state:
 
 - route to read;
-- dense slice name;
+- Task Card name;
 - goal;
-- allowed scope;
+- requested subagents;
+- allowed files;
 - forbidden scope;
+- acceptance criteria;
+- tests;
 - stop conditions;
-- required final summary.
+- required consolidated output.
 
-## Codex Work prompt shape
+## Codex Orchestrator prompt shape
 
 ```text
 Read AGENTS.md and docs/context_map.yaml route: <route>.
+Read docs/agent_rules/codex_subagents.md.
 
-Dense slice:
-  <name>
+You are the Codex Orchestrator for this SCAFFOLD Task Card.
+Execute exactly this Task Card. Do not expand scope.
 
-Mode:
-  Single Codex Work chat.
+Task Card:
+<task card>
 
-Steps:
-  1. Inspect relevant files and produce a short plan.
-  2. If no blocker, implement the slice.
-  3. Run targeted tests.
-  4. Report architecture risks and follow-up needs.
+Subagent workflow:
+1. Spawn scaffold_explorer if requested.
+2. If explorer reports BLOCKER, stop and summarize.
+3. Spawn scaffold_worker to implement only the Task Card.
+4. Spawn scaffold_reviewer to review the resulting diff using the SCAFFOLD checklist.
+5. Wait for all requested results.
+6. Return a consolidated response.
 
-Allowed:
-  <files/dirs>
-
-Forbidden:
-  <hard forbidden concepts>
-
-Stop if:
-  <stop conditions>
-
-Final:
-  PATCH SUMMARY
-  TESTS RUN
-  ARCHITECTURE CHECK
-  RISKS / FOLLOW-UP
+Do not start a second implementation pass if reviewer reports architecture
+UNCERTAIN or BLOCKER. Return to Architect instead.
 ```
 
-## Final response format for dense slices
+## Consolidated response format
 
 ```text
-PATCH SUMMARY
+EXPLORER SUMMARY
+- facts / files / risks, or N/A
+
+WORKER SUMMARY
 - changed files
 - behavior added
 
 TESTS RUN
 - commands and results
 
-ARCHITECTURE CHECK
-- phase boundaries
-- forbidden imports
-- no future layers
+REVIEW RESULT
+- PASS / WARNING / BLOCKER / UNCERTAIN
+- key checklist items
 
-RISKS / FOLLOW-UP
-- known limitations
-- next slice suggestion
+FINAL RECOMMENDATION
+- merge
+- fix within Task Card
+- return to Architect
+- split Task Card
 ```
