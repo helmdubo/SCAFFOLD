@@ -56,13 +56,14 @@ Implemented:
 - G3c4 - PatchChainEndpointSample
 - G3c5 - PatchChainEndpointRelation v0
 - G3c6 - LoopCorner v0
+- G3c7 - ScaffoldNode v0
 - LocalFaceFanGeometryFacts as Layer 2 geometry evidence consumed by Layer 3
 
 Next:
 
-- inspection review of PatchChainEndpointRelations and LoopCorners
-- ScaffoldNode v0
-- ScaffoldGraph / ScaffoldTrace v0
+- inspection review of ScaffoldNode v0 reports and edge cases
+- ScaffoldGraph / ScaffoldEdge v0 contract review
+- ScaffoldGraph / ScaffoldTrace v0 only after contract is clear
 
 Deferred:
 
@@ -83,15 +84,15 @@ Current terminology for the final boundary graph model:
 | `PatchChainEndpointRelation` | Pairwise local relation between endpoint samples at one Vertex. |
 | `LocalFaceFanGeometryFacts` | Local owner-normal geometry evidence. |
 | `LoopCorner` | Patch-local transition between adjacent PatchChains in one BoundaryLoop. |
-| `ScaffoldNode` | Future graph-level node assembled from LoopCorners and endpoint evidence. |
+| `ScaffoldNode` | Implemented G3c7 graph-level evidence node assembled from LoopCorners and endpoint evidence. It is not Layer 1 identity. |
 | `ScaffoldJunction` | Future graph-level ScaffoldNode classification for branch/seam/cross-patch structures. |
 | `ScaffoldEdge` | Future graph-level view of a final PatchChain. |
 | `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
 
-Endpoint samples, endpoint relations and LocalFaceFanGeometryFacts are evidence
-or measurements; they are not graph nodes.
+Endpoint samples, endpoint relations, LocalFaceFanGeometryFacts and ScaffoldNodes
+are evidence or derived relation records; they are not Layer 1 topology.
 
 ## G3b1 PatchChain incidence
 
@@ -338,10 +339,45 @@ Implementation status:
 - For the cylinder tube fixture this produces exactly four LoopCorners.
 - ScaffoldNode and ScaffoldGraph remain deferred.
 
+## G3c7 - ScaffoldNode v0
+
+G3c7 introduces `ScaffoldNode` as a graph-level evidence node assembled from
+`LoopCorner`, `PatchChainEndpointSample` and `PatchChainEndpointRelation` data.
+
+ScaffoldNode v0 is a Layer 3 derived relation record. It is not Layer 1 topology
+and not a replacement for Vertex, Chain, PatchChain or BoundaryLoop identity.
+
+Grouping policy v0:
+
+- group materialized topology `Vertex` occurrences by `SourceVertexId` when
+  source provenance exists;
+- fall back to topology `VertexId` grouping when no source provenance exists;
+- retain contributing LoopCorner ids, endpoint sample ids, endpoint relation ids,
+  incident PatchChain ids, Patch ids, confidence and evidence;
+- do not classify ScaffoldJunctions;
+- do not build ScaffoldEdges, ScaffoldTraces, ScaffoldCircuits or ScaffoldRails.
+
+Rules:
+
+- no Layer 1 mutation;
+- no PatchChain split/re-id;
+- no U/V labels;
+- no H/V labels;
+- no WORLD_UP;
+- no WorldOrientation;
+- no Feature, Runtime, Solve or UV semantics.
+
+Implementation status:
+
+- `ScaffoldNode` is implemented in the Layer 3 relation model.
+- `build_scaffold_nodes()` builds nodes from LoopCorners and endpoint evidence.
+- `RelationSnapshot.scaffold_nodes` stores the derived node records.
+- Inspection reports `scaffold_node_count` and full `scaffold_nodes` in full detail.
+
 ## Future - ScaffoldGraph / ScaffoldTrace
 
-A future slice may build `ScaffoldGraph` from `PatchChainEndpointRelation` and
-LoopCorner data.
+A future slice may build `ScaffoldGraph` from `PatchChainEndpointRelation`,
+`LoopCorner` and `ScaffoldNode` data.
 
 `ScaffoldEdge` is the graph-level view of a final PatchChain. `ScaffoldTrace`
 is a connected sequence of ScaffoldEdges through ScaffoldNodes. It may later
@@ -360,8 +396,8 @@ direction-stable ScaffoldTrace usable as a conditional axis.
 Cylinder-like cases may produce ScaffoldCircuits around cap boundaries. These
 traces can later inform conditional axes or UV orientation.
 
-Do not implement ScaffoldGraph before PatchChainEndpointRelation and
-LoopCorner data are available.
+Do not implement ScaffoldGraph before the ScaffoldEdge / PatchChain contract is
+clear. ScaffoldGraph must not create a competing PatchChain identity layer.
 
 ## Rules
 
