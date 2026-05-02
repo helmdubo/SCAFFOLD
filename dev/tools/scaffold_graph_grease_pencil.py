@@ -29,10 +29,19 @@ NODE_MARKER_SIZE = 0.045
 
 
 def _add_repo_root_to_path() -> None:
-    repo_root = Path(__file__).resolve().parents[2]
-    repo_root_text = str(repo_root)
-    if repo_root_text not in sys.path:
-        sys.path.insert(0, repo_root_text)
+    text = getattr(getattr(bpy.context, "space_data", None), "text", None)
+    text_path = Path(text.filepath).resolve() if getattr(text, "filepath", "") else None
+    script_path = Path(__file__).resolve()
+    for candidate in (text_path, script_path, *script_path.parents, Path.cwd()):
+        if candidate is None:
+            continue
+        repo_root = candidate if (candidate / "scaffold_core").is_dir() else candidate.parent
+        if (repo_root / "scaffold_core").is_dir():
+            repo_root_text = str(repo_root)
+            if repo_root_text not in sys.path:
+                sys.path.insert(0, repo_root_text)
+            return
+    raise RuntimeError("Could not locate repository root containing scaffold_core.")
 
 
 _add_repo_root_to_path()
