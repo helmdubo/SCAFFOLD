@@ -302,12 +302,26 @@ def scaffold_graph_overlay_to_dict(
     """Return a pure-Python debug overlay payload for existing ScaffoldGraph data."""
 
     graph = relations.scaffold_graph
+    patch_ordinals = {
+        patch_id: index
+        for index, patch_id in enumerate(sorted(topology.patches, key=str))
+    }
+    node_ordinals = {
+        node.id: index + 1
+        for index, node in enumerate(sorted(relations.scaffold_nodes, key=lambda item: item.id))
+    }
     return {
         "scaffold_node_count": len(relations.scaffold_nodes),
         "scaffold_edge_count": len(relations.scaffold_edges),
         "nodes": [
             {
                 "id": node.id,
+                "display_label": _scaffold_node_display_label(
+                    topology,
+                    node,
+                    patch_ordinals,
+                    node_ordinals[node.id],
+                ),
                 "source_vertex_ids": [
                     str(source_vertex_id)
                     for source_vertex_id in node.source_vertex_ids
@@ -321,6 +335,11 @@ def scaffold_graph_overlay_to_dict(
         "edges": [
             {
                 "id": edge.id,
+                "display_label": _patch_chain_display_label(
+                    topology,
+                    edge.patch_chain_id,
+                    patch_ordinals,
+                ),
                 "patch_chain_id": str(edge.patch_chain_id),
                 "chain_id": str(edge.chain_id),
                 "start_scaffold_node_id": edge.start_scaffold_node_id,
@@ -341,6 +360,38 @@ def scaffold_graph_overlay_to_dict(
             else None
         ),
     }
+
+
+def _patch_chain_display_label(
+    topology: SurfaceModel,
+    patch_chain_id,
+    patch_ordinals: dict[object, int],
+) -> str:
+    patch_chain = topology.patch_chains[patch_chain_id]
+    return f"P{patch_ordinals[patch_chain.patch_id]}C{patch_chain.position_in_loop}"
+
+
+def _scaffold_node_display_label(
+    topology: SurfaceModel,
+    node,
+    patch_ordinals: dict[object, int],
+    node_ordinal: int,
+) -> str:
+    incident_patch_chain_ids = sorted(
+        node.incident_patch_chain_ids,
+        key=lambda item: (
+            patch_ordinals[topology.patch_chains[item].patch_id],
+            topology.patch_chains[item].position_in_loop,
+            str(item),
+        ),
+    )
+    incident_labels = [
+        _patch_chain_display_label(topology, patch_chain_id, patch_ordinals)
+        for patch_chain_id in incident_patch_chain_ids
+    ]
+    if not incident_labels:
+        return f"N{node_ordinal}"
+    return f"N{node_ordinal} {'/'.join(incident_labels)}"
 
 
 def _scaffold_node_position(

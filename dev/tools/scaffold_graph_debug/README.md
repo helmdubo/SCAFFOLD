@@ -34,9 +34,11 @@ Edges / Nodes / Labels visibility
 `Show Graph` hides the source mesh while the overlay is active. `Close Graph`
 removes the overlay and restores the mesh visibility.
 
-Labels are Blender text objects. Node labels use the `ScaffoldNode` id from the
-inspection overlay; edge labels use the `ScaffoldEdge` id, with the
-`PatchChain` id only as a fallback if no edge id is present.
+Labels are Blender text objects. Node and edge labels prefer the compact
+`display_label` from the inspection overlay, with raw ids only as a fallback
+for older payloads. Exact coincident or reversed edge polylines are spread into
+small deterministic display lanes while leaving the overlay payload and core
+graph records unchanged.
 
 To unregister:
 

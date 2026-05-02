@@ -29,6 +29,8 @@ NODE_WIDTH = 9
 NODE_MARKER_SIZE = 0.045
 LABEL_SIZE = 0.12
 LABEL_LIFT = 0.06
+EDGE_LANE_SPACING = 0.035
+EDGE_LANE_ROUND_DIGITS = 6
 GP_OBJECT_TYPES = {"GREASEPENCIL", "GPENCIL"}
 
 
@@ -198,10 +200,97 @@ def _node_marker_strokes(
     )
 
 
+def _edge_label(edge: dict[str, Any]) -> str:
+    return str(edge.get("display_label") or edge.get("id") or edge.get("patch_chain_id") or "")
+
+
+def _node_label(node: dict[str, Any]) -> str:
+    return str(node.get("display_label") or node.get("id") or "")
+
+
+def _rounded_polyline_point(point: Sequence[float]) -> tuple[float, float, float]:
+    return (
+        round(float(point[0]), EDGE_LANE_ROUND_DIGITS),
+        round(float(point[1]), EDGE_LANE_ROUND_DIGITS),
+        round(float(point[2]), EDGE_LANE_ROUND_DIGITS),
+    )
+
+
+def _coincident_polyline_key(polyline: Sequence[Sequence[float]]) -> tuple[tuple[float, float, float], ...]:
+    rounded = tuple(_rounded_polyline_point(point) for point in polyline if len(point) == 3)
+    reversed_rounded = tuple(reversed(rounded))
+    return min(rounded, reversed_rounded)
+
+
+def _lane_perpendicular(
+    key: tuple[tuple[float, float, float], ...],
+) -> Vector:
+    points = [Vector(point) for point in key]
+    for first, second in zip(points, points[1:]):
+        direction = second - first
+        if direction.length > 1.0e-8:
+            direction.normalize()
+            axis = min(
+                (Vector((0.0, 0.0, 1.0)), Vector((0.0, 1.0, 0.0)), Vector((1.0, 0.0, 0.0))),
+                key=lambda candidate: abs(direction.dot(candidate)),
+            )
+            perpendicular = direction.cross(axis)
+            if perpendicular.length > 1.0e-8:
+                perpendicular.normalize()
+                return perpendicular
+    return Vector((0.0, 0.0, 1.0))
+
+
+def _offset_polyline(
+    polyline: Sequence[Sequence[float]],
+    offset: Vector,
+) -> list[tuple[float, float, float]]:
+    return [
+        (
+            float(point[0]) + offset.x,
+            float(point[1]) + offset.y,
+            float(point[2]) + offset.z,
+        )
+        for point in polyline
+        if len(point) == 3
+    ]
+
+
+def _display_edges(edges: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: dict[tuple[tuple[float, float, float], ...], list[tuple[int, dict[str, Any]]]] = {}
+    display_edges = [dict(edge) for edge in edges]
+    for index, edge in enumerate(display_edges):
+        polyline = edge.get("polyline", ())
+        if len(polyline) < 2:
+            edge["display_polyline"] = polyline
+            continue
+        groups.setdefault(_coincident_polyline_key(polyline), []).append((index, edge))
+
+    for key, group in groups.items():
+        ordered_group = sorted(
+            group,
+            key=lambda item: (
+                _edge_label(item[1]),
+                str(item[1].get("id", "")),
+                str(item[1].get("patch_chain_id", "")),
+            ),
+        )
+        perpendicular = _lane_perpendicular(key)
+        midpoint = (len(ordered_group) - 1) * 0.5
+        for lane_index, (edge_index, edge) in enumerate(ordered_group):
+            amount = (lane_index - midpoint) * EDGE_LANE_SPACING
+            offset = perpendicular * amount if len(ordered_group) > 1 else Vector((0.0, 0.0, 0.0))
+            display_edges[edge_index]["display_polyline"] = _offset_polyline(
+                edge.get("polyline", ()),
+                offset,
+            )
+    return display_edges
+
+
 def _draw_edges(frame: Any, material_index: int, edges: Iterable[dict[str, Any]]) -> int:
     stroke_count = 0
     for edge in edges:
-        polyline = edge.get("polyline", ())
+        polyline = edge.get("display_polyline", edge.get("polyline", ()))
         if _add_stroke(frame, polyline, material_index, EDGE_WIDTH):
             stroke_count += 1
     return stroke_count
@@ -305,7 +394,7 @@ def _draw_labels(
     label_count = 0
 
     for node in nodes:
-        label = str(node.get("id", ""))
+        label = _node_label(node)
         position = node.get("position", ())
         if label and len(position) == 3:
             _add_label(
@@ -319,8 +408,8 @@ def _draw_labels(
             label_count += 1
 
     for edge in edges:
-        label = str(edge.get("id") or edge.get("patch_chain_id") or "")
-        label_position = _edge_label_position(edge.get("polyline", ()))
+        label = _edge_label(edge)
+        label_position = _edge_label_position(edge.get("display_polyline", edge.get("polyline", ())))
         if label and label_position is not None:
             _add_label(collection, source_object, "edge", label, label_position, material)
             label_count += 1
@@ -369,12 +458,13 @@ def render_overlay(
 
     edges = list(overlay.get("edges", ()))
     nodes = list(overlay.get("nodes", ()))
-    edge_stroke_count = _draw_edges(edge_frame, edge_material_index, edges)
+    display_edges = _display_edges(edges)
+    edge_stroke_count = _draw_edges(edge_frame, edge_material_index, display_edges)
     node_marker_count = _draw_nodes(node_frame, node_material_index, nodes)
     label_count = _draw_labels(
         source_object,
         nodes,
-        edges,
+        display_edges,
         visible=show_labels,
     )
 

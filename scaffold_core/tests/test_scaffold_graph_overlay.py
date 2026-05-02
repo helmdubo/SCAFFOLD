@@ -9,6 +9,7 @@ Rules:
 from __future__ import annotations
 
 import json
+import re
 
 from scaffold_core.pipeline.inspection import inspect_pipeline_context
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
@@ -58,6 +59,7 @@ def test_scaffold_graph_overlay_has_required_debug_payload_shape() -> None:
     }
     assert set(overlay["nodes"][0]) == {
         "id",
+        "display_label",
         "source_vertex_ids",
         "vertex_ids",
         "position",
@@ -65,6 +67,7 @@ def test_scaffold_graph_overlay_has_required_debug_payload_shape() -> None:
     }
     assert set(overlay["edges"][0]) == {
         "id",
+        "display_label",
         "patch_chain_id",
         "chain_id",
         "start_scaffold_node_id",
@@ -77,6 +80,31 @@ def test_scaffold_graph_overlay_has_required_debug_payload_shape() -> None:
     assert all(len(node["position"]) == 3 for node in overlay["nodes"])
     assert all(edge["polyline"] for edge in overlay["edges"])
     assert all(edge["edge_source"] == "FINAL_PATCH_CHAIN" for edge in overlay["edges"])
+
+
+def test_scaffold_graph_overlay_display_labels_are_compact_and_deterministic() -> None:
+    context = run_pass_1_relations(
+        run_pass_0(make_segmented_cylinder_tube_without_caps_with_one_seam_source())
+    )
+
+    first_report = inspect_pipeline_context(context, detail="full")
+    second_report = inspect_pipeline_context(context, detail="full")
+    first_overlay = first_report["scaffold_graph_overlay"]
+    second_overlay = second_report["scaffold_graph_overlay"]
+
+    edge_labels = [edge["display_label"] for edge in first_overlay["edges"]]
+    node_labels = [node["display_label"] for node in first_overlay["nodes"]]
+    all_labels = edge_labels + node_labels
+
+    assert edge_labels == [edge["display_label"] for edge in second_overlay["edges"]]
+    assert node_labels == [node["display_label"] for node in second_overlay["nodes"]]
+    assert all(re.fullmatch(r"P\d+C\d+", label) for label in edge_labels)
+    assert all(re.fullmatch(r"N\d+( P\d+C\d+(?:/P\d+C\d+)*)?", label) for label in node_labels)
+    assert not any(
+        raw in label
+        for label in all_labels
+        for raw in ("scaffold_edge", "scaffold_node", "patch_chain", "patch:seed")
+    )
 
 
 def test_scaffold_graph_overlay_uses_existing_graph_records() -> None:
