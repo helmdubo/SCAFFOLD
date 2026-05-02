@@ -239,8 +239,10 @@ ScaffoldJunction:
 Grease Pencil compact report expectation:
   scaffold_node_count: 2
   scaffold_edge_count: 4
+  scaffold_junction_count: 2
   edge_stroke_count: 4
   node_marker_count: 2
+  junction_marker_count: 2
 ```
 
 ---

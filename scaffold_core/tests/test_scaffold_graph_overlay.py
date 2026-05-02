@@ -29,13 +29,17 @@ def _compact_graph_report(source_factory) -> dict[str, int]:
     overlay = full_report["scaffold_graph_overlay"]
     assert all(edge["polyline"] for edge in overlay["edges"])
     assert all(len(node["position"]) == 3 for node in overlay["nodes"])
+    assert all(len(junction["position"]) == 3 for junction in overlay["junctions"])
     return {
         "scaffold_node_count": relations["scaffold_node_count"],
         "scaffold_edge_count": relations["scaffold_edge_count"],
+        "scaffold_junction_count": relations["scaffold_junction_count"],
         "overlay_node_count": overlay["scaffold_node_count"],
         "overlay_edge_count": overlay["scaffold_edge_count"],
+        "overlay_junction_count": overlay["scaffold_junction_count"],
         "edge_stroke_count": len(overlay["edges"]),
         "node_marker_count": len(overlay["nodes"]),
+        "junction_marker_count": len(overlay["junctions"]),
     }
 
 
@@ -53,8 +57,10 @@ def test_scaffold_graph_overlay_has_required_debug_payload_shape() -> None:
     assert set(overlay) == {
         "scaffold_node_count",
         "scaffold_edge_count",
+        "scaffold_junction_count",
         "nodes",
         "edges",
+        "junctions",
         "graph",
     }
     assert set(overlay["nodes"][0]) == {
@@ -76,6 +82,8 @@ def test_scaffold_graph_overlay_has_required_debug_payload_shape() -> None:
         "confidence",
         "edge_source",
     }
+    assert overlay["scaffold_junction_count"] == len(overlay["junctions"])
+    assert overlay["junctions"] == []
     assert set(overlay["graph"]) == {"id", "node_ids", "edge_ids"}
     assert all(len(node["position"]) == 3 for node in overlay["nodes"])
     assert all(edge["polyline"] for edge in overlay["edges"])
@@ -119,6 +127,7 @@ def test_scaffold_graph_overlay_uses_existing_graph_records() -> None:
     overlay = report["scaffold_graph_overlay"]
     assert overlay["scaffold_node_count"] == len(snapshot.scaffold_nodes)
     assert overlay["scaffold_edge_count"] == len(snapshot.scaffold_edges)
+    assert overlay["scaffold_junction_count"] == len(snapshot.scaffold_junctions)
     assert overlay["graph"]["id"] == snapshot.scaffold_graph.id
     assert overlay["graph"]["node_ids"] == [node.id for node in snapshot.scaffold_nodes]
     assert overlay["graph"]["edge_ids"] == [edge.id for edge in snapshot.scaffold_edges]
@@ -128,6 +137,42 @@ def test_scaffold_graph_overlay_uses_existing_graph_records() -> None:
     } == {
         str(edge.patch_chain_id)
         for edge in snapshot.scaffold_edges
+    }
+
+
+def test_scaffold_graph_overlay_exposes_self_seam_junction_markers_for_cylinder() -> None:
+    context = run_pass_1_relations(
+        run_pass_0(make_segmented_cylinder_tube_without_caps_with_one_seam_source())
+    )
+
+    report = inspect_pipeline_context(context, detail="full")
+
+    json.dumps(report)
+    overlay = report["scaffold_graph_overlay"]
+    node_ids = {node["id"] for node in overlay["nodes"]}
+    node_positions = {
+        node["id"]: node["position"]
+        for node in overlay["nodes"]
+    }
+    assert overlay["scaffold_node_count"] == 2
+    assert overlay["scaffold_edge_count"] == 4
+    assert overlay["scaffold_junction_count"] == 2
+    assert len(overlay["junctions"]) == 2
+    assert {junction["kind"] for junction in overlay["junctions"]} == {"SELF_SEAM"}
+    assert all(junction["scaffold_node_id"] in node_ids for junction in overlay["junctions"])
+    assert all(
+        junction["position"] == node_positions[junction["scaffold_node_id"]]
+        for junction in overlay["junctions"]
+    )
+    assert all(len(junction["position"]) == 3 for junction in overlay["junctions"])
+    assert all(junction["evidence"] for junction in overlay["junctions"])
+    assert set(overlay["junctions"][0]) == {
+        "id",
+        "scaffold_node_id",
+        "kind",
+        "position",
+        "confidence",
+        "evidence",
     }
 
 
@@ -173,10 +218,13 @@ def test_scaffold_graph_overlay_compact_report_expectations_for_single_patch() -
     assert _compact_graph_report(make_single_quad_source) == {
         "scaffold_node_count": 1,
         "scaffold_edge_count": 1,
+        "scaffold_junction_count": 0,
         "overlay_node_count": 1,
         "overlay_edge_count": 1,
+        "overlay_junction_count": 0,
         "edge_stroke_count": 1,
         "node_marker_count": 1,
+        "junction_marker_count": 0,
     }
 
 
@@ -186,10 +234,13 @@ def test_scaffold_graph_overlay_compact_report_expectations_for_cylinder() -> No
     ) == {
         "scaffold_node_count": 2,
         "scaffold_edge_count": 4,
+        "scaffold_junction_count": 2,
         "overlay_node_count": 2,
         "overlay_edge_count": 4,
+        "overlay_junction_count": 2,
         "edge_stroke_count": 4,
         "node_marker_count": 2,
+        "junction_marker_count": 2,
     }
 
 
@@ -197,10 +248,13 @@ def test_scaffold_graph_overlay_compact_report_expectations_for_closed_shared_lo
     assert _compact_graph_report(make_closed_shared_boundary_loop_source) == {
         "scaffold_node_count": 2,
         "scaffold_edge_count": 2,
+        "scaffold_junction_count": 0,
         "overlay_node_count": 2,
         "overlay_edge_count": 2,
+        "overlay_junction_count": 0,
         "edge_stroke_count": 2,
         "node_marker_count": 2,
+        "junction_marker_count": 0,
     }
 
 

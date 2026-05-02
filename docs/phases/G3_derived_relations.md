@@ -410,17 +410,18 @@ Implementation status:
 - `RelationSnapshot.scaffold_edges` and `RelationSnapshot.scaffold_graph` store
   the derived records.
 - Pipeline inspection exposes a JSON-serializable `scaffold_graph_overlay`
-  payload with node anchors, edge polylines and graph ids for debug tooling.
+  payload with node anchors, edge polylines, SELF_SEAM junction markers and
+  graph ids for debug tooling.
 - Grease Pencil dev rendering consumes that overlay payload and reports compact
   validation counts; it does not recompute ScaffoldGraph semantics.
 
 Compact report expectations:
 
-| Fixture | `scaffold_node_count` | `scaffold_edge_count` | `edge_stroke_count` | `node_marker_count` |
-|---|---:|---:|---:|---:|
-| single patch / rectangle | 1 | 1 | 1 | 1 |
-| cylinder tube without caps + one seam cut | 2 | 4 | 4 | 2 |
-| closed shared-loop / cube-like synthetic fixture | 2 | 2 | 2 | 2 |
+| Fixture | `scaffold_node_count` | `scaffold_edge_count` | `scaffold_junction_count` | `edge_stroke_count` | `node_marker_count` | `junction_marker_count` |
+|---|---:|---:|---:|---:|---:|---:|
+| single patch / rectangle | 1 | 1 | 0 | 1 | 1 | 0 |
+| cylinder tube without caps + one seam cut | 2 | 4 | 2 | 4 | 2 | 2 |
+| closed shared-loop / cube-like synthetic fixture | 2 | 2 | 0 | 2 | 2 | 0 |
 
 Report interpretation:
 
@@ -428,6 +429,8 @@ Report interpretation:
   evidence; it is not every mesh vertex.
 - `ScaffoldEdge` is one graph edge per final `PatchChain`; the overlay edge
   source remains `FINAL_PATCH_CHAIN`.
+- `SELF_SEAM` `ScaffoldJunction` markers render on top of existing ScaffoldNode
+  positions and do not create additional graph nodes.
 
 Rules:
 

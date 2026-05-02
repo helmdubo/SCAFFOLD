@@ -14,6 +14,7 @@ class SCAFFOLDGRAPH_Settings(bpy.types.PropertyGroup):
     last_report: StringProperty(name="Last Report", default="")
     show_edges: BoolProperty(name="Edges", default=True)
     show_nodes: BoolProperty(name="Nodes", default=True)
+    show_junctions: BoolProperty(name="Junctions", default=True)
     show_labels: BoolProperty(name="Labels", default=True)
     source_hide_viewport: BoolProperty(name="Stored Viewport Hidden", default=False)
     source_hide_set: BoolProperty(name="Stored Object Hidden", default=False)
@@ -114,6 +115,7 @@ class SCAFFOLDGRAPH_PT_Panel(bpy.types.Panel):
         row = col.row(align=True)
         row.prop(settings, "show_edges", toggle=True)
         row.prop(settings, "show_nodes", toggle=True)
+        row.prop(settings, "show_junctions", toggle=True)
         row.prop(settings, "show_labels", toggle=True)
         col.operator("scaffold_graph_debug.update_visibility", text="Apply Visibility", icon="HIDE_OFF")
 

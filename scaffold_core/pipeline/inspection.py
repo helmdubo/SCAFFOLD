@@ -315,9 +315,14 @@ def scaffold_graph_overlay_to_dict(
         node.id: index + 1
         for index, node in enumerate(sorted(relations.scaffold_nodes, key=lambda item: item.id))
     }
+    node_positions = {
+        node.id: list(_scaffold_node_position(geometry, node.vertex_ids))
+        for node in relations.scaffold_nodes
+    }
     return {
         "scaffold_node_count": len(relations.scaffold_nodes),
         "scaffold_edge_count": len(relations.scaffold_edges),
+        "scaffold_junction_count": len(relations.scaffold_junctions),
         "nodes": [
             {
                 "id": node.id,
@@ -332,7 +337,7 @@ def scaffold_graph_overlay_to_dict(
                     for source_vertex_id in node.source_vertex_ids
                 ],
                 "vertex_ids": [str(vertex_id) for vertex_id in node.vertex_ids],
-                "position": list(_scaffold_node_position(geometry, node.vertex_ids)),
+                "position": node_positions[node.id],
                 "confidence": node.confidence,
             }
             for node in sorted(relations.scaffold_nodes, key=lambda item: item.id)
@@ -354,6 +359,10 @@ def scaffold_graph_overlay_to_dict(
                 "edge_source": _scaffold_edge_source(edge),
             }
             for edge in sorted(relations.scaffold_edges, key=lambda item: item.id)
+        ],
+        "junctions": [
+            _scaffold_junction_overlay_to_dict(junction, node_positions)
+            for junction in sorted(relations.scaffold_junctions, key=lambda item: item.id)
         ],
         "graph": (
             {
@@ -449,6 +458,24 @@ def _scaffold_edge_source(edge) -> str:
         if edge_source is not None:
             return str(edge_source)
     return "FINAL_PATCH_CHAIN"
+
+
+def _scaffold_junction_overlay_to_dict(junction, node_positions: dict[str, list[float]]) -> dict[str, object]:
+    return {
+        "id": junction.id,
+        "scaffold_node_id": junction.scaffold_node_id,
+        "kind": str(junction.kind.value),
+        "position": list(node_positions.get(junction.scaffold_node_id, (0.0, 0.0, 0.0))),
+        "confidence": junction.confidence,
+        "evidence": [
+            {
+                "source": evidence.source,
+                "summary": evidence.summary,
+                "data": dict(evidence.data),
+            }
+            for evidence in junction.evidence
+        ],
+    }
 
 
 def _patch_axes_candidate_scores(patch_axes) -> list[dict[str, object]]:

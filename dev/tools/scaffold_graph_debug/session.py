@@ -55,8 +55,10 @@ def _format_summary(report: dict[str, Any]) -> str:
     return (
         f"nodes:{report['scaffold_node_count']} "
         f"edges:{report['scaffold_edge_count']} "
+        f"junctions:{report['scaffold_junction_count']} "
         f"strokes:{report['edge_stroke_count']} "
         f"markers:{report['node_marker_count']} "
+        f"junction_markers:{report['junction_marker_count']} "
         f"labels:{report['label_count']}"
     )
 
@@ -87,6 +89,7 @@ def show_or_refresh(context: Any) -> tuple[dict[str, Any], str]:
         overlay,
         show_edges=bool(settings.show_edges),
         show_nodes=bool(settings.show_nodes),
+        show_junctions=bool(settings.show_junctions),
         show_labels=bool(settings.show_labels),
     )
 
@@ -134,6 +137,7 @@ def refresh_visibility(context: Any) -> None:
             settings.source_object,
             show_edges=bool(settings.show_edges),
             show_nodes=bool(settings.show_nodes),
+            show_junctions=bool(settings.show_junctions),
             show_labels=bool(settings.show_labels),
         )
 
