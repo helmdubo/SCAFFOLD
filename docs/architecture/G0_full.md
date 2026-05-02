@@ -624,8 +624,8 @@ ScaffoldNode where two incident final PatchChains share the same ChainId and
 same PatchId, representing the supported SEAM_SELF case. Implemented
 `CROSS_PATCH` classifies an existing ScaffoldNode whose incident final
 ScaffoldEdges reference more than one distinct PatchId. Future kind vocabulary
-beyond SELF_SEAM/CROSS_PATCH includes `BRANCH`, `TERMINUS`, `AMBIGUOUS` and
-`DEGRADED`.
+beyond SELF_SEAM/CROSS_PATCH includes `BRANCH`, `TERMINUS`,
+`BORDER_TERMINUS`, `AMBIGUOUS` and `DEGRADED`.
 
 ScaffoldJunction classification must not change ScaffoldNode grouping, change
 PatchChain identity, walk traces, detect circuits, select rails, choose
@@ -964,7 +964,7 @@ Implemented ScaffoldJunctionKind vocabulary includes:
 
 Future ScaffoldJunctionKind vocabulary beyond SELF_SEAM/CROSS_PATCH includes:
 - BRANCH;
-- TERMINUS;
+- TERMINUS or BORDER_TERMINUS;
 - AMBIGUOUS or DEGRADED when describing evidence quality.
 
 ## DD-36 — LocalFaceFan is geometry evidence, not graph topology

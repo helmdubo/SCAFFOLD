@@ -146,7 +146,8 @@ SELF_SEAM is for a ScaffoldNode where two incident final PatchChains share the
 same ChainId and same PatchId, representing the supported SEAM_SELF case.
 CROSS_PATCH is for an existing ScaffoldNode whose incident final ScaffoldEdges
 reference more than one distinct PatchId. Future kind vocabulary beyond
-SELF_SEAM/CROSS_PATCH includes BRANCH, TERMINUS, AMBIGUOUS and DEGRADED.
+SELF_SEAM/CROSS_PATCH includes BRANCH, TERMINUS, BORDER_TERMINUS, AMBIGUOUS
+and DEGRADED.
 
 ## DD-36 - LocalFaceFan is geometry evidence, not graph topology
 

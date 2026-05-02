@@ -109,8 +109,8 @@ ScaffoldJunction classification:
 - `CROSS_PATCH` is an implemented ScaffoldJunctionKind for an existing
   ScaffoldNode whose incident final ScaffoldEdges reference more than one
   distinct PatchId;
-- future kind vocabulary beyond SELF_SEAM/CROSS_PATCH may include `BRANCH`,
-  `TERMINUS`, `AMBIGUOUS` and `DEGRADED`;
+- deferred kind vocabulary after implemented SELF_SEAM/CROSS_PATCH may include
+  `BRANCH`, `TERMINUS`, `BORDER_TERMINUS`, `AMBIGUOUS` and `DEGRADED`;
 - classification must not change ScaffoldNode grouping, change
   PatchChain identity, walk traces, detect circuits, select rails, choose
   continuations or introduce UV, runtime or feature semantics.

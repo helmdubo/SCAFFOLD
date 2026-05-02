@@ -268,7 +268,7 @@ PatchChainEndpointSample
 -> LoopCorner
 -> ScaffoldNode
 -> ScaffoldEdge / ScaffoldGraph
--> ScaffoldJunction SELF_SEAM
+-> ScaffoldJunction classification for SELF_SEAM/CROSS_PATCH
 ```
 
 PatchChainEndpointRelation classifies local endpoint pairs as:
@@ -334,9 +334,9 @@ Still unresolved:
 
 ## Next architecture decision
 
-ScaffoldGraph overlay and ScaffoldJunction SELF_SEAM reports now have compact
-expectations on representative meshes. Use those reports as validation evidence
-before any explicit ScaffoldTrace task.
+ScaffoldGraph overlay reports for SELF_SEAM/CROSS_PATCH ScaffoldJunctions now
+have compact expectations on representative meshes. Use those reports as
+validation evidence before any explicit ScaffoldTrace task.
 
 Grease Pencil rendering consumes the pipeline inspection overlay payload instead
 of duplicating core graph logic. Do not import Blender into Scaffold Core.
