@@ -59,8 +59,6 @@ def _relevant_vertex_ids(
         corner.vertex_id
         for corner in loop_corners
     }
-    vertex_ids.update(sample.vertex_id for sample in endpoint_samples)
-    vertex_ids.update(relation.vertex_id for relation in endpoint_relations)
     return tuple(sorted(vertex_ids, key=str))
 
 

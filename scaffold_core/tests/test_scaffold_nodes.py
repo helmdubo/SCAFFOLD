@@ -52,11 +52,12 @@ def test_closed_shared_loop_builds_scaffold_nodes_from_endpoint_evidence() -> No
     snapshot = context.relation_snapshot
 
     assert snapshot is not None
-    assert len(snapshot.scaffold_nodes) == 4
+    assert len(snapshot.scaffold_nodes) == 2
     assert {
         tuple(str(source_vertex_id) for source_vertex_id in node.source_vertex_ids)
         for node in snapshot.scaffold_nodes
-    } == {("v0",), ("v1",), ("v2",), ("v3",)}
+    } == {("v0",), ("v1",)}
+    assert all(node.loop_corner_ids for node in snapshot.scaffold_nodes)
     assert all(node.patch_chain_endpoint_sample_ids for node in snapshot.scaffold_nodes)
     assert all(node.incident_patch_chain_ids for node in snapshot.scaffold_nodes)
 
@@ -69,7 +70,14 @@ def test_cylinder_scaffold_nodes_group_materialized_seam_vertices_by_source_vert
     snapshot = context.relation_snapshot
 
     assert snapshot is not None
-    assert len(snapshot.scaffold_nodes) == 8
+    assert len(context.topology_snapshot.patch_chains) == 4
+    assert len(snapshot.loop_corners) == 4
+    assert len(snapshot.scaffold_nodes) == 2
+    node_source_ids = {
+        tuple(str(source_vertex_id) for source_vertex_id in node.source_vertex_ids)
+        for node in snapshot.scaffold_nodes
+    }
+    assert node_source_ids == {("v_a_t",), ("v_a_b",)}
     top_seam_node = _node_for_source(snapshot.scaffold_nodes, "v_a_t")
     bottom_seam_node = _node_for_source(snapshot.scaffold_nodes, "v_a_b")
     assert len(top_seam_node.vertex_ids) == 2
@@ -78,6 +86,33 @@ def test_cylinder_scaffold_nodes_group_materialized_seam_vertices_by_source_vert
     assert len(bottom_seam_node.loop_corner_ids) == 2
     assert len(top_seam_node.incident_patch_chain_ids) == 3
     assert len(bottom_seam_node.incident_patch_chain_ids) == 3
+    assert not {
+        ("v_b_t",),
+        ("v_b_b",),
+        ("v_c_t",),
+        ("v_c_b",),
+        ("v_d_t",),
+        ("v_d_b",),
+    } & node_source_ids
+
+    samples_by_id = {
+        sample.id: sample
+        for sample in snapshot.patch_chain_endpoint_samples
+    }
+    relations_by_id = {
+        relation.id: relation
+        for relation in snapshot.patch_chain_endpoint_relations
+    }
+    for node in snapshot.scaffold_nodes:
+        node_vertex_ids = set(node.vertex_ids)
+        assert all(
+            samples_by_id[sample_id].vertex_id in node_vertex_ids
+            for sample_id in node.patch_chain_endpoint_sample_ids
+        )
+        assert all(
+            relations_by_id[relation_id].vertex_id in node_vertex_ids
+            for relation_id in node.patch_chain_endpoint_relation_ids
+        )
 
 
 def test_scaffold_node_builder_does_not_change_layer_1_identity() -> None:
@@ -110,7 +145,8 @@ def test_inspection_json_includes_scaffold_nodes() -> None:
 
     json.dumps(report)
     relations = report["relations"]
-    assert relations["scaffold_node_count"] == 8
+    assert relations["loop_corner_count"] == 4
+    assert relations["scaffold_node_count"] == 2
     top_seam_node = next(
         node
         for node in relations["scaffold_nodes"]
