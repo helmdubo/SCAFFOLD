@@ -149,6 +149,8 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         "scaffold_edge_count": len(relations.scaffold_edges),
         "scaffold_graph_count": 1 if relations.scaffold_graph is not None else 0,
         "scaffold_junction_count": len(relations.scaffold_junctions),
+        "scaffold_node_incident_edge_relation_count": len(relations.scaffold_node_incident_edge_relations),
+        "shared_chain_patch_chain_relation_count": len(relations.shared_chain_patch_chain_relations),
         "alignment_class_count": len(relations.alignment_classes),
         "patch_axes_count": len(relations.patch_axes),
     }
@@ -278,6 +280,14 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         "scaffold_junctions": [
             _scaffold_junction_to_dict(junction)
             for junction in sorted(relations.scaffold_junctions, key=lambda item: item.id)
+        ],
+        "scaffold_node_incident_edge_relations": [
+            _scaffold_node_incident_edge_relation_to_dict(relation)
+            for relation in sorted(relations.scaffold_node_incident_edge_relations, key=lambda item: item.id)
+        ],
+        "shared_chain_patch_chain_relations": [
+            _shared_chain_patch_chain_relation_to_dict(relation)
+            for relation in sorted(relations.shared_chain_patch_chain_relations, key=lambda item: item.id)
         ],
         "patch_axes": [
             {
@@ -626,6 +636,54 @@ def _scaffold_junction_to_dict(junction) -> dict[str, object]:
                 "data": dict(evidence.data),
             }
             for evidence in junction.evidence
+        ],
+    }
+
+
+def _scaffold_node_incident_edge_relation_to_dict(relation) -> dict[str, object]:
+    return {
+        "id": relation.id,
+        "kind": str(relation.kind.value),
+        "policy": relation.policy,
+        "scaffold_node_id": relation.scaffold_node_id,
+        "first_scaffold_edge_id": relation.first_scaffold_edge_id,
+        "second_scaffold_edge_id": relation.second_scaffold_edge_id,
+        "first_patch_chain_id": str(relation.first_patch_chain_id),
+        "second_patch_chain_id": str(relation.second_patch_chain_id),
+        "patch_chain_endpoint_relation_id": relation.patch_chain_endpoint_relation_id,
+        "confidence": relation.confidence,
+        "evidence": [
+            {
+                "source": evidence.source,
+                "summary": evidence.summary,
+                "data": dict(evidence.data),
+            }
+            for evidence in relation.evidence
+        ],
+    }
+
+
+def _shared_chain_patch_chain_relation_to_dict(relation) -> dict[str, object]:
+    return {
+        "id": relation.id,
+        "kind": str(relation.kind.value),
+        "policy": relation.policy,
+        "chain_id": str(relation.chain_id),
+        "first_scaffold_edge_id": relation.first_scaffold_edge_id,
+        "second_scaffold_edge_id": relation.second_scaffold_edge_id,
+        "first_patch_chain_id": str(relation.first_patch_chain_id),
+        "second_patch_chain_id": str(relation.second_patch_chain_id),
+        "first_patch_id": str(relation.first_patch_id),
+        "second_patch_id": str(relation.second_patch_id),
+        "patch_adjacency_id": relation.patch_adjacency_id,
+        "confidence": relation.confidence,
+        "evidence": [
+            {
+                "source": evidence.source,
+                "summary": evidence.summary,
+                "data": dict(evidence.data),
+            }
+            for evidence in relation.evidence
         ],
     }
 

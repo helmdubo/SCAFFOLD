@@ -22,7 +22,6 @@ FORBIDDEN_TOKENS = frozenset({
     "SLOPE",
     "WorldOrientation",
     "WORLD_UP",
-    "ScaffoldJunction",
     "Feature",
     "Runtime",
     "Solve",

@@ -103,6 +103,22 @@ class ScaffoldJunctionKind(str, Enum):
     CROSS_PATCH = "CROSS_PATCH"
 
 
+class ScaffoldNodeIncidentEdgeRelationKind(str, Enum):
+    """Node-local relation kinds between incident ScaffoldEdges."""
+
+    CONTINUATION_CANDIDATE = "CONTINUATION_CANDIDATE"
+    ORTHOGONAL_CORNER = "ORTHOGONAL_CORNER"
+    OBLIQUE_CONNECTOR = "OBLIQUE_CONNECTOR"
+    SAME_RAY_AMBIGUOUS = "SAME_RAY_AMBIGUOUS"
+    DEGRADED = "DEGRADED"
+
+
+class SharedChainPatchChainRelationKind(str, Enum):
+    """Graph-level relation kinds for ScaffoldEdges sharing one Chain."""
+
+    CROSS_PATCH_SHARED_CHAIN = "CROSS_PATCH_SHARED_CHAIN"
+
+
 @dataclass(frozen=True)
 class PatchAdjacency:
     id: str
@@ -291,6 +307,42 @@ class ScaffoldJunction:
 
 
 @dataclass(frozen=True)
+class ScaffoldNodeIncidentEdgeRelation:
+    """Node-local relation between two existing incident ScaffoldEdges."""
+
+    id: str
+    kind: ScaffoldNodeIncidentEdgeRelationKind
+    policy: str
+    scaffold_node_id: str
+    first_scaffold_edge_id: str
+    second_scaffold_edge_id: str
+    first_patch_chain_id: PatchChainId
+    second_patch_chain_id: PatchChainId
+    patch_chain_endpoint_relation_id: str | None
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
+class SharedChainPatchChainRelation:
+    """Graph-level relation between final PatchChains sharing one Chain."""
+
+    id: str
+    kind: SharedChainPatchChainRelationKind
+    policy: str
+    chain_id: ChainId
+    first_scaffold_edge_id: str
+    second_scaffold_edge_id: str
+    first_patch_chain_id: PatchChainId
+    second_patch_chain_id: PatchChainId
+    first_patch_id: PatchId
+    second_patch_id: PatchId
+    patch_adjacency_id: str | None
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
     chain_continuations: tuple[ChainContinuationRelation, ...] = ()
@@ -303,6 +355,8 @@ class RelationSnapshot:
     scaffold_edges: tuple[ScaffoldEdge, ...] = ()
     scaffold_graph: ScaffoldGraph | None = None
     scaffold_junctions: tuple[ScaffoldJunction, ...] = ()
+    scaffold_node_incident_edge_relations: tuple[ScaffoldNodeIncidentEdgeRelation, ...] = ()
+    shared_chain_patch_chain_relations: tuple[SharedChainPatchChainRelation, ...] = ()
     alignment_classes: tuple[AlignmentClass, ...] = ()
     patch_axes: Mapping[PatchId, PatchAxes] = field(default_factory=dict)
     diagnostics: tuple[Diagnostic, ...] = ()
