@@ -239,6 +239,32 @@ class ScaffoldNode:
 
 
 @dataclass(frozen=True)
+class ScaffoldEdge:
+    """Graph-level edge view of one final PatchChain."""
+
+    id: str
+    patch_chain_id: PatchChainId
+    chain_id: ChainId
+    patch_id: PatchId
+    loop_id: BoundaryLoopId
+    start_scaffold_node_id: str
+    end_scaffold_node_id: str
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
+class ScaffoldGraph:
+    """Connectivity-only graph over ScaffoldNode and ScaffoldEdge records."""
+
+    id: str
+    node_ids: tuple[str, ...]
+    edge_ids: tuple[str, ...]
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
     chain_continuations: tuple[ChainContinuationRelation, ...] = ()
@@ -248,6 +274,8 @@ class RelationSnapshot:
     patch_chain_endpoint_samples: tuple[PatchChainEndpointSample, ...] = ()
     patch_chain_endpoint_relations: tuple[PatchChainEndpointRelation, ...] = ()
     scaffold_nodes: tuple[ScaffoldNode, ...] = ()
+    scaffold_edges: tuple[ScaffoldEdge, ...] = ()
+    scaffold_graph: ScaffoldGraph | None = None
     alignment_classes: tuple[AlignmentClass, ...] = ()
     patch_axes: Mapping[PatchId, PatchAxes] = field(default_factory=dict)
     diagnostics: tuple[Diagnostic, ...] = ()

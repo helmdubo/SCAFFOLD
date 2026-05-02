@@ -134,6 +134,8 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         "patch_chain_endpoint_sample_count": len(relations.patch_chain_endpoint_samples),
         "patch_chain_endpoint_relation_count": len(relations.patch_chain_endpoint_relations),
         "scaffold_node_count": len(relations.scaffold_nodes),
+        "scaffold_edge_count": len(relations.scaffold_edges),
+        "scaffold_graph_count": 1 if relations.scaffold_graph is not None else 0,
         "alignment_class_count": len(relations.alignment_classes),
         "patch_axes_count": len(relations.patch_axes),
     }
@@ -251,6 +253,15 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
             _scaffold_node_to_dict(node)
             for node in sorted(relations.scaffold_nodes, key=lambda item: item.id)
         ],
+        "scaffold_edges": [
+            _scaffold_edge_to_dict(edge)
+            for edge in sorted(relations.scaffold_edges, key=lambda item: item.id)
+        ],
+        "scaffold_graph": (
+            _scaffold_graph_to_dict(relations.scaffold_graph)
+            if relations.scaffold_graph is not None
+            else None
+        ),
         "patch_axes": [
             {
                 "patch_id": str(patch_axes.patch_id),
@@ -346,6 +357,44 @@ def _scaffold_node_to_dict(node) -> dict[str, object]:
         ],
         "patch_ids": [str(patch_id) for patch_id in node.patch_ids],
         "confidence": node.confidence,
+    }
+
+
+def _scaffold_edge_to_dict(edge) -> dict[str, object]:
+    return {
+        "id": edge.id,
+        "patch_chain_id": str(edge.patch_chain_id),
+        "chain_id": str(edge.chain_id),
+        "patch_id": str(edge.patch_id),
+        "loop_id": str(edge.loop_id),
+        "start_scaffold_node_id": edge.start_scaffold_node_id,
+        "end_scaffold_node_id": edge.end_scaffold_node_id,
+        "confidence": edge.confidence,
+        "evidence": [
+            {
+                "source": evidence.source,
+                "summary": evidence.summary,
+                "data": dict(evidence.data),
+            }
+            for evidence in edge.evidence
+        ],
+    }
+
+
+def _scaffold_graph_to_dict(graph) -> dict[str, object]:
+    return {
+        "id": graph.id,
+        "node_ids": list(graph.node_ids),
+        "edge_ids": list(graph.edge_ids),
+        "confidence": graph.confidence,
+        "evidence": [
+            {
+                "source": evidence.source,
+                "summary": evidence.summary,
+                "data": dict(evidence.data),
+            }
+            for evidence in graph.evidence
+        ],
     }
 
 
