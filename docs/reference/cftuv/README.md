@@ -1,25 +1,34 @@
-# CFTUV Reference
+# CFTUV Reference Docs
 
-Optional location for selected CFTUV source files used as migration reference.
+This folder contains SCAFFOLD-side reference notes for CFTUV migration.
 
-Preferred layout:
+It is not the CFTUV source-code location.
+
+CFTUV source/reference code lives in:
 
 ```text
-docs/reference/cftuv/
-  AGENTS.md
-  README.md
-  source/
-    structural_tokens.py
-    shape_classify.py
-    band_spine.py
-    solve_frontier.py
-    solve_pin_policy.py
-    solve_skeleton.py
+dev/tools/CFTUV/
+  *.py
+  docs/*.md
 ```
 
-Copy only files needed for a specific migration analysis. Keeping the full CFTUV
-repository here is possible but discouraged because it increases the chance that
-agents read too much or copy code directly.
+Use `dev/tools/CFTUV/` only as a read-only algorithm oracle during explicit
+CFTUV migration / Algorithm Card tasks.
 
-For most work, keep CFTUV as a sibling checkout and point Scout agents to exact
-files instead.
+Use this folder for lightweight reference notes that help agents understand how
+CFTUV should be treated during migration.
+
+Rules:
+
+- ordinary SCAFFOLD tasks should not read `dev/tools/CFTUV/`;
+- CFTUV source reading should be done by `scaffold_explorer`;
+- SCAFFOLD implementation should normally consume an Algorithm Card, not CFTUV source directly;
+- do not import or run CFTUV files from SCAFFOLD code/tests.
+
+Primary migration docs:
+
+```text
+docs/migration/cftuv_lessons.md
+docs/migration/cftuv_bridge.md
+docs/migration/cftuv_parity_fixtures.md
+```
