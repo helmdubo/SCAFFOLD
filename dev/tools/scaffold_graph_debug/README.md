@@ -28,11 +28,15 @@ Controls:
 Show Graph
 Refresh Graph
 Close Graph
-Edges / Nodes visibility
+Edges / Nodes / Labels visibility
 ```
 
 `Show Graph` hides the source mesh while the overlay is active. `Close Graph`
 removes the overlay and restores the mesh visibility.
+
+Labels are Blender text objects. Node labels use the `ScaffoldNode` id from the
+inspection overlay; edge labels use the `ScaffoldEdge` id, with the
+`PatchChain` id only as a fallback if no edge id is present.
 
 To unregister:
 

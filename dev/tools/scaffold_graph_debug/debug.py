@@ -10,18 +10,25 @@ from __future__ import annotations
 from typing import Any, Iterable, Sequence
 
 import bpy
+from mathutils import Vector
 
 
 EDGE_LAYER_NAME = "ScaffoldGraph_Edges"
 NODE_LAYER_NAME = "ScaffoldGraph_Nodes"
 GP_OBJECT_PREFIX = "ScaffoldGraph_Overlay__"
+LABEL_COLLECTION_PREFIX = "ScaffoldGraph_Labels__"
+LABEL_OBJECT_PREFIX = "ScaffoldGraph_Label__"
 EDGE_MATERIAL_NAME = "ScaffoldGraph_Edge_Material"
 NODE_MATERIAL_NAME = "ScaffoldGraph_Node_Material"
+LABEL_MATERIAL_NAME = "ScaffoldGraph_Label_Material"
 EDGE_COLOR = (0.1, 0.75, 1.0, 1.0)
 NODE_COLOR = (1.0, 0.95, 0.2, 1.0)
+LABEL_COLOR = (1.0, 1.0, 1.0, 1.0)
 EDGE_WIDTH = 5
 NODE_WIDTH = 9
 NODE_MARKER_SIZE = 0.045
+LABEL_SIZE = 0.12
+LABEL_LIFT = 0.06
 GP_OBJECT_TYPES = {"GREASEPENCIL", "GPENCIL"}
 
 
@@ -32,6 +39,10 @@ def _safe_object_suffix(name: str) -> str:
 
 def overlay_object_name(source_name: str) -> str:
     return GP_OBJECT_PREFIX + _safe_object_suffix(source_name)
+
+
+def label_collection_name(source_name: str) -> str:
+    return LABEL_COLLECTION_PREFIX + _safe_object_suffix(source_name)
 
 
 def is_graph_debug_object(obj: Any) -> bool:
@@ -208,6 +219,115 @@ def _draw_nodes(frame: Any, material_index: int, nodes: Iterable[dict[str, Any]]
     return marker_count
 
 
+def _edge_label_position(polyline: Sequence[Sequence[float]]) -> Vector | None:
+    points = [Vector((float(point[0]), float(point[1]), float(point[2]))) for point in polyline]
+    if not points:
+        return None
+    if len(points) == 1:
+        return points[0]
+
+    lengths: list[float] = []
+    total = 0.0
+    for first, second in zip(points, points[1:]):
+        length = (second - first).length
+        lengths.append(length)
+        total += length
+    if total <= 1e-8:
+        return points[0]
+
+    halfway = total * 0.5
+    accumulated = 0.0
+    for index, length in enumerate(lengths):
+        if accumulated + length >= halfway:
+            ratio = (halfway - accumulated) / length if length > 1e-8 else 0.0
+            return points[index].lerp(points[index + 1], ratio)
+        accumulated += length
+    return points[-1]
+
+
+def _ensure_label_collection(source_name: str) -> Any:
+    collection_name = label_collection_name(source_name)
+    collection = bpy.data.collections.get(collection_name)
+    if collection is None:
+        collection = bpy.data.collections.new(collection_name)
+        bpy.context.scene.collection.children.link(collection)
+    else:
+        for obj in list(collection.objects):
+            data = obj.data
+            bpy.data.objects.remove(obj, do_unlink=True)
+            if data and getattr(data, "users", 0) == 0:
+                bpy.data.curves.remove(data)
+    return collection
+
+
+def _ensure_label_material() -> Any:
+    material = bpy.data.materials.get(LABEL_MATERIAL_NAME)
+    if material is None:
+        material = bpy.data.materials.new(LABEL_MATERIAL_NAME)
+    material.diffuse_color = LABEL_COLOR
+    return material
+
+
+def _add_label(
+    collection: Any,
+    source_object: Any,
+    kind: str,
+    label: str,
+    local_position: Vector,
+    material: Any,
+) -> None:
+    safe_label = _safe_object_suffix(label)
+    curve_name = f"{LABEL_OBJECT_PREFIX}{kind}__{safe_label}"
+    curve_data = bpy.data.curves.new(curve_name, type="FONT")
+    curve_data.body = label
+    curve_data.size = LABEL_SIZE
+    curve_data.align_x = "CENTER"
+    curve_data.align_y = "CENTER"
+    curve_data.materials.append(material)
+
+    label_object = bpy.data.objects.new(curve_name, curve_data)
+    label_object.location = source_object.matrix_world @ (
+        local_position + Vector((0.0, 0.0, LABEL_LIFT))
+    )
+    collection.objects.link(label_object)
+
+
+def _draw_labels(
+    source_object: Any,
+    nodes: Sequence[dict[str, Any]],
+    edges: Sequence[dict[str, Any]],
+    *,
+    visible: bool,
+) -> int:
+    collection = _ensure_label_collection(source_object.name)
+    collection.hide_viewport = not visible
+    material = _ensure_label_material()
+    label_count = 0
+
+    for node in nodes:
+        label = str(node.get("id", ""))
+        position = node.get("position", ())
+        if label and len(position) == 3:
+            _add_label(
+                collection,
+                source_object,
+                "node",
+                label,
+                Vector((float(position[0]), float(position[1]), float(position[2]))),
+                material,
+            )
+            label_count += 1
+
+    for edge in edges:
+        label = str(edge.get("id") or edge.get("patch_chain_id") or "")
+        label_position = _edge_label_position(edge.get("polyline", ()))
+        if label and label_position is not None:
+            _add_label(collection, source_object, "edge", label, label_position, material)
+            label_count += 1
+
+    return label_count
+
+
 def _get_or_create_grease_pencil_object(source_object: Any) -> Any:
     gp_name = overlay_object_name(source_object.name)
     existing = bpy.data.objects.get(gp_name)
@@ -235,6 +355,7 @@ def render_overlay(
     *,
     show_edges: bool = True,
     show_nodes: bool = True,
+    show_labels: bool = True,
 ) -> dict[str, Any]:
     gp_object = _get_or_create_grease_pencil_object(source_object)
     gp_data = gp_object.data
@@ -250,6 +371,12 @@ def render_overlay(
     nodes = list(overlay.get("nodes", ()))
     edge_stroke_count = _draw_edges(edge_frame, edge_material_index, edges)
     node_marker_count = _draw_nodes(node_frame, node_material_index, nodes)
+    label_count = _draw_labels(
+        source_object,
+        nodes,
+        edges,
+        visible=show_labels,
+    )
 
     return {
         "scaffold_node_count": int(overlay.get("scaffold_node_count", len(nodes))),
@@ -259,6 +386,7 @@ def render_overlay(
         "node_layer": NODE_LAYER_NAME,
         "edge_stroke_count": edge_stroke_count,
         "node_marker_count": node_marker_count,
+        "label_count": label_count,
     }
 
 
@@ -277,18 +405,40 @@ def clear_overlay(source_name: str | None = None) -> None:
                     if getattr(data, "users", 0) == 0:
                         collection.remove(data)
 
+    label_prefix = label_collection_name(source_name) if source_name else LABEL_COLLECTION_PREFIX
+    for collection in list(bpy.data.collections):
+        if collection.name.startswith(label_prefix):
+            for obj in list(collection.objects):
+                data = obj.data
+                bpy.data.objects.remove(obj, do_unlink=True)
+                if data and getattr(data, "users", 0) == 0:
+                    bpy.data.curves.remove(data)
+            bpy.data.collections.remove(collection)
+
     for material in list(bpy.data.materials):
-        if material.name in {EDGE_MATERIAL_NAME, NODE_MATERIAL_NAME} and material.users == 0:
+        if (
+            material.name in {EDGE_MATERIAL_NAME, NODE_MATERIAL_NAME, LABEL_MATERIAL_NAME}
+            and material.users == 0
+        ):
             bpy.data.materials.remove(material)
 
 
-def apply_layer_visibility(source_name: str, *, show_edges: bool, show_nodes: bool) -> None:
+def apply_layer_visibility(
+    source_name: str,
+    *,
+    show_edges: bool,
+    show_nodes: bool,
+    show_labels: bool,
+) -> None:
     obj = bpy.data.objects.get(overlay_object_name(source_name))
-    if not is_graph_debug_object(obj):
-        return
-    edge_layer = _find_layer(obj.data, EDGE_LAYER_NAME)
-    node_layer = _find_layer(obj.data, NODE_LAYER_NAME)
-    if edge_layer is not None and hasattr(edge_layer, "hide"):
-        edge_layer.hide = not show_edges
-    if node_layer is not None and hasattr(node_layer, "hide"):
-        node_layer.hide = not show_nodes
+    if is_graph_debug_object(obj):
+        edge_layer = _find_layer(obj.data, EDGE_LAYER_NAME)
+        node_layer = _find_layer(obj.data, NODE_LAYER_NAME)
+        if edge_layer is not None and hasattr(edge_layer, "hide"):
+            edge_layer.hide = not show_edges
+        if node_layer is not None and hasattr(node_layer, "hide"):
+            node_layer.hide = not show_nodes
+
+    collection = bpy.data.collections.get(label_collection_name(source_name))
+    if collection is not None:
+        collection.hide_viewport = not show_labels
