@@ -25,6 +25,9 @@ Architect chat
 Codex only spawns subagents when explicitly asked. The Orchestrator prompt must
 name which subagents to spawn and what each one must return.
 
+The user should not manually validate Task Card structure. Architect is
+responsible for producing copy-paste-ready Codex Orchestrator prompts.
+
 ## Parent / Orchestrator
 
 The Codex parent session coordinates one Task Card.

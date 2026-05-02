@@ -82,6 +82,9 @@ It owns:
 - preparing prompts for Codex Orchestrator sessions;
 - keeping CFTUV lessons aligned with SCAFFOLD architecture.
 
+The user should not manually validate Task Card structure. Architect is
+responsible for producing copy-paste-ready Codex Orchestrator prompts.
+
 It does not own production code implementation.
 
 ## Default behavior
