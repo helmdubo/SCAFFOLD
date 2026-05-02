@@ -76,6 +76,12 @@ task_routes:
     - docs/migration/cftuv_lessons.md
     - docs/migration/cftuv_bridge.md
     - docs/architecture/design_decisions.md
+    - docs/reference/cftuv/README.md
+    - docs/reference/cftuv/AGENTS.md
+  cftuv_source_oracle:
+    - docs/migration/cftuv_bridge.md
+    - docs/reference/cftuv/README.md
+    - docs/reference/cftuv/AGENTS.md
   cftuv_algorithm_card:
     - docs/migration/cftuv_bridge.md
     - docs/agent_rules/codex_subagents.md
