@@ -205,7 +205,8 @@ Cylinder tube without caps + one seam cut:
   Chain count: 3
   PatchChain count: 4
   LoopCorner count: 4
-  ScaffoldNode count: 8
+  ScaffoldNode count: 2
+  ScaffoldEdge count: 4
 
 PatchChains:
   1. seam side A
@@ -220,13 +221,16 @@ LocalFaceFanGeometryFacts:
 
 ScaffoldNode:
   graph-level evidence nodes assembled from loop corners and endpoint evidence;
-  seam-side materialized Vertex occurrences may group by SourceVertexId.
+  this is not one node per mesh vertex.
 
-Future ScaffoldJunction:
-  likely two seam endpoint groups after graph-level classification
+ScaffoldEdge:
+  one graph edge per final PatchChain.
 
-Future ScaffoldCircuit:
-  likely two cap / border circuits
+Grease Pencil compact report expectation:
+  scaffold_node_count: 2
+  scaffold_edge_count: 4
+  edge_stroke_count: 4
+  node_marker_count: 2
 ```
 
 ---
@@ -311,18 +315,14 @@ Still unresolved:
 
 ---
 
-## Recommended next task
+## Next architecture decision
 
-Review ScaffoldGraph overlay reports and edge cases on synthetic fixtures.
+ScaffoldGraph overlay reports and Grease Pencil smoke output now have compact
+expectations on representative meshes. Use those reports as validation evidence
+before any explicit ScaffoldJunction or ScaffoldTrace task.
 
-After that:
-
-```text
-Grease Pencil dev debug rendering as a future consumer of the overlay payload.
-```
-
-Grease Pencil rendering must consume the pipeline inspection overlay payload
-instead of duplicating core graph logic. Do not import Blender into Scaffold Core.
+Grease Pencil rendering consumes the pipeline inspection overlay payload instead
+of duplicating core graph logic. Do not import Blender into Scaffold Core.
 
 ---
 

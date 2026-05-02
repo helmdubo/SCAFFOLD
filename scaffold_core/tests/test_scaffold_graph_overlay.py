@@ -17,6 +17,25 @@ from scaffold_core.tests.fixtures.cylinder_tube import (
     make_segmented_cylinder_tube_without_caps_with_one_seam_source,
 )
 from scaffold_core.tests.fixtures.l_shape import make_two_patch_source_with_two_edge_seam_run
+from scaffold_core.tests.fixtures.single_patch import make_single_quad_source
+
+
+def _compact_graph_report(source_factory) -> dict[str, int]:
+    context = run_pass_1_relations(run_pass_0(source_factory()))
+    compact_report = inspect_pipeline_context(context, detail="compact")
+    full_report = inspect_pipeline_context(context, detail="full")
+    relations = compact_report["relations"]
+    overlay = full_report["scaffold_graph_overlay"]
+    assert all(edge["polyline"] for edge in overlay["edges"])
+    assert all(len(node["position"]) == 3 for node in overlay["nodes"])
+    return {
+        "scaffold_node_count": relations["scaffold_node_count"],
+        "scaffold_edge_count": relations["scaffold_edge_count"],
+        "overlay_node_count": overlay["scaffold_node_count"],
+        "overlay_edge_count": overlay["scaffold_edge_count"],
+        "edge_stroke_count": len(overlay["edges"]),
+        "node_marker_count": len(overlay["nodes"]),
+    }
 
 
 def test_scaffold_graph_overlay_has_required_debug_payload_shape() -> None:
@@ -120,3 +139,51 @@ def test_scaffold_graph_overlay_polyline_follows_patch_chain_orientation() -> No
     first_polyline = overlay["edges"][0]["polyline"]
     second_polyline = overlay["edges"][1]["polyline"]
     assert first_polyline == list(reversed(second_polyline))
+
+
+def test_scaffold_graph_overlay_compact_report_expectations_for_single_patch() -> None:
+    assert _compact_graph_report(make_single_quad_source) == {
+        "scaffold_node_count": 1,
+        "scaffold_edge_count": 1,
+        "overlay_node_count": 1,
+        "overlay_edge_count": 1,
+        "edge_stroke_count": 1,
+        "node_marker_count": 1,
+    }
+
+
+def test_scaffold_graph_overlay_compact_report_expectations_for_cylinder() -> None:
+    assert _compact_graph_report(
+        make_segmented_cylinder_tube_without_caps_with_one_seam_source
+    ) == {
+        "scaffold_node_count": 2,
+        "scaffold_edge_count": 4,
+        "overlay_node_count": 2,
+        "overlay_edge_count": 4,
+        "edge_stroke_count": 4,
+        "node_marker_count": 2,
+    }
+
+
+def test_scaffold_graph_overlay_compact_report_expectations_for_closed_shared_loop() -> None:
+    assert _compact_graph_report(make_closed_shared_boundary_loop_source) == {
+        "scaffold_node_count": 2,
+        "scaffold_edge_count": 2,
+        "overlay_node_count": 2,
+        "overlay_edge_count": 2,
+        "edge_stroke_count": 2,
+        "node_marker_count": 2,
+    }
+
+
+def test_scaffold_graph_overlay_report_edges_are_final_patch_chains() -> None:
+    context = run_pass_1_relations(
+        run_pass_0(make_segmented_cylinder_tube_without_caps_with_one_seam_source())
+    )
+
+    report = inspect_pipeline_context(context, detail="full")
+    overlay = report["scaffold_graph_overlay"]
+
+    assert overlay["scaffold_node_count"] != len(context.source_snapshot.vertices)
+    assert overlay["scaffold_edge_count"] == len(context.topology_snapshot.patch_chains)
+    assert all(edge["edge_source"] == "FINAL_PATCH_CHAIN" for edge in overlay["edges"])

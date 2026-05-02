@@ -60,10 +60,12 @@ Implemented:
 - G3c8 - ScaffoldEdge v0 / ScaffoldGraph v0
 - LocalFaceFanGeometryFacts as Layer 2 geometry evidence consumed by Layer 3
 
-Next:
+Validation status:
 
-- inspection review of ScaffoldGraph overlay reports and edge cases
-- Grease Pencil dev debug rendering as a future consumer of the overlay payload
+- ScaffoldGraph overlay compact report expectations are captured for
+  representative single patch, cylinder and shared-loop fixtures.
+- Grease Pencil dev debug rendering smoke validation confirms the cylinder
+  report shape without adding ScaffoldJunction or ScaffoldTrace semantics.
 
 Deferred:
 
@@ -394,6 +396,23 @@ Implementation status:
   the derived records.
 - Pipeline inspection exposes a JSON-serializable `scaffold_graph_overlay`
   payload with node anchors, edge polylines and graph ids for debug tooling.
+- Grease Pencil dev rendering consumes that overlay payload and reports compact
+  validation counts; it does not recompute ScaffoldGraph semantics.
+
+Compact report expectations:
+
+| Fixture | `scaffold_node_count` | `scaffold_edge_count` | `edge_stroke_count` | `node_marker_count` |
+|---|---:|---:|---:|---:|
+| single patch / rectangle | 1 | 1 | 1 | 1 |
+| cylinder tube without caps + one seam cut | 2 | 4 | 4 | 2 |
+| closed shared-loop / cube-like synthetic fixture | 2 | 2 | 2 | 2 |
+
+Report interpretation:
+
+- `ScaffoldNode` is graph-level evidence grouped from LoopCorners and endpoint
+  evidence; it is not every mesh vertex.
+- `ScaffoldEdge` is one graph edge per final `PatchChain`; the overlay edge
+  source remains `FINAL_PATCH_CHAIN`.
 
 Rules:
 
@@ -405,9 +424,9 @@ Rules:
 - no U/V labels, H/V labels, WORLD_UP, WorldOrientation, Feature, Runtime,
   Solve or UV semantics.
 
-Grease Pencil rendering is a future dev-tool slice. It must consume the
-inspection overlay payload instead of duplicating core graph logic or importing
-Blender into Scaffold Core.
+Grease Pencil rendering is a dev-tool consumer. It must consume the inspection
+overlay payload instead of duplicating core graph logic or importing Blender
+into Scaffold Core.
 
 ## Future - ScaffoldTrace
 
