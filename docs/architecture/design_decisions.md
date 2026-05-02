@@ -34,7 +34,7 @@ No code rename is required as part of this documentation cleanup.
 
 | Term | Meaning |
 |---|---|
-| `ScaffoldJunction` | Future graph-level ScaffoldNode classification for branch/seam/cross-patch structures. |
+| `ScaffoldJunction` | Future graph-level classification overlay on existing ScaffoldNode, not a separate graph node identity. |
 | `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
@@ -136,10 +136,15 @@ as graph edges, not a parallel effective PatchChain layer.
 ## DD-35 - LoopCorner is patch-local; ScaffoldJunction is graph-level
 
 LoopCorner is the local transition between adjacent PatchChains inside one
-BoundaryLoop. A LoopCorner may feed ScaffoldNode evidence. ScaffoldJunction remains
-a future graph-level classification of ScaffoldNodes when graph-level structure
-says it is structural: 3+ incident PatchChains, seam pair, cross-patch connection,
-branch, or other graph-level structure.
+BoundaryLoop. A LoopCorner may feed ScaffoldNode evidence. ScaffoldJunction
+remains a future graph-level classification overlay on existing ScaffoldNode,
+not a separate graph node identity. Ordinary ScaffoldNodes remain unclassified
+until a future ScaffoldJunction classifier exists.
+
+Planning-only ScaffoldJunctionKind vocabulary includes SELF_SEAM, CROSS_PATCH,
+BRANCH, TERMINUS, AMBIGUOUS and DEGRADED. SELF_SEAM is for a ScaffoldNode where
+two incident final PatchChains share the same ChainId and same PatchId,
+representing the supported SEAM_SELF case.
 
 ## DD-36 - LocalFaceFan is geometry evidence, not graph topology
 
@@ -180,6 +185,9 @@ ScaffoldNode does not mutate, merge, split or replace Layer 1 Vertex, Chain,
 PatchChain or BoundaryLoop identity. It does not classify ScaffoldJunctions.
 ScaffoldEdge and ScaffoldGraph consume ScaffoldNode evidence in the implemented
 G3c8 builder; ScaffoldTrace, ScaffoldCircuit and ScaffoldRail remain deferred.
+Future ScaffoldJunction classification must not change ScaffoldNode grouping,
+change PatchChain identity, walk traces, detect circuits, select rails, choose
+continuations or introduce UV, runtime or feature semantics.
 
 ## PatchChain directional evidence
 

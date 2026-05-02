@@ -69,7 +69,8 @@ Validation status:
 
 Deferred:
 
-- ScaffoldJunction / ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
+- ScaffoldJunction classification overlay on existing ScaffoldNode
+- ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 - WorldOrientation
 - Layer 4 Feature Grammar
 - Layer 5 Runtime / Solve
@@ -89,13 +90,26 @@ Current terminology for the final boundary graph model:
 | `ScaffoldNode` | Implemented G3c7 graph-level evidence node assembled from LoopCorners and endpoint evidence. It is not Layer 1 identity. |
 | `ScaffoldEdge` | Implemented G3c8 graph-level view of one final PatchChain. |
 | `ScaffoldGraph` | Implemented G3c8 connectivity graph assembled from ScaffoldNodes and ScaffoldEdges. |
-| `ScaffoldJunction` | Future graph-level ScaffoldNode classification for branch/seam/cross-patch structures. |
+| `ScaffoldJunction` | Future graph-level classification overlay on existing ScaffoldNode, not a separate graph node identity. |
 | `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
 
 Endpoint samples, endpoint relations, LocalFaceFanGeometryFacts and ScaffoldNodes
 are evidence or derived relation records; they are not Layer 1 topology.
+
+Future ScaffoldJunction classification:
+
+- ordinary ScaffoldNodes remain unclassified until a future ScaffoldJunction
+  classifier exists;
+- `SELF_SEAM` is a future ScaffoldJunctionKind for a ScaffoldNode where two
+  incident final PatchChains share the same ChainId and same PatchId,
+  representing the supported SEAM_SELF case;
+- planning-only kind vocabulary may include `SELF_SEAM`, `CROSS_PATCH`,
+  `BRANCH`, `TERMINUS`, `AMBIGUOUS` and `DEGRADED`;
+- future classification must not change ScaffoldNode grouping, change
+  PatchChain identity, walk traces, detect circuits, select rails, choose
+  continuations or introduce UV, runtime or feature semantics.
 
 ## G3b1 PatchChain incidence
 

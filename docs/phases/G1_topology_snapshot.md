@@ -94,7 +94,7 @@ A topology snapshot that can represent:
 - BoundaryLoop
 - Chain
 - PatchChain
-- Vertex / ScaffoldJunction
+- Vertex
 
 with diagnostics for:
 
@@ -105,6 +105,9 @@ with diagnostics for:
 - SEAM_SELF;
 - non-manifold chains;
 - missing/degraded topology.
+
+ScaffoldJunction is not a Layer 1 topology deliverable. It is reserved for a
+future Layer 3 graph-level classification overlay on existing ScaffoldNode.
 
 ## Acceptance
 

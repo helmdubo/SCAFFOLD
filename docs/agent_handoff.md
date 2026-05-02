@@ -99,7 +99,7 @@ Implemented:
 
 Not implemented:
 
-- ScaffoldJunction
+- ScaffoldJunction classification overlay on existing ScaffoldNode
 - ScaffoldTrace
 - ScaffoldCircuit
 - ScaffoldRail
@@ -142,7 +142,10 @@ ScaffoldNode:
   Chain or PatchChain records.
 
 ScaffoldJunction:
-  future ScaffoldNode classification for branch/seam/cross-patch structures.
+  future graph-level classification overlay on existing ScaffoldNode, not a
+  separate graph node identity. SELF_SEAM is a future ScaffoldJunctionKind for
+  a ScaffoldNode where two incident final PatchChains share the same ChainId
+  and same PatchId.
 
 ScaffoldEdge:
   implemented G3c8 graph-level view of one final PatchChain.
@@ -207,6 +210,7 @@ Cylinder tube without caps + one seam cut:
   LoopCorner count: 4
   ScaffoldNode count: 2
   ScaffoldEdge count: 4
+  Future SELF_SEAM ScaffoldJunction count: 2
 
 PatchChains:
   1. seam side A
@@ -225,6 +229,11 @@ ScaffoldNode:
 
 ScaffoldEdge:
   one graph edge per final PatchChain.
+
+Future ScaffoldJunction:
+  ordinary ScaffoldNodes remain unclassified until a future ScaffoldJunction
+  classifier exists. SELF_SEAM would classify the 2 seam endpoint ScaffoldNodes
+  in this fixture after graph-level classification.
 
 Grease Pencil compact report expectation:
   scaffold_node_count: 2
@@ -267,7 +276,9 @@ DEGENERATE
 ```
 
 LoopCorner is patch-local. ScaffoldNode is graph-level evidence. ScaffoldJunction
-is a future ScaffoldNode kind/classification, not every corner or node.
+is a future ScaffoldNode classification overlay, not every corner or node and
+not a separate graph node identity. Ordinary ScaffoldNodes remain unclassified
+until a future ScaffoldJunction classifier exists.
 ScaffoldEdge is a graph-level view of one final PatchChain, and ScaffoldGraph is
 connectivity-only over existing ScaffoldNodes and ScaffoldEdges.
 

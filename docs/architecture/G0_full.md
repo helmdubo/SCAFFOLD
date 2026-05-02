@@ -267,7 +267,7 @@ documentation cleanup.
 
 | Term | Meaning |
 |---|---|
-| `ScaffoldJunction` | Future graph-level ScaffoldNode classification for branch/seam/cross-patch structures. |
+| `ScaffoldJunction` | Future graph-level classification overlay on existing ScaffoldNode, not a separate graph node identity. |
 | `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
@@ -316,7 +316,7 @@ Conceptual mapping, not literal CAD implementation.
 | Loop / Wire | `BoundaryLoop` | Outer or inner patch boundary. |
 | Edge | `Chain` | Shared boundary curve/polyline entity. |
 | Coedge / Edge-use | `PatchChain` | Oriented use of a Chain by one Loop. Mandatory. |
-| Vertex | `Vertex` | Topological point; graph-level ScaffoldJunction is derived later. |
+| Vertex | `Vertex` | Topological point; future ScaffoldJunction classification is derived later from ScaffoldNode. |
 | Face adjacency graph | Patch dual graph | Layer 3 `adjacency.*`. |
 | Feature recognition | Feature grammar | Layer 4 graph-pattern recognition. |
 | Attributed Adjacency Graph | `PatchAdjacency` | Dihedral, continuity, shared length, evidence. |
@@ -377,7 +377,7 @@ SurfaceModel
 
 
 `Vertex` is a topological endpoint. `ScaffoldJunction` is a future graph-level
-classification, not every topology Vertex.
+classification overlay on existing ScaffoldNode, not every topology Vertex.
 
 ## 5.4 Chain / PatchChain cardinality cases
 
@@ -613,8 +613,21 @@ or measurements; they are not graph nodes.
 `LoopCorner` is the patch-local transition between adjacent PatchChains inside
 one BoundaryLoop. It may feed ScaffoldNode evidence.
 
-`ScaffoldJunction` is graph-level: a ScaffoldNode classified as branch-like,
-not every PatchChain endpoint sample or LoopCorner.
+`ScaffoldJunction` is future graph-level classification of an existing
+ScaffoldNode, not every PatchChain endpoint sample or LoopCorner. Ordinary
+ScaffoldNodes remain unclassified until a future ScaffoldJunction classifier
+exists.
+
+Future ScaffoldJunction classification is an overlay on existing ScaffoldNode
+records, not a separate graph node identity. `SELF_SEAM` is a future
+ScaffoldJunctionKind for a ScaffoldNode where two incident final PatchChains
+share the same ChainId and same PatchId, representing the supported SEAM_SELF
+case. Planning-only kind vocabulary may include `SELF_SEAM`, `CROSS_PATCH`,
+`BRANCH`, `TERMINUS`, `AMBIGUOUS` and `DEGRADED`.
+
+Future ScaffoldJunction classification must not change ScaffoldNode grouping,
+change PatchChain identity, walk traces, detect circuits, select rails, choose
+continuations or introduce UV, runtime or feature semantics.
 
 `ScaffoldEdge` is the graph-level view of a final PatchChain. `ScaffoldGraph`
 is connectivity-only over ScaffoldNodes and ScaffoldEdges. `ScaffoldTrace` is
@@ -936,9 +949,10 @@ effective PatchChain layer.
 LoopCorner is the local transition between adjacent PatchChains inside one
 BoundaryLoop. A LoopCorner may feed ScaffoldNode evidence.
 
-It becomes a ScaffoldJunction only when graph-level classification says it is
-structural: 3+ incident PatchChains, seam pair, cross-patch connection,
-branch, or other graph-level structure.
+It becomes a ScaffoldJunction only when a future graph-level classifier assigns
+a ScaffoldJunctionKind to an existing ScaffoldNode. ScaffoldJunction is a
+classification overlay, not a separate graph node identity. Ordinary
+ScaffoldNodes remain unclassified until the future classifier exists.
 
 ## DD-36 — LocalFaceFan is geometry evidence, not graph topology
 
@@ -982,6 +996,9 @@ ScaffoldNode does not mutate, merge, split or replace Layer 1 Vertex, Chain,
 PatchChain or BoundaryLoop identity. It does not classify ScaffoldJunctions.
 ScaffoldEdge and ScaffoldGraph consume ScaffoldNode evidence in the implemented
 G3c8 builder; ScaffoldTrace, ScaffoldCircuit and ScaffoldRail remain deferred.
+Future ScaffoldJunction classification must not change ScaffoldNode grouping,
+change PatchChain identity, walk traces, detect circuits, select rails, choose
+continuations or introduce UV, runtime or feature semantics.
 
 ## PatchChain directional evidence
 
@@ -1066,7 +1083,7 @@ Next:
 - Grease Pencil dev debug rendering as a future overlay consumer
 
 Deferred:
-- ScaffoldJunction
+- ScaffoldJunction classification overlay on existing ScaffoldNode
 - ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 - WorldOrientation
 - Layer 4 Feature Grammar
