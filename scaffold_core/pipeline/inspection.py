@@ -18,7 +18,7 @@ from scaffold_core.layer_1_topology.build import build_topology_snapshot
 from scaffold_core.layer_1_topology.invariants import validate_topology
 from scaffold_core.layer_1_topology.model import PatchChain, SurfaceModel
 from scaffold_core.layer_1_topology.queries import patch_chain_vertices, patch_chains_for_chain
-from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot
+from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot, Vector3
 from scaffold_core.layer_3_relations.model import RelationSnapshot
 from scaffold_core.pipeline.context import PipelineContext
 
@@ -37,6 +37,18 @@ def inspect_pipeline_context(context: PipelineContext, detail: str = "compact") 
         report["geometry"] = geometry_summary_to_dict(context.geometry_facts, detail=detail)
     if context.relation_snapshot is not None:
         report["relations"] = relation_summary_to_dict(context.relation_snapshot, detail=detail)
+    if (
+        detail == "full"
+        and context.topology_snapshot is not None
+        and context.geometry_facts is not None
+        and context.relation_snapshot is not None
+        and context.relation_snapshot.scaffold_graph is not None
+    ):
+        report["scaffold_graph_overlay"] = scaffold_graph_overlay_to_dict(
+            context.topology_snapshot,
+            context.geometry_facts,
+            context.relation_snapshot,
+        )
     report["diagnostics"] = _diagnostics_to_list(context)
     return report
 
@@ -280,6 +292,107 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         ],
     })
     return summary
+
+
+def scaffold_graph_overlay_to_dict(
+    topology: SurfaceModel,
+    geometry: GeometryFactSnapshot,
+    relations: RelationSnapshot,
+) -> InspectionDict:
+    """Return a pure-Python debug overlay payload for existing ScaffoldGraph data."""
+
+    graph = relations.scaffold_graph
+    return {
+        "scaffold_node_count": len(relations.scaffold_nodes),
+        "scaffold_edge_count": len(relations.scaffold_edges),
+        "nodes": [
+            {
+                "id": node.id,
+                "source_vertex_ids": [
+                    str(source_vertex_id)
+                    for source_vertex_id in node.source_vertex_ids
+                ],
+                "vertex_ids": [str(vertex_id) for vertex_id in node.vertex_ids],
+                "position": list(_scaffold_node_position(geometry, node.vertex_ids)),
+                "confidence": node.confidence,
+            }
+            for node in sorted(relations.scaffold_nodes, key=lambda item: item.id)
+        ],
+        "edges": [
+            {
+                "id": edge.id,
+                "patch_chain_id": str(edge.patch_chain_id),
+                "chain_id": str(edge.chain_id),
+                "start_scaffold_node_id": edge.start_scaffold_node_id,
+                "end_scaffold_node_id": edge.end_scaffold_node_id,
+                "polyline": _scaffold_edge_polyline(topology, geometry, edge.patch_chain_id),
+                "confidence": edge.confidence,
+                "edge_source": _scaffold_edge_source(edge),
+            }
+            for edge in sorted(relations.scaffold_edges, key=lambda item: item.id)
+        ],
+        "graph": (
+            {
+                "id": graph.id,
+                "node_ids": list(graph.node_ids),
+                "edge_ids": list(graph.edge_ids),
+            }
+            if graph is not None
+            else None
+        ),
+    }
+
+
+def _scaffold_node_position(
+    geometry: GeometryFactSnapshot,
+    vertex_ids,
+) -> Vector3:
+    positions = [
+        geometry.vertex_facts[vertex_id].position
+        for vertex_id in sorted(vertex_ids, key=str)
+        if vertex_id in geometry.vertex_facts
+    ]
+    if not positions:
+        return (0.0, 0.0, 0.0)
+    count = float(len(positions))
+    return (
+        sum(position[0] for position in positions) / count,
+        sum(position[1] for position in positions) / count,
+        sum(position[2] for position in positions) / count,
+    )
+
+
+def _scaffold_edge_polyline(
+    topology: SurfaceModel,
+    geometry: GeometryFactSnapshot,
+    patch_chain_id,
+) -> list[list[float]]:
+    patch_chain = topology.patch_chains[patch_chain_id]
+    chain_facts = geometry.chain_facts.get(patch_chain.chain_id)
+    if chain_facts is not None and chain_facts.segments:
+        segments = chain_facts.segments
+        if patch_chain.orientation_sign < 0:
+            segments = tuple(reversed(segments))
+            points = [segments[0].end_position]
+            points.extend(segment.start_position for segment in segments)
+        else:
+            points = [segments[0].start_position]
+            points.extend(segment.end_position for segment in segments)
+        return [list(point) for point in points]
+
+    start_vertex_id, end_vertex_id = patch_chain_vertices(topology, patch_chain_id)
+    return [
+        list(geometry.vertex_facts[start_vertex_id].position),
+        list(geometry.vertex_facts[end_vertex_id].position),
+    ]
+
+
+def _scaffold_edge_source(edge) -> str:
+    for evidence in edge.evidence:
+        edge_source = evidence.data.get("edge_source")
+        if edge_source is not None:
+            return str(edge_source)
+    return "FINAL_PATCH_CHAIN"
 
 
 def _patch_axes_candidate_scores(patch_axes) -> list[dict[str, object]]:

@@ -156,6 +156,11 @@ task_routes:
     - docs/phases/G3_derived_relations.md
     - docs/architecture/design_decisions.md
     - docs/agent_handoff.md
+  scaffold_graph_overlay:
+    - docs/phases/G3_derived_relations.md
+    - docs/architecture/design_decisions.md
+    - docs/agent_rules/blender_boundaries.md
+    - docs/agent_handoff.md
 
 layer_order:
   - layer_0_source

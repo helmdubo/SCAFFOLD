@@ -22,6 +22,8 @@ This document is the canonical reference for subsequent implementation plans: G1
 - Added PatchChainEndpointSample / PatchChainEndpointRelation terminology.
 - Added LoopCorner as patch-local transition between adjacent PatchChains.
 - Implemented ScaffoldNode v0 as graph-level evidence, not Layer 1 identity.
+- Implemented ScaffoldEdge v0 as a graph-level view of one final PatchChain.
+- Implemented ScaffoldGraph v0 as connectivity assembled from ScaffoldNodes and ScaffoldEdges.
 - Amended DD-29 to allow topology/materialization-based border coalescing.
 - Marked OQ-11 as partially resolved for polygonal straight/turning Chains.
 
@@ -250,6 +252,8 @@ Feature-local alignment is expressed as `FeatureConstraint`, not as newly regist
 | `PatchChainEndpointRelation` | Pairwise local relation between endpoint samples at one Vertex; not a graph node. |
 | `LoopCorner` | Patch-local transition between adjacent PatchChains in one BoundaryLoop. |
 | `ScaffoldNode` | Implemented G3c7 graph-level evidence node assembled from LoopCorners and endpoint evidence; not Layer 1 identity. |
+| `ScaffoldEdge` | Implemented G3c8 graph-level view of one final PatchChain. |
+| `ScaffoldGraph` | Implemented G3c8 connectivity graph assembled from ScaffoldNodes and ScaffoldEdges. |
 | `AlignmentClass` | Implemented Layer 3 direction-family grouping over PatchChainDirectionalEvidence. |
 | `PatchAxes` | Implemented Layer 3 primary/secondary AlignmentClass selection per Patch. |
 
@@ -264,8 +268,6 @@ documentation cleanup.
 | Term | Meaning |
 |---|---|
 | `ScaffoldJunction` | Future graph-level ScaffoldNode classification for branch/seam/cross-patch structures. |
-| `ScaffoldEdge` | Future graph-level view of a final PatchChain. |
-| `ScaffoldGraph` | Future graph assembled from ScaffoldNodes and ScaffoldEdges. |
 | `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
@@ -602,8 +604,8 @@ These relations are axis-free:
 ScaffoldNode v0 is graph-level evidence assembled from LoopCorners and endpoint
 evidence. It is not Layer 1 identity.
 
-Future ScaffoldGraph / ScaffoldTrace may be derived from these endpoint
-relations, LoopCorner data and ScaffoldNode evidence.
+ScaffoldGraph is derived from these endpoint relations, LoopCorner data and
+ScaffoldNode evidence.
 
 Endpoint samples, endpoint relations and LocalFaceFanGeometryFacts are evidence
 or measurements; they are not graph nodes.
@@ -614,8 +616,9 @@ one BoundaryLoop. It may feed ScaffoldNode evidence.
 `ScaffoldJunction` is graph-level: a ScaffoldNode classified as branch-like,
 not every PatchChain endpoint sample or LoopCorner.
 
-`ScaffoldEdge` is the graph-level view of a final PatchChain. `ScaffoldTrace`
-is a connected sequence of ScaffoldEdges through ScaffoldNodes.
+`ScaffoldEdge` is the graph-level view of a final PatchChain. `ScaffoldGraph`
+is connectivity-only over ScaffoldNodes and ScaffoldEdges. `ScaffoldTrace` is
+a future connected sequence of ScaffoldEdges through ScaffoldNodes.
 `ScaffoldCircuit` is a closed ScaffoldTrace. `ScaffoldRail` is a future
 direction-stable ScaffoldTrace usable as a conditional axis.
 
@@ -913,13 +916,12 @@ normals; Patch aggregate normals are a fallback.
 
 ## DD-33 — ScaffoldGraph is derived from endpoint relations and LoopCorners
 
-ScaffoldGraph / ScaffoldTrace are future Layer 3 derived structures built from
+ScaffoldGraph is a Layer 3 derived structure built from
 `PatchChainEndpointRelation`, `LoopCorner` and implemented `ScaffoldNode` evidence,
-not from raw Chain or world axes.
+not from raw Chain or world axes. ScaffoldTrace remains deferred.
 
-ScaffoldEdge must be a graph-level view of final PatchChain, not a competing
-PatchChain identity. ScaffoldGraph must not be introduced before pairwise
-endpoint relations, LoopCorner and ScaffoldNode data exist.
+ScaffoldEdge is a graph-level view of final PatchChain, not a competing
+PatchChain identity.
 
 ## DD-34 — Final PatchChain is the single source of truth
 
@@ -977,15 +979,16 @@ Grouping policy v0:
 - retain evidence ids, incident PatchChain ids, Patch ids, confidence and provenance.
 
 ScaffoldNode does not mutate, merge, split or replace Layer 1 Vertex, Chain,
-PatchChain or BoundaryLoop identity. It does not classify ScaffoldJunctions and
-does not build ScaffoldEdges, ScaffoldTraces, ScaffoldCircuits or ScaffoldRails.
+PatchChain or BoundaryLoop identity. It does not classify ScaffoldJunctions.
+ScaffoldEdge and ScaffoldGraph consume ScaffoldNode evidence in the implemented
+G3c8 builder; ScaffoldTrace, ScaffoldCircuit and ScaffoldRail remain deferred.
 
 ## PatchChain directional evidence
 
 Final PatchChain remains the public source of truth.
 
 Layer 3 may derive directional evidence from final PatchChains to support
-alignment, endpoint samples and future graph construction.
+alignment, endpoint samples and ScaffoldGraph construction.
 
 Concepts:
 
@@ -1000,8 +1003,8 @@ PatchChainDirectionalEvidence:
 ```
 
 These are evidence/views over final PatchChain. They are not competing
-PatchChain identities. They are not ScaffoldEdges. They must not replace final
-PatchChains as graph source of truth.
+PatchChain identities. ScaffoldEdges consume these facts only as evidence and
+must not replace final PatchChains as graph source of truth.
 
 ---
 
@@ -1056,12 +1059,15 @@ Implemented:
 - G3c5 - PatchChainEndpointRelation
 - G3c6 - LoopCorner
 - G3c7 - ScaffoldNode v0
+- G3c8 - ScaffoldEdge v0 / ScaffoldGraph v0
 
 Next:
-- inspection review of PatchChainEndpointRelations and LoopCorners
-- ScaffoldGraph / ScaffoldTrace v0
+- inspection review of ScaffoldGraph overlay reports
+- Grease Pencil dev debug rendering as a future overlay consumer
 
 Deferred:
+- ScaffoldJunction
+- ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 - WorldOrientation
 - Layer 4 Feature Grammar
 - Layer 5 Runtime / Solve
@@ -1193,7 +1199,7 @@ Still unresolved:
 - closed-loop wrap merge policy;
 - advanced corner detection;
 - local face-fan refinement policy;
-- exact relationship between endpoint relations, ScaffoldNode and ScaffoldGraph construction.
+- trace/circuit/rail construction over ScaffoldGraph.
 
 ---
 

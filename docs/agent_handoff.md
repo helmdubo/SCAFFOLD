@@ -93,13 +93,13 @@ Implemented:
 - PatchChainEndpointRelation v0
 - LoopCorner v0
 - ScaffoldNode v0
+- ScaffoldEdge v0
+- ScaffoldGraph v0
 - LocalFaceFanGeometryFacts
 
 Not implemented:
 
 - ScaffoldJunction
-- ScaffoldEdge
-- ScaffoldGraph
 - ScaffoldTrace
 - ScaffoldCircuit
 - ScaffoldRail
@@ -145,7 +145,11 @@ ScaffoldJunction:
   future ScaffoldNode classification for branch/seam/cross-patch structures.
 
 ScaffoldEdge:
-  future graph-level view of a final PatchChain.
+  implemented G3c8 graph-level view of one final PatchChain.
+
+ScaffoldGraph:
+  implemented G3c8 connectivity graph assembled from ScaffoldNodes and
+  ScaffoldEdges.
 
 ScaffoldTrace:
   future connected sequence of ScaffoldEdges through ScaffoldNodes.
@@ -245,6 +249,7 @@ PatchChainEndpointSample
 -> PatchChainEndpointRelation
 -> LoopCorner
 -> ScaffoldNode
+-> ScaffoldEdge / ScaffoldGraph
 ```
 
 PatchChainEndpointRelation classifies local endpoint pairs as:
@@ -259,6 +264,8 @@ DEGENERATE
 
 LoopCorner is patch-local. ScaffoldNode is graph-level evidence. ScaffoldJunction
 is a future ScaffoldNode kind/classification, not every corner or node.
+ScaffoldEdge is a graph-level view of one final PatchChain, and ScaffoldGraph is
+connectivity-only over existing ScaffoldNodes and ScaffoldEdges.
 
 ScaffoldNode v0 grouping policy:
 
@@ -300,24 +307,22 @@ Still unresolved:
 - closed-loop wrap merge policy;
 - advanced corner detection;
 - local face-fan refinement policy;
-- exact relationship between endpoint relations, ScaffoldNode and ScaffoldGraph construction.
+- trace/circuit/rail construction over ScaffoldGraph.
 
 ---
 
 ## Recommended next task
 
-Review ScaffoldNode v0 inspection reports and grouping behavior on synthetic
-fixtures.
+Review ScaffoldGraph overlay reports and edge cases on synthetic fixtures.
 
 After that:
 
 ```text
-Scout / design review for ScaffoldGraph and ScaffoldEdge v0 contract.
+Grease Pencil dev debug rendering as a future consumer of the overlay payload.
 ```
 
-Do not start ScaffoldGraph implementation until the ScaffoldEdge / PatchChain
-contract is clear. ScaffoldGraph must not become a competing PatchChain identity
-layer.
+Grease Pencil rendering must consume the pipeline inspection overlay payload
+instead of duplicating core graph logic. Do not import Blender into Scaffold Core.
 
 ---
 

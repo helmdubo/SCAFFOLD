@@ -170,14 +170,16 @@ PatchChainEndpointSample
 PatchChainEndpointRelation v0
 LoopCorner v0
 ScaffoldNode v0
+ScaffoldEdge v0
+ScaffoldGraph v0
 LocalFaceFanGeometryFacts
 ```
 
 Deferred in G3:
 
 ```text
-ScaffoldJunction / ScaffoldEdge
-ScaffoldGraph / ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
+ScaffoldJunction
+ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 WorldOrientation
 ```
 

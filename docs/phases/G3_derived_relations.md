@@ -57,17 +57,17 @@ Implemented:
 - G3c5 - PatchChainEndpointRelation v0
 - G3c6 - LoopCorner v0
 - G3c7 - ScaffoldNode v0
+- G3c8 - ScaffoldEdge v0 / ScaffoldGraph v0
 - LocalFaceFanGeometryFacts as Layer 2 geometry evidence consumed by Layer 3
 
 Next:
 
-- inspection review of ScaffoldNode v0 reports and edge cases
-- ScaffoldGraph / ScaffoldEdge v0 contract review
-- ScaffoldGraph / ScaffoldTrace v0 only after contract is clear
+- inspection review of ScaffoldGraph overlay reports and edge cases
+- Grease Pencil dev debug rendering as a future consumer of the overlay payload
 
 Deferred:
 
-- ScaffoldJunction / ScaffoldEdge / ScaffoldCircuit / ScaffoldRail
+- ScaffoldJunction / ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 - WorldOrientation
 - Layer 4 Feature Grammar
 - Layer 5 Runtime / Solve
@@ -85,8 +85,9 @@ Current terminology for the final boundary graph model:
 | `LocalFaceFanGeometryFacts` | Local owner-normal geometry evidence. |
 | `LoopCorner` | Patch-local transition between adjacent PatchChains in one BoundaryLoop. |
 | `ScaffoldNode` | Implemented G3c7 graph-level evidence node assembled from LoopCorners and endpoint evidence. It is not Layer 1 identity. |
+| `ScaffoldEdge` | Implemented G3c8 graph-level view of one final PatchChain. |
+| `ScaffoldGraph` | Implemented G3c8 connectivity graph assembled from ScaffoldNodes and ScaffoldEdges. |
 | `ScaffoldJunction` | Future graph-level ScaffoldNode classification for branch/seam/cross-patch structures. |
-| `ScaffoldEdge` | Future graph-level view of a final PatchChain. |
 | `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
@@ -285,7 +286,7 @@ Purpose:
 - identify continuation candidates;
 - identify orthogonal/corner connectors;
 - identify oblique/ambiguous/degenerate relations;
-- provide structural input for future ScaffoldGraph.
+- provide structural input for ScaffoldGraph.
 
 Relation vocabulary v0:
 
@@ -323,7 +324,7 @@ Implementation status:
   SAME_RAY_COLLINEAR, ORTHOGONAL, OBLIQUE or DEGENERATE.
 - v0 maps those measurements to continuation candidate, corner connector,
   oblique connector, ambiguous or degenerate relation kinds.
-- ScaffoldGraph / ScaffoldTrace remain deferred.
+- ScaffoldTrace remains deferred.
 
 ## G3c6 - LoopCorner
 
@@ -337,7 +338,7 @@ Implementation status:
 - LoopCorner is implemented as a Layer 3 derived relation.
 - One LoopCorner is built per BoundaryLoop position from final PatchChains.
 - For the cylinder tube fixture this produces exactly four LoopCorners.
-- ScaffoldGraph remains deferred.
+- ScaffoldGraph consumes LoopCorner and ScaffoldNode evidence in G3c8.
 
 ## G3c7 - ScaffoldNode v0
 
@@ -355,7 +356,8 @@ Grouping policy v0:
 - retain contributing LoopCorner ids, endpoint sample ids, endpoint relation ids,
   incident PatchChain ids, Patch ids, confidence and evidence;
 - do not classify ScaffoldJunctions;
-- do not build ScaffoldEdges, ScaffoldTraces, ScaffoldCircuits or ScaffoldRails.
+- ScaffoldNode v0 itself does not classify ScaffoldJunctions or build graph
+  edges/traces.
 
 Rules:
 
@@ -374,14 +376,43 @@ Implementation status:
 - `RelationSnapshot.scaffold_nodes` stores the derived node records.
 - Inspection reports `scaffold_node_count` and full `scaffold_nodes` in full detail.
 
-## Future - ScaffoldGraph / ScaffoldTrace
+## G3c8 - ScaffoldEdge / ScaffoldGraph v0
 
-A future slice may build `ScaffoldGraph` from `PatchChainEndpointRelation`,
-`LoopCorner` and `ScaffoldNode` data.
+G3c8 builds `ScaffoldGraph` from final PatchChains and implemented
+`ScaffoldNode` evidence.
 
-`ScaffoldEdge` is the graph-level view of a final PatchChain. `ScaffoldTrace`
-is a connected sequence of ScaffoldEdges through ScaffoldNodes. It may later
-be classified as:
+`ScaffoldEdge` is the graph-level view of one final PatchChain. It does not
+split, merge, refine or re-id PatchChains. `ScaffoldGraph` is connectivity-only
+over existing ScaffoldNodes and ScaffoldEdges.
+
+Implementation status:
+
+- `ScaffoldEdge` is implemented in the Layer 3 relation model.
+- `ScaffoldGraph` is implemented in the Layer 3 relation model.
+- `build_scaffold_graph()` emits one ScaffoldEdge per final PatchChain.
+- `RelationSnapshot.scaffold_edges` and `RelationSnapshot.scaffold_graph` store
+  the derived records.
+- Pipeline inspection exposes a JSON-serializable `scaffold_graph_overlay`
+  payload with node anchors, edge polylines and graph ids for debug tooling.
+
+Rules:
+
+- no Layer 1 mutation;
+- no PatchChain split/re-id;
+- no raw BMesh or boundary-builder internal source;
+- no ScaffoldJunction classification;
+- no ScaffoldTrace, ScaffoldCircuit or ScaffoldRail construction;
+- no U/V labels, H/V labels, WORLD_UP, WorldOrientation, Feature, Runtime,
+  Solve or UV semantics.
+
+Grease Pencil rendering is a future dev-tool slice. It must consume the
+inspection overlay payload instead of duplicating core graph logic or importing
+Blender into Scaffold Core.
+
+## Future - ScaffoldTrace
+
+`ScaffoldTrace` is a connected sequence of ScaffoldEdges through ScaffoldNodes.
+It may later be classified as:
 
 ```text
 OPEN_TRACE
@@ -396,8 +427,7 @@ direction-stable ScaffoldTrace usable as a conditional axis.
 Cylinder-like cases may produce ScaffoldCircuits around cap boundaries. These
 traces can later inform conditional axes or UV orientation.
 
-Do not implement ScaffoldGraph before the ScaffoldEdge / PatchChain contract is
-clear. ScaffoldGraph must not create a competing PatchChain identity layer.
+ScaffoldTrace must not create a competing PatchChain identity layer.
 
 ## Rules
 
