@@ -14,6 +14,8 @@ class SCAFFOLDGRAPH_Settings(bpy.types.PropertyGroup):
     last_report: StringProperty(name="Last Report", default="")
     show_edges: BoolProperty(name="Edges", default=True)
     show_nodes: BoolProperty(name="Nodes", default=True)
+    source_hide_viewport: BoolProperty(name="Stored Viewport Hidden", default=False)
+    source_hide_set: BoolProperty(name="Stored Object Hidden", default=False)
 
 
 class SCAFFOLDGRAPH_OT_Show(bpy.types.Operator):
@@ -45,6 +47,9 @@ class SCAFFOLDGRAPH_OT_Refresh(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
+        settings = getattr(context.scene, "scaffold_graph_debug_settings", None)
+        if settings is not None and settings.active and settings.source_object:
+            return settings.source_object in bpy.data.objects
         obj = context.active_object
         return obj is not None and obj.type == "MESH" and obj.mode in {"OBJECT", "EDIT"}
 

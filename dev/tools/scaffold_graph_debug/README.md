@@ -31,9 +31,11 @@ Close Graph
 Edges / Nodes visibility
 ```
 
+`Show Graph` hides the source mesh while the overlay is active. `Close Graph`
+removes the overlay and restores the mesh visibility.
+
 To unregister:
 
 ```python
 scaffold_graph_debug.unregister()
 ```
-

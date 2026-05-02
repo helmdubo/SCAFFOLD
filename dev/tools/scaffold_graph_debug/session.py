@@ -9,7 +9,13 @@ from typing import Any
 
 import bpy
 
-from .debug import apply_layer_visibility, clear_overlay, render_overlay
+from .debug import (
+    apply_layer_visibility,
+    clear_overlay,
+    is_graph_debug_object,
+    overlay_object_name,
+    render_overlay,
+)
 
 
 def _add_repo_root_to_path() -> None:
@@ -19,10 +25,14 @@ def _add_repo_root_to_path() -> None:
         sys.path.insert(0, repo_root_text)
 
 
-def active_mesh_object(context: Any) -> Any:
+def active_mesh_object(context: Any, *, fallback_source_name: str = "") -> Any:
     obj = getattr(context, "active_object", None)
     if obj is not None and getattr(obj, "type", None) == "MESH":
         return obj
+    if fallback_source_name:
+        source_obj = bpy.data.objects.get(fallback_source_name)
+        if source_obj is not None and getattr(source_obj, "type", None) == "MESH":
+            return source_obj
     raise RuntimeError("Select a mesh object.")
 
 
@@ -52,7 +62,24 @@ def _format_summary(report: dict[str, Any]) -> str:
 
 def show_or_refresh(context: Any) -> tuple[dict[str, Any], str]:
     settings = context.scene.scaffold_graph_debug_settings
-    source_object = active_mesh_object(context)
+    source_object = active_mesh_object(
+        context,
+        fallback_source_name=settings.source_object if settings.active else "",
+    )
+    starting_new_session = (not settings.active) or settings.source_object != source_object.name
+    if starting_new_session:
+        settings.source_hide_viewport = bool(getattr(source_object, "hide_viewport", False))
+        hide_get = getattr(source_object, "hide_get", None)
+        settings.source_hide_set = bool(hide_get()) if callable(hide_get) else False
+
+    if context.active_object and context.active_object.mode != "OBJECT":
+        bpy.ops.object.mode_set(mode="OBJECT")
+    source_object.hide_viewport = False
+    source_object.hide_set(False)
+    bpy.ops.object.select_all(action="DESELECT")
+    source_object.select_set(True)
+    context.view_layer.objects.active = source_object
+
     overlay = _build_overlay_payload(context)
     render_report = render_overlay(
         source_object,
@@ -60,6 +87,16 @@ def show_or_refresh(context: Any) -> tuple[dict[str, Any], str]:
         show_edges=bool(settings.show_edges),
         show_nodes=bool(settings.show_nodes),
     )
+
+    gp_object = bpy.data.objects.get(overlay_object_name(source_object.name))
+    if is_graph_debug_object(gp_object):
+        bpy.ops.object.select_all(action="DESELECT")
+        source_object.hide_viewport = True
+        source_object.hide_set(True)
+        gp_object.hide_viewport = False
+        gp_object.hide_set(False)
+        gp_object.select_set(True)
+        context.view_layer.objects.active = gp_object
 
     settings.active = True
     settings.source_object = source_object.name
@@ -72,8 +109,18 @@ def close(context: Any) -> str:
     settings = context.scene.scaffold_graph_debug_settings
     source_name = settings.source_object or None
     clear_overlay(source_name)
+    if source_name and source_name in bpy.data.objects:
+        source_object = bpy.data.objects[source_name]
+        source_object.hide_viewport = bool(settings.source_hide_viewport)
+        source_object.hide_set(bool(settings.source_hide_set))
+        if not source_object.hide_viewport and not source_object.hide_get():
+            bpy.ops.object.select_all(action="DESELECT")
+            source_object.select_set(True)
+            context.view_layer.objects.active = source_object
     settings.active = False
     settings.source_object = ""
+    settings.source_hide_viewport = False
+    settings.source_hide_set = False
     settings.last_report = "closed"
     return settings.last_report
 
