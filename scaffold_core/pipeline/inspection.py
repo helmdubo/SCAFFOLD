@@ -149,7 +149,9 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         "scaffold_edge_count": len(relations.scaffold_edges),
         "scaffold_graph_count": 1 if relations.scaffold_graph is not None else 0,
         "scaffold_junction_count": len(relations.scaffold_junctions),
-        "scaffold_node_incident_edge_relation_count": len(relations.scaffold_node_incident_edge_relations),
+        "scaffold_node_incident_edge_relation_count": len(
+            relations.scaffold_node_incident_edge_relations
+        ),
         "shared_chain_patch_chain_relation_count": len(relations.shared_chain_patch_chain_relations),
         "alignment_class_count": len(relations.alignment_classes),
         "patch_axes_count": len(relations.patch_axes),
@@ -329,51 +331,85 @@ def scaffold_graph_overlay_to_dict(
         node.id: list(_scaffold_node_position(geometry, node.vertex_ids))
         for node in relations.scaffold_nodes
     }
+    nodes_payload = [
+        {
+            "id": node.id,
+            "display_label": _scaffold_node_display_label(
+                topology,
+                node,
+                patch_ordinals,
+                node_ordinals[node.id],
+            ),
+            "source_vertex_ids": [
+                str(source_vertex_id)
+                for source_vertex_id in node.source_vertex_ids
+            ],
+            "vertex_ids": [str(vertex_id) for vertex_id in node.vertex_ids],
+            "position": node_positions[node.id],
+            "confidence": node.confidence,
+        }
+        for node in sorted(relations.scaffold_nodes, key=lambda item: item.id)
+    ]
+    edges_payload = [
+        {
+            "id": edge.id,
+            "display_label": _patch_chain_display_label(
+                topology,
+                edge.patch_chain_id,
+                patch_ordinals,
+            ),
+            "patch_chain_id": str(edge.patch_chain_id),
+            "chain_id": str(edge.chain_id),
+            "start_scaffold_node_id": edge.start_scaffold_node_id,
+            "end_scaffold_node_id": edge.end_scaffold_node_id,
+            "polyline": _scaffold_edge_polyline(topology, geometry, edge.patch_chain_id),
+            "confidence": edge.confidence,
+            "edge_source": _scaffold_edge_source(edge),
+        }
+        for edge in sorted(relations.scaffold_edges, key=lambda item: item.id)
+    ]
+    edge_polylines = {
+        str(edge["id"]): edge["polyline"]
+        for edge in edges_payload
+    }
+    endpoint_relation_by_id = {
+        relation.id: relation
+        for relation in relations.patch_chain_endpoint_relations
+    }
     return {
         "scaffold_node_count": len(relations.scaffold_nodes),
         "scaffold_edge_count": len(relations.scaffold_edges),
         "scaffold_junction_count": len(relations.scaffold_junctions),
-        "nodes": [
-            {
-                "id": node.id,
-                "display_label": _scaffold_node_display_label(
-                    topology,
-                    node,
-                    patch_ordinals,
-                    node_ordinals[node.id],
-                ),
-                "source_vertex_ids": [
-                    str(source_vertex_id)
-                    for source_vertex_id in node.source_vertex_ids
-                ],
-                "vertex_ids": [str(vertex_id) for vertex_id in node.vertex_ids],
-                "position": node_positions[node.id],
-                "confidence": node.confidence,
-            }
-            for node in sorted(relations.scaffold_nodes, key=lambda item: item.id)
-        ],
-        "edges": [
-            {
-                "id": edge.id,
-                "display_label": _patch_chain_display_label(
-                    topology,
-                    edge.patch_chain_id,
-                    patch_ordinals,
-                ),
-                "patch_chain_id": str(edge.patch_chain_id),
-                "chain_id": str(edge.chain_id),
-                "start_scaffold_node_id": edge.start_scaffold_node_id,
-                "end_scaffold_node_id": edge.end_scaffold_node_id,
-                "polyline": _scaffold_edge_polyline(topology, geometry, edge.patch_chain_id),
-                "confidence": edge.confidence,
-                "edge_source": _scaffold_edge_source(edge),
-            }
-            for edge in sorted(relations.scaffold_edges, key=lambda item: item.id)
-        ],
+        "scaffold_node_incident_edge_relation_count": len(
+            relations.scaffold_node_incident_edge_relations
+        ),
+        "shared_chain_patch_chain_relation_count": len(relations.shared_chain_patch_chain_relations),
+        "nodes": nodes_payload,
+        "edges": edges_payload,
         "junctions": [
             _scaffold_junction_overlay_to_dict(junction, node_positions)
             for junction in sorted(relations.scaffold_junctions, key=lambda item: item.id)
         ],
+        "incident_relations": [
+            _incident_relation_overlay_to_dict(
+                relation,
+                relations.scaffold_nodes,
+                node_positions,
+                endpoint_relation_by_id,
+            )
+            for relation in sorted(
+                relations.scaffold_node_incident_edge_relations,
+                key=lambda item: item.id,
+            )
+        ],
+        "shared_chain_relations": [
+            _shared_chain_relation_overlay_to_dict(relation, edge_polylines)
+            for relation in sorted(relations.shared_chain_patch_chain_relations, key=lambda item: item.id)
+        ],
+        "incident_relation_marker_count": len(
+            relations.scaffold_node_incident_edge_relations
+        ),
+        "shared_chain_relation_marker_count": len(relations.shared_chain_patch_chain_relations),
         "graph": (
             {
                 "id": graph.id,
@@ -486,6 +522,110 @@ def _scaffold_junction_overlay_to_dict(junction, node_positions: dict[str, list[
             for evidence in junction.evidence
         ],
     }
+
+
+def _incident_relation_overlay_to_dict(
+    relation,
+    scaffold_nodes,
+    node_positions: dict[str, list[float]],
+    endpoint_relation_by_id,
+) -> dict[str, object]:
+    node_by_id = {
+        node.id: node
+        for node in scaffold_nodes
+    }
+    node = node_by_id.get(relation.scaffold_node_id)
+    endpoint_relation = endpoint_relation_by_id.get(relation.patch_chain_endpoint_relation_id)
+    vertex_id = (
+        str(endpoint_relation.vertex_id)
+        if endpoint_relation is not None
+        else (
+            str(sorted(node.vertex_ids, key=str)[0])
+            if node is not None and node.vertex_ids
+            else None
+        )
+    )
+    return {
+        "id": relation.id,
+        "kind": str(relation.kind.value),
+        "scaffold_node_id": relation.scaffold_node_id,
+        "first_scaffold_edge_id": relation.first_scaffold_edge_id,
+        "second_scaffold_edge_id": relation.second_scaffold_edge_id,
+        "first_patch_chain_id": str(relation.first_patch_chain_id),
+        "second_patch_chain_id": str(relation.second_patch_chain_id),
+        "endpoint_relation_id": relation.patch_chain_endpoint_relation_id,
+        "vertex_id": vertex_id,
+        "confidence": relation.confidence,
+        "position": list(node_positions.get(relation.scaffold_node_id, (0.0, 0.0, 0.0))),
+        "evidence": [
+            {
+                "source": evidence.source,
+                "summary": evidence.summary,
+                "data": dict(evidence.data),
+            }
+            for evidence in relation.evidence
+        ],
+    }
+
+
+def _shared_chain_relation_overlay_to_dict(
+    relation,
+    edge_polylines: dict[str, list[list[float]]],
+) -> dict[str, object]:
+    first_polyline = edge_polylines.get(relation.first_scaffold_edge_id, [])
+    second_polyline = edge_polylines.get(relation.second_scaffold_edge_id, [])
+    label_position = _average_positions((
+        _polyline_midpoint(first_polyline),
+        _polyline_midpoint(second_polyline),
+    ))
+    return {
+        "id": relation.id,
+        "kind": str(relation.kind.value),
+        "chain_id": str(relation.chain_id),
+        "first_scaffold_edge_id": relation.first_scaffold_edge_id,
+        "second_scaffold_edge_id": relation.second_scaffold_edge_id,
+        "first_patch_chain_id": str(relation.first_patch_chain_id),
+        "second_patch_chain_id": str(relation.second_patch_chain_id),
+        "patch_ids": [
+            str(patch_id)
+            for patch_id in sorted((relation.first_patch_id, relation.second_patch_id), key=str)
+        ],
+        "confidence": relation.confidence,
+        "label_position": label_position,
+        "midpoint": label_position,
+        "evidence": [
+            {
+                "source": evidence.source,
+                "summary": evidence.summary,
+                "data": dict(evidence.data),
+            }
+            for evidence in relation.evidence
+        ],
+    }
+
+
+def _polyline_midpoint(polyline: list[list[float]]) -> list[float]:
+    if not polyline:
+        return [0.0, 0.0, 0.0]
+    middle_index = len(polyline) // 2
+    if len(polyline) % 2 == 1:
+        return list(polyline[middle_index])
+    return _average_positions((polyline[middle_index - 1], polyline[middle_index]))
+
+
+def _average_positions(positions) -> list[float]:
+    concrete_positions = [
+        position
+        for position in positions
+        if len(position) == 3
+    ]
+    if not concrete_positions:
+        return [0.0, 0.0, 0.0]
+    count = float(len(concrete_positions))
+    return [
+        sum(float(position[index]) for position in concrete_positions) / count
+        for index in range(3)
+    ]
 
 
 def _patch_axes_candidate_scores(patch_axes) -> list[dict[str, object]]:

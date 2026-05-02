@@ -20,18 +20,28 @@ import bpy
 EDGE_LAYER_NAME = "ScaffoldGraph_Edges"
 NODE_LAYER_NAME = "ScaffoldGraph_Nodes"
 JUNCTION_LAYER_NAME = "ScaffoldGraph_Junctions"
+INCIDENT_RELATION_LAYER_NAME = "ScaffoldGraph_IncidentRelations"
+SHARED_CHAIN_RELATION_LAYER_NAME = "ScaffoldGraph_SharedChainRelations"
 GP_OBJECT_NAME = "ScaffoldGraph_Overlay"
 EDGE_MATERIAL_NAME = "ScaffoldGraph_Edge_Material"
 NODE_MATERIAL_NAME = "ScaffoldGraph_Node_Material"
 JUNCTION_MATERIAL_NAME = "ScaffoldGraph_Junction_Material"
+INCIDENT_RELATION_MATERIAL_NAME = "ScaffoldGraph_IncidentRelation_Material"
+SHARED_CHAIN_RELATION_MATERIAL_NAME = "ScaffoldGraph_SharedChainRelation_Material"
 EDGE_COLOR = (0.1, 0.75, 1.0, 1.0)
 NODE_COLOR = (1.0, 0.95, 0.2, 1.0)
 JUNCTION_COLOR = (1.0, 0.2, 0.45, 1.0)
+INCIDENT_RELATION_COLOR = (0.2, 1.0, 0.45, 1.0)
+SHARED_CHAIN_RELATION_COLOR = (1.0, 0.55, 0.1, 1.0)
 EDGE_WIDTH = 5
 NODE_WIDTH = 9
 JUNCTION_WIDTH = 7
+INCIDENT_RELATION_WIDTH = 6
+SHARED_CHAIN_RELATION_WIDTH = 6
 NODE_MARKER_SIZE = 0.045
 JUNCTION_MARKER_SIZE = 0.065
+INCIDENT_RELATION_MARKER_SIZE = 0.085
+SHARED_CHAIN_RELATION_MARKER_SIZE = 0.075
 
 
 def _add_repo_root_to_path() -> None:
@@ -284,6 +294,26 @@ def _junction_marker_strokes(position: Sequence[float]) -> tuple[tuple[tuple[flo
     )
 
 
+def _incident_relation_marker_strokes(position: Sequence[float]) -> tuple[tuple[tuple[float, float, float], ...], ...]:
+    x, y, z = (float(position[0]), float(position[1]), float(position[2]))
+    size = INCIDENT_RELATION_MARKER_SIZE
+    return (
+        ((x - size, y, z), (x, y + size, z), (x + size, y, z)),
+    )
+
+
+def _shared_chain_relation_marker_strokes(
+    position: Sequence[float],
+) -> tuple[tuple[tuple[float, float, float], ...], ...]:
+    x, y, z = (float(position[0]), float(position[1]), float(position[2]))
+    size = SHARED_CHAIN_RELATION_MARKER_SIZE
+    return (
+        ((x - size, y - size, z), (x + size, y - size, z)),
+        ((x + size, y - size, z), (x, y + size, z)),
+        ((x, y + size, z), (x - size, y - size, z)),
+    )
+
+
 def _draw_edges(frame: Any, material_index: int, edges: Iterable[dict[str, Any]]) -> int:
     stroke_count = 0
     for edge in edges:
@@ -317,6 +347,38 @@ def _draw_junctions(frame: Any, material_index: int, junctions: Iterable[dict[st
     return marker_count
 
 
+def _draw_incident_relations(
+    frame: Any,
+    material_index: int,
+    relations: Iterable[dict[str, Any]],
+) -> int:
+    marker_count = 0
+    for relation in relations:
+        position = relation.get("position", ())
+        if len(position) != 3:
+            continue
+        for stroke_points in _incident_relation_marker_strokes(position):
+            _add_stroke(frame, stroke_points, material_index, INCIDENT_RELATION_WIDTH)
+        marker_count += 1
+    return marker_count
+
+
+def _draw_shared_chain_relations(
+    frame: Any,
+    material_index: int,
+    relations: Iterable[dict[str, Any]],
+) -> int:
+    marker_count = 0
+    for relation in relations:
+        position = relation.get("label_position", relation.get("midpoint", ()))
+        if len(position) != 3:
+            continue
+        for stroke_points in _shared_chain_relation_marker_strokes(position):
+            _add_stroke(frame, stroke_points, material_index, SHARED_CHAIN_RELATION_WIDTH)
+        marker_count += 1
+    return marker_count
+
+
 def render_overlay(overlay: dict[str, Any]) -> dict[str, Any]:
     source_object = _active_mesh_object()
     gp_object = _get_or_create_grease_pencil_object(source_object)
@@ -325,31 +387,67 @@ def render_overlay(overlay: dict[str, Any]) -> dict[str, Any]:
     edge_layer = _ensure_layer(gp_data, EDGE_LAYER_NAME)
     node_layer = _ensure_layer(gp_data, NODE_LAYER_NAME)
     junction_layer = _ensure_layer(gp_data, JUNCTION_LAYER_NAME)
+    incident_relation_layer = _ensure_layer(gp_data, INCIDENT_RELATION_LAYER_NAME)
+    shared_chain_relation_layer = _ensure_layer(gp_data, SHARED_CHAIN_RELATION_LAYER_NAME)
     edge_frame = _ensure_frame(edge_layer)
     node_frame = _ensure_frame(node_layer)
     junction_frame = _ensure_frame(junction_layer)
+    incident_relation_frame = _ensure_frame(incident_relation_layer)
+    shared_chain_relation_frame = _ensure_frame(shared_chain_relation_layer)
     edge_material_index = _ensure_material(gp_data, EDGE_MATERIAL_NAME, EDGE_COLOR)
     node_material_index = _ensure_material(gp_data, NODE_MATERIAL_NAME, NODE_COLOR)
     junction_material_index = _ensure_material(gp_data, JUNCTION_MATERIAL_NAME, JUNCTION_COLOR)
+    incident_relation_material_index = _ensure_material(
+        gp_data,
+        INCIDENT_RELATION_MATERIAL_NAME,
+        INCIDENT_RELATION_COLOR,
+    )
+    shared_chain_relation_material_index = _ensure_material(
+        gp_data,
+        SHARED_CHAIN_RELATION_MATERIAL_NAME,
+        SHARED_CHAIN_RELATION_COLOR,
+    )
 
     edges = list(overlay.get("edges", ()))
     nodes = list(overlay.get("nodes", ()))
     junctions = list(overlay.get("junctions", ()))
+    incident_relations = list(overlay.get("incident_relations", ()))
+    shared_chain_relations = list(overlay.get("shared_chain_relations", ()))
     edge_stroke_count = _draw_edges(edge_frame, edge_material_index, edges)
     node_marker_count = _draw_nodes(node_frame, node_material_index, nodes)
     junction_marker_count = _draw_junctions(junction_frame, junction_material_index, junctions)
+    incident_relation_marker_count = _draw_incident_relations(
+        incident_relation_frame,
+        incident_relation_material_index,
+        incident_relations,
+    )
+    shared_chain_relation_marker_count = _draw_shared_chain_relations(
+        shared_chain_relation_frame,
+        shared_chain_relation_material_index,
+        shared_chain_relations,
+    )
 
     return {
         "scaffold_node_count": int(overlay.get("scaffold_node_count", len(nodes))),
         "scaffold_edge_count": int(overlay.get("scaffold_edge_count", len(edges))),
         "scaffold_junction_count": int(overlay.get("scaffold_junction_count", len(junctions))),
+        "scaffold_node_incident_edge_relation_count": int(
+            overlay.get("scaffold_node_incident_edge_relation_count", len(incident_relations))
+        ),
+        "shared_chain_patch_chain_relation_count": int(
+            overlay.get("shared_chain_patch_chain_relation_count", len(shared_chain_relations))
+        ),
         "grease_pencil_object": gp_object.name,
         "edge_layer": EDGE_LAYER_NAME,
         "node_layer": NODE_LAYER_NAME,
         "junction_layer": JUNCTION_LAYER_NAME,
+        "incident_relation_layer": INCIDENT_RELATION_LAYER_NAME,
+        "shared_chain_relation_layer": SHARED_CHAIN_RELATION_LAYER_NAME,
         "edge_stroke_count": edge_stroke_count,
         "node_marker_count": node_marker_count,
         "junction_marker_count": junction_marker_count,
+        "incident_relation_marker_count": incident_relation_marker_count,
+        "shared_chain_relation_marker_count": shared_chain_relation_marker_count,
     }
 
 
