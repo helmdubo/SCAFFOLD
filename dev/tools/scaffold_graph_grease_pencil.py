@@ -47,10 +47,12 @@ def _add_repo_root_to_path() -> None:
         else None
     )
     script_path = Path(__file__).resolve()
+    local_checkout_path = Path(script_path.anchor) / "_mimirhead" / "website" / "SCAFFOLD"
     for candidate in (
         env_path,
         text_path,
         *text_paths,
+        local_checkout_path,
         script_path,
         *script_path.parents,
         Path.cwd(),
