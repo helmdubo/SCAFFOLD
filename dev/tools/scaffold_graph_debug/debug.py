@@ -327,8 +327,6 @@ def _draw_nodes(frame: Any, material_index: int, nodes: Iterable[dict[str, Any]]
 def _draw_junctions(frame: Any, material_index: int, junctions: Iterable[dict[str, Any]]) -> int:
     marker_count = 0
     for junction in junctions:
-        if junction.get("kind") != "SELF_SEAM":
-            continue
         position = junction.get("position", ())
         if len(position) != 3:
             continue

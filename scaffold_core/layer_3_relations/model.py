@@ -100,6 +100,7 @@ class ScaffoldJunctionKind(str, Enum):
     """Implemented ScaffoldJunction classification kinds."""
 
     SELF_SEAM = "SELF_SEAM"
+    CROSS_PATCH = "CROSS_PATCH"
 
 
 @dataclass(frozen=True)
@@ -278,8 +279,11 @@ class ScaffoldJunction:
     kind: ScaffoldJunctionKind
     policy: str
     scaffold_node_id: str
-    matched_chain_id: ChainId
-    patch_id: PatchId
+    matched_chain_id: ChainId | None
+    patch_id: PatchId | None
+    chain_ids: tuple[ChainId, ...]
+    patch_ids: tuple[PatchId, ...]
+    loop_ids: tuple[BoundaryLoopId, ...]
     scaffold_edge_ids: tuple[str, ...]
     patch_chain_ids: tuple[PatchChainId, ...]
     confidence: float

@@ -24,7 +24,7 @@ This document is the canonical reference for subsequent implementation plans: G1
 - Implemented ScaffoldNode v0 as graph-level evidence, not Layer 1 identity.
 - Implemented ScaffoldEdge v0 as a graph-level view of one final PatchChain.
 - Implemented ScaffoldGraph v0 as connectivity assembled from ScaffoldNodes and ScaffoldEdges.
-- Implemented ScaffoldJunction v0 as a SELF_SEAM-only classification overlay.
+- Implemented ScaffoldJunction v0 as a SELF_SEAM/CROSS_PATCH classification overlay.
 - Amended DD-29 to allow topology/materialization-based border coalescing.
 - Marked OQ-11 as partially resolved for polygonal straight/turning Chains.
 
@@ -255,7 +255,7 @@ Feature-local alignment is expressed as `FeatureConstraint`, not as newly regist
 | `ScaffoldNode` | Implemented G3c7 graph-level evidence node assembled from LoopCorners and endpoint evidence; not Layer 1 identity. |
 | `ScaffoldEdge` | Implemented G3c8 graph-level view of one final PatchChain. |
 | `ScaffoldGraph` | Implemented G3c8 connectivity graph assembled from ScaffoldNodes and ScaffoldEdges. |
-| `ScaffoldJunction` | Implemented SELF_SEAM-only graph-level classification overlay on existing ScaffoldNode records; not a separate graph node identity. |
+| `ScaffoldJunction` | Implemented SELF_SEAM/CROSS_PATCH graph-level classification overlay on existing ScaffoldNode records; not a separate graph node identity. |
 | `AlignmentClass` | Implemented Layer 3 direction-family grouping over PatchChainDirectionalEvidence. |
 | `PatchAxes` | Implemented Layer 3 primary/secondary AlignmentClass selection per Patch. |
 
@@ -621,9 +621,11 @@ remain unclassified unless a ScaffoldJunction classifier emits a record.
 ScaffoldJunction classification is an overlay on existing ScaffoldNode records,
 not a separate graph node identity. Implemented `SELF_SEAM` classifies a
 ScaffoldNode where two incident final PatchChains share the same ChainId and
-same PatchId, representing the supported SEAM_SELF case. Future kind
-vocabulary beyond SELF_SEAM includes `CROSS_PATCH`, `BRANCH`, `TERMINUS`,
-`AMBIGUOUS` and `DEGRADED`.
+same PatchId, representing the supported SEAM_SELF case. Implemented
+`CROSS_PATCH` classifies an existing ScaffoldNode whose incident final
+ScaffoldEdges reference more than one distinct PatchId. Future kind vocabulary
+beyond SELF_SEAM/CROSS_PATCH includes `BRANCH`, `TERMINUS`, `AMBIGUOUS` and
+`DEGRADED`.
 
 ScaffoldJunction classification must not change ScaffoldNode grouping, change
 PatchChain identity, walk traces, detect circuits, select rails, choose
@@ -957,9 +959,10 @@ ScaffoldNodes remain unclassified unless a classifier emits a record.
 Implemented ScaffoldJunctionKind vocabulary includes:
 - SELF_SEAM: two incident final PatchChains share the same ChainId and same
   PatchId, representing the supported SEAM_SELF case.
+- CROSS_PATCH: an existing ScaffoldNode's incident final ScaffoldEdges
+  reference more than one distinct PatchId.
 
-Future ScaffoldJunctionKind vocabulary beyond SELF_SEAM includes:
-- CROSS_PATCH;
+Future ScaffoldJunctionKind vocabulary beyond SELF_SEAM/CROSS_PATCH includes:
 - BRANCH;
 - TERMINUS;
 - AMBIGUOUS or DEGRADED when describing evidence quality.
@@ -1087,14 +1090,14 @@ Implemented:
 - G3c6 - LoopCorner
 - G3c7 - ScaffoldNode v0
 - G3c8 - ScaffoldEdge v0 / ScaffoldGraph v0
-- G3c9 - ScaffoldJunction v0 SELF_SEAM
+- G3c9 - ScaffoldJunction v0 SELF_SEAM/CROSS_PATCH
 
 Next:
 - inspection review of ScaffoldGraph overlay reports
 - Grease Pencil dev debug rendering as a future overlay consumer
 
 Deferred:
-- ScaffoldJunction kinds beyond SELF_SEAM
+- ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
 - ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 - WorldOrientation
 - Layer 4 Feature Grammar

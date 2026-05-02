@@ -600,8 +600,19 @@ def _scaffold_junction_to_dict(junction) -> dict[str, object]:
         "kind": str(junction.kind.value),
         "policy": junction.policy,
         "scaffold_node_id": junction.scaffold_node_id,
-        "matched_chain_id": str(junction.matched_chain_id),
-        "patch_id": str(junction.patch_id),
+        "matched_chain_id": (
+            str(junction.matched_chain_id)
+            if junction.matched_chain_id is not None
+            else None
+        ),
+        "patch_id": (
+            str(junction.patch_id)
+            if junction.patch_id is not None
+            else None
+        ),
+        "chain_ids": [str(chain_id) for chain_id in junction.chain_ids],
+        "patch_ids": [str(patch_id) for patch_id in junction.patch_ids],
+        "loop_ids": [str(loop_id) for loop_id in junction.loop_ids],
         "scaffold_edge_ids": list(junction.scaffold_edge_ids),
         "patch_chain_ids": [
             str(patch_chain_id)

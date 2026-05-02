@@ -22,7 +22,7 @@ Agents may read this file for quick lookup. If it disagrees with `G0.md`, `G0.md
 | `ScaffoldNode` | Implemented G3c7 graph-level evidence node assembled from LoopCorners and endpoint evidence. It is not Layer 1 identity. |
 | `ScaffoldEdge` | Implemented G3c8 graph-level view of one final PatchChain. |
 | `ScaffoldGraph` | Implemented G3c8 connectivity graph assembled from ScaffoldNodes and ScaffoldEdges. |
-| `ScaffoldJunction` | Implemented SELF_SEAM-only graph-level classification overlay on existing ScaffoldNode, not a separate graph node identity. |
+| `ScaffoldJunction` | Implemented SELF_SEAM/CROSS_PATCH graph-level classification overlay on existing ScaffoldNode, not a separate graph node identity. |
 | `AlignmentClass` | Implemented Layer 3 direction-family grouping over PatchChainDirectionalEvidence. |
 | `PatchAxes` | Implemented Layer 3 primary/secondary AlignmentClass selection per Patch. |
 
@@ -141,11 +141,12 @@ a graph-level classification overlay on existing ScaffoldNode, not a separate
 graph node identity. Ordinary ScaffoldNodes remain unclassified unless a
 ScaffoldJunction classifier emits a record.
 
-Implemented ScaffoldJunctionKind vocabulary includes SELF_SEAM only. SELF_SEAM
-is for a ScaffoldNode where two incident final PatchChains share the same
-ChainId and same PatchId, representing the supported SEAM_SELF case. Future
-kind vocabulary beyond SELF_SEAM includes CROSS_PATCH, BRANCH, TERMINUS,
-AMBIGUOUS and DEGRADED.
+Implemented ScaffoldJunctionKind vocabulary includes SELF_SEAM and CROSS_PATCH.
+SELF_SEAM is for a ScaffoldNode where two incident final PatchChains share the
+same ChainId and same PatchId, representing the supported SEAM_SELF case.
+CROSS_PATCH is for an existing ScaffoldNode whose incident final ScaffoldEdges
+reference more than one distinct PatchId. Future kind vocabulary beyond
+SELF_SEAM/CROSS_PATCH includes BRANCH, TERMINUS, AMBIGUOUS and DEGRADED.
 
 ## DD-36 - LocalFaceFan is geometry evidence, not graph topology
 

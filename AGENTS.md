@@ -172,14 +172,14 @@ LoopCorner v0
 ScaffoldNode v0
 ScaffoldEdge v0
 ScaffoldGraph v0
-ScaffoldJunction v0 SELF_SEAM classification overlay
+ScaffoldJunction v0 SELF_SEAM/CROSS_PATCH classification overlay
 LocalFaceFanGeometryFacts
 ```
 
 Deferred in G3:
 
 ```text
-ScaffoldJunction kinds beyond SELF_SEAM
+ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
 ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 WorldOrientation
 ```
@@ -206,8 +206,10 @@ ScaffoldJunction is a graph-level classification overlay on existing
 ScaffoldNode, not a separate graph node identity. Ordinary ScaffoldNodes remain
 unclassified unless a ScaffoldJunction classifier emits a record. SELF_SEAM v0
 is implemented for the supported SEAM_SELF case where two incident final
-PatchChains share the same ChainId and same PatchId. All other
-ScaffoldJunction kinds remain future/deferred.
+PatchChains share the same ChainId and same PatchId. CROSS_PATCH v0 is
+implemented where an existing ScaffoldNode's incident final ScaffoldEdges
+reference more than one distinct PatchId. All other ScaffoldJunction kinds
+remain future/deferred.
 
 ---
 

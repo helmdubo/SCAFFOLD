@@ -21,6 +21,7 @@ from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_b
 from scaffold_core.tests.fixtures.cylinder_tube import (
     make_segmented_cylinder_tube_without_caps_with_one_seam_source,
 )
+from scaffold_core.tests.fixtures.l_shape import make_two_patch_source_with_two_edge_seam_run
 from scaffold_core.tests.fixtures.single_patch import make_single_quad_source
 
 
@@ -36,6 +37,14 @@ def test_cylinder_builds_two_self_seam_scaffold_junctions() -> None:
     assert len(snapshot.scaffold_nodes) == 2
     assert len(snapshot.scaffold_edges) == 4
     assert len(snapshot.scaffold_junctions) == 2
+    assert sum(
+        junction.kind == ScaffoldJunctionKind.SELF_SEAM
+        for junction in snapshot.scaffold_junctions
+    ) == 2
+    assert sum(
+        junction.kind == ScaffoldJunctionKind.CROSS_PATCH
+        for junction in snapshot.scaffold_junctions
+    ) == 0
     assert {junction.kind for junction in snapshot.scaffold_junctions} == {
         ScaffoldJunctionKind.SELF_SEAM,
     }
@@ -48,7 +57,35 @@ def test_cylinder_builds_two_self_seam_scaffold_junctions() -> None:
     assert all(junction.evidence[0].data["policy"] == junction.policy for junction in snapshot.scaffold_junctions)
 
 
-def test_closed_shared_two_patch_boundary_does_not_build_self_seam_junctions() -> None:
+def test_two_patch_boundary_builds_cross_patch_but_not_self_seam_junctions() -> None:
+    context = run_pass_1_relations(
+        run_pass_0(make_two_patch_source_with_two_edge_seam_run())
+    )
+
+    snapshot = context.relation_snapshot
+
+    assert snapshot is not None
+    assert len(snapshot.scaffold_nodes) == 2
+    assert len(snapshot.scaffold_edges) == 4
+    assert len(snapshot.scaffold_junctions) == 2
+    assert {junction.kind for junction in snapshot.scaffold_junctions} == {
+        ScaffoldJunctionKind.CROSS_PATCH,
+    }
+    assert {
+        junction.scaffold_node_id
+        for junction in snapshot.scaffold_junctions
+    } == {node.id for node in snapshot.scaffold_nodes}
+    assert all(junction.matched_chain_id is None for junction in snapshot.scaffold_junctions)
+    assert all(junction.patch_id is None for junction in snapshot.scaffold_junctions)
+    assert all(len(junction.patch_ids) > 1 for junction in snapshot.scaffold_junctions)
+    assert all(len(junction.scaffold_edge_ids) == 4 for junction in snapshot.scaffold_junctions)
+    assert all(
+        junction.evidence[0].data["classification_policy"] == "scaffold_junction_cross_patch_v0"
+        for junction in snapshot.scaffold_junctions
+    )
+
+
+def test_closed_shared_two_patch_boundary_builds_cross_patch_from_existing_edges() -> None:
     context = run_pass_1_relations(
         run_pass_0(make_closed_shared_boundary_loop_source())
     )
@@ -58,7 +95,12 @@ def test_closed_shared_two_patch_boundary_does_not_build_self_seam_junctions() -
     assert snapshot is not None
     assert len(snapshot.scaffold_nodes) == 2
     assert len(snapshot.scaffold_edges) == 2
-    assert snapshot.scaffold_junctions == ()
+    assert len(snapshot.scaffold_junctions) == 2
+    assert {junction.kind for junction in snapshot.scaffold_junctions} == {
+        ScaffoldJunctionKind.CROSS_PATCH,
+    }
+    assert all(len(junction.patch_ids) == 2 for junction in snapshot.scaffold_junctions)
+    assert all(len(junction.scaffold_edge_ids) == 2 for junction in snapshot.scaffold_junctions)
 
 
 def test_ordinary_single_patch_node_remains_unclassified() -> None:
@@ -112,5 +154,29 @@ def test_inspection_json_includes_scaffold_junctions() -> None:
     assert all(junction["scaffold_node_id"] for junction in relations["scaffold_junctions"])
     assert all(junction["matched_chain_id"] for junction in relations["scaffold_junctions"])
     assert all(junction["patch_id"] for junction in relations["scaffold_junctions"])
+    assert all(junction["chain_ids"] for junction in relations["scaffold_junctions"])
+    assert all(junction["patch_ids"] for junction in relations["scaffold_junctions"])
+    assert all(junction["loop_ids"] for junction in relations["scaffold_junctions"])
     assert all(len(junction["scaffold_edge_ids"]) == 2 for junction in relations["scaffold_junctions"])
     assert all(len(junction["patch_chain_ids"]) == 2 for junction in relations["scaffold_junctions"])
+
+
+def test_inspection_json_includes_cross_patch_junctions() -> None:
+    context = run_pass_1_relations(
+        run_pass_0(make_two_patch_source_with_two_edge_seam_run())
+    )
+
+    report = inspect_pipeline_context(context, detail="full")
+
+    json.dumps(report)
+    relations = report["relations"]
+    node_ids = {
+        node["id"]
+        for node in relations["scaffold_nodes"]
+    }
+    assert relations["scaffold_junction_count"] == 2
+    assert {junction["kind"] for junction in relations["scaffold_junctions"]} == {"CROSS_PATCH"}
+    assert all(junction["scaffold_node_id"] in node_ids for junction in relations["scaffold_junctions"])
+    assert all(junction["matched_chain_id"] is None for junction in relations["scaffold_junctions"])
+    assert all(junction["patch_id"] is None for junction in relations["scaffold_junctions"])
+    assert all(len(junction["patch_ids"]) == 2 for junction in relations["scaffold_junctions"])

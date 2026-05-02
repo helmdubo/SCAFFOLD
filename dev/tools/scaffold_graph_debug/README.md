@@ -40,8 +40,9 @@ for older payloads. Exact coincident or reversed edge polylines are spread into
 small deterministic display lanes while leaving the overlay payload and core
 graph records unchanged.
 
-SELF_SEAM ScaffoldJunction records from the overlay payload render as distinct
-markers on `ScaffoldGraph_Junctions`, at the existing ScaffoldNode position.
+Implemented ScaffoldJunction records from the overlay payload render as
+distinct markers on `ScaffoldGraph_Junctions`, at the existing ScaffoldNode
+position.
 
 To unregister:
 

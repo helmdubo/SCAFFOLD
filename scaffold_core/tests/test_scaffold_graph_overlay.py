@@ -83,7 +83,9 @@ def test_scaffold_graph_overlay_has_required_debug_payload_shape() -> None:
         "edge_source",
     }
     assert overlay["scaffold_junction_count"] == len(overlay["junctions"])
-    assert overlay["junctions"] == []
+    assert len(overlay["junctions"]) == 2
+    assert {junction["kind"] for junction in overlay["junctions"]} == {"CROSS_PATCH"}
+    assert all(len(junction["position"]) == 3 for junction in overlay["junctions"])
     assert set(overlay["graph"]) == {"id", "node_ids", "edge_ids"}
     assert all(len(node["position"]) == 3 for node in overlay["nodes"])
     assert all(edge["polyline"] for edge in overlay["edges"])
@@ -176,6 +178,33 @@ def test_scaffold_graph_overlay_exposes_self_seam_junction_markers_for_cylinder(
     }
 
 
+def test_scaffold_graph_overlay_exposes_cross_patch_junction_markers() -> None:
+    context = run_pass_1_relations(
+        run_pass_0(make_two_patch_source_with_two_edge_seam_run())
+    )
+
+    report = inspect_pipeline_context(context, detail="full")
+
+    json.dumps(report)
+    overlay = report["scaffold_graph_overlay"]
+    node_ids = {node["id"] for node in overlay["nodes"]}
+    node_positions = {
+        node["id"]: node["position"]
+        for node in overlay["nodes"]
+    }
+    assert overlay["scaffold_node_count"] == 2
+    assert overlay["scaffold_edge_count"] == 4
+    assert overlay["scaffold_junction_count"] == 2
+    assert len(overlay["junctions"]) == 2
+    assert {junction["kind"] for junction in overlay["junctions"]} == {"CROSS_PATCH"}
+    assert all(junction["scaffold_node_id"] in node_ids for junction in overlay["junctions"])
+    assert all(
+        junction["position"] == node_positions[junction["scaffold_node_id"]]
+        for junction in overlay["junctions"]
+    )
+    assert all(junction["evidence"] for junction in overlay["junctions"])
+
+
 def test_scaffold_graph_overlay_node_anchor_groups_materialized_vertices() -> None:
     context = run_pass_1_relations(
         run_pass_0(make_segmented_cylinder_tube_without_caps_with_one_seam_source())
@@ -248,13 +277,13 @@ def test_scaffold_graph_overlay_compact_report_expectations_for_closed_shared_lo
     assert _compact_graph_report(make_closed_shared_boundary_loop_source) == {
         "scaffold_node_count": 2,
         "scaffold_edge_count": 2,
-        "scaffold_junction_count": 0,
+        "scaffold_junction_count": 2,
         "overlay_node_count": 2,
         "overlay_edge_count": 2,
-        "overlay_junction_count": 0,
+        "overlay_junction_count": 2,
         "edge_stroke_count": 2,
         "node_marker_count": 2,
-        "junction_marker_count": 0,
+        "junction_marker_count": 2,
     }
 
 

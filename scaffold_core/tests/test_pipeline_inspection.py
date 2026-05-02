@@ -214,7 +214,7 @@ def test_inspection_default_output_is_compact() -> None:
         "scaffold_node_count": 2,
         "scaffold_edge_count": 2,
         "scaffold_graph_count": 1,
-        "scaffold_junction_count": 0,
+        "scaffold_junction_count": 2,
         "alignment_class_count": 2,
         "patch_axes_count": 2,
     }
