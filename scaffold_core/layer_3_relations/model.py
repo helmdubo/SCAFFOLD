@@ -96,6 +96,12 @@ class PatchChainEndpointRelationKind(str, Enum):
     DEGENERATE = "DEGENERATE"
 
 
+class ScaffoldJunctionKind(str, Enum):
+    """Implemented ScaffoldJunction classification kinds."""
+
+    SELF_SEAM = "SELF_SEAM"
+
+
 @dataclass(frozen=True)
 class PatchAdjacency:
     id: str
@@ -265,6 +271,22 @@ class ScaffoldGraph:
 
 
 @dataclass(frozen=True)
+class ScaffoldJunction:
+    """Graph-level classification overlay on one existing ScaffoldNode."""
+
+    id: str
+    kind: ScaffoldJunctionKind
+    policy: str
+    scaffold_node_id: str
+    matched_chain_id: ChainId
+    patch_id: PatchId
+    scaffold_edge_ids: tuple[str, ...]
+    patch_chain_ids: tuple[PatchChainId, ...]
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
     chain_continuations: tuple[ChainContinuationRelation, ...] = ()
@@ -276,6 +298,7 @@ class RelationSnapshot:
     scaffold_nodes: tuple[ScaffoldNode, ...] = ()
     scaffold_edges: tuple[ScaffoldEdge, ...] = ()
     scaffold_graph: ScaffoldGraph | None = None
+    scaffold_junctions: tuple[ScaffoldJunction, ...] = ()
     alignment_classes: tuple[AlignmentClass, ...] = ()
     patch_axes: Mapping[PatchId, PatchAxes] = field(default_factory=dict)
     diagnostics: tuple[Diagnostic, ...] = ()

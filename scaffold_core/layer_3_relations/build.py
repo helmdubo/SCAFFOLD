@@ -29,6 +29,7 @@ from scaffold_core.layer_3_relations.patch_chain_endpoint_relations import (
 )
 from scaffold_core.layer_3_relations.patch_chain_endpoint_samples import build_patch_chain_endpoint_samples
 from scaffold_core.layer_3_relations.scaffold_graph import build_scaffold_graph
+from scaffold_core.layer_3_relations.scaffold_junctions import build_scaffold_junctions
 from scaffold_core.layer_3_relations.scaffold_nodes import build_scaffold_nodes
 
 
@@ -76,6 +77,7 @@ def build_relation_snapshot(
         patch_chain_endpoint_relations,
     )
     scaffold_edges, scaffold_graph = build_scaffold_graph(topology, scaffold_nodes)
+    scaffold_junctions = build_scaffold_junctions(scaffold_nodes, scaffold_edges)
     alignment_classes = build_alignment_classes(patch_chain_directional_evidence)
     return RelationSnapshot(
         patch_adjacencies=patch_adjacencies,
@@ -88,6 +90,7 @@ def build_relation_snapshot(
         scaffold_nodes=scaffold_nodes,
         scaffold_edges=scaffold_edges,
         scaffold_graph=scaffold_graph,
+        scaffold_junctions=scaffold_junctions,
         alignment_classes=alignment_classes,
         patch_axes=build_patch_axes(
             topology,

@@ -58,18 +58,19 @@ Implemented:
 - G3c6 - LoopCorner v0
 - G3c7 - ScaffoldNode v0
 - G3c8 - ScaffoldEdge v0 / ScaffoldGraph v0
+- G3c9 - ScaffoldJunction v0 SELF_SEAM
 - LocalFaceFanGeometryFacts as Layer 2 geometry evidence consumed by Layer 3
 
 Validation status:
 
-- ScaffoldGraph overlay compact report expectations are captured for
-  representative single patch, cylinder and shared-loop fixtures.
+- ScaffoldGraph and ScaffoldJunction compact report expectations are captured
+  for representative single patch, cylinder and shared-loop fixtures.
 - Grease Pencil dev debug rendering smoke validation confirms the cylinder
-  report shape without adding ScaffoldJunction or ScaffoldTrace semantics.
+  graph overlay report shape without adding ScaffoldTrace semantics.
 
 Deferred:
 
-- ScaffoldJunction classification overlay on existing ScaffoldNode
+- ScaffoldJunction kinds beyond SELF_SEAM
 - ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 - WorldOrientation
 - Layer 4 Feature Grammar
@@ -90,7 +91,7 @@ Current terminology for the final boundary graph model:
 | `ScaffoldNode` | Implemented G3c7 graph-level evidence node assembled from LoopCorners and endpoint evidence. It is not Layer 1 identity. |
 | `ScaffoldEdge` | Implemented G3c8 graph-level view of one final PatchChain. |
 | `ScaffoldGraph` | Implemented G3c8 connectivity graph assembled from ScaffoldNodes and ScaffoldEdges. |
-| `ScaffoldJunction` | Future graph-level classification overlay on existing ScaffoldNode, not a separate graph node identity. |
+| `ScaffoldJunction` | Implemented SELF_SEAM-only graph-level classification overlay on existing ScaffoldNode, not a separate graph node identity. |
 | `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
@@ -98,16 +99,16 @@ Current terminology for the final boundary graph model:
 Endpoint samples, endpoint relations, LocalFaceFanGeometryFacts and ScaffoldNodes
 are evidence or derived relation records; they are not Layer 1 topology.
 
-Future ScaffoldJunction classification:
+ScaffoldJunction classification:
 
-- ordinary ScaffoldNodes remain unclassified until a future ScaffoldJunction
-  classifier exists;
-- `SELF_SEAM` is a future ScaffoldJunctionKind for a ScaffoldNode where two
+- ordinary ScaffoldNodes remain unclassified unless a ScaffoldJunction
+  classifier emits a record;
+- `SELF_SEAM` is the implemented ScaffoldJunctionKind for a ScaffoldNode where two
   incident final PatchChains share the same ChainId and same PatchId,
   representing the supported SEAM_SELF case;
-- planning-only kind vocabulary may include `SELF_SEAM`, `CROSS_PATCH`,
-  `BRANCH`, `TERMINUS`, `AMBIGUOUS` and `DEGRADED`;
-- future classification must not change ScaffoldNode grouping, change
+- future kind vocabulary beyond SELF_SEAM may include `CROSS_PATCH`, `BRANCH`,
+  `TERMINUS`, `AMBIGUOUS` and `DEGRADED`;
+- classification must not change ScaffoldNode grouping, change
   PatchChain identity, walk traces, detect circuits, select rails, choose
   continuations or introduce UV, runtime or feature semantics.
 
@@ -371,7 +372,7 @@ Grouping policy v0:
 - fall back to topology `VertexId` grouping when no source provenance exists;
 - retain contributing LoopCorner ids, endpoint sample ids, endpoint relation ids,
   incident PatchChain ids, Patch ids, confidence and evidence;
-- do not classify ScaffoldJunctions;
+- do not classify ScaffoldJunctions inside the ScaffoldNode builder;
 - ScaffoldNode v0 itself does not classify ScaffoldJunctions or build graph
   edges/traces.
 
@@ -433,7 +434,6 @@ Rules:
 - no Layer 1 mutation;
 - no PatchChain split/re-id;
 - no raw BMesh or boundary-builder internal source;
-- no ScaffoldJunction classification;
 - no ScaffoldTrace, ScaffoldCircuit or ScaffoldRail construction;
 - no U/V labels, H/V labels, WORLD_UP, WorldOrientation, Feature, Runtime,
   Solve or UV semantics.
@@ -441,6 +441,46 @@ Rules:
 Grease Pencil rendering is a dev-tool consumer. It must consume the inspection
 overlay payload instead of duplicating core graph logic or importing Blender
 into Scaffold Core.
+
+## G3c9 - ScaffoldJunction v0 SELF_SEAM
+
+G3c9 classifies `SELF_SEAM` ScaffoldJunction overlays on existing
+`ScaffoldNode` records after ScaffoldGraph construction.
+
+`ScaffoldJunction` is not a separate graph node identity. It is a Layer 3
+derived classification record keyed to `ScaffoldNode.id`. Ordinary
+ScaffoldNodes remain unclassified by emitting no ScaffoldJunction record.
+
+Implementation status:
+
+- `ScaffoldJunctionKind` is implemented with only `SELF_SEAM`.
+- `ScaffoldJunction` records retain policy, scaffold node id, matched ChainId,
+  PatchId, contributing ScaffoldEdge ids, PatchChain ids, confidence and
+  evidence.
+- `build_scaffold_junctions()` consumes existing ScaffoldNodes and
+  ScaffoldEdges. It emits SELF_SEAM when one ScaffoldNode has at least two
+  incident final PatchChains with the same ChainId and same PatchId.
+- `RelationSnapshot.scaffold_junctions` stores emitted junction overlays.
+- Pipeline inspection reports `scaffold_junction_count` and full
+  `scaffold_junctions` details in full detail.
+
+Fixture expectations:
+
+| Fixture | `scaffold_junction_count` |
+|---|---:|
+| single patch / rectangle | 0 |
+| cylinder tube without caps + one seam cut | 2 |
+| closed shared-loop / cube-like synthetic fixture | 0 |
+
+Rules:
+
+- no ScaffoldNode grouping changes;
+- no ScaffoldEdge or ScaffoldGraph identity changes;
+- no Layer 1 Vertex, Chain, PatchChain, BoundaryLoop or Patch identity changes;
+- no ScaffoldJunction kinds beyond SELF_SEAM;
+- no ScaffoldTrace, ScaffoldCircuit or ScaffoldRail construction;
+- no U/V labels, H/V labels, WORLD_UP, WorldOrientation, Feature, Runtime,
+  Solve or UV semantics.
 
 ## Future - ScaffoldTrace
 

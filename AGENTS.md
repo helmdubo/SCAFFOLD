@@ -172,13 +172,14 @@ LoopCorner v0
 ScaffoldNode v0
 ScaffoldEdge v0
 ScaffoldGraph v0
+ScaffoldJunction v0 SELF_SEAM classification overlay
 LocalFaceFanGeometryFacts
 ```
 
 Deferred in G3:
 
 ```text
-ScaffoldJunction classification overlay on existing ScaffoldNode
+ScaffoldJunction kinds beyond SELF_SEAM
 ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 WorldOrientation
 ```
@@ -201,11 +202,12 @@ ScaffoldNode v0 is graph-level evidence assembled from LoopCorners and endpoint
 evidence. It is not Layer 1 identity and must not mutate Vertex, Chain or
 PatchChain records.
 
-Future ScaffoldJunction is a graph-level classification overlay on existing
+ScaffoldJunction is a graph-level classification overlay on existing
 ScaffoldNode, not a separate graph node identity. Ordinary ScaffoldNodes remain
-unclassified until a future ScaffoldJunction classifier exists. SELF_SEAM is a
-future ScaffoldJunctionKind for the supported SEAM_SELF case where two incident
-final PatchChains share the same ChainId and same PatchId.
+unclassified unless a ScaffoldJunction classifier emits a record. SELF_SEAM v0
+is implemented for the supported SEAM_SELF case where two incident final
+PatchChains share the same ChainId and same PatchId. All other
+ScaffoldJunction kinds remain future/deferred.
 
 ---
 
