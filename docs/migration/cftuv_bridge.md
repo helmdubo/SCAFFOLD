@@ -15,6 +15,48 @@ as:
 3. expected evidence/candidate/constraint/runtime artifacts;
 4. tests or compact report fields.
 
+## Repository locations
+
+SCAFFOLD now keeps two different kinds of CFTUV material.
+
+### Migration docs
+
+Migration/process documents live in:
+
+```text
+docs/migration/
+docs/reference/cftuv/
+```
+
+These are SCAFFOLD-side documents: lessons, bridge rules, fixture plans, and
+reference notes. They are safe for ordinary planning/migration tasks.
+
+### CFTUV source oracle
+
+CFTUV source/reference code lives in:
+
+```text
+dev/tools/CFTUV/
+  *.py
+  docs/*.md
+```
+
+This directory is a read-only algorithm oracle. It is not part of Scaffold Core.
+It must not be imported by SCAFFOLD runtime code, tests, or pipeline modules.
+
+Read `dev/tools/CFTUV/` only when a Task Card explicitly asks for CFTUV migration
+analysis or an Algorithm Card.
+
+## CFTUV source oracle rules
+
+- Do not import from `dev/tools/CFTUV/` in SCAFFOLD code.
+- Do not run files from `dev/tools/CFTUV/` as part of SCAFFOLD tests or pipeline.
+- Do not edit CFTUV reference files during SCAFFOLD implementation tasks.
+- Do not read CFTUV source in ordinary SCAFFOLD tasks.
+- Use `scaffold_explorer` for CFTUV source reading.
+- Name exact CFTUV files to inspect whenever possible.
+- Produce an Algorithm Card before any SCAFFOLD implementation.
+
 ## Bridge stages
 
 ### Stage 1 — Observe
@@ -88,7 +130,7 @@ Do not copy:
 
 ## Algorithm Card format
 
-A CFTUV Scout must output this card before any SCAFFOLD implementation:
+A CFTUV Explorer must output this card before any SCAFFOLD implementation:
 
 ```text
 ALGORITHM CARD
@@ -97,8 +139,8 @@ CFTUV behavior:
   <behavior name>
 
 Source files inspected:
-  - <file>
-  - <file>
+  - dev/tools/CFTUV/<file>.py
+  - dev/tools/CFTUV/docs/<file>.md
 
 Observed behavior:
   <what CFTUV does from the user's point of view>
@@ -125,31 +167,11 @@ Open questions:
 
 ## Implementer rule
 
-The SCAFFOLD Implementer should normally read the Algorithm Card, not the CFTUV
+The SCAFFOLD implementer should normally read the Algorithm Card, not the CFTUV
 source files.
 
-Read CFTUV source during implementation only when explicitly allowed by the user.
-
-## Suggested CFTUV reference layout
-
-Preferred: keep CFTUV as a sibling checkout outside SCAFFOLD.
-
-Optional reference layout inside SCAFFOLD:
-
-```text
-docs/reference/cftuv/
-  AGENTS.md
-  README.md
-  source/
-    structural_tokens.py
-    shape_classify.py
-    band_spine.py
-    solve_frontier.py
-    solve_pin_policy.py
-    solve_skeleton.py
-```
-
-This folder is read-only reference. It must not be imported by SCAFFOLD code.
+Read CFTUV source during implementation only when explicitly allowed by the user
+or Task Card.
 
 ## Mapping table
 
@@ -171,18 +193,21 @@ This folder is read-only reference. It must not be imported by SCAFFOLD code.
 
 ## Parallel migration model
 
-Use two sessions when possible:
+Use Codex subagents when possible:
 
 ```text
-CFTUV Scout:
-  reads selected CFTUV files;
+scaffold_explorer:
+  reads selected CFTUV files from dev/tools/CFTUV/;
   outputs Algorithm Card;
   writes no SCAFFOLD code.
 
-SCAFFOLD Implementer:
+scaffold_worker:
   reads Algorithm Card;
   implements SCAFFOLD artifact;
   does not copy CFTUV code.
+
+scaffold_reviewer:
+  checks the diff for CFTUV code-copy leakage, layer leakage and missing tests.
 ```
 
 This separation reduces accidental code copying and forces behavior-level design.
