@@ -21,6 +21,7 @@ This document is the canonical reference for subsequent implementation plans: G1
 - Clarified LocalFaceFanGeometryFacts as geometry evidence, not graph topology.
 - Added PatchChainEndpointSample / PatchChainEndpointRelation terminology.
 - Added LoopCorner as patch-local transition between adjacent PatchChains.
+- Implemented ScaffoldNode v0 as graph-level evidence, not Layer 1 identity.
 - Amended DD-29 to allow topology/materialization-based border coalescing.
 - Marked OQ-11 as partially resolved for polygonal straight/turning Chains.
 
@@ -248,20 +249,20 @@ Feature-local alignment is expressed as `FeatureConstraint`, not as newly regist
 | `PatchChainEndpointSample` | Endpoint ray/evidence sample for a PatchChain directional measurement; not a graph node. |
 | `PatchChainEndpointRelation` | Pairwise local relation between endpoint samples at one Vertex; not a graph node. |
 | `LoopCorner` | Patch-local transition between adjacent PatchChains in one BoundaryLoop. |
+| `ScaffoldNode` | Implemented G3c7 graph-level evidence node assembled from LoopCorners and endpoint evidence; not Layer 1 identity. |
 | `AlignmentClass` | Implemented Layer 3 direction-family grouping over PatchChainDirectionalEvidence. |
 | `PatchAxes` | Implemented Layer 3 primary/secondary AlignmentClass selection per Patch. |
 
 Implementation status:
 Code has already adopted canonical terms for PatchChain,
-PatchChainEndpointSample, PatchChainEndpointRelation, LocalFaceFanGeometryFacts
-and LoopCorner. No code rename is required as part of this documentation
-cleanup.
+PatchChainEndpointSample, PatchChainEndpointRelation, LocalFaceFanGeometryFacts,
+LoopCorner and ScaffoldNode. No code rename is required as part of this
+documentation cleanup.
 
 ### Future / reserved nomenclature, not implemented yet
 
 | Term | Meaning |
 |---|---|
-| `ScaffoldNode` | Future graph-level node assembled from LoopCorners and endpoint evidence. |
 | `ScaffoldJunction` | Future graph-level ScaffoldNode classification for branch/seam/cross-patch structures. |
 | `ScaffoldEdge` | Future graph-level view of a final PatchChain. |
 | `ScaffoldGraph` | Future graph assembled from ScaffoldNodes and ScaffoldEdges. |
@@ -598,14 +599,17 @@ These relations are axis-free:
 - no WALL/FLOOR/SLOPE;
 - no WorldOrientation dependency.
 
+ScaffoldNode v0 is graph-level evidence assembled from LoopCorners and endpoint
+evidence. It is not Layer 1 identity.
+
 Future ScaffoldGraph / ScaffoldTrace may be derived from these endpoint
-relations and LoopCorner data.
+relations, LoopCorner data and ScaffoldNode evidence.
 
 Endpoint samples, endpoint relations and LocalFaceFanGeometryFacts are evidence
 or measurements; they are not graph nodes.
 
 `LoopCorner` is the patch-local transition between adjacent PatchChains inside
-one BoundaryLoop. It may later feed ScaffoldNode assembly.
+one BoundaryLoop. It may feed ScaffoldNode evidence.
 
 `ScaffoldJunction` is graph-level: a ScaffoldNode classified as branch-like,
 not every PatchChain endpoint sample or LoopCorner.
@@ -910,11 +914,12 @@ normals; Patch aggregate normals are a fallback.
 ## DD-33 — ScaffoldGraph is derived from endpoint relations and LoopCorners
 
 ScaffoldGraph / ScaffoldTrace are future Layer 3 derived structures built from
-`PatchChainEndpointRelation` and `LoopCorner`, not from raw Chain or world axes.
+`PatchChainEndpointRelation`, `LoopCorner` and implemented `ScaffoldNode` evidence,
+not from raw Chain or world axes.
 
 ScaffoldEdge must be a graph-level view of final PatchChain, not a competing
 PatchChain identity. ScaffoldGraph must not be introduced before pairwise
-endpoint relations and LoopCorner data exist.
+endpoint relations, LoopCorner and ScaffoldNode data exist.
 
 ## DD-34 — Final PatchChain is the single source of truth
 
@@ -927,7 +932,7 @@ effective PatchChain layer.
 ## DD-35 — LoopCorner is patch-local; ScaffoldJunction is graph-level
 
 LoopCorner is the local transition between adjacent PatchChains inside one
-BoundaryLoop. A LoopCorner may become a ScaffoldNode.
+BoundaryLoop. A LoopCorner may feed ScaffoldNode evidence.
 
 It becomes a ScaffoldJunction only when graph-level classification says it is
 structural: 3+ incident PatchChains, seam pair, cross-patch connection,
@@ -951,7 +956,7 @@ retaining provenance to the same source vertex.
 Reason:
 Materialized UV-cut topology needs separate loop-side occurrences for the same
 source vertex. This is required for correct BoundaryLoop traversal, PatchChain
-construction, LoopCorner construction and future ScaffoldNode grouping.
+construction, LoopCorner construction and ScaffoldNode grouping.
 
 Implications:
 - VertexId equality is topology-occurrence equality, not source-vertex equality.
@@ -960,6 +965,20 @@ Implications:
   SourceVertexId or structural provenance.
 - ScaffoldNode construction may aggregate multiple materialized Vertex
   occurrences into one graph node.
+
+## DD-38 — ScaffoldNode v0 is graph-level evidence, not Layer 1 identity
+
+ScaffoldNode v0 is a Layer 3 derived relation record assembled from LoopCorner,
+PatchChainEndpointSample and PatchChainEndpointRelation evidence.
+
+Grouping policy v0:
+- group materialized topology Vertex occurrences by SourceVertexId when provenance exists;
+- fall back to topology VertexId grouping when no SourceVertexId provenance exists;
+- retain evidence ids, incident PatchChain ids, Patch ids, confidence and provenance.
+
+ScaffoldNode does not mutate, merge, split or replace Layer 1 Vertex, Chain,
+PatchChain or BoundaryLoop identity. It does not classify ScaffoldJunctions and
+does not build ScaffoldEdges, ScaffoldTraces, ScaffoldCircuits or ScaffoldRails.
 
 ## PatchChain directional evidence
 
@@ -1036,10 +1055,10 @@ Implemented:
 - G3c4 - PatchChainEndpointSample
 - G3c5 - PatchChainEndpointRelation
 - G3c6 - LoopCorner
+- G3c7 - ScaffoldNode v0
 
 Next:
 - inspection review of PatchChainEndpointRelations and LoopCorners
-- ScaffoldNode v0
 - ScaffoldGraph / ScaffoldTrace v0
 
 Deferred:
@@ -1163,6 +1182,8 @@ Resolved:
 - Polygonal straight/turning Chains can be described by ChainDirectionalRun /
   PatchChain directional evidence.
 - Directional evidence must not become a competing PatchChain identity.
+- ScaffoldNode v0 may group materialized Vertex occurrences as graph-level evidence,
+  but not as Layer 1 identity.
 
 Still unresolved:
 
@@ -1172,7 +1193,7 @@ Still unresolved:
 - closed-loop wrap merge policy;
 - advanced corner detection;
 - local face-fan refinement policy;
-- exact relationship between endpoint relations and ScaffoldGraph construction.
+- exact relationship between endpoint relations, ScaffoldNode and ScaffoldGraph construction.
 
 ---
 
