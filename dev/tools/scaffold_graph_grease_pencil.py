@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any, Iterable, Sequence
@@ -30,9 +31,30 @@ NODE_MARKER_SIZE = 0.045
 
 def _add_repo_root_to_path() -> None:
     text = getattr(getattr(bpy.context, "space_data", None), "text", None)
-    text_path = Path(text.filepath).resolve() if getattr(text, "filepath", "") else None
+    text_path = (
+        Path(bpy.path.abspath(text.filepath)).resolve()
+        if getattr(text, "filepath", "")
+        else None
+    )
+    text_paths = tuple(
+        Path(bpy.path.abspath(blender_text.filepath)).resolve()
+        for blender_text in bpy.data.texts
+        if getattr(blender_text, "filepath", "")
+    )
+    env_path = (
+        Path(os.environ["SCAFFOLD_REPO_ROOT"]).resolve()
+        if os.environ.get("SCAFFOLD_REPO_ROOT")
+        else None
+    )
     script_path = Path(__file__).resolve()
-    for candidate in (text_path, script_path, *script_path.parents, Path.cwd()):
+    for candidate in (
+        env_path,
+        text_path,
+        *text_paths,
+        script_path,
+        *script_path.parents,
+        Path.cwd(),
+    ):
         if candidate is None:
             continue
         repo_root = candidate if (candidate / "scaffold_core").is_dir() else candidate.parent
@@ -41,7 +63,10 @@ def _add_repo_root_to_path() -> None:
             if repo_root_text not in sys.path:
                 sys.path.insert(0, repo_root_text)
             return
-    raise RuntimeError("Could not locate repository root containing scaffold_core.")
+    raise RuntimeError(
+        "Could not locate repository root containing scaffold_core. "
+        "Open this script from disk or set SCAFFOLD_REPO_ROOT."
+    )
 
 
 _add_repo_root_to_path()
