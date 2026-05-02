@@ -1,17 +1,25 @@
-# CFTUV Reference Folder Rules
+# CFTUV Reference Rules
 
-This folder is read-only reference material for CFTUV-to-SCAFFOLD migration.
+This folder contains SCAFFOLD-side reference notes for CFTUV migration.
 
-Do not import from this folder.
-Do not run files from this folder as SCAFFOLD code.
+The CFTUV source oracle lives in:
+
+```text
+dev/tools/CFTUV/
+  *.py
+  docs/*.md
+```
+
+Do not import from `dev/tools/CFTUV/`.
+Do not run files from `dev/tools/CFTUV/` as SCAFFOLD code.
 Do not edit CFTUV reference files during SCAFFOLD implementation tasks.
-Do not read this folder in ordinary SCAFFOLD sessions.
+Do not read CFTUV source in ordinary SCAFFOLD sessions.
 
-Read it only when:
+Read CFTUV source only when:
 
 - the user explicitly asks for CFTUV migration analysis;
-- the routed task is `cftuv_algorithm_scout`;
-- the task names exact CFTUV reference files to inspect.
+- the routed task is `cftuv_algorithm_card` or `cftuv_migration`;
+- the Task Card names exact CFTUV files to inspect.
 
-When analyzing CFTUV, output an Algorithm Card. Do not copy implementation into
-SCAFFOLD directly.
+When analyzing CFTUV, `scaffold_explorer` must output an Algorithm Card.
+Do not copy implementation into SCAFFOLD directly.
