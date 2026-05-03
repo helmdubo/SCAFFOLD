@@ -56,6 +56,16 @@ Incident relation markers are drawn at the existing ScaffoldNode position.
 Shared-chain relation markers are drawn at the overlay-provided shared Chain
 label position.
 
+Incident relation kinds are rendered with compact labels:
+
+```text
+CONT  CONTINUATION_CANDIDATE
+ORTH  ORTHOGONAL_CORNER
+OBL   OBLIQUE_CONNECTOR
+SR?   SAME_RAY_AMBIGUOUS
+DEG   DEGRADED
+```
+
 To unregister:
 
 ```python

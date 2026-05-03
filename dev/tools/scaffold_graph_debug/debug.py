@@ -42,6 +42,16 @@ NODE_MARKER_SIZE = 0.045
 JUNCTION_MARKER_SIZE = 0.065
 INCIDENT_RELATION_MARKER_SIZE = 0.085
 SHARED_CHAIN_RELATION_MARKER_SIZE = 0.075
+INCIDENT_RELATION_LABEL_OFFSET = 0.14
+INCIDENT_RELATION_KIND_STYLES = {
+    "CONTINUATION_CANDIDATE": ("CONT", (0.2, 1.0, 0.45, 1.0)),
+    "ORTHOGONAL_CORNER": ("ORTH", (0.15, 0.85, 1.0, 1.0)),
+    "OBLIQUE_CONNECTOR": ("OBL", (1.0, 0.65, 0.15, 1.0)),
+    "SAME_RAY_AMBIGUOUS": ("SR?", (1.0, 0.95, 0.15, 1.0)),
+    "DEGRADED": ("DEG", (0.55, 0.55, 0.55, 1.0)),
+}
+INCIDENT_RELATION_DEFAULT_STYLE = ("INC", INCIDENT_RELATION_COLOR)
+SHARED_CHAIN_RELATION_LABEL = "SHARED"
 LABEL_SIZE = 0.12
 LABEL_LIFT = 0.06
 EDGE_LANE_SPACING = 0.035
@@ -226,11 +236,60 @@ def _junction_marker_strokes(
     )
 
 
+def _incident_relation_kind(relation: dict[str, Any]) -> str:
+    return str(relation.get("kind") or "")
+
+
+def _incident_relation_style(relation: dict[str, Any]) -> tuple[str, tuple[float, float, float, float]]:
+    return INCIDENT_RELATION_KIND_STYLES.get(
+        _incident_relation_kind(relation),
+        INCIDENT_RELATION_DEFAULT_STYLE,
+    )
+
+
+def _incident_relation_label(relation: dict[str, Any]) -> str:
+    label, _color = _incident_relation_style(relation)
+    return label
+
+
+def _incident_relation_material_name(kind: str) -> str:
+    label, _color = INCIDENT_RELATION_KIND_STYLES.get(
+        kind,
+        INCIDENT_RELATION_DEFAULT_STYLE,
+    )
+    return f"ScaffoldGraph_IncidentRelation_{_safe_object_suffix(label)}_Material"
+
+
 def _incident_relation_marker_strokes(
+    kind: str,
     position: Sequence[float],
 ) -> tuple[tuple[tuple[float, float, float], ...], ...]:
     x, y, z = (float(position[0]), float(position[1]), float(position[2]))
     size = INCIDENT_RELATION_MARKER_SIZE
+    if kind == "CONTINUATION_CANDIDATE":
+        return (
+            ((x - size, y, z), (x + size, y, z)),
+            ((x, y - size * 0.35, z), (x, y + size * 0.35, z)),
+        )
+    if kind == "ORTHOGONAL_CORNER":
+        return (
+            ((x - size, y, z), (x, y, z), (x, y + size, z)),
+        )
+    if kind == "OBLIQUE_CONNECTOR":
+        return (
+            ((x - size, y - size * 0.45, z), (x + size, y + size * 0.45, z)),
+            ((x - size * 0.35, y + size * 0.55, z), (x + size * 0.35, y - size * 0.55, z)),
+        )
+    if kind == "SAME_RAY_AMBIGUOUS":
+        return (
+            ((x - size, y - size * 0.35, z), (x, y, z), (x - size, y + size * 0.35, z)),
+            ((x, y - size * 0.35, z), (x + size, y, z), (x, y + size * 0.35, z)),
+        )
+    if kind == "DEGRADED":
+        return (
+            ((x - size, y - size, z), (x + size, y + size, z)),
+            ((x - size, y + size, z), (x + size, y - size, z)),
+        )
     return (
         ((x - size, y, z), (x, y + size, z), (x + size, y, z)),
     )
@@ -370,7 +429,7 @@ def _draw_junctions(frame: Any, material_index: int, junctions: Iterable[dict[st
 
 def _draw_incident_relations(
     frame: Any,
-    material_index: int,
+    material_indexes: dict[str, int],
     relations: Iterable[dict[str, Any]],
 ) -> int:
     marker_count = 0
@@ -378,7 +437,9 @@ def _draw_incident_relations(
         position = relation.get("position", ())
         if len(position) != 3:
             continue
-        for stroke_points in _incident_relation_marker_strokes(position):
+        kind = _incident_relation_kind(relation)
+        material_index = material_indexes.get(kind, material_indexes[""])
+        for stroke_points in _incident_relation_marker_strokes(kind, position):
             _add_stroke(frame, stroke_points, material_index, INCIDENT_RELATION_WIDTH)
         marker_count += 1
     return marker_count
@@ -473,10 +534,30 @@ def _add_label(
     collection.objects.link(label_object)
 
 
+def _position_key(position: Sequence[float]) -> tuple[float, float, float]:
+    return (
+        round(float(position[0]), EDGE_LANE_ROUND_DIGITS),
+        round(float(position[1]), EDGE_LANE_ROUND_DIGITS),
+        round(float(position[2]), EDGE_LANE_ROUND_DIGITS),
+    )
+
+
+def _relation_label_position(position: Sequence[float], lane_index: int) -> Vector:
+    lane_x = (lane_index % 3) - 1
+    lane_y = lane_index // 3
+    return Vector((
+        float(position[0]) + lane_x * INCIDENT_RELATION_LABEL_OFFSET,
+        float(position[1]) + (lane_y + 1) * INCIDENT_RELATION_LABEL_OFFSET,
+        float(position[2]),
+    ))
+
+
 def _draw_labels(
     source_object: Any,
     nodes: Sequence[dict[str, Any]],
     edges: Sequence[dict[str, Any]],
+    incident_relations: Sequence[dict[str, Any]],
+    shared_chain_relations: Sequence[dict[str, Any]],
     *,
     visible: bool,
 ) -> int:
@@ -504,6 +585,46 @@ def _draw_labels(
         label_position = _edge_label_position(edge.get("display_polyline", edge.get("polyline", ())))
         if label and label_position is not None:
             _add_label(collection, source_object, "edge", label, label_position, material)
+            label_count += 1
+
+    incident_groups: dict[tuple[float, float, float], list[dict[str, Any]]] = {}
+    for relation in incident_relations:
+        position = relation.get("position", ())
+        if len(position) == 3:
+            incident_groups.setdefault(_position_key(position), []).append(relation)
+
+    for relations_at_node in incident_groups.values():
+        ordered_relations = sorted(
+            relations_at_node,
+            key=lambda relation: (
+                _incident_relation_label(relation),
+                str(relation.get("id", "")),
+            ),
+        )
+        for lane_index, relation in enumerate(ordered_relations):
+            label = _incident_relation_label(relation)
+            position = relation.get("position", ())
+            _add_label(
+                collection,
+                source_object,
+                "incident",
+                label,
+                _relation_label_position(position, lane_index),
+                material,
+            )
+            label_count += 1
+
+    for relation in shared_chain_relations:
+        position = relation.get("label_position", relation.get("midpoint", ()))
+        if len(position) == 3:
+            _add_label(
+                collection,
+                source_object,
+                "shared",
+                SHARED_CHAIN_RELATION_LABEL,
+                Vector((float(position[0]), float(position[1]), float(position[2]))),
+                material,
+            )
             label_count += 1
 
     return label_count
@@ -565,7 +686,11 @@ def render_overlay(
     edge_material_index = _ensure_material(gp_data, EDGE_MATERIAL_NAME, EDGE_COLOR)
     node_material_index = _ensure_material(gp_data, NODE_MATERIAL_NAME, NODE_COLOR)
     junction_material_index = _ensure_material(gp_data, JUNCTION_MATERIAL_NAME, JUNCTION_COLOR)
-    incident_relation_material_index = _ensure_material(
+    incident_relation_material_indexes = {
+        kind: _ensure_material(gp_data, _incident_relation_material_name(kind), color)
+        for kind, (_label, color) in INCIDENT_RELATION_KIND_STYLES.items()
+    }
+    incident_relation_material_indexes[""] = _ensure_material(
         gp_data,
         INCIDENT_RELATION_MATERIAL_NAME,
         INCIDENT_RELATION_COLOR,
@@ -591,7 +716,7 @@ def render_overlay(
     )
     incident_relation_marker_count = _draw_incident_relations(
         incident_relation_frame,
-        incident_relation_material_index,
+        incident_relation_material_indexes,
         incident_relations,
     )
     shared_chain_relation_marker_count = _draw_shared_chain_relations(
@@ -603,6 +728,8 @@ def render_overlay(
         source_object,
         nodes,
         display_edges,
+        incident_relations if show_incident_relations else [],
+        shared_chain_relations if show_shared_chain_relations else [],
         visible=show_labels,
     )
 
@@ -657,17 +784,15 @@ def clear_overlay(source_name: str | None = None) -> None:
             bpy.data.collections.remove(collection)
 
     for material in list(bpy.data.materials):
-        if (
-            material.name in {
-                EDGE_MATERIAL_NAME,
-                NODE_MATERIAL_NAME,
-                JUNCTION_MATERIAL_NAME,
-                INCIDENT_RELATION_MATERIAL_NAME,
-                SHARED_CHAIN_RELATION_MATERIAL_NAME,
-                LABEL_MATERIAL_NAME,
-            }
-            and material.users == 0
-        ):
+        if material.users != 0:
+            continue
+        if material.name in {
+            EDGE_MATERIAL_NAME,
+            NODE_MATERIAL_NAME,
+            JUNCTION_MATERIAL_NAME,
+            SHARED_CHAIN_RELATION_MATERIAL_NAME,
+            LABEL_MATERIAL_NAME,
+        } or material.name.startswith("ScaffoldGraph_IncidentRelation_"):
             bpy.data.materials.remove(material)
 
 
