@@ -28,7 +28,7 @@ Controls:
 Show Graph
 Refresh Graph
 Close Graph
-Edges / Nodes / Junctions / Labels visibility
+Edges / Nodes / Junctions / Incident / Shared / Labels visibility
 ```
 
 `Show Graph` hides the source mesh while the overlay is active. `Close Graph`
@@ -43,6 +43,18 @@ graph records unchanged.
 Implemented ScaffoldJunction records from the overlay payload render as
 distinct markers on `ScaffoldGraph_Junctions`, at the existing ScaffoldNode
 position.
+
+Implemented graph relation records from the overlay payload render on dedicated
+layers:
+
+```text
+ScaffoldGraph_IncidentRelations
+ScaffoldGraph_SharedChainRelations
+```
+
+Incident relation markers are drawn at the existing ScaffoldNode position.
+Shared-chain relation markers are drawn at the overlay-provided shared Chain
+label position.
 
 To unregister:
 
