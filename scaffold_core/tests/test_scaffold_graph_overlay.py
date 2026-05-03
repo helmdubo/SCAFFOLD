@@ -137,8 +137,14 @@ def test_scaffold_graph_overlay_has_required_debug_payload_shape() -> None:
         "second_scaffold_edge_id",
         "first_patch_chain_id",
         "second_patch_chain_id",
+        "first_endpoint_role",
+        "second_endpoint_role",
+        "first_endpoint_sample_id",
+        "second_endpoint_sample_id",
         "endpoint_relation_id",
         "vertex_id",
+        "direction_dot",
+        "normal_dot",
         "confidence",
         "position",
         "evidence",
@@ -259,7 +265,6 @@ def test_scaffold_graph_overlay_relation_records_reference_renderable_graph_payl
         and relation["first_patch_chain_id"] in patch_chain_ids
         and relation["second_patch_chain_id"] in patch_chain_ids
         and relation["position"] == node_positions[relation["scaffold_node_id"]]
-        and relation["endpoint_relation_id"]
         and relation["vertex_id"]
         and relation["evidence"]
         for relation in overlay["incident_relations"]
@@ -389,17 +394,17 @@ def test_scaffold_graph_overlay_compact_report_expectations_for_single_patch() -
         "scaffold_node_count": 1,
         "scaffold_edge_count": 1,
         "scaffold_junction_count": 0,
-        "scaffold_node_incident_edge_relation_count": 0,
+        "scaffold_node_incident_edge_relation_count": 1,
         "shared_chain_patch_chain_relation_count": 0,
         "overlay_node_count": 1,
         "overlay_edge_count": 1,
         "overlay_junction_count": 0,
-        "overlay_incident_relation_count": 0,
+        "overlay_incident_relation_count": 1,
         "overlay_shared_chain_relation_count": 0,
         "edge_stroke_count": 1,
         "node_marker_count": 1,
         "junction_marker_count": 0,
-        "incident_relation_marker_count": 0,
+        "incident_relation_marker_count": 1,
         "shared_chain_relation_marker_count": 0,
     }
 
@@ -411,17 +416,17 @@ def test_scaffold_graph_overlay_compact_report_expectations_for_cylinder() -> No
         "scaffold_node_count": 2,
         "scaffold_edge_count": 4,
         "scaffold_junction_count": 2,
-        "scaffold_node_incident_edge_relation_count": 4,
+        "scaffold_node_incident_edge_relation_count": 12,
         "shared_chain_patch_chain_relation_count": 0,
         "overlay_node_count": 2,
         "overlay_edge_count": 4,
         "overlay_junction_count": 2,
-        "overlay_incident_relation_count": 4,
+        "overlay_incident_relation_count": 12,
         "overlay_shared_chain_relation_count": 0,
         "edge_stroke_count": 4,
         "node_marker_count": 2,
         "junction_marker_count": 2,
-        "incident_relation_marker_count": 4,
+        "incident_relation_marker_count": 12,
         "shared_chain_relation_marker_count": 0,
     }
 
@@ -431,17 +436,17 @@ def test_scaffold_graph_overlay_compact_report_expectations_for_closed_shared_lo
         "scaffold_node_count": 2,
         "scaffold_edge_count": 2,
         "scaffold_junction_count": 2,
-        "scaffold_node_incident_edge_relation_count": 8,
+        "scaffold_node_incident_edge_relation_count": 2,
         "shared_chain_patch_chain_relation_count": 1,
         "overlay_node_count": 2,
         "overlay_edge_count": 2,
         "overlay_junction_count": 2,
-        "overlay_incident_relation_count": 8,
+        "overlay_incident_relation_count": 2,
         "overlay_shared_chain_relation_count": 1,
         "edge_stroke_count": 2,
         "node_marker_count": 2,
         "junction_marker_count": 2,
-        "incident_relation_marker_count": 8,
+        "incident_relation_marker_count": 2,
         "shared_chain_relation_marker_count": 1,
     }
 

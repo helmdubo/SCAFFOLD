@@ -25,7 +25,7 @@ This document is the canonical reference for subsequent implementation plans: G1
 - Implemented ScaffoldEdge v0 as a graph-level view of one final PatchChain.
 - Implemented ScaffoldGraph v0 as connectivity assembled from ScaffoldNodes and ScaffoldEdges.
 - Implemented ScaffoldJunction v0 as a SELF_SEAM/CROSS_PATCH classification overlay.
-- Added planned ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence contract.
+- Implemented ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence contract.
 - Amended DD-29 to allow topology/materialization-based border coalescing.
 - Marked OQ-11 as partially resolved for polygonal straight/turning Chains.
 
@@ -632,7 +632,7 @@ ScaffoldJunction classification must not change ScaffoldNode grouping, change
 PatchChain identity, walk traces, detect circuits, select rails, choose
 continuations or introduce UV, runtime or feature semantics.
 
-Planned ScaffoldNodeIncidentEdgeRelation v1 is a complete unordered all-pairs
+Implemented ScaffoldNodeIncidentEdgeRelation v1 is a complete unordered all-pairs
 relation over incident ScaffoldEdge endpoint occurrences at one existing
 ScaffoldNode. For n incident edge-end occurrences at one ScaffoldNode, v1 emits
 C(n,2) relations. Emission is graph-structural: missing endpoint sample or
@@ -644,7 +644,7 @@ PatchChainEndpointRelation id when available, confidence and evidence quality.
 It is evidence only. It must not select trace paths, circuits, rails,
 continuations, UV behavior or runtime behavior.
 
-Planned v1 relation kinds:
+Implemented v1 relation kinds:
 
 ```text
 STRAIGHT_CONTINUATION_CANDIDATE
@@ -1055,7 +1055,7 @@ continuations or introduce UV, runtime or feature semantics.
 
 ## DD-39 - ScaffoldNodeIncidentEdgeRelation v1 is all-pairs evidence
 
-Planned ScaffoldNodeIncidentEdgeRelation v1 is a complete unordered all-pairs
+Implemented ScaffoldNodeIncidentEdgeRelation v1 is a complete unordered all-pairs
 Layer 3 relation over incident ScaffoldEdge endpoint occurrences at one
 existing ScaffoldNode. For n incident edge-end occurrences at one ScaffoldNode,
 v1 emits C(n,2) relations.
@@ -1071,7 +1071,7 @@ PatchChainEndpointRelation id when available, confidence and evidence quality.
 It is evidence only. It must not select trace paths, circuits, rails,
 continuations, UV behavior or runtime behavior.
 
-Planned v1 relation kinds:
+Implemented v1 relation kinds:
 - STRAIGHT_CONTINUATION_CANDIDATE: opposite tangent/chord evidence;
   compatible owner-normal proof may be absent or weak.
 - SURFACE_CONTINUATION_CANDIDATE: continuation candidate with compatible owner
@@ -1309,7 +1309,7 @@ Resolved:
 - Directional evidence must not become a competing PatchChain identity.
 - ScaffoldNode v0 may group materialized Vertex occurrences as graph-level evidence,
   but not as Layer 1 identity.
-- ScaffoldNodeIncidentEdgeRelation v1 is planned as all-pairs graph evidence
+- ScaffoldNodeIncidentEdgeRelation v1 is implemented as all-pairs graph evidence
   over existing ScaffoldNode incident edge-end occurrences and must not choose
   traces, circuits, rails or continuations.
 

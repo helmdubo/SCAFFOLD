@@ -194,7 +194,7 @@ continuations or introduce UV, runtime or feature semantics.
 
 ## DD-39 - ScaffoldNodeIncidentEdgeRelation v1 is all-pairs evidence
 
-Planned ScaffoldNodeIncidentEdgeRelation v1 is a complete unordered all-pairs
+Implemented ScaffoldNodeIncidentEdgeRelation v1 is a complete unordered all-pairs
 Layer 3 relation over incident ScaffoldEdge endpoint occurrences at one
 existing ScaffoldNode. For n incident edge-end occurrences at one ScaffoldNode,
 v1 emits C(n,2) relations.
@@ -210,7 +210,7 @@ PatchChainEndpointRelation id when available, confidence and evidence quality.
 It is evidence only. It must not select trace paths, circuits, rails,
 continuations, UV behavior or runtime behavior.
 
-Planned v1 relation kinds:
+Implemented v1 relation kinds:
 - STRAIGHT_CONTINUATION_CANDIDATE: opposite tangent/chord evidence;
   compatible owner-normal proof may be absent or weak.
 - SURFACE_CONTINUATION_CANDIDATE: continuation candidate with compatible owner
@@ -275,4 +275,4 @@ That future option should convert sharp information into seam/boundary input bef
 
 ## Open questions
 
-- **OQ-11 - Geometry-based Chain / PatchChain refinement policy.** Status: partially resolved. Final PatchChain is the public source of truth; raw boundary elements are builder internals; Layer 3 may derive directional evidence from final PatchChains; polygonal straight/turning Chains can be described by ChainDirectionalRun / PatchChain directional evidence; directional evidence must not become a competing PatchChain identity; ScaffoldNode may group materialized Vertex occurrences as graph-level evidence but not Layer 1 identity; planned ScaffoldNodeIncidentEdgeRelation v1 is all-pairs graph evidence over existing ScaffoldNode incident edge-end occurrences and must not choose traces, circuits, rails or continuations. Curved-chain policy, sawtooth tuning, user split marks, closed-loop wrap merge policy, advanced corner detection, local face-fan refinement policy and trace/circuit/rail construction over ScaffoldGraph remain unresolved. See `G0.md` Section 6.
+- **OQ-11 - Geometry-based Chain / PatchChain refinement policy.** Status: partially resolved. Final PatchChain is the public source of truth; raw boundary elements are builder internals; Layer 3 may derive directional evidence from final PatchChains; polygonal straight/turning Chains can be described by ChainDirectionalRun / PatchChain directional evidence; directional evidence must not become a competing PatchChain identity; ScaffoldNode may group materialized Vertex occurrences as graph-level evidence but not Layer 1 identity; implemented ScaffoldNodeIncidentEdgeRelation v1 is all-pairs graph evidence over existing ScaffoldNode incident edge-end occurrences and must not choose traces, circuits, rails or continuations. Curved-chain policy, sawtooth tuning, user split marks, closed-loop wrap merge policy, advanced corner detection, local face-fan refinement policy and trace/circuit/rail construction over ScaffoldGraph remain unresolved. See `G0.md` Section 6.

@@ -59,6 +59,7 @@ Implemented:
 - G3c7 - ScaffoldNode v0
 - G3c8 - ScaffoldEdge v0 / ScaffoldGraph v0
 - G3c9 - ScaffoldJunction v0 SELF_SEAM/CROSS_PATCH
+- G3c10 - ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence matrix
 - LocalFaceFanGeometryFacts as Layer 2 geometry evidence consumed by Layer 3
 
 Validation status:
@@ -70,7 +71,6 @@ Validation status:
 
 Deferred:
 
-- ScaffoldNodeIncidentEdgeRelation v1 complete all-pairs edge-end occurrence matrix
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
 - ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 - WorldOrientation
@@ -492,16 +492,15 @@ Rules:
 - no U/V labels, H/V labels, WORLD_UP, WorldOrientation, Feature, Runtime,
   Solve or UV semantics.
 
-## Planned - ScaffoldNodeIncidentEdgeRelation v1
+## Implemented - ScaffoldNodeIncidentEdgeRelation v1
 
-ScaffoldNodeIncidentEdgeRelation v1 is planned as a complete unordered all-pairs
+ScaffoldNodeIncidentEdgeRelation v1 is implemented as a complete unordered all-pairs
 relation over incident ScaffoldEdge endpoint occurrences at one existing
 ScaffoldNode. For n incident edge-end occurrences at one ScaffoldNode, v1 emits
 C(n,2) relations.
 
-Current code contains an endpoint-relation-backed v0 relation. The full v1
-contract is not documented as implemented here unless the builder emits the
-complete all-pairs matrix including pairs with missing endpoint evidence.
+Current code emits the complete all-pairs matrix, including pairs with missing
+endpoint evidence.
 
 Emission is graph-structural. Missing PatchChainEndpointSample or
 PatchChainEndpointRelation evidence must not cause a pair to disappear. When
@@ -518,7 +517,7 @@ Classification is evidence-backed and may use:
 - PatchChainEndpointRelation id when available;
 - confidence and evidence quality.
 
-Planned v1 kinds:
+Implemented v1 kinds:
 
 | Kind | Meaning |
 |---|---|

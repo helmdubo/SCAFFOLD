@@ -12,14 +12,18 @@ from __future__ import annotations
 
 from collections import defaultdict
 from itertools import combinations
+from dataclasses import dataclass
 from typing import Mapping
 
 from scaffold_core.core.evidence import Evidence
 from scaffold_core.ids import ChainId, PatchChainId, PatchId, VertexId
+from scaffold_core.layer_2_geometry.measures import EPSILON, dot, length, normalize
 from scaffold_core.layer_3_relations.model import (
+    EndpointDirectionRelationKind,
+    OwnerNormalSource,
     PatchAdjacency,
     PatchChainEndpointRelation,
-    PatchChainEndpointRelationKind,
+    PatchChainEndpointRole,
     PatchChainEndpointSample,
     ScaffoldEdge,
     ScaffoldNode,
@@ -30,8 +34,21 @@ from scaffold_core.layer_3_relations.model import (
 )
 
 
-NODE_INCIDENT_EDGE_POLICY_NAME = "scaffold_node_incident_edge_relation_v0"
+NODE_INCIDENT_EDGE_POLICY_NAME = "scaffold_node_incident_edge_relation_v1"
 SHARED_CHAIN_POLICY_NAME = "shared_chain_patch_chain_relation_v0"
+OPPOSITE_COLLINEAR_MAX_DOT = -0.996
+SAME_RAY_COLLINEAR_MIN_DOT = 0.996
+ORTHOGONAL_MAX_ABS_DOT = 0.2
+COMPATIBLE_NORMAL_MIN_DOT = 0.7
+DIVERGENT_NORMAL_MAX_DOT = 0.25
+
+
+@dataclass(frozen=True)
+class _IncidentEdgeOccurrence:
+    scaffold_node_id: str
+    scaffold_edge: ScaffoldEdge
+    endpoint_role: PatchChainEndpointRole
+    endpoint_sample: PatchChainEndpointSample | None
 
 
 def build_scaffold_graph_relations(
@@ -69,39 +86,28 @@ def build_scaffold_node_incident_edge_relations(
     endpoint_relations: tuple[PatchChainEndpointRelation, ...],
     edge_by_patch_chain_id: Mapping[PatchChainId, ScaffoldEdge],
 ) -> tuple[ScaffoldNodeIncidentEdgeRelation, ...]:
-    """Build node-local pair relations backed by endpoint relation evidence."""
+    """Build complete node-local pair relations over edge endpoint occurrences."""
 
-    sample_by_id = {
-        sample.id: sample
-        for sample in endpoint_samples
-    }
-    node_by_vertex_id = _node_by_vertex_id(scaffold_nodes)
+    samples_by_patch_chain_and_role = _samples_by_patch_chain_and_role(endpoint_samples)
+    relation_by_sample_pair = _relation_by_sample_pair(endpoint_relations)
+    occurrences_by_node_id = _occurrences_by_node_id(
+        scaffold_nodes,
+        edge_by_patch_chain_id,
+        samples_by_patch_chain_and_role,
+    )
     relations: list[ScaffoldNodeIncidentEdgeRelation] = []
-    seen_keys: set[tuple[str, str, str, str]] = set()
-    for endpoint_relation in sorted(endpoint_relations, key=lambda item: item.id):
-        first_sample = sample_by_id.get(endpoint_relation.first_sample_id)
-        second_sample = sample_by_id.get(endpoint_relation.second_sample_id)
-        if first_sample is None or second_sample is None:
-            continue
-        if first_sample.patch_chain_id == second_sample.patch_chain_id:
-            continue
-        first_edge = edge_by_patch_chain_id.get(first_sample.patch_chain_id)
-        second_edge = edge_by_patch_chain_id.get(second_sample.patch_chain_id)
-        if first_edge is None or second_edge is None:
-            continue
-        edge_pair = tuple(sorted((first_edge, second_edge), key=lambda edge: edge.id))
-        node = node_by_vertex_id.get(endpoint_relation.vertex_id)
-        if node is None or not _node_has_patch_chain_pair(
-            node,
-            first_sample.patch_chain_id,
-            second_sample.patch_chain_id,
-        ):
-            continue
-        seen_key = (node.id, edge_pair[0].id, edge_pair[1].id, endpoint_relation.id)
-        if seen_key in seen_keys:
-            continue
-        seen_keys.add(seen_key)
-        relations.append(_incident_edge_relation(node, edge_pair, endpoint_relation))
+    for node in sorted(scaffold_nodes, key=lambda item: item.id):
+        occurrences = tuple(sorted(
+            occurrences_by_node_id.get(node.id, ()),
+            key=_occurrence_sort_key,
+        ))
+        for first, second in combinations(occurrences, 2):
+            endpoint_relation = _endpoint_relation_for_occurrences(
+                first,
+                second,
+                relation_by_sample_pair,
+            )
+            relations.append(_incident_edge_relation(node, first, second, endpoint_relation))
     return tuple(relations)
 
 
@@ -135,37 +141,122 @@ def build_shared_chain_patch_chain_relations(
     return tuple(relations)
 
 
-def _node_by_vertex_id(
+def _samples_by_patch_chain_and_role(
+    endpoint_samples: tuple[PatchChainEndpointSample, ...],
+) -> dict[tuple[PatchChainId, PatchChainEndpointRole], tuple[PatchChainEndpointSample, ...]]:
+    samples: dict[tuple[PatchChainId, PatchChainEndpointRole], list[PatchChainEndpointSample]] = {}
+    for sample in sorted(endpoint_samples, key=lambda item: item.id):
+        samples.setdefault((sample.patch_chain_id, sample.endpoint_role), []).append(sample)
+    return {
+        key: tuple(value)
+        for key, value in samples.items()
+    }
+
+
+def _relation_by_sample_pair(
+    endpoint_relations: tuple[PatchChainEndpointRelation, ...],
+) -> dict[tuple[str, str], PatchChainEndpointRelation]:
+    return {
+        _sample_pair_key(relation.first_sample_id, relation.second_sample_id): relation
+        for relation in endpoint_relations
+    }
+
+
+def _occurrences_by_node_id(
     scaffold_nodes: tuple[ScaffoldNode, ...],
-) -> dict[VertexId, ScaffoldNode]:
-    node_by_vertex_id: dict[VertexId, ScaffoldNode] = {}
-    for node in sorted(scaffold_nodes, key=lambda item: item.id):
-        for vertex_id in node.vertex_ids:
-            node_by_vertex_id[vertex_id] = node
-    return node_by_vertex_id
+    edge_by_patch_chain_id: Mapping[PatchChainId, ScaffoldEdge],
+    samples_by_patch_chain_and_role: Mapping[
+        tuple[PatchChainId, PatchChainEndpointRole],
+        tuple[PatchChainEndpointSample, ...],
+    ],
+) -> dict[str, tuple[_IncidentEdgeOccurrence, ...]]:
+    node_by_id = {
+        node.id: node
+        for node in scaffold_nodes
+    }
+    occurrences_by_node_id: dict[str, list[_IncidentEdgeOccurrence]] = defaultdict(list)
+    for edge in sorted(edge_by_patch_chain_id.values(), key=lambda item: item.id):
+        for node_id, endpoint_role in (
+            (edge.start_scaffold_node_id, PatchChainEndpointRole.START),
+            (edge.end_scaffold_node_id, PatchChainEndpointRole.END),
+        ):
+            node = node_by_id.get(node_id)
+            if node is None:
+                continue
+            occurrences_by_node_id[node_id].append(
+                _IncidentEdgeOccurrence(
+                    scaffold_node_id=node_id,
+                    scaffold_edge=edge,
+                    endpoint_role=endpoint_role,
+                    endpoint_sample=_sample_for_node_occurrence(
+                        node,
+                        samples_by_patch_chain_and_role.get((edge.patch_chain_id, endpoint_role), ()),
+                    ),
+                )
+            )
+    return {
+        node_id: tuple(occurrences)
+        for node_id, occurrences in occurrences_by_node_id.items()
+    }
 
 
-def _node_has_patch_chain_pair(
+def _sample_for_node_occurrence(
     node: ScaffoldNode,
-    first_patch_chain_id: PatchChainId,
-    second_patch_chain_id: PatchChainId,
-) -> bool:
-    incident_patch_chain_ids = set(node.incident_patch_chain_ids)
-    return first_patch_chain_id in incident_patch_chain_ids and second_patch_chain_id in incident_patch_chain_ids
+    samples: tuple[PatchChainEndpointSample, ...],
+) -> PatchChainEndpointSample | None:
+    node_vertex_ids = frozenset(node.vertex_ids)
+    node_samples = tuple(
+        sample
+        for sample in samples
+        if sample.vertex_id in node_vertex_ids
+    )
+    if not node_samples:
+        return None
+    return sorted(node_samples, key=lambda item: item.id)[0]
+
+
+def _occurrence_sort_key(
+    occurrence: _IncidentEdgeOccurrence,
+) -> tuple[str, str, str, str]:
+    return (
+        occurrence.endpoint_role.value,
+        occurrence.scaffold_edge.id,
+        str(occurrence.scaffold_edge.patch_chain_id),
+        occurrence.endpoint_sample.id if occurrence.endpoint_sample is not None else "",
+    )
+
+
+def _sample_pair_key(first_sample_id: str, second_sample_id: str) -> tuple[str, str]:
+    return tuple(sorted((first_sample_id, second_sample_id)))
+
+
+def _endpoint_relation_for_occurrences(
+    first: _IncidentEdgeOccurrence,
+    second: _IncidentEdgeOccurrence,
+    relation_by_sample_pair: Mapping[tuple[str, str], PatchChainEndpointRelation],
+) -> PatchChainEndpointRelation | None:
+    if first.endpoint_sample is None or second.endpoint_sample is None:
+        return None
+    return relation_by_sample_pair.get(
+        _sample_pair_key(first.endpoint_sample.id, second.endpoint_sample.id)
+    )
 
 
 def _incident_edge_relation(
     node: ScaffoldNode,
-    edge_pair: tuple[ScaffoldEdge, ScaffoldEdge],
-    endpoint_relation: PatchChainEndpointRelation,
+    first: _IncidentEdgeOccurrence,
+    second: _IncidentEdgeOccurrence,
+    endpoint_relation: PatchChainEndpointRelation | None,
 ) -> ScaffoldNodeIncidentEdgeRelation:
-    first_edge, second_edge = edge_pair
-    kind = _incident_edge_kind(endpoint_relation.kind)
-    confidence = min(node.confidence, first_edge.confidence, second_edge.confidence, endpoint_relation.confidence)
+    first_edge = first.scaffold_edge
+    second_edge = second.scaffold_edge
+    direction_dot, normal_dot = _dot_values(first, second, endpoint_relation)
+    kind = _incident_edge_kind(first, second, endpoint_relation, direction_dot, normal_dot)
+    confidence = _incident_edge_confidence(node, first, second, endpoint_relation, kind)
     return ScaffoldNodeIncidentEdgeRelation(
         id=(
             "scaffold_node_incident_edge_relation:"
-            f"{node.id}:{first_edge.id}:{second_edge.id}:{endpoint_relation.id}"
+            f"{node.id}:{_occurrence_id(first)}:{_occurrence_id(second)}"
         ),
         kind=kind,
         policy=NODE_INCIDENT_EDGE_POLICY_NAME,
@@ -174,37 +265,157 @@ def _incident_edge_relation(
         second_scaffold_edge_id=second_edge.id,
         first_patch_chain_id=first_edge.patch_chain_id,
         second_patch_chain_id=second_edge.patch_chain_id,
-        patch_chain_endpoint_relation_id=endpoint_relation.id,
+        first_endpoint_role=first.endpoint_role,
+        second_endpoint_role=second.endpoint_role,
+        first_endpoint_sample_id=first.endpoint_sample.id if first.endpoint_sample is not None else None,
+        second_endpoint_sample_id=second.endpoint_sample.id if second.endpoint_sample is not None else None,
+        patch_chain_endpoint_relation_id=endpoint_relation.id if endpoint_relation is not None else None,
+        direction_dot=direction_dot,
+        normal_dot=normal_dot,
         confidence=confidence,
-        evidence=(_incident_edge_evidence(node, first_edge, second_edge, endpoint_relation, kind, confidence),),
+        evidence=(_incident_edge_evidence(node, first, second, endpoint_relation, kind, confidence),),
     )
 
 
 def _incident_edge_kind(
-    endpoint_relation_kind: PatchChainEndpointRelationKind,
+    first: _IncidentEdgeOccurrence,
+    second: _IncidentEdgeOccurrence,
+    endpoint_relation: PatchChainEndpointRelation | None,
+    direction_dot: float | None,
+    normal_dot: float | None,
 ) -> ScaffoldNodeIncidentEdgeRelationKind:
-    if endpoint_relation_kind is PatchChainEndpointRelationKind.CONTINUATION_CANDIDATE:
-        return ScaffoldNodeIncidentEdgeRelationKind.CONTINUATION_CANDIDATE
-    if endpoint_relation_kind is PatchChainEndpointRelationKind.CORNER_CONNECTOR:
-        return ScaffoldNodeIncidentEdgeRelationKind.ORTHOGONAL_CORNER
-    if endpoint_relation_kind is PatchChainEndpointRelationKind.OBLIQUE_CONNECTOR:
-        return ScaffoldNodeIncidentEdgeRelationKind.OBLIQUE_CONNECTOR
-    if endpoint_relation_kind is PatchChainEndpointRelationKind.AMBIGUOUS:
+    if first.endpoint_sample is None or second.endpoint_sample is None:
+        return ScaffoldNodeIncidentEdgeRelationKind.MISSING_ENDPOINT_EVIDENCE
+    if (
+        direction_dot is None
+        or _is_degraded_sample(first.endpoint_sample)
+        or _is_degraded_sample(second.endpoint_sample)
+        or (
+            endpoint_relation is not None
+            and endpoint_relation.direction_relation is EndpointDirectionRelationKind.DEGENERATE
+        )
+    ):
+        return ScaffoldNodeIncidentEdgeRelationKind.DEGRADED
+    if direction_dot >= SAME_RAY_COLLINEAR_MIN_DOT:
         return ScaffoldNodeIncidentEdgeRelationKind.SAME_RAY_AMBIGUOUS
-    return ScaffoldNodeIncidentEdgeRelationKind.DEGRADED
+    has_strong_normal_evidence = _has_strong_normal_evidence(
+        first.endpoint_sample,
+        second.endpoint_sample,
+        normal_dot,
+    )
+    if direction_dot <= OPPOSITE_COLLINEAR_MAX_DOT:
+        if (
+            has_strong_normal_evidence
+            and normal_dot is not None
+            and normal_dot <= DIVERGENT_NORMAL_MAX_DOT
+        ):
+            return ScaffoldNodeIncidentEdgeRelationKind.CROSS_SURFACE_CONNECTOR
+        if (
+            has_strong_normal_evidence
+            and normal_dot is not None
+            and normal_dot >= COMPATIBLE_NORMAL_MIN_DOT
+        ):
+            return ScaffoldNodeIncidentEdgeRelationKind.SURFACE_CONTINUATION_CANDIDATE
+        return ScaffoldNodeIncidentEdgeRelationKind.STRAIGHT_CONTINUATION_CANDIDATE
+    if abs(direction_dot) <= ORTHOGONAL_MAX_ABS_DOT:
+        return ScaffoldNodeIncidentEdgeRelationKind.ORTHOGONAL_CORNER
+    if has_strong_normal_evidence and normal_dot is not None and normal_dot <= DIVERGENT_NORMAL_MAX_DOT:
+        return ScaffoldNodeIncidentEdgeRelationKind.CROSS_SURFACE_CONNECTOR
+    return ScaffoldNodeIncidentEdgeRelationKind.OBLIQUE_CONNECTOR
+
+
+def _dot_values(
+    first: _IncidentEdgeOccurrence,
+    second: _IncidentEdgeOccurrence,
+    endpoint_relation: PatchChainEndpointRelation | None,
+) -> tuple[float | None, float | None]:
+    if endpoint_relation is not None:
+        return endpoint_relation.direction_dot, endpoint_relation.normal_dot
+    if first.endpoint_sample is None or second.endpoint_sample is None:
+        return None, None
+    first_tangent = normalize(first.endpoint_sample.tangent_away_from_vertex)
+    second_tangent = normalize(second.endpoint_sample.tangent_away_from_vertex)
+    first_normal = normalize(first.endpoint_sample.owner_normal)
+    second_normal = normalize(second.endpoint_sample.owner_normal)
+    if length(first_tangent) <= EPSILON or length(second_tangent) <= EPSILON:
+        return None, None
+    direction_dot = dot(first_tangent, second_tangent)
+    normal_dot = (
+        dot(first_normal, second_normal)
+        if length(first_normal) > EPSILON and length(second_normal) > EPSILON
+        else None
+    )
+    return direction_dot, normal_dot
+
+
+def _is_degraded_sample(sample: PatchChainEndpointSample) -> bool:
+    return (
+        sample.confidence <= 0.0
+        or length(sample.tangent_away_from_vertex) <= EPSILON
+    )
+
+
+def _has_strong_normal_evidence(
+    first: PatchChainEndpointSample,
+    second: PatchChainEndpointSample,
+    normal_dot: float | None,
+) -> bool:
+    return (
+        normal_dot is not None
+        and first.owner_normal_source is not OwnerNormalSource.UNKNOWN
+        and second.owner_normal_source is not OwnerNormalSource.UNKNOWN
+        and length(first.owner_normal) > EPSILON
+        and length(second.owner_normal) > EPSILON
+        and first.confidence > 0.0
+        and second.confidence > 0.0
+    )
+
+
+def _incident_edge_confidence(
+    node: ScaffoldNode,
+    first: _IncidentEdgeOccurrence,
+    second: _IncidentEdgeOccurrence,
+    endpoint_relation: PatchChainEndpointRelation | None,
+    kind: ScaffoldNodeIncidentEdgeRelationKind,
+) -> float:
+    if kind is ScaffoldNodeIncidentEdgeRelationKind.MISSING_ENDPOINT_EVIDENCE:
+        return 0.0
+    confidence_values = [
+        node.confidence,
+        first.scaffold_edge.confidence,
+        second.scaffold_edge.confidence,
+    ]
+    if first.endpoint_sample is not None:
+        confidence_values.append(first.endpoint_sample.confidence)
+    if second.endpoint_sample is not None:
+        confidence_values.append(second.endpoint_sample.confidence)
+    if endpoint_relation is not None:
+        confidence_values.append(endpoint_relation.confidence)
+    return min(confidence_values)
+
+
+def _occurrence_id(occurrence: _IncidentEdgeOccurrence) -> str:
+    return (
+        f"{occurrence.endpoint_role.value}:"
+        f"{occurrence.scaffold_edge.id}:"
+        f"{occurrence.scaffold_edge.patch_chain_id}:"
+        f"{occurrence.endpoint_sample.id if occurrence.endpoint_sample is not None else 'missing_sample'}"
+    )
 
 
 def _incident_edge_evidence(
     node: ScaffoldNode,
-    first_edge: ScaffoldEdge,
-    second_edge: ScaffoldEdge,
-    endpoint_relation: PatchChainEndpointRelation,
+    first: _IncidentEdgeOccurrence,
+    second: _IncidentEdgeOccurrence,
+    endpoint_relation: PatchChainEndpointRelation | None,
     kind: ScaffoldNodeIncidentEdgeRelationKind,
     confidence: float,
 ) -> Evidence:
+    first_edge = first.scaffold_edge
+    second_edge = second.scaffold_edge
     return Evidence(
         source="layer_3_relations.scaffold_graph_relations",
-        summary="node-local ScaffoldEdge pair relation backed by PatchChainEndpointRelation",
+        summary="node-local ScaffoldEdge endpoint occurrence pair relation",
         data={
             "policy": NODE_INCIDENT_EDGE_POLICY_NAME,
             "scaffold_node_id": node.id,
@@ -212,8 +423,12 @@ def _incident_edge_evidence(
             "second_scaffold_edge_id": second_edge.id,
             "first_patch_chain_id": str(first_edge.patch_chain_id),
             "second_patch_chain_id": str(second_edge.patch_chain_id),
-            "patch_chain_endpoint_relation_id": endpoint_relation.id,
-            "endpoint_relation_kind": endpoint_relation.kind.value,
+            "first_endpoint_role": first.endpoint_role.value,
+            "second_endpoint_role": second.endpoint_role.value,
+            "first_endpoint_sample_id": first.endpoint_sample.id if first.endpoint_sample is not None else None,
+            "second_endpoint_sample_id": second.endpoint_sample.id if second.endpoint_sample is not None else None,
+            "patch_chain_endpoint_relation_id": endpoint_relation.id if endpoint_relation is not None else None,
+            "endpoint_relation_kind": endpoint_relation.kind.value if endpoint_relation is not None else None,
             "kind": kind.value,
             "confidence": confidence,
         },

@@ -174,6 +174,7 @@ ScaffoldEdge v0
 ScaffoldGraph v0
 ScaffoldJunction v0 SELF_SEAM/CROSS_PATCH classification overlay
 LocalFaceFanGeometryFacts
+ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence matrix
 ```
 
 Deferred in G3:

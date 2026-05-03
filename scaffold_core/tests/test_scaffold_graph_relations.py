@@ -34,6 +34,9 @@ from scaffold_core.layer_3_relations.scaffold_graph_relations import (
 from scaffold_core.pipeline.inspection import inspect_pipeline_context
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_boundary_loop_source
+from scaffold_core.tests.fixtures.cylinder_tube import (
+    make_segmented_cylinder_tube_without_caps_with_one_seam_source,
+)
 from scaffold_core.tests.fixtures.l_shape import make_two_patch_source_with_two_edge_seam_run
 
 
@@ -66,13 +69,35 @@ FORBIDDEN_IMPORTS = (
 
 def test_same_patch_orthogonal_endpoint_relation_becomes_node_corner_relation() -> None:
     relation = _single_incident_relation(
-        _sample("a", (1.0, 0.0, 0.0), PatchId("patch:one")),
-        _sample("b", (0.0, 1.0, 0.0), PatchId("patch:one")),
+        _sample(
+            "a",
+            (1.0, 0.0, 0.0),
+            PatchId("patch:one"),
+            owner_normal=(0.0, 0.0, 0.0),
+            owner_normal_source=OwnerNormalSource.UNKNOWN,
+        ),
+        _sample(
+            "b",
+            (0.0, 1.0, 0.0),
+            PatchId("patch:one"),
+            owner_normal=(0.0, 0.0, 0.0),
+            owner_normal_source=OwnerNormalSource.UNKNOWN,
+        ),
     )
 
     assert relation.kind is ScaffoldNodeIncidentEdgeRelationKind.ORTHOGONAL_CORNER
     assert relation.patch_chain_endpoint_relation_id is not None
     assert relation.confidence == 1.0
+
+
+def test_orthogonal_tangent_with_compatible_normals_stays_corner_relation() -> None:
+    relation = _single_incident_relation(
+        _sample("a", (1.0, 0.0, 0.0), PatchId("patch:one")),
+        _sample("b", (0.0, 1.0, 0.0), PatchId("patch:one")),
+    )
+
+    assert relation.kind is ScaffoldNodeIncidentEdgeRelationKind.ORTHOGONAL_CORNER
+    assert relation.normal_dot == 1.0
 
 
 def test_opposite_collinear_endpoint_relation_becomes_continuation_candidate() -> None:
@@ -81,8 +106,50 @@ def test_opposite_collinear_endpoint_relation_becomes_continuation_candidate() -
         _sample("b", (-1.0, 0.0, 0.0), PatchId("patch:one")),
     )
 
-    assert relation.kind is ScaffoldNodeIncidentEdgeRelationKind.CONTINUATION_CANDIDATE
+    assert relation.kind is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_CONTINUATION_CANDIDATE
     assert relation.evidence[0].data["endpoint_relation_kind"] == "CONTINUATION_CANDIDATE"
+
+
+def test_opposite_tangent_with_missing_normal_proof_becomes_straight_candidate() -> None:
+    relation = _single_incident_relation(
+        _sample(
+            "a",
+            (1.0, 0.0, 0.0),
+            PatchId("patch:one"),
+            owner_normal=(0.0, 0.0, 0.0),
+            owner_normal_source=OwnerNormalSource.UNKNOWN,
+        ),
+        _sample(
+            "b",
+            (-1.0, 0.0, 0.0),
+            PatchId("patch:one"),
+            owner_normal=(0.0, 0.0, 0.0),
+            owner_normal_source=OwnerNormalSource.UNKNOWN,
+        ),
+    )
+
+    assert relation.kind is ScaffoldNodeIncidentEdgeRelationKind.STRAIGHT_CONTINUATION_CANDIDATE
+    assert relation.normal_dot == 0.0
+
+
+def test_opposite_tangent_with_divergent_normals_becomes_cross_surface_connector() -> None:
+    relation = _single_incident_relation(
+        _sample("a", (1.0, 0.0, 0.0), PatchId("patch:one"), owner_normal=(0.0, 0.0, 1.0)),
+        _sample("b", (-1.0, 0.0, 0.0), PatchId("patch:two"), owner_normal=(0.0, 1.0, 0.0)),
+    )
+
+    assert relation.kind is ScaffoldNodeIncidentEdgeRelationKind.CROSS_SURFACE_CONNECTOR
+    assert relation.normal_dot == 0.0
+
+
+def test_oblique_tangent_evidence_becomes_oblique_connector() -> None:
+    relation = _single_incident_relation(
+        _sample("a", (1.0, 0.0, 0.0), PatchId("patch:one")),
+        _sample("b", (0.5, 0.8660254037844386, 0.0), PatchId("patch:one")),
+    )
+
+    assert relation.kind is ScaffoldNodeIncidentEdgeRelationKind.OBLIQUE_CONNECTOR
+    assert relation.normal_dot == 1.0
 
 
 def test_same_ray_endpoint_relation_becomes_ambiguous_pair_without_reversed_duplicate() -> None:
@@ -103,6 +170,88 @@ def test_degraded_endpoint_evidence_becomes_degraded_incident_edge_relation() ->
 
     assert relation.kind is ScaffoldNodeIncidentEdgeRelationKind.DEGRADED
     assert relation.confidence == 0.0
+
+
+def test_missing_endpoint_relation_pair_still_uses_sample_evidence_for_classification() -> None:
+    first_sample = _sample("a", (1.0, 0.0, 0.0), PatchId("patch:one"))
+    second_sample = _sample("b", (-1.0, 0.0, 0.0), PatchId("patch:one"))
+    edges = (
+        _edge("a", ChainId("chain:a"), first_sample.patch_id),
+        _edge("b", ChainId("chain:b"), second_sample.patch_id),
+    )
+    node = _node(first_sample.patch_chain_id, second_sample.patch_chain_id)
+
+    incident_relations, shared_relations = build_scaffold_graph_relations(
+        scaffold_nodes=(node,),
+        scaffold_edges=edges,
+        endpoint_samples=(first_sample, second_sample),
+        endpoint_relations=(),
+        patch_adjacencies={},
+    )
+
+    assert shared_relations == ()
+    assert len(incident_relations) == 1
+    assert incident_relations[0].kind is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_CONTINUATION_CANDIDATE
+    assert incident_relations[0].patch_chain_endpoint_relation_id is None
+    assert incident_relations[0].confidence == 1.0
+
+
+def test_missing_endpoint_sample_pair_emits_missing_endpoint_evidence() -> None:
+    edges = (
+        _edge("a", ChainId("chain:a"), PatchId("patch:one")),
+        _edge("b", ChainId("chain:b"), PatchId("patch:one")),
+    )
+    node = _node(edges[0].patch_chain_id, edges[1].patch_chain_id)
+
+    incident_relations, shared_relations = build_scaffold_graph_relations(
+        scaffold_nodes=(node,),
+        scaffold_edges=edges,
+        endpoint_samples=(),
+        endpoint_relations=(),
+        patch_adjacencies={},
+    )
+
+    assert shared_relations == ()
+    assert len(incident_relations) == 1
+    assert incident_relations[0].kind is ScaffoldNodeIncidentEdgeRelationKind.MISSING_ENDPOINT_EVIDENCE
+    assert incident_relations[0].first_endpoint_sample_id is None
+    assert incident_relations[0].second_endpoint_sample_id is None
+    assert incident_relations[0].confidence == 0.0
+
+
+def test_node_with_five_incident_edge_endpoint_occurrences_emits_ten_relations() -> None:
+    samples = tuple(
+        _sample(str(index), (1.0, 0.0, 0.0), PatchId("patch:one"))
+        for index in range(5)
+    )
+    endpoint_relations = build_patch_chain_endpoint_relations(samples)
+    edges = tuple(
+        _edge(str(index), ChainId(f"chain:{index}"), PatchId("patch:one"))
+        for index in range(5)
+    )
+    node = ScaffoldNode(
+        id="scaffold_node:one",
+        vertex_ids=(VertexId("vertex:one"),),
+        source_vertex_ids=(),
+        loop_corner_ids=(),
+        patch_chain_endpoint_sample_ids=tuple(sample.id for sample in samples),
+        patch_chain_endpoint_relation_ids=tuple(relation.id for relation in endpoint_relations),
+        incident_patch_chain_ids=tuple(edge.patch_chain_id for edge in edges),
+        patch_ids=(PatchId("patch:one"),),
+        confidence=1.0,
+    )
+
+    incident_relations, shared_relations = build_scaffold_graph_relations(
+        scaffold_nodes=(node,),
+        scaffold_edges=edges,
+        endpoint_samples=samples,
+        endpoint_relations=endpoint_relations,
+        patch_adjacencies={},
+    )
+
+    assert shared_relations == ()
+    assert len(incident_relations) == 10
+    assert len({relation.id for relation in incident_relations}) == 10
 
 
 def test_cross_patch_shared_chain_relation_links_patch_adjacency_when_available() -> None:
@@ -155,10 +304,7 @@ def test_cross_patch_node_has_incident_edge_pair_evidence_in_snapshot_and_inspec
     assert cross_patch_node_ids
     assert cross_patch_node_ids <= relation_node_ids
     assert all(
-        relation.patch_chain_endpoint_relation_id in {
-            endpoint_relation.id
-            for endpoint_relation in snapshot.patch_chain_endpoint_relations
-        }
+        relation.first_endpoint_role and relation.second_endpoint_role
         for relation in snapshot.scaffold_node_incident_edge_relations
     )
     assert snapshot.shared_chain_patch_chain_relations
@@ -176,29 +322,70 @@ def test_cross_patch_node_has_incident_edge_pair_evidence_in_snapshot_and_inspec
     assert relations["shared_chain_patch_chain_relations"]
 
 
-def test_closed_shared_loop_preserves_multiple_endpoint_relations_for_same_edge_pair() -> None:
+def test_closed_shared_loop_emits_one_pair_per_node_local_edge_occurrence_pair() -> None:
     context = run_pass_1_relations(
         run_pass_0(make_closed_shared_boundary_loop_source())
     )
 
     snapshot = context.relation_snapshot
     assert snapshot is not None
-    assert len(snapshot.scaffold_node_incident_edge_relations) == 8
+    assert len(snapshot.scaffold_node_incident_edge_relations) == 2
     assert {
         relation.kind
         for relation in snapshot.scaffold_node_incident_edge_relations
     } == {
         ScaffoldNodeIncidentEdgeRelationKind.ORTHOGONAL_CORNER,
-        ScaffoldNodeIncidentEdgeRelationKind.SAME_RAY_AMBIGUOUS,
     }
     assert len({
         relation.patch_chain_endpoint_relation_id
         for relation in snapshot.scaffold_node_incident_edge_relations
-    }) == 8
+    }) == 2
     assert len({
         relation.id
         for relation in snapshot.scaffold_node_incident_edge_relations
-    }) == 8
+    }) == 2
+
+
+def test_cylinder_seam_nodes_emit_complete_incident_edge_occurrence_matrix() -> None:
+    context = run_pass_1_relations(
+        run_pass_0(make_segmented_cylinder_tube_without_caps_with_one_seam_source())
+    )
+
+    snapshot = context.relation_snapshot
+    assert snapshot is not None
+    assert context.topology_snapshot is not None
+    assert len(context.topology_snapshot.patch_chains) == 4
+    assert len(snapshot.scaffold_nodes) == 2
+    assert len(snapshot.scaffold_edges) == 4
+    assert len(snapshot.scaffold_node_incident_edge_relations) == 12
+    sample_by_id = {
+        sample.id: sample
+        for sample in snapshot.patch_chain_endpoint_samples
+    }
+    node_by_id = {
+        node.id: node
+        for node in snapshot.scaffold_nodes
+    }
+    for relation in snapshot.scaffold_node_incident_edge_relations:
+        node_vertex_ids = set(node_by_id[relation.scaffold_node_id].vertex_ids)
+        for sample_id in (relation.first_endpoint_sample_id, relation.second_endpoint_sample_id):
+            assert sample_id is None or sample_by_id[sample_id].vertex_id in node_vertex_ids
+    relation_counts_by_node = {
+        node.id: len([
+            relation
+            for relation in snapshot.scaffold_node_incident_edge_relations
+            if relation.scaffold_node_id == node.id
+        ])
+        for node in snapshot.scaffold_nodes
+    }
+    assert set(relation_counts_by_node.values()) == {6}
+    relation_kinds = {
+        relation.kind
+        for relation in snapshot.scaffold_node_incident_edge_relations
+    }
+    assert ScaffoldNodeIncidentEdgeRelationKind.MISSING_ENDPOINT_EVIDENCE not in relation_kinds
+    assert ScaffoldNodeIncidentEdgeRelationKind.DEGRADED not in relation_kinds
+    assert ScaffoldNodeIncidentEdgeRelationKind.ORTHOGONAL_CORNER in relation_kinds
 
 
 def test_scaffold_graph_relations_code_does_not_introduce_deferred_terms_or_imports() -> None:
@@ -257,6 +444,8 @@ def _sample(
     tangent,
     patch_id: PatchId,
     confidence: float = 1.0,
+    owner_normal=(0.0, 0.0, 1.0),
+    owner_normal_source: OwnerNormalSource = OwnerNormalSource.PATCH_AGGREGATE_NORMAL,
 ) -> PatchChainEndpointSample:
     return PatchChainEndpointSample(
         id=f"sample:{suffix}",
@@ -266,8 +455,8 @@ def _sample(
         patch_id=patch_id,
         endpoint_role=PatchChainEndpointRole.START,
         tangent_away_from_vertex=tangent,
-        owner_normal=(0.0, 0.0, 1.0),
-        owner_normal_source=OwnerNormalSource.PATCH_AGGREGATE_NORMAL,
+        owner_normal=owner_normal,
+        owner_normal_source=owner_normal_source,
         confidence=confidence,
     )
 

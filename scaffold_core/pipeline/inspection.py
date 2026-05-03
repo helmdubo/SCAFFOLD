@@ -553,8 +553,14 @@ def _incident_relation_overlay_to_dict(
         "second_scaffold_edge_id": relation.second_scaffold_edge_id,
         "first_patch_chain_id": str(relation.first_patch_chain_id),
         "second_patch_chain_id": str(relation.second_patch_chain_id),
+        "first_endpoint_role": str(relation.first_endpoint_role.value),
+        "second_endpoint_role": str(relation.second_endpoint_role.value),
+        "first_endpoint_sample_id": relation.first_endpoint_sample_id,
+        "second_endpoint_sample_id": relation.second_endpoint_sample_id,
         "endpoint_relation_id": relation.patch_chain_endpoint_relation_id,
         "vertex_id": vertex_id,
+        "direction_dot": relation.direction_dot,
+        "normal_dot": relation.normal_dot,
         "confidence": relation.confidence,
         "position": list(node_positions.get(relation.scaffold_node_id, (0.0, 0.0, 0.0))),
         "evidence": [
@@ -790,7 +796,13 @@ def _scaffold_node_incident_edge_relation_to_dict(relation) -> dict[str, object]
         "second_scaffold_edge_id": relation.second_scaffold_edge_id,
         "first_patch_chain_id": str(relation.first_patch_chain_id),
         "second_patch_chain_id": str(relation.second_patch_chain_id),
+        "first_endpoint_role": str(relation.first_endpoint_role.value),
+        "second_endpoint_role": str(relation.second_endpoint_role.value),
+        "first_endpoint_sample_id": relation.first_endpoint_sample_id,
+        "second_endpoint_sample_id": relation.second_endpoint_sample_id,
         "patch_chain_endpoint_relation_id": relation.patch_chain_endpoint_relation_id,
+        "direction_dot": relation.direction_dot,
+        "normal_dot": relation.normal_dot,
         "confidence": relation.confidence,
         "evidence": [
             {

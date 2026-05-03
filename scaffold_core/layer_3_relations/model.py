@@ -106,10 +106,13 @@ class ScaffoldJunctionKind(str, Enum):
 class ScaffoldNodeIncidentEdgeRelationKind(str, Enum):
     """Node-local relation kinds between incident ScaffoldEdges."""
 
-    CONTINUATION_CANDIDATE = "CONTINUATION_CANDIDATE"
+    STRAIGHT_CONTINUATION_CANDIDATE = "STRAIGHT_CONTINUATION_CANDIDATE"
+    SURFACE_CONTINUATION_CANDIDATE = "SURFACE_CONTINUATION_CANDIDATE"
+    CROSS_SURFACE_CONNECTOR = "CROSS_SURFACE_CONNECTOR"
     ORTHOGONAL_CORNER = "ORTHOGONAL_CORNER"
     OBLIQUE_CONNECTOR = "OBLIQUE_CONNECTOR"
     SAME_RAY_AMBIGUOUS = "SAME_RAY_AMBIGUOUS"
+    MISSING_ENDPOINT_EVIDENCE = "MISSING_ENDPOINT_EVIDENCE"
     DEGRADED = "DEGRADED"
 
 
@@ -318,7 +321,13 @@ class ScaffoldNodeIncidentEdgeRelation:
     second_scaffold_edge_id: str
     first_patch_chain_id: PatchChainId
     second_patch_chain_id: PatchChainId
+    first_endpoint_role: PatchChainEndpointRole
+    second_endpoint_role: PatchChainEndpointRole
+    first_endpoint_sample_id: str | None
+    second_endpoint_sample_id: str | None
     patch_chain_endpoint_relation_id: str | None
+    direction_dot: float | None
+    normal_dot: float | None
     confidence: float
     evidence: tuple[Evidence, ...] = ()
 
