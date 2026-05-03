@@ -70,6 +70,7 @@ Validation status:
 
 Deferred:
 
+- ScaffoldNodeIncidentEdgeRelation v1 complete all-pairs edge-end occurrence matrix
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
 - ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 - WorldOrientation
@@ -490,6 +491,64 @@ Rules:
 - no ScaffoldTrace, ScaffoldCircuit or ScaffoldRail construction;
 - no U/V labels, H/V labels, WORLD_UP, WorldOrientation, Feature, Runtime,
   Solve or UV semantics.
+
+## Planned - ScaffoldNodeIncidentEdgeRelation v1
+
+ScaffoldNodeIncidentEdgeRelation v1 is planned as a complete unordered all-pairs
+relation over incident ScaffoldEdge endpoint occurrences at one existing
+ScaffoldNode. For n incident edge-end occurrences at one ScaffoldNode, v1 emits
+C(n,2) relations.
+
+Current code contains an endpoint-relation-backed v0 relation. The full v1
+contract is not documented as implemented here unless the builder emits the
+complete all-pairs matrix including pairs with missing endpoint evidence.
+
+Emission is graph-structural. Missing PatchChainEndpointSample or
+PatchChainEndpointRelation evidence must not cause a pair to disappear. When
+endpoint evidence is unavailable, the pair remains present as
+MISSING_ENDPOINT_EVIDENCE or DEGRADED.
+
+Classification is evidence-backed and may use:
+
+- tangent direction evidence;
+- owner normal evidence;
+- direction_dot;
+- normal_dot;
+- endpoint sample ids;
+- PatchChainEndpointRelation id when available;
+- confidence and evidence quality.
+
+Planned v1 kinds:
+
+| Kind | Meaning |
+|---|---|
+| `STRAIGHT_CONTINUATION_CANDIDATE` | Opposite tangent/chord evidence; compatible owner-normal proof may be absent or weak. |
+| `SURFACE_CONTINUATION_CANDIDATE` | Continuation candidate with compatible owner normals. |
+| `CROSS_SURFACE_CONNECTOR` | Tangent may align or connect, but owner normals diverge strongly. |
+| `ORTHOGONAL_CORNER` | Tangent evidence is orthogonal. |
+| `OBLIQUE_CONNECTOR` | Tangent evidence is neither collinear nor orthogonal. |
+| `SAME_RAY_AMBIGUOUS` | Endpoint tangents point in the same ray direction away from the node. |
+| `MISSING_ENDPOINT_EVIDENCE` | The edge-end pair exists but endpoint sample/relation evidence is absent. |
+| `DEGRADED` | Tangent, normal, confidence or evidence is zero, unknown or collapsed. |
+
+Tube examples:
+
+- Tube without caps split by multiple seam chains: top border PatchChains may
+  be `SURFACE_CONTINUATION_CANDIDATE` through seam nodes even if the 3D chord
+  turns around the tube surface. Bottom border PatchChains follow the same
+  rule.
+- Tube with cap patch: side-to-cap PatchChains may be shared/cross-patch
+  neighbors, but they are not side-surface continuation when owner normals
+  diverge.
+
+Rules:
+
+- evidence only; no trace path, circuit, rail, continuation, UV or runtime
+  behavior selection;
+- no ScaffoldNode grouping changes;
+- no ScaffoldEdge, PatchChain, Chain, Vertex or BoundaryLoop identity changes;
+- no H/V, U/V, WORLD_UP, WorldOrientation, Feature, API, UI, runtime solve or
+  UV transfer.
 
 ## Future - ScaffoldTrace
 

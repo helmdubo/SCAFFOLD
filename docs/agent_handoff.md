@@ -100,6 +100,7 @@ Implemented:
 
 Not implemented:
 
+- ScaffoldNodeIncidentEdgeRelation v1 complete all-pairs edge-end occurrence matrix
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
 - ScaffoldTrace
 - ScaffoldCircuit
@@ -287,6 +288,21 @@ separate graph node identity. Ordinary ScaffoldNodes remain unclassified unless
 a ScaffoldJunction classifier emits a record.
 ScaffoldEdge is a graph-level view of one final PatchChain, and ScaffoldGraph is
 connectivity-only over existing ScaffoldNodes and ScaffoldEdges.
+
+ScaffoldNodeIncidentEdgeRelation v1 is planned but not implemented as complete.
+The v1 contract is an unordered all-pairs relation over incident ScaffoldEdge
+endpoint occurrences at one existing ScaffoldNode: n incident edge-end
+occurrences emit C(n,2) relations. Missing endpoint sample/relation evidence
+must not make a pair disappear; it should become MISSING_ENDPOINT_EVIDENCE or
+DEGRADED evidence. Planned normal-aware kinds include
+STRAIGHT_CONTINUATION_CANDIDATE, SURFACE_CONTINUATION_CANDIDATE,
+CROSS_SURFACE_CONNECTOR, ORTHOGONAL_CORNER, OBLIQUE_CONNECTOR,
+SAME_RAY_AMBIGUOUS, MISSING_ENDPOINT_EVIDENCE and DEGRADED.
+
+This relation is evidence only. It must not choose traces, circuits, rails,
+continuations, UV behavior or runtime behavior, and must not change
+ScaffoldNode grouping or ScaffoldEdge, PatchChain, Chain, Vertex or
+BoundaryLoop identity.
 
 ScaffoldNode v0 grouping policy:
 

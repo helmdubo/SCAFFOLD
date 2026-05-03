@@ -192,6 +192,54 @@ ScaffoldJunction classification must not change ScaffoldNode grouping, change
 PatchChain identity, walk traces, detect circuits, select rails, choose
 continuations or introduce UV, runtime or feature semantics.
 
+## DD-39 - ScaffoldNodeIncidentEdgeRelation v1 is all-pairs evidence
+
+Planned ScaffoldNodeIncidentEdgeRelation v1 is a complete unordered all-pairs
+Layer 3 relation over incident ScaffoldEdge endpoint occurrences at one
+existing ScaffoldNode. For n incident edge-end occurrences at one ScaffoldNode,
+v1 emits C(n,2) relations.
+
+Emission is graph-structural. Missing PatchChainEndpointSample or
+PatchChainEndpointRelation evidence must not cause an edge-end pair to
+disappear. When endpoint evidence is missing, the pair remains present and is
+classified with missing or degraded evidence quality.
+
+Classification is evidence-backed. It may use tangent direction evidence,
+owner normal evidence, direction_dot, normal_dot, endpoint sample ids,
+PatchChainEndpointRelation id when available, confidence and evidence quality.
+It is evidence only. It must not select trace paths, circuits, rails,
+continuations, UV behavior or runtime behavior.
+
+Planned v1 relation kinds:
+- STRAIGHT_CONTINUATION_CANDIDATE: opposite tangent/chord evidence;
+  compatible owner-normal proof may be absent or weak.
+- SURFACE_CONTINUATION_CANDIDATE: continuation candidate with compatible owner
+  normals.
+- CROSS_SURFACE_CONNECTOR: tangent may align or connect, but owner normals
+  diverge strongly.
+- ORTHOGONAL_CORNER: tangent evidence is orthogonal.
+- OBLIQUE_CONNECTOR: tangent evidence is neither collinear nor orthogonal.
+- SAME_RAY_AMBIGUOUS: endpoint tangents point in the same ray direction away
+  from the node.
+- MISSING_ENDPOINT_EVIDENCE: the edge-end pair exists but endpoint
+  sample/relation evidence is absent.
+- DEGRADED: tangent, normal, confidence or evidence is zero, unknown or
+  collapsed.
+
+ScaffoldNodeIncidentEdgeRelation v1 must not change ScaffoldNode grouping,
+ScaffoldEdge identity, PatchChain identity, Chain identity, Vertex identity or
+BoundaryLoop identity. It must not use H/V, U/V, WORLD_UP, WorldOrientation,
+Feature, API, UI, runtime solve or UV transfer.
+
+Examples:
+- Tube without caps split by multiple seam chains: top border PatchChains may
+  be SURFACE_CONTINUATION_CANDIDATE through seam nodes even if the 3D chord
+  turns around the tube surface. Bottom border PatchChains follow the same
+  rule.
+- Tube with cap patch: side-to-cap PatchChains may be shared/cross-patch
+  neighbors, but they are not side-surface continuation when owner normals
+  diverge.
+
 ## PatchChain directional evidence
 
 Final PatchChain remains the public source of truth.
@@ -227,4 +275,4 @@ That future option should convert sharp information into seam/boundary input bef
 
 ## Open questions
 
-- **OQ-11 - Geometry-based Chain / PatchChain refinement policy.** Status: partially resolved. Final PatchChain is the public source of truth; raw boundary elements are builder internals; Layer 3 may derive directional evidence from final PatchChains; polygonal straight/turning Chains can be described by ChainDirectionalRun / PatchChain directional evidence; directional evidence must not become a competing PatchChain identity; ScaffoldNode may group materialized Vertex occurrences as graph-level evidence but not Layer 1 identity. Curved-chain policy, sawtooth tuning, user split marks, closed-loop wrap merge policy, advanced corner detection, local face-fan refinement policy and trace/circuit/rail construction over ScaffoldGraph remain unresolved. See `G0.md` Section 6.
+- **OQ-11 - Geometry-based Chain / PatchChain refinement policy.** Status: partially resolved. Final PatchChain is the public source of truth; raw boundary elements are builder internals; Layer 3 may derive directional evidence from final PatchChains; polygonal straight/turning Chains can be described by ChainDirectionalRun / PatchChain directional evidence; directional evidence must not become a competing PatchChain identity; ScaffoldNode may group materialized Vertex occurrences as graph-level evidence but not Layer 1 identity; planned ScaffoldNodeIncidentEdgeRelation v1 is all-pairs graph evidence over existing ScaffoldNode incident edge-end occurrences and must not choose traces, circuits, rails or continuations. Curved-chain policy, sawtooth tuning, user split marks, closed-loop wrap merge policy, advanced corner detection, local face-fan refinement policy and trace/circuit/rail construction over ScaffoldGraph remain unresolved. See `G0.md` Section 6.
