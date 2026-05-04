@@ -16,6 +16,7 @@ from .debug import (
     overlay_object_name,
     render_overlay,
 )
+from .pair_checks import format_continuity_pair_check
 
 
 def _add_repo_root_to_path() -> None:
@@ -69,6 +70,16 @@ def _format_summary(report: dict[str, Any]) -> str:
     )
 
 
+def _write_pair_check_text_block(source_object_name: str, report: str) -> None:
+    datablock_name = f"ScaffoldGraph_ContinuityPairCheck__{source_object_name}"
+    text = bpy.data.texts.get(datablock_name)
+    if text is None:
+        text = bpy.data.texts.new(datablock_name)
+    else:
+        text.clear()
+    text.write(report)
+
+
 def show_or_refresh(context: Any) -> tuple[dict[str, Any], str]:
     settings = context.scene.scaffold_graph_debug_settings
     source_object = active_mesh_object(
@@ -120,6 +131,9 @@ def show_or_refresh(context: Any) -> tuple[dict[str, Any], str]:
     settings.source_object = source_object.name
     settings.last_report = _format_summary(render_report)
     print(json.dumps(render_report, separators=(",", ":"), sort_keys=True))
+    pair_check_report = format_continuity_pair_check(source_object.name, overlay)
+    print(pair_check_report)
+    _write_pair_check_text_block(source_object.name, pair_check_report)
     return render_report, settings.last_report
 
 
