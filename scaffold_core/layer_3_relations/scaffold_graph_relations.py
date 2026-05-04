@@ -19,6 +19,7 @@ from scaffold_core.core.evidence import Evidence
 from scaffold_core.ids import BoundaryLoopId, ChainId, PatchChainId, PatchId, VertexId
 from scaffold_core.layer_2_geometry.measures import EPSILON, dot, length, normalize
 from scaffold_core.layer_3_relations.model import (
+    AlignmentClass,
     EndpointDirectionRelationKind,
     OwnerNormalSource,
     PatchAdjacency,
@@ -37,7 +38,7 @@ from scaffold_core.layer_3_relations.model import (
 
 
 NODE_INCIDENT_EDGE_POLICY_NAME = "scaffold_node_incident_edge_relation_v1"
-SIDE_SURFACE_CONTINUITY_POLICY_NAME = "side_surface_continuity_evidence_v0"
+SIDE_SURFACE_CONTINUITY_POLICY_NAME = "side_surface_continuity_evidence_v1"
 SHARED_CHAIN_POLICY_NAME = "shared_chain_patch_chain_relation_v0"
 OPPOSITE_COLLINEAR_MAX_DOT = -0.996
 SAME_RAY_COLLINEAR_MIN_DOT = 0.996
@@ -65,6 +66,7 @@ def build_scaffold_graph_relations(
     endpoint_relations: tuple[PatchChainEndpointRelation, ...],
     patch_adjacencies: Mapping[str, PatchAdjacency],
     loop_corners: tuple[LoopCorner, ...] = (),
+    alignment_classes: tuple[AlignmentClass, ...] = (),
 ) -> tuple[
     tuple[SideSurfaceContinuityEvidence, ...],
     tuple[ScaffoldNodeIncidentEdgeRelation, ...],
@@ -88,6 +90,7 @@ def build_scaffold_graph_relations(
         occurrences_by_node_id,
         relation_by_sample_pair,
         loop_corners,
+        alignment_classes,
     )
     incident_edge_relations = build_scaffold_node_incident_edge_relations(
         scaffold_nodes,
@@ -107,10 +110,12 @@ def build_side_surface_continuity_evidence(
     occurrences_by_node_id: Mapping[str, tuple[_IncidentEdgeOccurrence, ...]],
     relation_by_sample_pair: Mapping[tuple[str, str], PatchChainEndpointRelation],
     loop_corners: tuple[LoopCorner, ...],
+    alignment_classes: tuple[AlignmentClass, ...] = (),
 ) -> tuple[SideSurfaceContinuityEvidence, ...]:
     """Build explicit same-side surface evidence before incident classification."""
 
     loop_corner_by_ordered_pair = _loop_corner_by_ordered_pair(loop_corners)
+    direction_family_by_evidence_id = _direction_family_by_evidence_id(alignment_classes)
     records: list[SideSurfaceContinuityEvidence] = []
     for node in sorted(scaffold_nodes, key=lambda item: item.id):
         occurrences = tuple(sorted(
@@ -129,6 +134,7 @@ def build_side_surface_continuity_evidence(
                 second,
                 endpoint_relation,
                 loop_corner_by_ordered_pair,
+                direction_family_by_evidence_id,
             )
             if record is not None:
                 records.append(record)
@@ -473,6 +479,7 @@ def _side_surface_continuity_evidence(
         tuple[PatchId, BoundaryLoopId, VertexId, PatchChainId, PatchChainId],
         LoopCorner,
     ],
+    direction_family_by_evidence_id: Mapping[str, str],
 ) -> SideSurfaceContinuityEvidence | None:
     if first.endpoint_sample is None or second.endpoint_sample is None:
         return None
@@ -518,6 +525,19 @@ def _side_surface_continuity_evidence(
         and endpoint_relation.direction_relation is EndpointDirectionRelationKind.DEGENERATE
     ):
         return None
+    first_direction_family_id = direction_family_by_evidence_id.get(
+        first.endpoint_sample.directional_evidence_id
+    )
+    second_direction_family_id = direction_family_by_evidence_id.get(
+        second.endpoint_sample.directional_evidence_id
+    )
+    direction_family_compatible = (
+        first_direction_family_id is not None
+        and second_direction_family_id is not None
+        and first_direction_family_id == second_direction_family_id
+    )
+    if not direction_family_compatible:
+        return None
     confidence_values = [
         node.confidence,
         first.scaffold_edge.confidence,
@@ -549,6 +569,10 @@ def _side_surface_continuity_evidence(
         source_vertex_ids=tuple(sorted(node.source_vertex_ids, key=str)),
         first_endpoint_sample_id=first.endpoint_sample.id,
         second_endpoint_sample_id=second.endpoint_sample.id,
+        first_direction_family_id=first_direction_family_id,
+        second_direction_family_id=second_direction_family_id,
+        direction_family_compatible=True,
+        blocked_by_direction_family=False,
         normal_dot=normal_dot,
         normal_evidence_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL.value,
         confidence=confidence,
@@ -560,6 +584,8 @@ def _side_surface_continuity_evidence(
             normal_dot,
             confidence,
             loop_corner,
+            first_direction_family_id,
+            second_direction_family_id,
         ),),
     )
 
@@ -614,6 +640,16 @@ def _loop_corner_pair_key(
         previous_patch_chain_id,
         next_patch_chain_id,
     )
+
+
+def _direction_family_by_evidence_id(
+    alignment_classes: tuple[AlignmentClass, ...],
+) -> dict[str, str]:
+    return {
+        directional_evidence_id: alignment_class.id
+        for alignment_class in alignment_classes
+        for directional_evidence_id in alignment_class.member_directional_evidence_ids
+    }
 
 
 def _has_recurrent_previous_chain(
@@ -719,6 +755,10 @@ def _incident_edge_evidence(
             "second_chain_id": str(side_surface_evidence.second_chain_id),
             "normal_dot": side_surface_evidence.normal_dot,
             "recurrence_evidence_present": recurrence_evidence_present,
+            "first_direction_family_id": side_surface_evidence.first_direction_family_id,
+            "second_direction_family_id": side_surface_evidence.second_direction_family_id,
+            "direction_family_compatible": side_surface_evidence.direction_family_compatible,
+            "blocked_by_direction_family": side_surface_evidence.blocked_by_direction_family,
         })
     return Evidence(
         source="layer_3_relations.scaffold_graph_relations",
@@ -735,6 +775,8 @@ def _side_surface_evidence(
     normal_dot: float,
     confidence: float,
     loop_corner: LoopCorner,
+    first_direction_family_id: str | None,
+    second_direction_family_id: str | None,
 ) -> Evidence:
     return Evidence(
         source="layer_3_relations.scaffold_graph_relations",
@@ -764,6 +806,10 @@ def _side_surface_evidence(
             "position_in_loop": loop_corner.position_in_loop,
             "normal_dot": normal_dot,
             "normal_evidence_source": OwnerNormalSource.LOCAL_FACE_FAN_NORMAL.value,
+            "first_direction_family_id": first_direction_family_id,
+            "second_direction_family_id": second_direction_family_id,
+            "direction_family_compatible": True,
+            "blocked_by_direction_family": False,
             "confidence": confidence,
         },
     )

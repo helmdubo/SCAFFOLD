@@ -100,12 +100,12 @@ Implemented:
 - ScaffoldNodeIncidentEdgeRelation v1 complete all-pairs edge-end occurrence matrix
 - ScaffoldNodeIncidentEdgeRelationKind SURFACE_SLIDING_CONTINUATION_CANDIDATE v0
 - ScaffoldContinuityComponent v0
-- SideSurfaceContinuityEvidence v0 evidence-only same-side surface flow record
+- SideSurfaceContinuityEvidence v1 evidence-only same-side surface flow record
+  with direction/flow-family gate
 
 Not implemented:
 
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
-- SideSurfaceContinuityEvidence v1 direction/flow-family gate implementation
 - ScaffoldTrace
 - ScaffoldCircuit
 - ScaffoldRail
@@ -178,9 +178,8 @@ ScaffoldContinuityComponent:
 SideSurfaceContinuityEvidence:
   implemented Layer 3 derived evidence record over two
   existing ScaffoldEdge endpoint occurrences at one existing ScaffoldNode. It
-  proves candidate same-side surface flow within one patch boundary loop and is
-  evidence only. Approved v1 direction/flow-family gate is documented but not
-  yet implemented.
+  proves candidate same-side surface flow within one patch boundary loop and
+  compatible direction/flow-family evidence. It is evidence only.
 ```
 
 ---
@@ -320,10 +319,10 @@ endpoint occurrences where tangent/chord classification may otherwise look
 orthogonal or same-ray, but explicit same-side-surface evidence plus compatible
 local owner normals support continuation along the same curved or side surface.
 It requires local owner-normal evidence, compatible local owner normals and
-explicit same-side-surface evidence. Current SideSurfaceContinuityEvidence v0
-may be consumed as this explicit same-side-surface evidence source. The approved
-v1 contract adds a direction/flow-family compatibility gate before this evidence
-may promote a pair to SURFACE_SLIDING_CONTINUATION_CANDIDATE. Same patch, same
+explicit same-side-surface evidence. Current SideSurfaceContinuityEvidence v1
+is consumed as this explicit same-side-surface evidence source and includes the
+direction/flow-family compatibility gate before this evidence may promote a pair
+to SURFACE_SLIDING_CONTINUATION_CANDIDATE. Same patch, same
 loop, END -> START adjacency and compatible local normals are not sufficient by
 themselves under v1. Missing/degraded or direction-family-incompatible evidence
 and SharedChainPatchChainRelation alone must not produce this kind under v1.
@@ -336,7 +335,7 @@ continuations, UV behavior or runtime behavior, and must not change
 ScaffoldNode grouping or ScaffoldEdge, PatchChain, Chain, Vertex or
 BoundaryLoop identity.
 
-SideSurfaceContinuityEvidence v0 is implemented as a Layer 3 derived evidence
+SideSurfaceContinuityEvidence v1 is implemented as a Layer 3 derived evidence
 record over two existing ScaffoldEdge endpoint
 occurrences at one existing ScaffoldNode. Required evidence is same
 ScaffoldNodeId, same PatchId, same LoopId, different ChainId, explicit and
@@ -346,8 +345,8 @@ LOCAL_FACE_FAN_NORMAL for both owner normals, normal_dot greater than or equal
 to the ScaffoldNodeIncidentEdgeRelation compatible-normal threshold source
 COMPATIBLE_NORMAL_MIN_DOT, and no missing or degraded endpoint evidence.
 
-Approved v1 evidence additionally requires direction/flow-family compatibility
-when both PatchChains have AlignmentClass or direction-family evidence. If
+Implemented v1 evidence additionally requires direction/flow-family compatibility
+when PatchChains have AlignmentClass or direction-family evidence. If
 direction-family evidence is missing, ORTHOGONAL_CORNER promotion must be
 conservative and must not emit SideSurfaceContinuityEvidence.
 SAME_RAY_AMBIGUOUS remains conservative unless direction-family compatibility is
@@ -423,16 +422,16 @@ Still unresolved:
 
 ## Next architecture decision
 
-Current implementation checkpoint: SideSurfaceContinuityEvidence v0 is
+Current implementation checkpoint: SideSurfaceContinuityEvidence v1 is
 implemented as the evidence-only Layer 3 record consumed by
-SURFACE_SLIDING_CONTINUATION_CANDIDATE. The approved v1 direction/flow-family
-gate is documented but not yet implemented. ScaffoldContinuityComponent v0
+SURFACE_SLIDING_CONTINUATION_CANDIDATE. The direction/flow-family gate is
+implemented and uses existing AlignmentClass membership. ScaffoldContinuityComponent v0
 continues to propagate only through SURFACE_SLIDING_CONTINUATION_CANDIDATE, not
 directly through SideSurfaceContinuityEvidence. Treat local `D:\cylinder.blend`
 as exploratory smoke only, not as the canonical synthetic fixture. Wrong merges
 P1C1->P1C2, P1C2->P1C3, P2C3->P2C0 and P2C2->P2C3 in Cube.001 are examples of
-ORTHOGONAL_CORNER pairs crossing alignment:0 <-> alignment:1 that v1 must
-block, not promote. Missing lower-side cross-patch or same-chain lower-ring flow
+ORTHOGONAL_CORNER pairs crossing alignment:0 <-> alignment:1 that v1 blocks
+instead of promoting. Missing lower-side cross-patch or same-chain lower-ring flow
 is deferred and requires a separate evidence contract if needed later.
 
 Grease Pencil rendering consumes the pipeline inspection overlay payload instead

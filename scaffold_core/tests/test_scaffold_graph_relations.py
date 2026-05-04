@@ -14,12 +14,15 @@ from pathlib import Path
 
 from scaffold_core.ids import BoundaryLoopId, ChainId, PatchChainId, PatchId, VertexId
 from scaffold_core.layer_3_relations.model import (
+    AlignmentClass,
+    AlignmentClassKind,
     DihedralKind,
     LoopCorner,
     PatchAdjacency,
     PatchChainEndpointRole,
     PatchChainEndpointSample,
     OwnerNormalSource,
+    RelationSnapshot,
     ScaffoldEdge,
     ScaffoldJunctionKind,
     ScaffoldNode,
@@ -32,7 +35,7 @@ from scaffold_core.layer_3_relations.patch_chain_endpoint_relations import (
 from scaffold_core.layer_3_relations.scaffold_graph_relations import (
     build_scaffold_graph_relations,
 )
-from scaffold_core.pipeline.inspection import inspect_pipeline_context
+from scaffold_core.pipeline.inspection import inspect_pipeline_context, relation_summary_to_dict
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_boundary_loop_source
 from scaffold_core.tests.fixtures.cylinder_tube import (
@@ -140,6 +143,7 @@ def test_same_patch_same_loop_end_start_local_normals_emit_side_surface_evidence
         endpoint_relations=build_patch_chain_endpoint_relations((end_sample, start_sample)),
         patch_adjacencies={},
         loop_corners=(_loop_corner("a", end_sample.patch_chain_id, start_sample.patch_chain_id),),
+        alignment_classes=_alignment_classes((end_sample, start_sample)),
     )
 
     assert shared_relations == ()
@@ -148,6 +152,10 @@ def test_same_patch_same_loop_end_start_local_normals_emit_side_surface_evidence
     assert side_surface_evidence[0].second_endpoint_role is PatchChainEndpointRole.START
     assert side_surface_evidence[0].first_chain_id == ChainId("chain:a")
     assert side_surface_evidence[0].second_chain_id == ChainId("chain:b")
+    assert side_surface_evidence[0].first_direction_family_id == "alignment:test:0"
+    assert side_surface_evidence[0].second_direction_family_id == "alignment:test:0"
+    assert side_surface_evidence[0].direction_family_compatible is True
+    assert side_surface_evidence[0].blocked_by_direction_family is False
     assert side_surface_evidence[0].normal_dot == 1.0
     assert len(incident_relations) == 1
     assert (
@@ -160,6 +168,106 @@ def test_same_patch_same_loop_end_start_local_normals_emit_side_surface_evidence
         == side_surface_evidence[0].id
     )
     assert incident_relations[0].evidence[0].data["recurrence_evidence_present"] is False
+    report = relation_summary_to_dict(
+        RelationSnapshot(side_surface_continuity_evidence=side_surface_evidence),
+        detail="full",
+    )
+    serialized = report["side_surface_continuity_evidence"][0]
+    assert serialized["first_direction_family_id"] == "alignment:test:0"
+    assert serialized["second_direction_family_id"] == "alignment:test:0"
+    assert serialized["direction_family_compatible"] is True
+    assert serialized["blocked_by_direction_family"] is False
+
+
+def test_same_patch_same_loop_different_alignment_families_do_not_emit_side_surface_evidence() -> None:
+    end_sample = _sample(
+        "a",
+        (1.0, 0.0, 0.0),
+        PatchId("patch:one"),
+        endpoint_role=PatchChainEndpointRole.END,
+        owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
+    )
+    start_sample = _sample(
+        "b",
+        (0.0, 1.0, 0.0),
+        PatchId("patch:one"),
+        endpoint_role=PatchChainEndpointRole.START,
+        owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
+    )
+
+    side_surface_evidence, incident_relations, _ = build_scaffold_graph_relations(
+        scaffold_nodes=(_node(end_sample.patch_chain_id, start_sample.patch_chain_id),),
+        scaffold_edges=(
+            _edge(
+                "a",
+                ChainId("chain:a"),
+                PatchId("patch:one"),
+                start_node_id="scaffold_node:two",
+                end_node_id="scaffold_node:one",
+                loop_id=BoundaryLoopId("loop:one"),
+            ),
+            _edge(
+                "b",
+                ChainId("chain:b"),
+                PatchId("patch:one"),
+                loop_id=BoundaryLoopId("loop:one"),
+            ),
+        ),
+        endpoint_samples=(end_sample, start_sample),
+        endpoint_relations=build_patch_chain_endpoint_relations((end_sample, start_sample)),
+        patch_adjacencies={},
+        loop_corners=(_loop_corner("a", end_sample.patch_chain_id, start_sample.patch_chain_id),),
+        alignment_classes=_alignment_classes((end_sample,), (start_sample,)),
+    )
+
+    assert side_surface_evidence == ()
+    assert len(incident_relations) == 1
+    assert incident_relations[0].kind is ScaffoldNodeIncidentEdgeRelationKind.ORTHOGONAL_CORNER
+
+
+def test_same_ray_without_explicit_direction_family_evidence_does_not_emit_side_surface_evidence() -> None:
+    end_sample = _sample(
+        "a",
+        (1.0, 0.0, 0.0),
+        PatchId("patch:one"),
+        endpoint_role=PatchChainEndpointRole.END,
+        owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
+    )
+    start_sample = _sample(
+        "b",
+        (1.0, 0.0, 0.0),
+        PatchId("patch:one"),
+        endpoint_role=PatchChainEndpointRole.START,
+        owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
+    )
+
+    side_surface_evidence, incident_relations, _ = build_scaffold_graph_relations(
+        scaffold_nodes=(_node(end_sample.patch_chain_id, start_sample.patch_chain_id),),
+        scaffold_edges=(
+            _edge(
+                "a",
+                ChainId("chain:a"),
+                PatchId("patch:one"),
+                start_node_id="scaffold_node:two",
+                end_node_id="scaffold_node:one",
+                loop_id=BoundaryLoopId("loop:one"),
+            ),
+            _edge(
+                "b",
+                ChainId("chain:b"),
+                PatchId("patch:one"),
+                loop_id=BoundaryLoopId("loop:one"),
+            ),
+        ),
+        endpoint_samples=(end_sample, start_sample),
+        endpoint_relations=build_patch_chain_endpoint_relations((end_sample, start_sample)),
+        patch_adjacencies={},
+        loop_corners=(_loop_corner("a", end_sample.patch_chain_id, start_sample.patch_chain_id),),
+    )
+
+    assert side_surface_evidence == ()
+    assert len(incident_relations) == 1
+    assert incident_relations[0].kind is ScaffoldNodeIncidentEdgeRelationKind.SAME_RAY_AMBIGUOUS
 
 
 def test_explicit_side_surface_evidence_promotes_orthogonal_pair_without_recurrence() -> None:
@@ -200,6 +308,7 @@ def test_explicit_side_surface_evidence_promotes_orthogonal_pair_without_recurre
         endpoint_relations=build_patch_chain_endpoint_relations((end_sample, start_sample)),
         patch_adjacencies={},
         loop_corners=(_loop_corner("a", end_sample.patch_chain_id, start_sample.patch_chain_id),),
+        alignment_classes=_alignment_classes((end_sample, start_sample)),
     )
 
     assert shared_relations == ()
@@ -269,6 +378,7 @@ def test_explicit_side_surface_pair_promotes_at_cross_patch_node() -> None:
         endpoint_relations=build_patch_chain_endpoint_relations((end_sample, start_sample, cross_patch_sample)),
         patch_adjacencies={},
         loop_corners=(_loop_corner("a", end_sample.patch_chain_id, start_sample.patch_chain_id),),
+        alignment_classes=_alignment_classes((end_sample, start_sample)),
     )
 
     assert len(side_surface_evidence) == 1
@@ -356,6 +466,7 @@ def test_same_patch_self_seam_side_pair_becomes_surface_sliding_candidate() -> N
                 position_in_loop=1,
             ),
         ),
+        alignment_classes=_alignment_classes((seam_sample, duplicate_seam_sample, side_sample)),
     )
 
     assert len(side_surface_evidence) == 2
@@ -376,7 +487,7 @@ def test_same_patch_self_seam_side_pair_becomes_surface_sliding_candidate() -> N
     )
     assert all(
         relation.evidence[0].data["same_side_surface_evidence_source"]
-        == "side_surface_continuity_evidence_v0"
+        == "side_surface_continuity_evidence_v1"
         for relation in sliding_relations
     )
     assert all(
@@ -450,6 +561,7 @@ def test_same_ray_self_seam_side_pair_becomes_surface_sliding_candidate() -> Non
                 position_in_loop=1,
             ),
         ),
+        alignment_classes=_alignment_classes((seam_sample, duplicate_seam_sample, side_sample)),
     )
 
     assert len(side_surface_evidence) == 2
@@ -1089,44 +1201,25 @@ def test_cylinder_seam_nodes_emit_complete_incident_edge_occurrence_matrix() -> 
     assert ScaffoldNodeIncidentEdgeRelationKind.ORTHOGONAL_CORNER in relation_kinds
 
 
-def test_simple_tube_without_caps_emits_surface_sliding_relations_as_data() -> None:
+def test_simple_tube_without_caps_blocks_sliding_without_compatible_direction_family() -> None:
     context = run_pass_1_relations(
         run_pass_0(make_cylinder_tube_without_caps_with_one_seam_source())
     )
 
     snapshot = context.relation_snapshot
     assert snapshot is not None
-    assert len(snapshot.side_surface_continuity_evidence) == 4
+    assert snapshot.side_surface_continuity_evidence == ()
     sliding_relations = [
         relation
         for relation in snapshot.scaffold_node_incident_edge_relations
         if relation.kind is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
     ]
-    assert len(sliding_relations) == len(snapshot.side_surface_continuity_evidence)
-    assert all(
-        relation.evidence[0].data["same_side_surface_evidence_source"]
-        == "side_surface_continuity_evidence_v0"
-        for relation in sliding_relations
-    )
-    consumed_evidence_ids = {
-        relation.evidence[0].data["side_surface_continuity_evidence_id"]
-        for relation in sliding_relations
-    }
-    assert consumed_evidence_ids == {
-        evidence.id
-        for evidence in snapshot.side_surface_continuity_evidence
-    }
+    assert sliding_relations == []
 
     report = inspect_pipeline_context(context, detail="full")
     relations = report["relations"]
-    assert relations["side_surface_continuity_evidence_count"] == 4
-    assert len(relations["side_surface_continuity_evidence"]) == 4
-    assert all(
-        evidence["normal_evidence_source"] == "LOCAL_FACE_FAN_NORMAL"
-        and evidence["first_endpoint_role"] == "END"
-        and evidence["second_endpoint_role"] == "START"
-        for evidence in relations["side_surface_continuity_evidence"]
-    )
+    assert relations["side_surface_continuity_evidence_count"] == 0
+    assert relations["side_surface_continuity_evidence"] == []
 
 
 def test_scaffold_graph_relations_code_does_not_introduce_deferred_terms_or_imports() -> None:
@@ -1260,4 +1353,23 @@ def _node(
         )),
         patch_ids=(PatchId("patch:one"),),
         confidence=1.0,
+    )
+
+
+def _alignment_classes(
+    *sample_groups: tuple[PatchChainEndpointSample, ...],
+) -> tuple[AlignmentClass, ...]:
+    return tuple(
+        AlignmentClass(
+            id=f"alignment:test:{index}",
+            member_directional_evidence_ids=tuple(
+                sample.directional_evidence_id
+                for sample in samples
+            ),
+            patch_ids=tuple(sorted({sample.patch_id for sample in samples}, key=str)),
+            dominant_direction=samples[0].tangent_away_from_vertex,
+            kind=AlignmentClassKind.LINEAR,
+            confidence=1.0,
+        )
+        for index, samples in enumerate(sample_groups)
     )

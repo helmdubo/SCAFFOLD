@@ -353,6 +353,10 @@ class SideSurfaceContinuityEvidence:
     source_vertex_ids: tuple[SourceVertexId, ...]
     first_endpoint_sample_id: str
     second_endpoint_sample_id: str
+    first_direction_family_id: str | None
+    second_direction_family_id: str | None
+    direction_family_compatible: bool
+    blocked_by_direction_family: bool
     normal_dot: float
     normal_evidence_source: str
     confidence: float

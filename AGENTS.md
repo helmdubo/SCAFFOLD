@@ -177,14 +177,13 @@ LocalFaceFanGeometryFacts
 ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence matrix
 ScaffoldContinuityComponent v0 derived evidence view over ScaffoldEdges
 ScaffoldNodeIncidentEdgeRelationKind SURFACE_SLIDING_CONTINUATION_CANDIDATE v0
-SideSurfaceContinuityEvidence v0 evidence-only same-side surface flow record
+SideSurfaceContinuityEvidence v1 evidence-only same-side surface flow record with direction/flow-family gate
 ```
 
 Deferred in G3:
 
 ```text
 ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
-SideSurfaceContinuityEvidence v1 direction/flow-family gate implementation
 ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 WorldOrientation
 ```
@@ -230,18 +229,18 @@ curved/side-surface continuation with explicit same-side-surface evidence and
 compatible local owner normals. It must not choose trace paths, next edges,
 rails, circuits, UV direction or solve behavior.
 
-SideSurfaceContinuityEvidence v0 is implemented as a Layer 3 derived evidence
+SideSurfaceContinuityEvidence v1 is implemented as a Layer 3 derived evidence
 record over two existing ScaffoldEdge endpoint
 occurrences at one existing ScaffoldNode proving candidate same-side surface
-flow within one patch boundary loop. The approved v1 contract, not yet
-implemented, adds a direction/flow-family compatibility gate. Under v1, same
+flow within one patch boundary loop. It includes a direction/flow-family
+compatibility gate. Same
 patch, same loop, END -> START adjacency and compatible local normals are not
 sufficient by themselves. ORTHOGONAL_CORNER pairs crossing different
 AlignmentClass families must not emit SideSurfaceContinuityEvidence and must
 not become SURFACE_SLIDING_CONTINUATION_CANDIDATE. If direction-family evidence
 is missing, ORTHOGONAL_CORNER promotion stays conservative; SAME_RAY_AMBIGUOUS
 stays conservative unless direction-family compatibility is explicit.
-SURFACE_SLIDING_CONTINUATION_CANDIDATE consumes current v0 evidence as its
+SURFACE_SLIDING_CONTINUATION_CANDIDATE consumes current v1 evidence as its
 same-side-surface evidence source.
 ScaffoldContinuityComponent v0 must not propagate directly through
 SideSurfaceContinuityEvidence; it may continue propagating only through
