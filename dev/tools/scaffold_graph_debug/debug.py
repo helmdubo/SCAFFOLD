@@ -22,6 +22,7 @@ GP_OBJECT_PREFIX = "ScaffoldGraph_Overlay__"
 LABEL_COLLECTION_PREFIX = "ScaffoldGraph_Labels__"
 LABEL_OBJECT_PREFIX = "ScaffoldGraph_Label__"
 EDGE_MATERIAL_NAME = "ScaffoldGraph_Edge_Material"
+CONTINUITY_EDGE_MATERIAL_PREFIX = "ScaffoldGraph_ContinuityEdge_"
 NODE_MATERIAL_NAME = "ScaffoldGraph_Node_Material"
 JUNCTION_MATERIAL_NAME = "ScaffoldGraph_Junction_Material"
 INCIDENT_RELATION_MATERIAL_NAME = "ScaffoldGraph_IncidentRelation_Material"
@@ -44,10 +45,13 @@ INCIDENT_RELATION_MARKER_SIZE = 0.085
 SHARED_CHAIN_RELATION_MARKER_SIZE = 0.075
 INCIDENT_RELATION_LABEL_OFFSET = 0.14
 INCIDENT_RELATION_KIND_STYLES = {
-    "CONTINUATION_CANDIDATE": ("CONT", (0.2, 1.0, 0.45, 1.0)),
+    "STRAIGHT_CONTINUATION_CANDIDATE": ("CONT", (0.2, 1.0, 0.45, 1.0)),
+    "SURFACE_CONTINUATION_CANDIDATE": ("CONT", (0.2, 1.0, 0.45, 1.0)),
+    "CROSS_SURFACE_CONNECTOR": ("XSRF", (1.0, 0.35, 0.15, 1.0)),
     "ORTHOGONAL_CORNER": ("ORTH", (0.15, 0.85, 1.0, 1.0)),
     "OBLIQUE_CONNECTOR": ("OBL", (1.0, 0.65, 0.15, 1.0)),
     "SAME_RAY_AMBIGUOUS": ("SR?", (1.0, 0.95, 0.15, 1.0)),
+    "MISSING_ENDPOINT_EVIDENCE": ("MISS", (1.0, 0.7, 0.05, 1.0)),
     "DEGRADED": ("DEG", (0.55, 0.55, 0.55, 1.0)),
 }
 INCIDENT_RELATION_DEFAULT_STYLE = ("INC", INCIDENT_RELATION_COLOR)
@@ -57,6 +61,14 @@ LABEL_LIFT = 0.06
 EDGE_LANE_SPACING = 0.035
 EDGE_LANE_ROUND_DIGITS = 6
 GP_OBJECT_TYPES = {"GREASEPENCIL", "GPENCIL"}
+DISPLAY_MODE_IDENTITY = "IDENTITY"
+DISPLAY_MODE_CONTINUITY = "CONTINUITY"
+DISPLAY_MODE_RELATIONS = "RELATIONS"
+DISPLAY_MODES = {
+    DISPLAY_MODE_IDENTITY,
+    DISPLAY_MODE_CONTINUITY,
+    DISPLAY_MODE_RELATIONS,
+}
 
 
 def _safe_object_suffix(name: str) -> str:
@@ -152,6 +164,42 @@ def _ensure_material(
             return index
     gp_data.materials.append(material)
     return len(gp_data.materials) - 1
+
+
+def _rgba(color: Sequence[float]) -> tuple[float, float, float, float]:
+    if len(color) != 4:
+        return EDGE_COLOR
+    return (
+        float(color[0]),
+        float(color[1]),
+        float(color[2]),
+        float(color[3]),
+    )
+
+
+def _continuity_material_name(color_key: str) -> str:
+    return f"{CONTINUITY_EDGE_MATERIAL_PREFIX}{_safe_object_suffix(color_key)}_Material"
+
+
+def _continuity_edge_material_indexes(
+    gp_data: Any,
+    overlay: dict[str, Any],
+) -> dict[str, int]:
+    keyed_colors: dict[str, tuple[float, float, float, float]] = {}
+    for component in overlay.get("continuity_components", ()):
+        color_key = str(component.get("color_key") or component.get("id") or "")
+        color = component.get("continuity_color", ())
+        if color_key and len(color) == 4:
+            keyed_colors[color_key] = _rgba(color)
+    for edge in overlay.get("edges", ()):
+        color_key = str(edge.get("color_key") or "")
+        color = edge.get("continuity_color", ())
+        if color_key and len(color) == 4:
+            keyed_colors.setdefault(color_key, _rgba(color))
+    return {
+        color_key: _ensure_material(gp_data, _continuity_material_name(color_key), color)
+        for color_key, color in sorted(keyed_colors.items())
+    }
 
 
 def _new_stroke(frame: Any, point_count: int) -> Any:
@@ -266,10 +314,16 @@ def _incident_relation_marker_strokes(
 ) -> tuple[tuple[tuple[float, float, float], ...], ...]:
     x, y, z = (float(position[0]), float(position[1]), float(position[2]))
     size = INCIDENT_RELATION_MARKER_SIZE
-    if kind == "CONTINUATION_CANDIDATE":
+    if kind in {"STRAIGHT_CONTINUATION_CANDIDATE", "SURFACE_CONTINUATION_CANDIDATE"}:
         return (
             ((x - size, y, z), (x + size, y, z)),
             ((x, y - size * 0.35, z), (x, y + size * 0.35, z)),
+        )
+    if kind == "CROSS_SURFACE_CONNECTOR":
+        return (
+            ((x - size, y - size * 0.45, z), (x + size, y + size * 0.45, z)),
+            ((x - size, y + size * 0.45, z), (x + size, y - size * 0.45, z)),
+            ((x, y - size, z), (x, y + size, z)),
         )
     if kind == "ORTHOGONAL_CORNER":
         return (
@@ -285,7 +339,7 @@ def _incident_relation_marker_strokes(
             ((x - size, y - size * 0.35, z), (x, y, z), (x - size, y + size * 0.35, z)),
             ((x, y - size * 0.35, z), (x + size, y, z), (x, y + size * 0.35, z)),
         )
-    if kind == "DEGRADED":
+    if kind in {"MISSING_ENDPOINT_EVIDENCE", "DEGRADED"}:
         return (
             ((x - size, y - size, z), (x + size, y + size, z)),
             ((x - size, y + size, z), (x + size, y - size, z)),
@@ -394,11 +448,21 @@ def _display_edges(edges: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
     return display_edges
 
 
-def _draw_edges(frame: Any, material_index: int, edges: Iterable[dict[str, Any]]) -> int:
+def _draw_edges(
+    frame: Any,
+    material_index: int,
+    edges: Iterable[dict[str, Any]],
+    *,
+    material_indexes_by_color_key: dict[str, int] | None = None,
+) -> int:
     stroke_count = 0
     for edge in edges:
         polyline = edge.get("display_polyline", edge.get("polyline", ()))
-        if _add_stroke(frame, polyline, material_index, EDGE_WIDTH):
+        stroke_material_index = material_index
+        if material_indexes_by_color_key:
+            color_key = str(edge.get("color_key") or "")
+            stroke_material_index = material_indexes_by_color_key.get(color_key, material_index)
+        if _add_stroke(frame, polyline, stroke_material_index, EDGE_WIDTH):
             stroke_count += 1
     return stroke_count
 
@@ -655,6 +719,7 @@ def render_overlay(
     source_object: Any,
     overlay: dict[str, Any],
     *,
+    display_mode: str = DISPLAY_MODE_CONTINUITY,
     show_edges: bool = True,
     show_nodes: bool = True,
     show_junctions: bool = True,
@@ -662,6 +727,8 @@ def render_overlay(
     show_shared_chain_relations: bool = True,
     show_labels: bool = True,
 ) -> dict[str, Any]:
+    if display_mode not in DISPLAY_MODES:
+        display_mode = DISPLAY_MODE_CONTINUITY
     gp_object = _get_or_create_grease_pencil_object(source_object)
     gp_data = gp_object.data
 
@@ -684,6 +751,11 @@ def render_overlay(
     incident_relation_frame = _ensure_frame(incident_relation_layer)
     shared_chain_relation_frame = _ensure_frame(shared_chain_relation_layer)
     edge_material_index = _ensure_material(gp_data, EDGE_MATERIAL_NAME, EDGE_COLOR)
+    continuity_edge_material_indexes = (
+        _continuity_edge_material_indexes(gp_data, overlay)
+        if display_mode == DISPLAY_MODE_CONTINUITY
+        else {}
+    )
     node_material_index = _ensure_material(gp_data, NODE_MATERIAL_NAME, NODE_COLOR)
     junction_material_index = _ensure_material(gp_data, JUNCTION_MATERIAL_NAME, JUNCTION_COLOR)
     incident_relation_material_indexes = {
@@ -707,7 +779,12 @@ def render_overlay(
     incident_relations = list(overlay.get("incident_relations", ()))
     shared_chain_relations = list(overlay.get("shared_chain_relations", ()))
     display_edges = _display_edges(edges)
-    edge_stroke_count = _draw_edges(edge_frame, edge_material_index, display_edges)
+    edge_stroke_count = _draw_edges(
+        edge_frame,
+        edge_material_index,
+        display_edges,
+        material_indexes_by_color_key=continuity_edge_material_indexes,
+    )
     node_marker_count = _draw_nodes(node_frame, node_material_index, nodes)
     junction_marker_count = _draw_junctions(
         junction_frame,
@@ -737,6 +814,9 @@ def render_overlay(
         "scaffold_node_count": int(overlay.get("scaffold_node_count", len(nodes))),
         "scaffold_edge_count": int(overlay.get("scaffold_edge_count", len(edges))),
         "scaffold_junction_count": int(overlay.get("scaffold_junction_count", len(junctions))),
+        "scaffold_continuity_component_count": int(
+            overlay.get("scaffold_continuity_component_count", 0)
+        ),
         "scaffold_node_incident_edge_relation_count": int(
             overlay.get("scaffold_node_incident_edge_relation_count", len(incident_relations))
         ),
@@ -744,6 +824,7 @@ def render_overlay(
             overlay.get("shared_chain_patch_chain_relation_count", len(shared_chain_relations))
         ),
         "grease_pencil_object": gp_object.name,
+        "display_mode": display_mode,
         "edge_layer": EDGE_LAYER_NAME,
         "node_layer": NODE_LAYER_NAME,
         "junction_layer": JUNCTION_LAYER_NAME,
@@ -792,7 +873,9 @@ def clear_overlay(source_name: str | None = None) -> None:
             JUNCTION_MATERIAL_NAME,
             SHARED_CHAIN_RELATION_MATERIAL_NAME,
             LABEL_MATERIAL_NAME,
-        } or material.name.startswith("ScaffoldGraph_IncidentRelation_"):
+        } or material.name.startswith("ScaffoldGraph_IncidentRelation_") or material.name.startswith(
+            CONTINUITY_EDGE_MATERIAL_PREFIX
+        ):
             bpy.data.materials.remove(material)
 
 

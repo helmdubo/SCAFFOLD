@@ -55,7 +55,9 @@ def _format_summary(report: dict[str, Any]) -> str:
     return (
         f"nodes:{report['scaffold_node_count']} "
         f"edges:{report['scaffold_edge_count']} "
+        f"components:{report['scaffold_continuity_component_count']} "
         f"junctions:{report['scaffold_junction_count']} "
+        f"mode:{report['display_mode'].lower()} "
         f"incident:{report['scaffold_node_incident_edge_relation_count']} "
         f"shared:{report['shared_chain_patch_chain_relation_count']} "
         f"strokes:{report['edge_stroke_count']} "
@@ -88,15 +90,20 @@ def show_or_refresh(context: Any) -> tuple[dict[str, Any], str]:
     context.view_layer.objects.active = source_object
 
     overlay = _build_overlay_payload(context)
+    display_mode = str(settings.display_mode or "CONTINUITY")
+    show_incident_relations = bool(settings.show_incident_relations) or display_mode == "RELATIONS"
+    show_shared_chain_relations = bool(settings.show_shared_chain_relations) or display_mode == "RELATIONS"
+    show_labels = bool(settings.show_labels) or display_mode == "RELATIONS"
     render_report = render_overlay(
         source_object,
         overlay,
+        display_mode=display_mode,
         show_edges=bool(settings.show_edges),
         show_nodes=bool(settings.show_nodes),
         show_junctions=bool(settings.show_junctions),
-        show_incident_relations=bool(settings.show_incident_relations),
-        show_shared_chain_relations=bool(settings.show_shared_chain_relations),
-        show_labels=bool(settings.show_labels),
+        show_incident_relations=show_incident_relations,
+        show_shared_chain_relations=show_shared_chain_relations,
+        show_labels=show_labels,
     )
 
     gp_object = bpy.data.objects.get(overlay_object_name(source_object.name))
@@ -144,9 +151,16 @@ def refresh_visibility(context: Any) -> None:
             show_edges=bool(settings.show_edges),
             show_nodes=bool(settings.show_nodes),
             show_junctions=bool(settings.show_junctions),
-            show_incident_relations=bool(settings.show_incident_relations),
-            show_shared_chain_relations=bool(settings.show_shared_chain_relations),
-            show_labels=bool(settings.show_labels),
+            show_incident_relations=(
+                bool(settings.show_incident_relations)
+                or str(settings.display_mode or "CONTINUITY") == "RELATIONS"
+            ),
+            show_shared_chain_relations=(
+                bool(settings.show_shared_chain_relations)
+                or str(settings.display_mode or "CONTINUITY") == "RELATIONS"
+            ),
+            show_labels=bool(settings.show_labels)
+            or str(settings.display_mode or "CONTINUITY") == "RELATIONS",
         )
 
 

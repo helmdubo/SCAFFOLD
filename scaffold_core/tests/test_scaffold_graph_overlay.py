@@ -42,9 +42,13 @@ def _compact_graph_report(source_factory) -> dict[str, int]:
         "shared_chain_patch_chain_relation_count": relations[
             "shared_chain_patch_chain_relation_count"
         ],
+        "scaffold_continuity_component_count": relations[
+            "scaffold_continuity_component_count"
+        ],
         "overlay_node_count": overlay["scaffold_node_count"],
         "overlay_edge_count": overlay["scaffold_edge_count"],
         "overlay_junction_count": overlay["scaffold_junction_count"],
+        "overlay_continuity_component_count": overlay["scaffold_continuity_component_count"],
         "overlay_incident_relation_count": overlay["scaffold_node_incident_edge_relation_count"],
         "overlay_shared_chain_relation_count": overlay["shared_chain_patch_chain_relation_count"],
         "edge_stroke_count": len(overlay["edges"]),
@@ -89,8 +93,10 @@ def test_scaffold_graph_overlay_has_required_debug_payload_shape() -> None:
         "scaffold_junction_count",
         "scaffold_node_incident_edge_relation_count",
         "shared_chain_patch_chain_relation_count",
+        "scaffold_continuity_component_count",
         "nodes",
         "edges",
+        "continuity_components",
         "junctions",
         "incident_relations",
         "shared_chain_relations",
@@ -114,10 +120,29 @@ def test_scaffold_graph_overlay_has_required_debug_payload_shape() -> None:
         "start_scaffold_node_id",
         "end_scaffold_node_id",
         "polyline",
+        "continuity_component_id",
+        "color_key",
+        "continuity_color",
         "confidence",
         "edge_source",
     }
+    assert set(overlay["continuity_components"][0]) == {
+        "id",
+        "color_key",
+        "continuity_color",
+        "scaffold_edge_ids",
+        "scaffold_node_ids",
+        "propagating_incident_relation_ids",
+        "ambiguous_incident_relation_ids",
+        "blocked_incident_relation_ids",
+        "degraded_incident_relation_ids",
+        "warning_relation_ids",
+        "warning_count",
+        "is_ambiguous",
+        "confidence",
+    }
     assert overlay["scaffold_junction_count"] == len(overlay["junctions"])
+    assert overlay["scaffold_continuity_component_count"] == len(overlay["continuity_components"])
     assert overlay["scaffold_node_incident_edge_relation_count"] == len(overlay["incident_relations"])
     assert overlay["shared_chain_patch_chain_relation_count"] == len(overlay["shared_chain_relations"])
     assert overlay["incident_relation_marker_count"] == len(overlay["incident_relations"])
@@ -135,6 +160,8 @@ def test_scaffold_graph_overlay_has_required_debug_payload_shape() -> None:
         "scaffold_node_id",
         "first_scaffold_edge_id",
         "second_scaffold_edge_id",
+        "first_continuity_component_id",
+        "second_continuity_component_id",
         "first_patch_chain_id",
         "second_patch_chain_id",
         "first_endpoint_role",
@@ -209,6 +236,9 @@ def test_scaffold_graph_overlay_uses_existing_graph_records() -> None:
     assert overlay["shared_chain_patch_chain_relation_count"] == len(
         snapshot.shared_chain_patch_chain_relations
     )
+    assert overlay["scaffold_continuity_component_count"] == len(
+        snapshot.scaffold_continuity_components
+    )
     assert overlay["graph"]["id"] == snapshot.scaffold_graph.id
     assert overlay["graph"]["node_ids"] == [node.id for node in snapshot.scaffold_nodes]
     assert overlay["graph"]["edge_ids"] == [edge.id for edge in snapshot.scaffold_edges]
@@ -246,6 +276,7 @@ def test_scaffold_graph_overlay_relation_records_reference_renderable_graph_payl
     overlay = report["scaffold_graph_overlay"]
     node_ids = {node["id"] for node in overlay["nodes"]}
     edge_ids = {edge["id"] for edge in overlay["edges"]}
+    component_ids = {component["id"] for component in overlay["continuity_components"]}
     patch_chain_ids = {edge["patch_chain_id"] for edge in overlay["edges"]}
     edge_polylines = {
         edge["id"]: edge["polyline"]
@@ -262,6 +293,8 @@ def test_scaffold_graph_overlay_relation_records_reference_renderable_graph_payl
         relation["scaffold_node_id"] in node_ids
         and relation["first_scaffold_edge_id"] in edge_ids
         and relation["second_scaffold_edge_id"] in edge_ids
+        and relation["first_continuity_component_id"] in component_ids
+        and relation["second_continuity_component_id"] in component_ids
         and relation["first_patch_chain_id"] in patch_chain_ids
         and relation["second_patch_chain_id"] in patch_chain_ids
         and relation["position"] == node_positions[relation["scaffold_node_id"]]
@@ -304,6 +337,7 @@ def test_scaffold_graph_overlay_exposes_self_seam_junction_markers_for_cylinder(
     }
     assert overlay["scaffold_node_count"] == 2
     assert overlay["scaffold_edge_count"] == 4
+    assert overlay["scaffold_continuity_component_count"] == 4
     assert overlay["scaffold_junction_count"] == 2
     assert len(overlay["junctions"]) == 2
     assert {junction["kind"] for junction in overlay["junctions"]} == {"SELF_SEAM"}
@@ -396,9 +430,11 @@ def test_scaffold_graph_overlay_compact_report_expectations_for_single_patch() -
         "scaffold_junction_count": 0,
         "scaffold_node_incident_edge_relation_count": 1,
         "shared_chain_patch_chain_relation_count": 0,
+        "scaffold_continuity_component_count": 1,
         "overlay_node_count": 1,
         "overlay_edge_count": 1,
         "overlay_junction_count": 0,
+        "overlay_continuity_component_count": 1,
         "overlay_incident_relation_count": 1,
         "overlay_shared_chain_relation_count": 0,
         "edge_stroke_count": 1,
@@ -418,9 +454,11 @@ def test_scaffold_graph_overlay_compact_report_expectations_for_cylinder() -> No
         "scaffold_junction_count": 2,
         "scaffold_node_incident_edge_relation_count": 12,
         "shared_chain_patch_chain_relation_count": 0,
+        "scaffold_continuity_component_count": 4,
         "overlay_node_count": 2,
         "overlay_edge_count": 4,
         "overlay_junction_count": 2,
+        "overlay_continuity_component_count": 4,
         "overlay_incident_relation_count": 12,
         "overlay_shared_chain_relation_count": 0,
         "edge_stroke_count": 4,
@@ -438,9 +476,11 @@ def test_scaffold_graph_overlay_compact_report_expectations_for_closed_shared_lo
         "scaffold_junction_count": 2,
         "scaffold_node_incident_edge_relation_count": 2,
         "shared_chain_patch_chain_relation_count": 1,
+        "scaffold_continuity_component_count": 2,
         "overlay_node_count": 2,
         "overlay_edge_count": 2,
         "overlay_junction_count": 2,
+        "overlay_continuity_component_count": 2,
         "overlay_incident_relation_count": 2,
         "overlay_shared_chain_relation_count": 1,
         "edge_stroke_count": 2,
@@ -462,3 +502,63 @@ def test_scaffold_graph_overlay_report_edges_are_final_patch_chains() -> None:
     assert overlay["scaffold_node_count"] != len(context.source_snapshot.vertices)
     assert overlay["scaffold_edge_count"] == len(context.topology_snapshot.patch_chains)
     assert all(edge["edge_source"] == "FINAL_PATCH_CHAIN" for edge in overlay["edges"])
+    assert all(edge["continuity_component_id"] for edge in overlay["edges"])
+    assert all(edge["color_key"].startswith("continuity:") for edge in overlay["edges"])
+    assert all(len(edge["continuity_color"]) == 4 for edge in overlay["edges"])
+
+
+def test_scaffold_graph_overlay_continuity_colors_are_deterministic() -> None:
+    context = run_pass_1_relations(
+        run_pass_0(make_two_patch_source_with_two_edge_seam_run())
+    )
+
+    first_overlay = inspect_pipeline_context(context, detail="full")["scaffold_graph_overlay"]
+    second_overlay = inspect_pipeline_context(context, detail="full")["scaffold_graph_overlay"]
+
+    first_components = {
+        component["id"]: (component["color_key"], component["continuity_color"])
+        for component in first_overlay["continuity_components"]
+    }
+    second_components = {
+        component["id"]: (component["color_key"], component["continuity_color"])
+        for component in second_overlay["continuity_components"]
+    }
+    first_edges = {
+        edge["id"]: (
+            edge["continuity_component_id"],
+            edge["color_key"],
+            edge["continuity_color"],
+        )
+        for edge in first_overlay["edges"]
+    }
+    second_edges = {
+        edge["id"]: (
+            edge["continuity_component_id"],
+            edge["color_key"],
+            edge["continuity_color"],
+        )
+        for edge in second_overlay["edges"]
+    }
+
+    assert first_components == second_components
+    assert first_edges == second_edges
+
+
+def test_scaffold_graph_overlay_continuity_edge_colors_do_not_use_relation_kind() -> None:
+    context = run_pass_1_relations(
+        run_pass_0(make_two_patch_source_with_two_edge_seam_run())
+    )
+
+    overlay = inspect_pipeline_context(context, detail="full")["scaffold_graph_overlay"]
+    relation_kinds = {relation["kind"] for relation in overlay["incident_relations"]}
+    colors_by_component = {
+        component["id"]: component["continuity_color"]
+        for component in overlay["continuity_components"]
+    }
+
+    assert relation_kinds
+    assert not any(edge["color_key"] in relation_kinds for edge in overlay["edges"])
+    assert all(
+        edge["continuity_color"] == colors_by_component[edge["continuity_component_id"]]
+        for edge in overlay["edges"]
+    )

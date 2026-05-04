@@ -336,6 +336,19 @@ def scaffold_graph_overlay_to_dict(
         node.id: list(_scaffold_node_position(geometry, node.vertex_ids))
         for node in relations.scaffold_nodes
     }
+    continuity_components = sorted(
+        relations.scaffold_continuity_components,
+        key=lambda item: item.id,
+    )
+    continuity_color_by_component_id = {
+        component.id: _continuity_color(index)
+        for index, component in enumerate(continuity_components)
+    }
+    continuity_component_id_by_edge_id = {
+        edge_id: component.id
+        for component in continuity_components
+        for edge_id in component.scaffold_edge_ids
+    }
     nodes_payload = [
         {
             "id": node.id,
@@ -368,6 +381,13 @@ def scaffold_graph_overlay_to_dict(
             "start_scaffold_node_id": edge.start_scaffold_node_id,
             "end_scaffold_node_id": edge.end_scaffold_node_id,
             "polyline": _scaffold_edge_polyline(topology, geometry, edge.patch_chain_id),
+            "continuity_component_id": continuity_component_id_by_edge_id.get(edge.id),
+            "color_key": _continuity_color_key(continuity_component_id_by_edge_id.get(edge.id)),
+            "continuity_color": _continuity_color_by_edge_id(
+                edge.id,
+                continuity_component_id_by_edge_id,
+                continuity_color_by_component_id,
+            ),
             "confidence": edge.confidence,
             "edge_source": _scaffold_edge_source(edge),
         }
@@ -381,6 +401,10 @@ def scaffold_graph_overlay_to_dict(
         relation.id: relation
         for relation in relations.patch_chain_endpoint_relations
     }
+    incident_relation_by_id = {
+        relation.id: relation
+        for relation in relations.scaffold_node_incident_edge_relations
+    }
     return {
         "scaffold_node_count": len(relations.scaffold_nodes),
         "scaffold_edge_count": len(relations.scaffold_edges),
@@ -389,8 +413,17 @@ def scaffold_graph_overlay_to_dict(
             relations.scaffold_node_incident_edge_relations
         ),
         "shared_chain_patch_chain_relation_count": len(relations.shared_chain_patch_chain_relations),
+        "scaffold_continuity_component_count": len(continuity_components),
         "nodes": nodes_payload,
         "edges": edges_payload,
+        "continuity_components": [
+            _scaffold_continuity_component_overlay_to_dict(
+                component,
+                continuity_color_by_component_id,
+                incident_relation_by_id,
+            )
+            for component in continuity_components
+        ],
         "junctions": [
             _scaffold_junction_overlay_to_dict(junction, node_positions)
             for junction in sorted(relations.scaffold_junctions, key=lambda item: item.id)
@@ -401,6 +434,7 @@ def scaffold_graph_overlay_to_dict(
                 relations.scaffold_nodes,
                 node_positions,
                 endpoint_relation_by_id,
+                continuity_component_id_by_edge_id,
             )
             for relation in sorted(
                 relations.scaffold_node_incident_edge_relations,
@@ -425,6 +459,40 @@ def scaffold_graph_overlay_to_dict(
             else None
         ),
     }
+
+
+CONTINUITY_COLOR_PALETTE: tuple[tuple[float, float, float, float], ...] = (
+    (0.12, 0.62, 1.0, 1.0),
+    (0.95, 0.45, 0.18, 1.0),
+    (0.18, 0.78, 0.38, 1.0),
+    (0.82, 0.35, 0.95, 1.0),
+    (0.96, 0.82, 0.18, 1.0),
+    (0.1, 0.78, 0.72, 1.0),
+    (0.92, 0.28, 0.42, 1.0),
+    (0.52, 0.7, 0.18, 1.0),
+)
+CONTINUITY_UNASSIGNED_COLOR = (0.55, 0.55, 0.55, 1.0)
+
+
+def _continuity_color(index: int) -> list[float]:
+    return list(CONTINUITY_COLOR_PALETTE[index % len(CONTINUITY_COLOR_PALETTE)])
+
+
+def _continuity_color_key(component_id: str | None) -> str:
+    if component_id is None:
+        return "continuity:unassigned"
+    return f"continuity:{component_id}"
+
+
+def _continuity_color_by_edge_id(
+    edge_id: str,
+    continuity_component_id_by_edge_id: dict[str, str],
+    continuity_color_by_component_id: dict[str, list[float]],
+) -> list[float]:
+    component_id = continuity_component_id_by_edge_id.get(edge_id)
+    if component_id is None:
+        return list(CONTINUITY_UNASSIGNED_COLOR)
+    return list(continuity_color_by_component_id[component_id])
 
 
 def _patch_chain_display_label(
@@ -534,6 +602,7 @@ def _incident_relation_overlay_to_dict(
     scaffold_nodes,
     node_positions: dict[str, list[float]],
     endpoint_relation_by_id,
+    continuity_component_id_by_edge_id: dict[str, str],
 ) -> dict[str, object]:
     node_by_id = {
         node.id: node
@@ -556,6 +625,12 @@ def _incident_relation_overlay_to_dict(
         "scaffold_node_id": relation.scaffold_node_id,
         "first_scaffold_edge_id": relation.first_scaffold_edge_id,
         "second_scaffold_edge_id": relation.second_scaffold_edge_id,
+        "first_continuity_component_id": continuity_component_id_by_edge_id.get(
+            relation.first_scaffold_edge_id
+        ),
+        "second_continuity_component_id": continuity_component_id_by_edge_id.get(
+            relation.second_scaffold_edge_id
+        ),
         "first_patch_chain_id": str(relation.first_patch_chain_id),
         "second_patch_chain_id": str(relation.second_patch_chain_id),
         "first_endpoint_role": str(relation.first_endpoint_role.value),
@@ -577,6 +652,42 @@ def _incident_relation_overlay_to_dict(
             for evidence in relation.evidence
         ],
     }
+
+
+def _scaffold_continuity_component_overlay_to_dict(
+    component,
+    continuity_color_by_component_id: dict[str, list[float]],
+    incident_relation_by_id: dict[str, object],
+) -> dict[str, object]:
+    degraded_relation_ids = tuple(
+        relation_id
+        for relation_id in component.blocked_incident_relation_ids
+        if _relation_kind_value(incident_relation_by_id.get(relation_id)) == "DEGRADED"
+    )
+    warning_relation_ids = tuple(sorted((
+        *component.ambiguous_incident_relation_ids,
+        *degraded_relation_ids,
+    )))
+    return {
+        "id": component.id,
+        "color_key": _continuity_color_key(component.id),
+        "continuity_color": list(continuity_color_by_component_id[component.id]),
+        "scaffold_edge_ids": list(component.scaffold_edge_ids),
+        "scaffold_node_ids": list(component.scaffold_node_ids),
+        "propagating_incident_relation_ids": list(component.propagating_incident_relation_ids),
+        "ambiguous_incident_relation_ids": list(component.ambiguous_incident_relation_ids),
+        "blocked_incident_relation_ids": list(component.blocked_incident_relation_ids),
+        "degraded_incident_relation_ids": list(degraded_relation_ids),
+        "warning_relation_ids": list(warning_relation_ids),
+        "warning_count": len(warning_relation_ids),
+        "is_ambiguous": component.is_ambiguous,
+        "confidence": component.confidence,
+    }
+
+
+def _relation_kind_value(relation) -> str:
+    kind = getattr(relation, "kind", None)
+    return str(getattr(kind, "value", kind or ""))
 
 
 def _shared_chain_relation_overlay_to_dict(

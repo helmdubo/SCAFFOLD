@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import bpy
-from bpy.props import BoolProperty, PointerProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, PointerProperty, StringProperty
 
-from .session import clear_all, close, refresh_visibility, show_or_refresh
+from .session import clear_all, close, show_or_refresh
 
 
 class SCAFFOLDGRAPH_Settings(bpy.types.PropertyGroup):
@@ -18,6 +18,15 @@ class SCAFFOLDGRAPH_Settings(bpy.types.PropertyGroup):
     show_incident_relations: BoolProperty(name="Incident", default=True)
     show_shared_chain_relations: BoolProperty(name="Shared", default=True)
     show_labels: BoolProperty(name="Labels", default=True)
+    display_mode: EnumProperty(
+        name="Mode",
+        items=(
+            ("IDENTITY", "Identity", "Use the existing edge debug color"),
+            ("CONTINUITY", "Continuity", "Color edges by continuity component"),
+            ("RELATIONS", "Relations", "Expand relation markers and labels"),
+        ),
+        default="CONTINUITY",
+    )
     source_hide_viewport: BoolProperty(name="Stored Viewport Hidden", default=False)
     source_hide_set: BoolProperty(name="Stored Object Hidden", default=False)
 
@@ -90,8 +99,12 @@ class SCAFFOLDGRAPH_OT_UpdateVisibility(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
-        refresh_visibility(context)
-        self.report({"INFO"}, "ScaffoldGraph visibility updated")
+        try:
+            _report, summary = show_or_refresh(context)
+        except Exception as exc:
+            self.report({"ERROR"}, f"ScaffoldGraph visibility update failed: {exc}")
+            return {"CANCELLED"}
+        self.report({"INFO"}, summary)
         return {"FINISHED"}
 
 
@@ -114,6 +127,7 @@ class SCAFFOLDGRAPH_PT_Panel(bpy.types.Panel):
             col.operator("scaffold_graph_debug.show", text="Show Graph", icon="OUTLINER_OB_GREASEPENCIL")
 
         col.separator()
+        col.prop(settings, "display_mode", expand=True)
         row = col.row(align=True)
         row.prop(settings, "show_edges", toggle=True)
         row.prop(settings, "show_nodes", toggle=True)
