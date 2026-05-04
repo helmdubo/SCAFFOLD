@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Mapping
 
 from scaffold_core.core.evidence import Evidence
-from scaffold_core.ids import ChainId, PatchChainId, PatchId, VertexId
+from scaffold_core.ids import BoundaryLoopId, ChainId, PatchChainId, PatchId, VertexId
 from scaffold_core.layer_2_geometry.measures import EPSILON, dot, length, normalize
 from scaffold_core.layer_3_relations.model import (
     EndpointDirectionRelationKind,
@@ -25,16 +25,19 @@ from scaffold_core.layer_3_relations.model import (
     PatchChainEndpointRelation,
     PatchChainEndpointRole,
     PatchChainEndpointSample,
+    LoopCorner,
     ScaffoldEdge,
     ScaffoldNode,
     ScaffoldNodeIncidentEdgeRelation,
     ScaffoldNodeIncidentEdgeRelationKind,
+    SideSurfaceContinuityEvidence,
     SharedChainPatchChainRelation,
     SharedChainPatchChainRelationKind,
 )
 
 
 NODE_INCIDENT_EDGE_POLICY_NAME = "scaffold_node_incident_edge_relation_v1"
+SIDE_SURFACE_CONTINUITY_POLICY_NAME = "side_surface_continuity_evidence_v0"
 SHARED_CHAIN_POLICY_NAME = "shared_chain_patch_chain_relation_v0"
 OPPOSITE_COLLINEAR_MAX_DOT = -0.996
 SAME_RAY_COLLINEAR_MIN_DOT = 0.996
@@ -61,7 +64,9 @@ def build_scaffold_graph_relations(
     endpoint_samples: tuple[PatchChainEndpointSample, ...],
     endpoint_relations: tuple[PatchChainEndpointRelation, ...],
     patch_adjacencies: Mapping[str, PatchAdjacency],
+    loop_corners: tuple[LoopCorner, ...] = (),
 ) -> tuple[
+    tuple[SideSurfaceContinuityEvidence, ...],
     tuple[ScaffoldNodeIncidentEdgeRelation, ...],
     tuple[SharedChainPatchChainRelation, ...],
 ]:
@@ -71,27 +76,6 @@ def build_scaffold_graph_relations(
         edge.patch_chain_id: edge
         for edge in scaffold_edges
     }
-    incident_edge_relations = build_scaffold_node_incident_edge_relations(
-        scaffold_nodes,
-        endpoint_samples,
-        endpoint_relations,
-        edge_by_patch_chain_id,
-    )
-    shared_chain_relations = build_shared_chain_patch_chain_relations(
-        scaffold_edges,
-        patch_adjacencies,
-    )
-    return incident_edge_relations, shared_chain_relations
-
-
-def build_scaffold_node_incident_edge_relations(
-    scaffold_nodes: tuple[ScaffoldNode, ...],
-    endpoint_samples: tuple[PatchChainEndpointSample, ...],
-    endpoint_relations: tuple[PatchChainEndpointRelation, ...],
-    edge_by_patch_chain_id: Mapping[PatchChainId, ScaffoldEdge],
-) -> tuple[ScaffoldNodeIncidentEdgeRelation, ...]:
-    """Build complete node-local pair relations over edge endpoint occurrences."""
-
     samples_by_patch_chain_and_role = _samples_by_patch_chain_and_role(endpoint_samples)
     relation_by_sample_pair = _relation_by_sample_pair(endpoint_relations)
     occurrences_by_node_id = _occurrences_by_node_id(
@@ -99,6 +83,67 @@ def build_scaffold_node_incident_edge_relations(
         edge_by_patch_chain_id,
         samples_by_patch_chain_and_role,
     )
+    side_surface_evidence = build_side_surface_continuity_evidence(
+        scaffold_nodes,
+        occurrences_by_node_id,
+        relation_by_sample_pair,
+        loop_corners,
+    )
+    incident_edge_relations = build_scaffold_node_incident_edge_relations(
+        scaffold_nodes,
+        occurrences_by_node_id,
+        relation_by_sample_pair,
+        side_surface_evidence,
+    )
+    shared_chain_relations = build_shared_chain_patch_chain_relations(
+        scaffold_edges,
+        patch_adjacencies,
+    )
+    return side_surface_evidence, incident_edge_relations, shared_chain_relations
+
+
+def build_side_surface_continuity_evidence(
+    scaffold_nodes: tuple[ScaffoldNode, ...],
+    occurrences_by_node_id: Mapping[str, tuple[_IncidentEdgeOccurrence, ...]],
+    relation_by_sample_pair: Mapping[tuple[str, str], PatchChainEndpointRelation],
+    loop_corners: tuple[LoopCorner, ...],
+) -> tuple[SideSurfaceContinuityEvidence, ...]:
+    """Build explicit same-side surface evidence before incident classification."""
+
+    loop_corner_by_ordered_pair = _loop_corner_by_ordered_pair(loop_corners)
+    records: list[SideSurfaceContinuityEvidence] = []
+    for node in sorted(scaffold_nodes, key=lambda item: item.id):
+        occurrences = tuple(sorted(
+            occurrences_by_node_id.get(node.id, ()),
+            key=_occurrence_sort_key,
+        ))
+        for first, second in combinations(occurrences, 2):
+            endpoint_relation = _endpoint_relation_for_occurrences(
+                first,
+                second,
+                relation_by_sample_pair,
+            )
+            record = _side_surface_continuity_evidence(
+                node,
+                first,
+                second,
+                endpoint_relation,
+                loop_corner_by_ordered_pair,
+            )
+            if record is not None:
+                records.append(record)
+    return tuple(records)
+
+
+def build_scaffold_node_incident_edge_relations(
+    scaffold_nodes: tuple[ScaffoldNode, ...],
+    occurrences_by_node_id: Mapping[str, tuple[_IncidentEdgeOccurrence, ...]],
+    relation_by_sample_pair: Mapping[tuple[str, str], PatchChainEndpointRelation],
+    side_surface_evidence: tuple[SideSurfaceContinuityEvidence, ...],
+) -> tuple[ScaffoldNodeIncidentEdgeRelation, ...]:
+    """Build complete node-local pair relations over edge endpoint occurrences."""
+
+    side_surface_evidence_by_pair = _side_surface_evidence_by_pair(side_surface_evidence)
     relations: list[ScaffoldNodeIncidentEdgeRelation] = []
     for node in sorted(scaffold_nodes, key=lambda item: item.id):
         occurrences = tuple(sorted(
@@ -111,7 +156,14 @@ def build_scaffold_node_incident_edge_relations(
                 second,
                 relation_by_sample_pair,
             )
-            relations.append(_incident_edge_relation(node, first, second, endpoint_relation, occurrences))
+            relations.append(_incident_edge_relation(
+                node,
+                first,
+                second,
+                endpoint_relation,
+                side_surface_evidence_by_pair.get(_node_occurrence_pair_key(node.id, first, second)),
+                occurrences,
+            ))
     return tuple(relations)
 
 
@@ -251,23 +303,23 @@ def _incident_edge_relation(
     first: _IncidentEdgeOccurrence,
     second: _IncidentEdgeOccurrence,
     endpoint_relation: PatchChainEndpointRelation | None,
+    side_surface_evidence: SideSurfaceContinuityEvidence | None,
     node_occurrences: tuple[_IncidentEdgeOccurrence, ...],
 ) -> ScaffoldNodeIncidentEdgeRelation:
     first_edge = first.scaffold_edge
     second_edge = second.scaffold_edge
     direction_dot, normal_dot = _dot_values(first, second, endpoint_relation)
     base_kind = _incident_edge_kind(first, second, endpoint_relation, direction_dot, normal_dot)
-    sliding_evidence = _surface_sliding_evidence(
-        node,
+    should_promote_sliding = _should_promote_surface_sliding(
         first,
         second,
         node_occurrences,
         base_kind,
-        normal_dot,
+        side_surface_evidence,
     )
     kind = (
         ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
-        if sliding_evidence is not None
+        if should_promote_sliding
         else base_kind
     )
     confidence = _incident_edge_confidence(node, first, second, endpoint_relation, kind)
@@ -299,7 +351,7 @@ def _incident_edge_relation(
             kind,
             confidence,
             base_kind,
-            sliding_evidence,
+            side_surface_evidence if should_promote_sliding else None,
         ),),
     )
 
@@ -398,18 +450,33 @@ def _has_strong_normal_evidence(
     )
 
 
-def _surface_sliding_evidence(
-    node: ScaffoldNode,
+def _should_promote_surface_sliding(
     first: _IncidentEdgeOccurrence,
     second: _IncidentEdgeOccurrence,
     node_occurrences: tuple[_IncidentEdgeOccurrence, ...],
     base_kind: ScaffoldNodeIncidentEdgeRelationKind,
-    normal_dot: float | None,
-) -> dict[str, object] | None:
-    if base_kind not in SLIDING_BASE_KINDS:
-        return None
+    side_surface_evidence: SideSurfaceContinuityEvidence | None,
+) -> bool:
+    if side_surface_evidence is None or base_kind not in SLIDING_BASE_KINDS:
+        return False
+    if base_kind is ScaffoldNodeIncidentEdgeRelationKind.SAME_RAY_AMBIGUOUS:
+        return True
+    return _has_recurrent_previous_chain(first, second, node_occurrences)
+
+
+def _side_surface_continuity_evidence(
+    node: ScaffoldNode,
+    first: _IncidentEdgeOccurrence,
+    second: _IncidentEdgeOccurrence,
+    endpoint_relation: PatchChainEndpointRelation | None,
+    loop_corner_by_ordered_pair: Mapping[
+        tuple[PatchId, BoundaryLoopId, VertexId, PatchChainId, PatchChainId],
+        LoopCorner,
+    ],
+) -> SideSurfaceContinuityEvidence | None:
     if first.endpoint_sample is None or second.endpoint_sample is None:
         return None
+    _, normal_dot = _dot_values(first, second, endpoint_relation)
     if first.scaffold_edge.patch_id != second.scaffold_edge.patch_id:
         return None
     if first.scaffold_edge.loop_id != second.scaffold_edge.loop_id:
@@ -422,6 +489,17 @@ def _surface_sliding_evidence(
         return None
     if first.endpoint_sample.vertex_id != second.endpoint_sample.vertex_id:
         return None
+    loop_corner = loop_corner_by_ordered_pair.get(
+        _loop_corner_pair_key(
+            first.scaffold_edge.patch_id,
+            first.scaffold_edge.loop_id,
+            first.endpoint_sample.vertex_id,
+            first.scaffold_edge.patch_chain_id,
+            second.scaffold_edge.patch_chain_id,
+        )
+    )
+    if loop_corner is None:
+        return None
     if (
         first.endpoint_sample.owner_normal_source
         is not OwnerNormalSource.LOCAL_FACE_FAN_NORMAL
@@ -433,28 +511,120 @@ def _surface_sliding_evidence(
         return None
     if normal_dot is None or normal_dot < COMPATIBLE_NORMAL_MIN_DOT:
         return None
+    if _is_degraded_sample(first.endpoint_sample) or _is_degraded_sample(second.endpoint_sample):
+        return None
+    if (
+        endpoint_relation is not None
+        and endpoint_relation.direction_relation is EndpointDirectionRelationKind.DEGENERATE
+    ):
+        return None
+    confidence_values = [
+        node.confidence,
+        first.scaffold_edge.confidence,
+        second.scaffold_edge.confidence,
+        first.endpoint_sample.confidence,
+        second.endpoint_sample.confidence,
+    ]
+    if endpoint_relation is not None:
+        confidence_values.append(endpoint_relation.confidence)
+    confidence = min(confidence_values)
+    evidence_id = (
+        "side_surface_continuity_evidence:"
+        f"{node.id}:{_occurrence_id(first)}:{_occurrence_id(second)}"
+    )
+    return SideSurfaceContinuityEvidence(
+        id=evidence_id,
+        scaffold_node_id=node.id,
+        first_scaffold_edge_id=first.scaffold_edge.id,
+        second_scaffold_edge_id=second.scaffold_edge.id,
+        first_patch_chain_id=first.scaffold_edge.patch_chain_id,
+        second_patch_chain_id=second.scaffold_edge.patch_chain_id,
+        first_endpoint_role=first.endpoint_role,
+        second_endpoint_role=second.endpoint_role,
+        patch_id=first.scaffold_edge.patch_id,
+        loop_id=first.scaffold_edge.loop_id,
+        first_chain_id=first.scaffold_edge.chain_id,
+        second_chain_id=second.scaffold_edge.chain_id,
+        vertex_id=first.endpoint_sample.vertex_id,
+        source_vertex_ids=tuple(sorted(node.source_vertex_ids, key=str)),
+        first_endpoint_sample_id=first.endpoint_sample.id,
+        second_endpoint_sample_id=second.endpoint_sample.id,
+        normal_dot=normal_dot,
+        normal_evidence_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL.value,
+        confidence=confidence,
+        evidence=(_side_surface_evidence(
+            node,
+            first,
+            second,
+            endpoint_relation,
+            normal_dot,
+            confidence,
+            loop_corner,
+        ),),
+    )
 
+
+def _side_surface_evidence_by_pair(
+    evidence_records: tuple[SideSurfaceContinuityEvidence, ...],
+) -> dict[tuple[str, str, str], SideSurfaceContinuityEvidence]:
+    return {
+        (
+            record.scaffold_node_id,
+            f"{record.first_endpoint_role.value}:{record.first_scaffold_edge_id}:{record.first_patch_chain_id}:{record.first_endpoint_sample_id}",
+            f"{record.second_endpoint_role.value}:{record.second_scaffold_edge_id}:{record.second_patch_chain_id}:{record.second_endpoint_sample_id}",
+        ): record
+        for record in evidence_records
+    }
+
+
+def _node_occurrence_pair_key(
+    node_id: str,
+    first: _IncidentEdgeOccurrence,
+    second: _IncidentEdgeOccurrence,
+) -> tuple[str, str, str]:
+    return (node_id, _occurrence_id(first), _occurrence_id(second))
+
+
+def _loop_corner_by_ordered_pair(
+    loop_corners: tuple[LoopCorner, ...],
+) -> dict[tuple[PatchId, BoundaryLoopId, VertexId, PatchChainId, PatchChainId], LoopCorner]:
+    return {
+        _loop_corner_pair_key(
+            corner.patch_id,
+            corner.loop_id,
+            corner.vertex_id,
+            corner.previous_patch_chain_id,
+            corner.next_patch_chain_id,
+        ): corner
+        for corner in loop_corners
+    }
+
+
+def _loop_corner_pair_key(
+    patch_id: PatchId,
+    loop_id: BoundaryLoopId,
+    vertex_id: VertexId,
+    previous_patch_chain_id: PatchChainId,
+    next_patch_chain_id: PatchChainId,
+) -> tuple[PatchId, BoundaryLoopId, VertexId, PatchChainId, PatchChainId]:
+    return (
+        patch_id,
+        loop_id,
+        vertex_id,
+        previous_patch_chain_id,
+        next_patch_chain_id,
+    )
+
+
+def _has_recurrent_previous_chain(
+    first: _IncidentEdgeOccurrence,
+    second: _IncidentEdgeOccurrence,
+    node_occurrences: tuple[_IncidentEdgeOccurrence, ...],
+) -> bool:
     duplicated_chain_keys = _same_patch_chain_keys_with_recurrence(node_occurrences)
     first_key = (first.scaffold_edge.chain_id, first.scaffold_edge.patch_id)
     second_key = (second.scaffold_edge.chain_id, second.scaffold_edge.patch_id)
-    if first_key not in duplicated_chain_keys or second_key in duplicated_chain_keys:
-        return None
-
-    return {
-        "normal_evidence_source": (
-            first.endpoint_sample.owner_normal_source.value,
-            second.endpoint_sample.owner_normal_source.value,
-        ),
-        "same_side_surface_evidence_source": (
-            "same_patch_same_loop_local_face_fan_at_materialized_vertex_with_self_seam_recurrence"
-        ),
-        "original_tangent_local_category": base_kind.value,
-        "materialized_vertex_id": str(first.endpoint_sample.vertex_id),
-        "self_seam_chain_id": str(first.scaffold_edge.chain_id),
-        "patch_id": str(first.scaffold_edge.patch_id),
-        "loop_id": str(first.scaffold_edge.loop_id),
-        "normal_dot": normal_dot,
-    }
+    return first_key in duplicated_chain_keys and second_key not in duplicated_chain_keys
 
 
 def _same_patch_chain_keys_with_recurrence(
@@ -511,7 +681,7 @@ def _incident_edge_evidence(
     kind: ScaffoldNodeIncidentEdgeRelationKind,
     confidence: float,
     base_kind: ScaffoldNodeIncidentEdgeRelationKind,
-    sliding_evidence: dict[str, object] | None,
+    side_surface_evidence: SideSurfaceContinuityEvidence | None,
 ) -> Evidence:
     first_edge = first.scaffold_edge
     second_edge = second.scaffold_edge
@@ -532,12 +702,68 @@ def _incident_edge_evidence(
         "original_tangent_local_category": base_kind.value,
         "confidence": confidence,
     }
-    if sliding_evidence is not None:
-        data.update(sliding_evidence)
+    if side_surface_evidence is not None:
+        data.update({
+            "side_surface_continuity_evidence_id": side_surface_evidence.id,
+            "same_side_surface_evidence_source": SIDE_SURFACE_CONTINUITY_POLICY_NAME,
+            "normal_evidence_source": side_surface_evidence.normal_evidence_source,
+            "materialized_vertex_id": str(side_surface_evidence.vertex_id),
+            "source_vertex_ids": [
+                str(source_vertex_id)
+                for source_vertex_id in side_surface_evidence.source_vertex_ids
+            ],
+            "patch_id": str(side_surface_evidence.patch_id),
+            "loop_id": str(side_surface_evidence.loop_id),
+            "first_chain_id": str(side_surface_evidence.first_chain_id),
+            "second_chain_id": str(side_surface_evidence.second_chain_id),
+            "normal_dot": side_surface_evidence.normal_dot,
+        })
     return Evidence(
         source="layer_3_relations.scaffold_graph_relations",
         summary="node-local ScaffoldEdge endpoint occurrence pair relation",
         data=data,
+    )
+
+
+def _side_surface_evidence(
+    node: ScaffoldNode,
+    first: _IncidentEdgeOccurrence,
+    second: _IncidentEdgeOccurrence,
+    endpoint_relation: PatchChainEndpointRelation | None,
+    normal_dot: float,
+    confidence: float,
+    loop_corner: LoopCorner,
+) -> Evidence:
+    return Evidence(
+        source="layer_3_relations.scaffold_graph_relations",
+        summary="same-side surface flow evidence between edge endpoint occurrences",
+        data={
+            "policy": SIDE_SURFACE_CONTINUITY_POLICY_NAME,
+            "scaffold_node_id": node.id,
+            "first_scaffold_edge_id": first.scaffold_edge.id,
+            "second_scaffold_edge_id": second.scaffold_edge.id,
+            "first_patch_chain_id": str(first.scaffold_edge.patch_chain_id),
+            "second_patch_chain_id": str(second.scaffold_edge.patch_chain_id),
+            "first_endpoint_role": first.endpoint_role.value,
+            "second_endpoint_role": second.endpoint_role.value,
+            "patch_id": str(first.scaffold_edge.patch_id),
+            "loop_id": str(first.scaffold_edge.loop_id),
+            "first_chain_id": str(first.scaffold_edge.chain_id),
+            "second_chain_id": str(second.scaffold_edge.chain_id),
+            "vertex_id": str(first.endpoint_sample.vertex_id) if first.endpoint_sample is not None else None,
+            "source_vertex_ids": [
+                str(source_vertex_id)
+                for source_vertex_id in sorted(node.source_vertex_ids, key=str)
+            ],
+            "first_endpoint_sample_id": first.endpoint_sample.id if first.endpoint_sample is not None else None,
+            "second_endpoint_sample_id": second.endpoint_sample.id if second.endpoint_sample is not None else None,
+            "patch_chain_endpoint_relation_id": endpoint_relation.id if endpoint_relation is not None else None,
+            "loop_corner_id": loop_corner.id,
+            "position_in_loop": loop_corner.position_in_loop,
+            "normal_dot": normal_dot,
+            "normal_evidence_source": OwnerNormalSource.LOCAL_FACE_FAN_NORMAL.value,
+            "confidence": confidence,
+        },
     )
 
 

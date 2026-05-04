@@ -80,12 +80,13 @@ def build_relation_snapshot(
     )
     scaffold_edges, scaffold_graph = build_scaffold_graph(topology, scaffold_nodes)
     scaffold_junctions = build_scaffold_junctions(scaffold_nodes, scaffold_edges)
-    scaffold_node_incident_edge_relations, shared_chain_patch_chain_relations = build_scaffold_graph_relations(
+    side_surface_continuity_evidence, scaffold_node_incident_edge_relations, shared_chain_patch_chain_relations = build_scaffold_graph_relations(
         scaffold_nodes,
         scaffold_edges,
         patch_chain_endpoint_samples,
         patch_chain_endpoint_relations,
         patch_adjacencies,
+        loop_corners,
     )
     scaffold_continuity_components = build_scaffold_continuity_components(
         scaffold_edges,
@@ -104,6 +105,7 @@ def build_relation_snapshot(
         scaffold_edges=scaffold_edges,
         scaffold_graph=scaffold_graph,
         scaffold_junctions=scaffold_junctions,
+        side_surface_continuity_evidence=side_surface_continuity_evidence,
         scaffold_node_incident_edge_relations=scaffold_node_incident_edge_relations,
         shared_chain_patch_chain_relations=shared_chain_patch_chain_relations,
         scaffold_continuity_components=scaffold_continuity_components,

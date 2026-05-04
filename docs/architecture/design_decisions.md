@@ -235,8 +235,8 @@ Implemented v1 relation kinds:
   direction.
 
 SURFACE_SLIDING_CONTINUATION_CANDIDATE requires local owner-normal evidence,
-compatible local owner normals and explicit same-side-surface evidence. Once
-implemented, SideSurfaceContinuityEvidence v0 may be consumed as this explicit
+compatible local owner normals and explicit same-side-surface evidence.
+SideSurfaceContinuityEvidence v0 may be consumed as this explicit
 same-side-surface evidence source. Missing or degraded evidence must not
 produce this kind. SharedChainPatchChainRelation alone must not produce this
 kind. Cross-patch cap, corner and shared-boundary cases must remain
@@ -278,8 +278,8 @@ true random.
 Default propagation policy:
 - SURFACE_CONTINUATION_CANDIDATE propagates continuity.
 - SURFACE_SLIDING_CONTINUATION_CANDIDATE propagates continuity by default.
-- SideSurfaceContinuityEvidence v0 must not propagate continuity directly; if
-  implemented, it may affect continuity only through a
+- SideSurfaceContinuityEvidence v0 must not propagate continuity directly; it
+  may affect continuity only through a
   SURFACE_SLIDING_CONTINUATION_CANDIDATE relation.
 - STRAIGHT_CONTINUATION_CANDIDATE is weak evidence and does not propagate by
   default in v0.
@@ -295,13 +295,12 @@ path choice, rail, circuit, UV direction, runtime behavior or replacement for
 ScaffoldEdge or PatchChain identity, and it must not introduce H/V, U/V,
 WORLD_UP, WorldOrientation, Feature, API, UI, runtime solve or UV transfer.
 
-## DD-41 - SideSurfaceContinuityEvidence v0 is planned evidence only
+## DD-41 - SideSurfaceContinuityEvidence v0 is evidence only
 
-Approved/planned SideSurfaceContinuityEvidence v0 is a Layer 3 derived evidence
+Implemented SideSurfaceContinuityEvidence v0 is a Layer 3 derived evidence
 record over two existing ScaffoldEdge endpoint occurrences at one existing
 ScaffoldNode. It proves that the two edge-end occurrences are candidate
-same-side surface flow within one patch boundary loop. It is not implemented
-yet.
+same-side surface flow within one patch boundary loop.
 
 It is evidence only. It is not a trace path choice, not a selected next edge,
 not a rail, not a circuit, not a UV direction, not a feature and not runtime
@@ -380,4 +379,4 @@ That future option should convert sharp information into seam/boundary input bef
 
 ## Open questions
 
-- **OQ-11 - Geometry-based Chain / PatchChain refinement policy.** Status: partially resolved. Final PatchChain is the public source of truth; raw boundary elements are builder internals; Layer 3 may derive directional evidence from final PatchChains; polygonal straight/turning Chains can be described by ChainDirectionalRun / PatchChain directional evidence; directional evidence must not become a competing PatchChain identity; ScaffoldNode may group materialized Vertex occurrences as graph-level evidence but not Layer 1 identity; implemented ScaffoldNodeIncidentEdgeRelation v1 is all-pairs graph evidence over existing ScaffoldNode incident edge-end occurrences and must not choose traces, circuits, rails or continuations; implemented ScaffoldContinuityComponent v0 may group existing ScaffoldEdges into continuity-family evidence without choosing trace, circuit, rail or continuation targets; implemented SURFACE_SLIDING_CONTINUATION_CANDIDATE is conservative curved/side-surface continuation evidence and must not choose traces, circuits, rails or continuation targets; approved/planned SideSurfaceContinuityEvidence v0 is evidence-only same-side surface flow input for sliding and must not propagate continuity directly. Curved-chain policy, sawtooth tuning, user split marks, closed-loop wrap merge policy, advanced corner detection, local face-fan refinement policy and trace/circuit/rail construction over ScaffoldGraph remain unresolved. See `G0.md` Section 6.
+- **OQ-11 - Geometry-based Chain / PatchChain refinement policy.** Status: partially resolved. Final PatchChain is the public source of truth; raw boundary elements are builder internals; Layer 3 may derive directional evidence from final PatchChains; polygonal straight/turning Chains can be described by ChainDirectionalRun / PatchChain directional evidence; directional evidence must not become a competing PatchChain identity; ScaffoldNode may group materialized Vertex occurrences as graph-level evidence but not Layer 1 identity; implemented ScaffoldNodeIncidentEdgeRelation v1 is all-pairs graph evidence over existing ScaffoldNode incident edge-end occurrences and must not choose traces, circuits, rails or continuations; implemented ScaffoldContinuityComponent v0 may group existing ScaffoldEdges into continuity-family evidence without choosing trace, circuit, rail or continuation targets; implemented SURFACE_SLIDING_CONTINUATION_CANDIDATE is conservative curved/side-surface continuation evidence and must not choose traces, circuits, rails or continuation targets; implemented SideSurfaceContinuityEvidence v0 is evidence-only same-side surface flow input for sliding and must not propagate continuity directly. Curved-chain policy, sawtooth tuning, user split marks, closed-loop wrap merge policy, advanced corner detection, local face-fan refinement policy and trace/circuit/rail construction over ScaffoldGraph remain unresolved. See `G0.md` Section 6.

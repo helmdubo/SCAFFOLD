@@ -91,6 +91,7 @@ def test_scaffold_graph_overlay_has_required_debug_payload_shape() -> None:
         "scaffold_node_count",
         "scaffold_edge_count",
         "scaffold_junction_count",
+        "side_surface_continuity_evidence_count",
         "scaffold_node_incident_edge_relation_count",
         "shared_chain_patch_chain_relation_count",
         "scaffold_continuity_component_count",
@@ -98,10 +99,12 @@ def test_scaffold_graph_overlay_has_required_debug_payload_shape() -> None:
         "edges",
         "continuity_components",
         "junctions",
+        "side_surface_continuity_evidence",
         "incident_relations",
         "shared_chain_relations",
         "incident_relation_marker_count",
         "shared_chain_relation_marker_count",
+        "side_surface_continuity_evidence_marker_count",
         "graph",
     }
     assert set(overlay["nodes"][0]) == {
@@ -144,8 +147,14 @@ def test_scaffold_graph_overlay_has_required_debug_payload_shape() -> None:
     assert overlay["scaffold_junction_count"] == len(overlay["junctions"])
     assert overlay["scaffold_continuity_component_count"] == len(overlay["continuity_components"])
     assert overlay["scaffold_node_incident_edge_relation_count"] == len(overlay["incident_relations"])
+    assert overlay["side_surface_continuity_evidence_count"] == len(
+        overlay["side_surface_continuity_evidence"]
+    )
     assert overlay["shared_chain_patch_chain_relation_count"] == len(overlay["shared_chain_relations"])
     assert overlay["incident_relation_marker_count"] == len(overlay["incident_relations"])
+    assert overlay["side_surface_continuity_evidence_marker_count"] == len(
+        overlay["side_surface_continuity_evidence"]
+    )
     assert overlay["shared_chain_relation_marker_count"] == len(overlay["shared_chain_relations"])
     assert len(overlay["junctions"]) == 2
     assert {junction["kind"] for junction in overlay["junctions"]} == {"CROSS_PATCH"}
@@ -351,9 +360,19 @@ def test_scaffold_graph_overlay_exposes_self_seam_junction_markers_for_cylinder(
     ]
     assert all(
         relation["evidence"][0]["data"]["same_side_surface_evidence_source"]
-        == "same_patch_same_loop_local_face_fan_at_materialized_vertex_with_self_seam_recurrence"
+        == "side_surface_continuity_evidence_v0"
         for relation in sliding_relations
     )
+    assert len(overlay["side_surface_continuity_evidence"]) == 4
+    consumed_evidence_ids = {
+        relation["evidence"][0]["data"]["side_surface_continuity_evidence_id"]
+        for relation in sliding_relations
+    }
+    assert len(consumed_evidence_ids) == 2
+    assert consumed_evidence_ids <= {
+        evidence["id"]
+        for evidence in overlay["side_surface_continuity_evidence"]
+    }
     assert len(overlay["junctions"]) == 2
     assert {junction["kind"] for junction in overlay["junctions"]} == {"SELF_SEAM"}
     assert all(junction["scaffold_node_id"] in node_ids for junction in overlay["junctions"])

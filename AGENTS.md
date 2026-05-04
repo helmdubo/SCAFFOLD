@@ -177,11 +177,6 @@ LocalFaceFanGeometryFacts
 ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence matrix
 ScaffoldContinuityComponent v0 derived evidence view over ScaffoldEdges
 ScaffoldNodeIncidentEdgeRelationKind SURFACE_SLIDING_CONTINUATION_CANDIDATE v0
-```
-
-Approved/planned in G3:
-
-```text
 SideSurfaceContinuityEvidence v0 evidence-only same-side surface flow record
 ```
 
@@ -234,11 +229,11 @@ curved/side-surface continuation with explicit same-side-surface evidence and
 compatible local owner normals. It must not choose trace paths, next edges,
 rails, circuits, UV direction or solve behavior.
 
-SideSurfaceContinuityEvidence v0 is approved/planned, not implemented. It is a
-Layer 3 derived evidence record over two existing ScaffoldEdge endpoint
+SideSurfaceContinuityEvidence v0 is implemented as a Layer 3 derived evidence
+record over two existing ScaffoldEdge endpoint
 occurrences at one existing ScaffoldNode proving candidate same-side surface
 flow within one patch boundary loop. SURFACE_SLIDING_CONTINUATION_CANDIDATE
-may consume it as its same-side-surface evidence source once implemented.
+consumes it as its same-side-surface evidence source.
 ScaffoldContinuityComponent v0 must not propagate directly through
 SideSurfaceContinuityEvidence; it may continue propagating only through
 SURFACE_SLIDING_CONTINUATION_CANDIDATE.

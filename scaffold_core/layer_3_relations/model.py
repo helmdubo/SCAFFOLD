@@ -334,6 +334,32 @@ class ScaffoldNodeIncidentEdgeRelation:
 
 
 @dataclass(frozen=True)
+class SideSurfaceContinuityEvidence:
+    """Evidence-only same-side surface flow between two edge-end occurrences."""
+
+    id: str
+    scaffold_node_id: str
+    first_scaffold_edge_id: str
+    second_scaffold_edge_id: str
+    first_patch_chain_id: PatchChainId
+    second_patch_chain_id: PatchChainId
+    first_endpoint_role: PatchChainEndpointRole
+    second_endpoint_role: PatchChainEndpointRole
+    patch_id: PatchId
+    loop_id: BoundaryLoopId
+    first_chain_id: ChainId
+    second_chain_id: ChainId
+    vertex_id: VertexId
+    source_vertex_ids: tuple[SourceVertexId, ...]
+    first_endpoint_sample_id: str
+    second_endpoint_sample_id: str
+    normal_dot: float
+    normal_evidence_source: str
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class SharedChainPatchChainRelation:
     """Graph-level relation between final PatchChains sharing one Chain."""
 
@@ -381,6 +407,7 @@ class RelationSnapshot:
     scaffold_edges: tuple[ScaffoldEdge, ...] = ()
     scaffold_graph: ScaffoldGraph | None = None
     scaffold_junctions: tuple[ScaffoldJunction, ...] = ()
+    side_surface_continuity_evidence: tuple[SideSurfaceContinuityEvidence, ...] = ()
     scaffold_node_incident_edge_relations: tuple[ScaffoldNodeIncidentEdgeRelation, ...] = ()
     shared_chain_patch_chain_relations: tuple[SharedChainPatchChainRelation, ...] = ()
     scaffold_continuity_components: tuple[ScaffoldContinuityComponent, ...] = ()

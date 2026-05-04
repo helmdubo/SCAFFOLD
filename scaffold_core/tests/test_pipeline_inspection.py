@@ -215,6 +215,7 @@ def test_inspection_default_output_is_compact() -> None:
         "scaffold_edge_count": 2,
         "scaffold_graph_count": 1,
         "scaffold_junction_count": 2,
+        "side_surface_continuity_evidence_count": 0,
         "scaffold_node_incident_edge_relation_count": 2,
         "shared_chain_patch_chain_relation_count": 1,
         "scaffold_continuity_component_count": 2,

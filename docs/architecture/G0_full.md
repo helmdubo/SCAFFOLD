@@ -28,7 +28,7 @@ This document is the canonical reference for subsequent implementation plans: G1
 - Implemented ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence contract.
 - Implemented ScaffoldContinuityComponent v0 continuity-family evidence contract.
 - Implemented SURFACE_SLIDING_CONTINUATION_CANDIDATE relation-kind contract.
-- Approved planned SideSurfaceContinuityEvidence v0 same-side surface flow evidence contract.
+- Implemented SideSurfaceContinuityEvidence v0 same-side surface flow evidence contract.
 - Amended DD-29 to allow topology/materialization-based border coalescing.
 - Marked OQ-11 as partially resolved for polygonal straight/turning Chains.
 
@@ -276,7 +276,6 @@ documentation cleanup.
 | `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
-| `SideSurfaceContinuityEvidence` | Approved/planned evidence-only same-side surface flow record over two existing ScaffoldEdge endpoint occurrences at one existing ScaffoldNode; not implemented yet. |
 | `WorldOrientation` | Future/deferred parallel semantic overlay. |
 
 Future terms reserve naming and constraints only. They must not be implemented
@@ -671,8 +670,7 @@ choice, not a selected next edge, not a rail/circuit decision and not a UV
 direction.
 
 It requires local owner-normal evidence, compatible local owner normals and
-explicit same-side-surface evidence. Once implemented,
-SideSurfaceContinuityEvidence v0 may be consumed as this explicit
+explicit same-side-surface evidence. SideSurfaceContinuityEvidence v0 may be consumed as this explicit
 same-side-surface evidence source. Missing or degraded evidence must not produce
 this kind. SharedChainPatchChainRelation alone must not produce this kind.
 Cross-patch cap, corner and shared-boundary cases must remain non-propagating
@@ -1171,8 +1169,8 @@ WorldOrientation, Feature, API, UI, runtime solve or UV transfer.
 Default propagation policy:
 - SURFACE_CONTINUATION_CANDIDATE propagates continuity.
 - SURFACE_SLIDING_CONTINUATION_CANDIDATE propagates continuity by default.
-- SideSurfaceContinuityEvidence v0 must not propagate continuity directly; if
-  implemented, it may affect continuity only through a
+- SideSurfaceContinuityEvidence v0 must not propagate continuity directly; it
+  may affect continuity only through a
   SURFACE_SLIDING_CONTINUATION_CANDIDATE relation.
 - STRAIGHT_CONTINUATION_CANDIDATE is weak evidence and does not propagate by
   default in v0.
@@ -1185,13 +1183,12 @@ singleton components. If multiple continuation-compatible candidates meet at
 the same ScaffoldNode, the component may be marked ambiguous; v0 must preserve
 that ambiguity and must not choose one continuation target.
 
-## DD-41 - SideSurfaceContinuityEvidence v0 is planned evidence only
+## DD-41 - SideSurfaceContinuityEvidence v0 is evidence only
 
-Approved/planned SideSurfaceContinuityEvidence v0 is a Layer 3 derived evidence
+Implemented SideSurfaceContinuityEvidence v0 is a Layer 3 derived evidence
 record over two existing ScaffoldEdge endpoint occurrences at one existing
 ScaffoldNode. It proves that the two edge-end occurrences are candidate
-same-side surface flow within one patch boundary loop. It is not implemented
-yet.
+same-side surface flow within one patch boundary loop.
 
 It is evidence only. It is not a trace path choice, not a selected next edge,
 not a rail, not a circuit, not a UV direction, not a feature and not runtime
@@ -1321,9 +1318,6 @@ Implemented:
 - G3c10 - ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence matrix
 - G3c11 - ScaffoldContinuityComponent v0
 - G3c12 - SURFACE_SLIDING_CONTINUATION_CANDIDATE conservative classifier
-
-Approved/planned:
-- SideSurfaceContinuityEvidence v0 evidence-only same-side surface flow record
 
 Deferred:
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH

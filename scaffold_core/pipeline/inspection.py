@@ -149,6 +149,7 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         "scaffold_edge_count": len(relations.scaffold_edges),
         "scaffold_graph_count": 1 if relations.scaffold_graph is not None else 0,
         "scaffold_junction_count": len(relations.scaffold_junctions),
+        "side_surface_continuity_evidence_count": len(relations.side_surface_continuity_evidence),
         "scaffold_node_incident_edge_relation_count": len(
             relations.scaffold_node_incident_edge_relations
         ),
@@ -284,6 +285,10 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
             _scaffold_junction_to_dict(junction)
             for junction in sorted(relations.scaffold_junctions, key=lambda item: item.id)
         ],
+        "side_surface_continuity_evidence": [
+            _side_surface_continuity_evidence_to_dict(evidence)
+            for evidence in sorted(relations.side_surface_continuity_evidence, key=lambda item: item.id)
+        ],
         "scaffold_node_incident_edge_relations": [
             _scaffold_node_incident_edge_relation_to_dict(relation)
             for relation in sorted(relations.scaffold_node_incident_edge_relations, key=lambda item: item.id)
@@ -409,6 +414,7 @@ def scaffold_graph_overlay_to_dict(
         "scaffold_node_count": len(relations.scaffold_nodes),
         "scaffold_edge_count": len(relations.scaffold_edges),
         "scaffold_junction_count": len(relations.scaffold_junctions),
+        "side_surface_continuity_evidence_count": len(relations.side_surface_continuity_evidence),
         "scaffold_node_incident_edge_relation_count": len(
             relations.scaffold_node_incident_edge_relations
         ),
@@ -427,6 +433,10 @@ def scaffold_graph_overlay_to_dict(
         "junctions": [
             _scaffold_junction_overlay_to_dict(junction, node_positions)
             for junction in sorted(relations.scaffold_junctions, key=lambda item: item.id)
+        ],
+        "side_surface_continuity_evidence": [
+            _side_surface_continuity_evidence_overlay_to_dict(evidence, node_positions)
+            for evidence in sorted(relations.side_surface_continuity_evidence, key=lambda item: item.id)
         ],
         "incident_relations": [
             _incident_relation_overlay_to_dict(
@@ -449,6 +459,9 @@ def scaffold_graph_overlay_to_dict(
             relations.scaffold_node_incident_edge_relations
         ),
         "shared_chain_relation_marker_count": len(relations.shared_chain_patch_chain_relations),
+        "side_surface_continuity_evidence_marker_count": len(
+            relations.side_surface_continuity_evidence
+        ),
         "graph": (
             {
                 "id": graph.id,
@@ -650,6 +663,45 @@ def _incident_relation_overlay_to_dict(
                 "data": dict(evidence.data),
             }
             for evidence in relation.evidence
+        ],
+    }
+
+
+def _side_surface_continuity_evidence_overlay_to_dict(
+    evidence,
+    node_positions: dict[str, list[float]],
+) -> dict[str, object]:
+    return {
+        "id": evidence.id,
+        "scaffold_node_id": evidence.scaffold_node_id,
+        "first_scaffold_edge_id": evidence.first_scaffold_edge_id,
+        "second_scaffold_edge_id": evidence.second_scaffold_edge_id,
+        "first_patch_chain_id": str(evidence.first_patch_chain_id),
+        "second_patch_chain_id": str(evidence.second_patch_chain_id),
+        "first_endpoint_role": str(evidence.first_endpoint_role.value),
+        "second_endpoint_role": str(evidence.second_endpoint_role.value),
+        "patch_id": str(evidence.patch_id),
+        "loop_id": str(evidence.loop_id),
+        "first_chain_id": str(evidence.first_chain_id),
+        "second_chain_id": str(evidence.second_chain_id),
+        "vertex_id": str(evidence.vertex_id),
+        "source_vertex_ids": [
+            str(source_vertex_id)
+            for source_vertex_id in evidence.source_vertex_ids
+        ],
+        "first_endpoint_sample_id": evidence.first_endpoint_sample_id,
+        "second_endpoint_sample_id": evidence.second_endpoint_sample_id,
+        "normal_dot": evidence.normal_dot,
+        "normal_evidence_source": evidence.normal_evidence_source,
+        "confidence": evidence.confidence,
+        "position": list(node_positions.get(evidence.scaffold_node_id, (0.0, 0.0, 0.0))),
+        "evidence": [
+            {
+                "source": item.source,
+                "summary": item.summary,
+                "data": dict(item.data),
+            }
+            for item in evidence.evidence
         ],
     }
 
@@ -927,6 +979,41 @@ def _scaffold_node_incident_edge_relation_to_dict(relation) -> dict[str, object]
                 "data": dict(evidence.data),
             }
             for evidence in relation.evidence
+        ],
+    }
+
+
+def _side_surface_continuity_evidence_to_dict(evidence) -> dict[str, object]:
+    return {
+        "id": evidence.id,
+        "scaffold_node_id": evidence.scaffold_node_id,
+        "first_scaffold_edge_id": evidence.first_scaffold_edge_id,
+        "second_scaffold_edge_id": evidence.second_scaffold_edge_id,
+        "first_patch_chain_id": str(evidence.first_patch_chain_id),
+        "second_patch_chain_id": str(evidence.second_patch_chain_id),
+        "first_endpoint_role": str(evidence.first_endpoint_role.value),
+        "second_endpoint_role": str(evidence.second_endpoint_role.value),
+        "patch_id": str(evidence.patch_id),
+        "loop_id": str(evidence.loop_id),
+        "first_chain_id": str(evidence.first_chain_id),
+        "second_chain_id": str(evidence.second_chain_id),
+        "vertex_id": str(evidence.vertex_id),
+        "source_vertex_ids": [
+            str(source_vertex_id)
+            for source_vertex_id in evidence.source_vertex_ids
+        ],
+        "first_endpoint_sample_id": evidence.first_endpoint_sample_id,
+        "second_endpoint_sample_id": evidence.second_endpoint_sample_id,
+        "normal_dot": evidence.normal_dot,
+        "normal_evidence_source": evidence.normal_evidence_source,
+        "confidence": evidence.confidence,
+        "evidence": [
+            {
+                "source": item.source,
+                "summary": item.summary,
+                "data": dict(item.data),
+            }
+            for item in evidence.evidence
         ],
     }
 
