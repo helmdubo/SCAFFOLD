@@ -65,6 +65,11 @@ Implemented:
 - SURFACE_SLIDING_CONTINUATION_CANDIDATE as a conservative
   ScaffoldNodeIncidentEdgeRelationKind.
 
+Approved/planned:
+
+- SideSurfaceContinuityEvidence v0 as an evidence-only same-side surface flow
+  record, not implemented yet.
+
 Validation status:
 
 - ScaffoldGraph and ScaffoldJunction compact report expectations are captured
@@ -98,6 +103,7 @@ Current terminology for the final boundary graph model:
 | `ScaffoldJunction` | Implemented SELF_SEAM/CROSS_PATCH graph-level classification overlay on existing ScaffoldNode, not a separate graph node identity. |
 | `ScaffoldContinuityComponent` | Implemented G3c11 derived evidence view grouping existing ScaffoldEdges into continuity families. |
 | `SURFACE_SLIDING_CONTINUATION_CANDIDATE` | Implemented conservative ScaffoldNodeIncidentEdgeRelationKind for curved/side-surface continuation evidence. |
+| `SideSurfaceContinuityEvidence` | Approved/planned evidence-only same-side surface flow record over two existing ScaffoldEdge endpoint occurrences at one existing ScaffoldNode; not implemented yet. |
 | `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
@@ -542,7 +548,9 @@ Implemented v1 kinds:
 `SURFACE_SLIDING_CONTINUATION_CANDIDATE` is not a trace path choice, not a
 selected next edge, not a rail/circuit decision and not a UV direction. It
 requires local owner-normal evidence, compatible local owner normals and
-explicit same-side-surface evidence. Missing or degraded evidence must not
+explicit same-side-surface evidence. Once implemented,
+SideSurfaceContinuityEvidence v0 may be consumed as this explicit
+same-side-surface evidence source. Missing or degraded evidence must not
 produce this kind. SharedChainPatchChainRelation alone must not produce this
 kind. Cross-patch cap, corner and shared-boundary cases must remain
 non-propagating unless same-side-surface evidence is explicit and safe.
@@ -571,6 +579,64 @@ Rules:
 - no H/V, U/V, WORLD_UP, WorldOrientation, Feature, API, UI, runtime solve or
   UV transfer.
 
+## Approved/planned - SideSurfaceContinuityEvidence v0
+
+SideSurfaceContinuityEvidence v0 is approved/planned, not implemented. It is a
+Layer 3 derived evidence record over two existing ScaffoldEdge endpoint
+occurrences at one existing ScaffoldNode.
+
+Meaning:
+
+- the two edge-end occurrences are candidate same-side surface flow within one
+  patch boundary loop;
+- evidence only;
+- not a trace path choice;
+- not a selected next edge;
+- not a rail, circuit, UV direction, feature or runtime solve.
+
+Required v0 evidence:
+
+- same ScaffoldNodeId;
+- same PatchId;
+- same LoopId;
+- different ChainId;
+- both ScaffoldEdge endpoint occurrence roles are explicit and
+  serialized/traceable;
+- same materialized/source vertex at the node;
+- endpoint roles form ordered local adjacency END -> START;
+- both endpoint samples exist;
+- both owner normals use LOCAL_FACE_FAN_NORMAL;
+- normal_dot is greater than or equal to the ScaffoldNodeIncidentEdgeRelation
+  compatible-normal threshold source, currently COMPATIBLE_NORMAL_MIN_DOT in
+  scaffold_core/layer_3_relations/scaffold_graph_relations.py;
+- neither endpoint evidence is missing or degraded.
+
+Explicit non-evidence:
+
+- same-chain pairs;
+- cross-patch pairs;
+- different-loop pairs;
+- shared-chain-only pairs;
+- cap, corner or cross-surface pairs without explicit same-side evidence;
+- missing or degraded endpoint or normal evidence.
+
+Consumption:
+
+- SURFACE_SLIDING_CONTINUATION_CANDIDATE may consume
+  SideSurfaceContinuityEvidence v0 as its same-side-surface evidence source
+  once implemented.
+- ScaffoldContinuityComponent v0 may continue propagating through
+  SURFACE_SLIDING_CONTINUATION_CANDIDATE only.
+- ScaffoldContinuityComponent v0 must not propagate directly through
+  SideSurfaceContinuityEvidence.
+
+Fixture expectation:
+
+- Local `D:\cylinder.blend` should produce SideSurfaceContinuityEvidence for the
+  same-patch same-loop END -> START local-normal-compatible pairs identified by
+  audit, but it remains exploratory until a synthetic equivalent fixture is
+  added.
+
 ## G3c11 - ScaffoldContinuityComponent v0
 
 ScaffoldContinuityComponent v0 is implemented as a Layer 3 derived evidence
@@ -588,6 +654,7 @@ Default propagation policy:
 |---|---|
 | `SURFACE_CONTINUATION_CANDIDATE` | Propagates continuity. |
 | `SURFACE_SLIDING_CONTINUATION_CANDIDATE` | Propagates continuity by default. |
+| `SideSurfaceContinuityEvidence` | Does not propagate directly; may affect components only through `SURFACE_SLIDING_CONTINUATION_CANDIDATE`. |
 | `STRAIGHT_CONTINUATION_CANDIDATE` | Weak evidence; non-default for propagation in v0. |
 | `ORTHOGONAL_CORNER` | Does not propagate. |
 | `OBLIQUE_CONNECTOR` | Does not propagate. |

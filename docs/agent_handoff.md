@@ -103,6 +103,7 @@ Implemented:
 
 Not implemented:
 
+- SideSurfaceContinuityEvidence v0 (approved/planned evidence-only record)
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
 - ScaffoldTrace
 - ScaffoldCircuit
@@ -172,6 +173,12 @@ ScaffoldRail:
 ScaffoldContinuityComponent:
   implemented Layer 3 derived evidence view grouping existing ScaffoldEdges into
   continuity families from ScaffoldNodeIncidentEdgeRelation records.
+
+SideSurfaceContinuityEvidence:
+  approved/planned, not implemented. Layer 3 derived evidence record over two
+  existing ScaffoldEdge endpoint occurrences at one existing ScaffoldNode. It
+  proves candidate same-side surface flow within one patch boundary loop and is
+  evidence only.
 ```
 
 ---
@@ -311,7 +318,9 @@ endpoint occurrences where tangent/chord classification may otherwise look
 orthogonal or same-ray, but explicit same-side-surface evidence plus compatible
 local owner normals support continuation along the same curved or side surface.
 It requires local owner-normal evidence, compatible local owner normals and
-explicit same-side-surface evidence. Missing/degraded evidence and
+explicit same-side-surface evidence. Once implemented,
+SideSurfaceContinuityEvidence v0 may be consumed as this explicit
+same-side-surface evidence source. Missing/degraded evidence and
 SharedChainPatchChainRelation alone must not produce this kind. Cross-patch cap,
 corner and shared-boundary cases remain non-propagating unless
 same-side-surface evidence is explicit and safe.
@@ -320,6 +329,19 @@ This relation is evidence only. It must not choose traces, circuits, rails,
 continuations, UV behavior or runtime behavior, and must not change
 ScaffoldNode grouping or ScaffoldEdge, PatchChain, Chain, Vertex or
 BoundaryLoop identity.
+
+SideSurfaceContinuityEvidence v0 is approved/planned, not implemented. It is a
+Layer 3 derived evidence record over two existing ScaffoldEdge endpoint
+occurrences at one existing ScaffoldNode. Required evidence is same
+ScaffoldNodeId, same PatchId, same LoopId, different ChainId, explicit and
+serialized/traceable endpoint occurrence roles, same materialized/source vertex
+at the node, ordered local adjacency END -> START, both endpoint samples,
+LOCAL_FACE_FAN_NORMAL for both owner normals, normal_dot greater than or equal
+to the ScaffoldNodeIncidentEdgeRelation compatible-normal threshold source
+COMPATIBLE_NORMAL_MIN_DOT, and no missing or degraded endpoint evidence.
+Same-chain, cross-patch, different-loop, shared-chain-only, cap/corner or
+cross-surface pairs without explicit same-side evidence, and missing/degraded
+endpoint or normal evidence are non-evidence.
 
 ScaffoldContinuityComponent v0 groups ScaffoldEdges into continuity families
 using existing ScaffoldNodeIncidentEdgeRelation records. Default propagation
@@ -330,6 +352,9 @@ CROSS_SURFACE_CONNECTOR, SAME_RAY_AMBIGUOUS, MISSING_ENDPOINT_EVIDENCE and
 DEGRADED do not propagate; SAME_RAY_AMBIGUOUS must preserve ambiguity. Every
 ScaffoldEdge belongs to exactly one component, including singletons, and
 ambiguous component evidence must not choose one continuation target.
+ScaffoldContinuityComponent v0 must not propagate directly through
+SideSurfaceContinuityEvidence; it may continue only through
+SURFACE_SLIDING_CONTINUATION_CANDIDATE.
 
 Debug component coloring should represent continuity_component_id, not relation
 kind. Relation kind remains a separate visual channel, and component colors
@@ -382,14 +407,15 @@ Still unresolved:
 
 ## Next architecture decision
 
-Current implementation checkpoint: SURFACE_SLIDING_CONTINUATION_CANDIDATE is
-implemented as conservative evidence and ScaffoldContinuityComponent v0
-propagates through it by default, without implementing ScaffoldTrace,
-ScaffoldCircuit, ScaffoldRail, UV direction or solve behavior. Tube without
-caps produces two side continuity families rather than four singleton side
-boundary edges; folded 90 seam, cube-like and cap-cross-surface cases remain
-non-propagating. Treat local `D:\cylinder.blend` as exploratory smoke only, not
-as the canonical synthetic fixture.
+Current implementation checkpoint: SideSurfaceContinuityEvidence v0 is
+approved/planned but not implemented. The next implementation slice is to add
+the evidence-only Layer 3 record and synthetic fixture for same-patch same-loop
+END -> START LOCAL_FACE_FAN_NORMAL-compatible pairs, then allow
+SURFACE_SLIDING_CONTINUATION_CANDIDATE to consume it as the explicit
+same-side-surface evidence source. ScaffoldContinuityComponent v0 must continue
+to propagate only through SURFACE_SLIDING_CONTINUATION_CANDIDATE, not directly
+through SideSurfaceContinuityEvidence. Treat local `D:\cylinder.blend` as
+exploratory smoke only, not as the canonical synthetic fixture.
 
 Grease Pencil rendering consumes the pipeline inspection overlay payload instead
 of duplicating core graph logic. Do not import Blender into Scaffold Core.
