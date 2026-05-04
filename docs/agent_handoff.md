@@ -103,6 +103,11 @@ Implemented:
 - SideSurfaceContinuityEvidence v1 evidence-only same-side surface flow record
   with direction/flow-family gate
 
+Approved/planned, not implemented:
+
+- SurfaceFlowCompatibilityEvidence v0 evidence-only cross-patch flow-family
+  compatibility record
+
 Not implemented:
 
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
@@ -180,6 +185,12 @@ SideSurfaceContinuityEvidence:
   existing ScaffoldEdge endpoint occurrences at one existing ScaffoldNode. It
   proves candidate same-side surface flow within one patch boundary loop and
   compatible direction/flow-family evidence. It is evidence only.
+
+SurfaceFlowCompatibilityEvidence:
+  approved/planned, not implemented Layer 3 derived evidence record over two
+  existing ScaffoldEdge endpoint occurrences or edge-pair occurrences across
+  compatible patches. It proves cross-patch surface-flow family compatibility
+  only. It is separate from SideSurfaceContinuityEvidence and is evidence only.
 ```
 
 ---
@@ -370,6 +381,39 @@ ScaffoldContinuityComponent v0 must not propagate directly through
 SideSurfaceContinuityEvidence; it may continue only through
 SURFACE_SLIDING_CONTINUATION_CANDIDATE.
 
+SurfaceFlowCompatibilityEvidence v0 is approved/planned, not implemented. It is
+a Layer 3 derived evidence record over two existing ScaffoldEdge endpoint
+occurrences or edge-pair occurrences across compatible patches. It means the two
+PatchChains are compatible members of the same surface-flow family across patch
+boundaries. It is separate from SideSurfaceContinuityEvidence, which handles
+same-patch/same-loop local side flow.
+
+Planned rule A covers ring flow without SharedChainPatchChainRelation when the
+current ScaffoldNodeIncidentEdgeRelation kind is SAME_RAY_AMBIGUOUS, endpoint
+samples are present, AlignmentClass/direction-family and PatchAxes role are
+compatible where available, both patches are compatible side/dual-axis patches,
+the pair is not same-patch, and evidence is not missing/degraded. Positive
+Cube.001 examples are P1C1/P2C0 and P1C3/P2C2; negative examples are
+P0C1/P1C1 and P0C0/P2C0.
+
+Planned rule B covers side-side seam flow through a SharedChainPatchChainRelation
+when both patches are compatible side/dual-axis patches with matching PatchAxes
+structure, same AlignmentClass/direction-family, same PatchAxes role where
+available, no cap-like single-axis patch participation, and no missing/degraded
+evidence unless a future edge-level fallback is explicitly approved. Positive
+Cube.001 example is P1C2/P2C3; negative examples are P0C0/P2C0 and P0C1/P1C1.
+
+SurfaceFlowCompatibilityEvidence must not choose traces, circuits, rails,
+selected next edges, continuation targets, UV direction, features or runtime
+solve behavior. It must not reintroduce same-loop alignment:0 <-> alignment:1
+false merges. P1C0/P2C1 and other missing-endpoint lower-side flow remain
+deferred in v0; do not add edge-level fallback in this slice.
+SURFACE_SLIDING_CONTINUATION_CANDIDATE may consume
+SurfaceFlowCompatibilityEvidence as an additional same-flow evidence source once
+implemented. ScaffoldContinuityComponent v0 must not propagate directly through
+SurfaceFlowCompatibilityEvidence and continues to propagate only through
+SURFACE_*_CONTINUATION_CANDIDATE relation kinds.
+
 Debug component coloring should represent continuity_component_id, not relation
 kind. Relation kind remains a separate visual channel, and component colors
 must be deterministic pseudo-random and stable by component id, never true
@@ -416,23 +460,25 @@ Still unresolved:
 - advanced corner detection;
 - local face-fan refinement policy;
 - trace/circuit/rail construction over ScaffoldGraph.
-- lower-side cross-patch or same-chain lower-ring flow evidence.
+- lower-side cross-patch or same-chain lower-ring flow endpoint fallback.
 
 ---
 
 ## Next architecture decision
 
 Current implementation checkpoint: SideSurfaceContinuityEvidence v1 is
-implemented as the evidence-only Layer 3 record consumed by
-SURFACE_SLIDING_CONTINUATION_CANDIDATE. The direction/flow-family gate is
-implemented and uses existing AlignmentClass membership. ScaffoldContinuityComponent v0
-continues to propagate only through SURFACE_SLIDING_CONTINUATION_CANDIDATE, not
-directly through SideSurfaceContinuityEvidence. Treat local `D:\cylinder.blend`
-as exploratory smoke only, not as the canonical synthetic fixture. Wrong merges
-P1C1->P1C2, P1C2->P1C3, P2C3->P2C0 and P2C2->P2C3 in Cube.001 are examples of
-ORTHOGONAL_CORNER pairs crossing alignment:0 <-> alignment:1 that v1 blocks
-instead of promoting. Missing lower-side cross-patch or same-chain lower-ring flow
-is deferred and requires a separate evidence contract if needed later.
+implemented as the evidence-only Layer 3 same-patch/same-loop record consumed by
+SURFACE_SLIDING_CONTINUATION_CANDIDATE. SurfaceFlowCompatibilityEvidence v0 is
+approved/planned but not implemented as cross-patch flow-family compatibility
+evidence. ScaffoldContinuityComponent v0 continues to propagate only through
+SURFACE_*_CONTINUATION_CANDIDATE relation kinds, not directly through
+SideSurfaceContinuityEvidence or SurfaceFlowCompatibilityEvidence. Treat local
+`D:\cylinder.blend` as exploratory smoke only, not as the canonical synthetic
+fixture. Wrong merges P1C1->P1C2, P1C2->P1C3, P2C3->P2C0 and P2C2->P2C3 in
+Cube.001 are examples of ORTHOGONAL_CORNER pairs crossing alignment:0 <->
+alignment:1 that v1 blocks instead of promoting. Missing lower-side endpoint
+fallback such as P1C0/P2C1 remains deferred and requires a separate evidence
+contract if needed later.
 
 Grease Pencil rendering consumes the pipeline inspection overlay payload instead
 of duplicating core graph logic. Do not import Blender into Scaffold Core.

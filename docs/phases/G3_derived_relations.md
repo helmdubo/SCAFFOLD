@@ -67,6 +67,11 @@ Implemented:
 - SideSurfaceContinuityEvidence v1 as an evidence-only same-side surface flow
   record with a direction/flow-family gate.
 
+Approved/planned, not implemented:
+
+- SurfaceFlowCompatibilityEvidence v0 as an evidence-only cross-patch
+  flow-family compatibility record.
+
 Validation status:
 
 - ScaffoldGraph and ScaffoldJunction compact report expectations are captured
@@ -101,6 +106,7 @@ Current terminology for the final boundary graph model:
 | `ScaffoldContinuityComponent` | Implemented G3c11 derived evidence view grouping existing ScaffoldEdges into continuity families. |
 | `SURFACE_SLIDING_CONTINUATION_CANDIDATE` | Implemented conservative ScaffoldNodeIncidentEdgeRelationKind for curved/side-surface continuation evidence. |
 | `SideSurfaceContinuityEvidence` | Implemented v1 evidence-only same-side surface flow record over two existing ScaffoldEdge endpoint occurrences at one existing ScaffoldNode, gated by compatible AlignmentClass direction families. |
+| `SurfaceFlowCompatibilityEvidence` | Approved/planned v0 evidence-only cross-patch surface-flow family compatibility record over existing ScaffoldEdge endpoint occurrences or edge-pair occurrences across compatible patches. Not implemented yet. |
 | `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
@@ -671,6 +677,7 @@ Default propagation policy:
 | `SURFACE_CONTINUATION_CANDIDATE` | Propagates continuity. |
 | `SURFACE_SLIDING_CONTINUATION_CANDIDATE` | Propagates continuity by default. |
 | `SideSurfaceContinuityEvidence` | Does not propagate directly; may affect components only through `SURFACE_SLIDING_CONTINUATION_CANDIDATE`. |
+| `SurfaceFlowCompatibilityEvidence` | Not implemented; must not propagate directly. Once implemented, it may affect components only through `SURFACE_SLIDING_CONTINUATION_CANDIDATE` or another explicit `SURFACE_*_CONTINUATION_CANDIDATE` relation kind. |
 | `STRAIGHT_CONTINUATION_CANDIDATE` | Weak evidence; non-default for propagation in v0. |
 | `ORTHOGONAL_CORNER` | Does not propagate. |
 | `OBLIQUE_CONNECTOR` | Does not propagate. |
@@ -702,6 +709,75 @@ Rules:
   behavior.
 - no H/V, U/V, WORLD_UP, WorldOrientation, Feature, API, UI, runtime solve or
   UV transfer.
+
+## Planned - SurfaceFlowCompatibilityEvidence v0
+
+SurfaceFlowCompatibilityEvidence v0 is approved/planned as a Layer 3 derived
+evidence record over two existing ScaffoldEdge endpoint occurrences or
+edge-pair occurrences across compatible patches.
+
+Meaning:
+
+- the two PatchChains are compatible members of the same surface-flow family
+  across patch boundaries;
+- evidence only;
+- separate from SideSurfaceContinuityEvidence, which handles same-patch,
+  same-loop local side flow;
+- not a trace path choice;
+- not a selected next edge;
+- not a rail, circuit, UV direction, feature or runtime solve.
+
+Planned v0 rule A - ring flow without shared-chain relation:
+
+- current ScaffoldNodeIncidentEdgeRelation kind is SAME_RAY_AMBIGUOUS;
+- endpoint samples are present;
+- same AlignmentClass/direction-family;
+- same PatchAxes role where available;
+- both participating patches are compatible side/dual-axis patches, not
+  cap-like single-axis patches;
+- no SharedChainPatchChainRelation exists for the pair;
+- the pair is not in the same patch;
+- evidence is not missing or degraded.
+
+Rule A examples for Cube.001:
+
+- positive: P1C1/P2C0 and P1C3/P2C2;
+- negative: P0C1/P1C1 and P0C0/P2C0.
+
+Planned v0 rule B - side-side seam flow through shared chain:
+
+- SharedChainPatchChainRelation exists for the pair;
+- both patches are compatible side/dual-axis patches with matching PatchAxes
+  structure;
+- same AlignmentClass/direction-family;
+- same PatchAxes role where available;
+- no cap-like single-axis patch participates;
+- evidence is not missing or degraded unless a future edge-level fallback is
+  explicitly approved.
+
+Rule B examples for Cube.001:
+
+- positive: P1C2/P2C3;
+- negative: P0C0/P2C0 and P0C1/P1C1.
+
+Explicit non-goals:
+
+- do not solve P1C0/P2C1 in v0 while endpoint evidence is missing;
+- do not add edge-level fallback for missing endpoint samples in v0;
+- do not allow ScaffoldContinuityComponent to consume
+  SurfaceFlowCompatibilityEvidence directly;
+- do not reintroduce same-loop alignment:0 <-> alignment:1 false merges;
+- do not implement Trace, Circuit or Rail.
+
+Consumption:
+
+- SURFACE_SLIDING_CONTINUATION_CANDIDATE may consume
+  SurfaceFlowCompatibilityEvidence as an additional same-flow evidence source
+  once SurfaceFlowCompatibilityEvidence is implemented.
+- ScaffoldContinuityComponent v0 continues to propagate only through
+  `SURFACE_*_CONTINUATION_CANDIDATE` relation kinds.
+- ScaffoldContinuityComponent v0 must not propagate directly through
+  SurfaceFlowCompatibilityEvidence.
 
 ## Future - ScaffoldTrace
 
