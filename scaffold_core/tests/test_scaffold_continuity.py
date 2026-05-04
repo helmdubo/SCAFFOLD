@@ -184,34 +184,49 @@ def test_competing_surface_sliding_candidates_mark_ambiguity_without_path_choice
     assert components[0].ambiguous_incident_relation_ids == ("relation:ab", "relation:ac")
 
 
-def test_simple_tube_without_caps_has_two_continuity_families() -> None:
-    components = _snapshot_components(make_cylinder_tube_without_caps_with_one_seam_source)
+def test_simple_tube_without_caps_merges_through_explicit_sliding_relations() -> None:
+    snapshot = _snapshot(make_cylinder_tube_without_caps_with_one_seam_source)
+    components = snapshot.scaffold_continuity_components
+    sliding_relation_ids = {
+        relation.id
+        for relation in snapshot.scaffold_node_incident_edge_relations
+        if relation.kind is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
+    }
 
-    assert len(components) == 2
-    assert sorted(len(component.scaffold_edge_ids) for component in components) == [2, 2]
+    assert len(components) == 1
+    assert sorted(len(component.scaffold_edge_ids) for component in components) == [4]
+    assert {
+        relation_id
+        for component in components
+        for relation_id in component.propagating_incident_relation_ids
+    } == sliding_relation_ids
 
 
-def test_segmented_tube_without_caps_has_two_continuity_families() -> None:
+def test_segmented_tube_without_caps_merges_through_explicit_sliding_relations() -> None:
     components = _snapshot_components(make_segmented_cylinder_tube_without_caps_with_one_seam_source)
 
-    assert len(components) == 2
-    assert sorted(len(component.scaffold_edge_ids) for component in components) == [2, 2]
+    assert len(components) == 1
+    assert sorted(len(component.scaffold_edge_ids) for component in components) == [4]
 
 
-def test_folded_90_seam_has_no_sliding_continuity_propagation() -> None:
+def test_folded_90_seam_propagates_only_through_explicit_sliding_relations() -> None:
     snapshot = run_pass_1_relations(
         run_pass_0(make_two_quad_folded_source_with_seam_on_shared_edge())
     ).relation_snapshot
 
     assert snapshot is not None
-    assert not any(
-        relation.kind is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
+    sliding_relation_ids = {
+        relation.id
         for relation in snapshot.scaffold_node_incident_edge_relations
-    )
-    assert all(
-        not component.propagating_incident_relation_ids
+        if relation.kind is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
+    }
+    assert len(sliding_relation_ids) == len(snapshot.side_surface_continuity_evidence)
+    assert {
+        relation_id
         for component in snapshot.scaffold_continuity_components
-    )
+        for relation_id in component.propagating_incident_relation_ids
+    } == sliding_relation_ids
+    assert len(snapshot.scaffold_continuity_components) == 2
 
 
 def test_closed_shared_loop_has_no_sliding_continuity_propagation() -> None:
@@ -230,7 +245,7 @@ def test_closed_shared_loop_has_no_sliding_continuity_propagation() -> None:
     )
 
 
-def test_planar_l_seam_surface_continuation_behavior_remains_unchanged() -> None:
+def test_planar_l_seam_explicit_side_surface_evidence_promotes_only_through_relations() -> None:
     snapshot = run_pass_1_relations(
         run_pass_0(make_two_patch_source_with_two_edge_seam_run())
     ).relation_snapshot
@@ -240,11 +255,18 @@ def test_planar_l_seam_surface_continuation_behavior_remains_unchanged() -> None
         relation.kind is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_CONTINUATION_CANDIDATE
         for relation in snapshot.scaffold_node_incident_edge_relations
     )
-    assert not any(
-        relation.kind is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
+    sliding_relation_ids = {
+        relation.id
         for relation in snapshot.scaffold_node_incident_edge_relations
-    )
-    assert len(snapshot.scaffold_continuity_components) == 3
+        if relation.kind is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
+    }
+    assert len(sliding_relation_ids) == len(snapshot.side_surface_continuity_evidence)
+    assert {
+        relation_id
+        for component in snapshot.scaffold_continuity_components
+        for relation_id in component.propagating_incident_relation_ids
+    } >= sliding_relation_ids
+    assert len(snapshot.scaffold_continuity_components) == 1
 
 
 def test_every_scaffold_edge_is_assigned_exactly_once() -> None:
@@ -324,9 +346,13 @@ def _components(
 
 
 def _snapshot_components(source_factory):
+    return _snapshot(source_factory).scaffold_continuity_components
+
+
+def _snapshot(source_factory):
     snapshot = run_pass_1_relations(run_pass_0(source_factory())).relation_snapshot
     assert snapshot is not None
-    return snapshot.scaffold_continuity_components
+    return snapshot
 
 
 def _edges(suffixes: tuple[str, ...]) -> tuple[ScaffoldEdge, ...]:

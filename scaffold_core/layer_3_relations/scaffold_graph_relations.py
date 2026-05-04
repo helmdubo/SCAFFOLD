@@ -310,6 +310,7 @@ def _incident_edge_relation(
     second_edge = second.scaffold_edge
     direction_dot, normal_dot = _dot_values(first, second, endpoint_relation)
     base_kind = _incident_edge_kind(first, second, endpoint_relation, direction_dot, normal_dot)
+    recurrence_evidence_present = _has_recurrent_previous_chain(first, second, node_occurrences)
     should_promote_sliding = _should_promote_surface_sliding(
         first,
         second,
@@ -352,6 +353,7 @@ def _incident_edge_relation(
             confidence,
             base_kind,
             side_surface_evidence if should_promote_sliding else None,
+            recurrence_evidence_present,
         ),),
     )
 
@@ -459,9 +461,7 @@ def _should_promote_surface_sliding(
 ) -> bool:
     if side_surface_evidence is None or base_kind not in SLIDING_BASE_KINDS:
         return False
-    if base_kind is ScaffoldNodeIncidentEdgeRelationKind.SAME_RAY_AMBIGUOUS:
-        return True
-    return _has_recurrent_previous_chain(first, second, node_occurrences)
+    return True
 
 
 def _side_surface_continuity_evidence(
@@ -682,6 +682,7 @@ def _incident_edge_evidence(
     confidence: float,
     base_kind: ScaffoldNodeIncidentEdgeRelationKind,
     side_surface_evidence: SideSurfaceContinuityEvidence | None,
+    recurrence_evidence_present: bool,
 ) -> Evidence:
     first_edge = first.scaffold_edge
     second_edge = second.scaffold_edge
@@ -717,6 +718,7 @@ def _incident_edge_evidence(
             "first_chain_id": str(side_surface_evidence.first_chain_id),
             "second_chain_id": str(side_surface_evidence.second_chain_id),
             "normal_dot": side_surface_evidence.normal_dot,
+            "recurrence_evidence_present": recurrence_evidence_present,
         })
     return Evidence(
         source="layer_3_relations.scaffold_graph_relations",
