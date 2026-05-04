@@ -244,7 +244,7 @@ def test_closed_shared_loop_has_no_sliding_continuity_propagation() -> None:
     )
 
 
-def test_planar_l_seam_does_not_promote_orthogonal_pairs_without_direction_gate() -> None:
+def test_planar_l_seam_promotes_only_through_explicit_flow_evidence() -> None:
     snapshot = run_pass_1_relations(
         run_pass_0(make_two_patch_source_with_two_edge_seam_run())
     ).relation_snapshot
@@ -259,13 +259,16 @@ def test_planar_l_seam_does_not_promote_orthogonal_pairs_without_direction_gate(
         for relation in snapshot.scaffold_node_incident_edge_relations
         if relation.kind is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
     }
-    assert len(sliding_relation_ids) == len(snapshot.side_surface_continuity_evidence)
+    assert len(sliding_relation_ids) == (
+        len(snapshot.side_surface_continuity_evidence)
+        + len(snapshot.surface_flow_compatibility_evidence)
+    )
     assert {
         relation_id
         for component in snapshot.scaffold_continuity_components
         for relation_id in component.propagating_incident_relation_ids
     } >= sliding_relation_ids
-    assert len(snapshot.scaffold_continuity_components) == 3
+    assert len(snapshot.scaffold_continuity_components) == 2
 
 
 def test_every_scaffold_edge_is_assigned_exactly_once() -> None:

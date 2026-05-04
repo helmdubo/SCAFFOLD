@@ -23,6 +23,8 @@ from scaffold_core.layer_3_relations.model import (
     EndpointDirectionRelationKind,
     OwnerNormalSource,
     PatchAdjacency,
+    PatchAxes,
+    PatchAxisSource,
     PatchChainEndpointRelation,
     PatchChainEndpointRole,
     PatchChainEndpointSample,
@@ -32,6 +34,8 @@ from scaffold_core.layer_3_relations.model import (
     ScaffoldNodeIncidentEdgeRelation,
     ScaffoldNodeIncidentEdgeRelationKind,
     SideSurfaceContinuityEvidence,
+    SurfaceFlowCompatibilityEvidence,
+    SurfaceFlowCompatibilityRule,
     SharedChainPatchChainRelation,
     SharedChainPatchChainRelationKind,
 )
@@ -39,6 +43,7 @@ from scaffold_core.layer_3_relations.model import (
 
 NODE_INCIDENT_EDGE_POLICY_NAME = "scaffold_node_incident_edge_relation_v1"
 SIDE_SURFACE_CONTINUITY_POLICY_NAME = "side_surface_continuity_evidence_v1"
+SURFACE_FLOW_COMPATIBILITY_POLICY_NAME = "surface_flow_compatibility_evidence_v0"
 SHARED_CHAIN_POLICY_NAME = "shared_chain_patch_chain_relation_v0"
 OPPOSITE_COLLINEAR_MAX_DOT = -0.996
 SAME_RAY_COLLINEAR_MIN_DOT = 0.996
@@ -67,8 +72,10 @@ def build_scaffold_graph_relations(
     patch_adjacencies: Mapping[str, PatchAdjacency],
     loop_corners: tuple[LoopCorner, ...] = (),
     alignment_classes: tuple[AlignmentClass, ...] = (),
+    patch_axes: Mapping[PatchId, PatchAxes] | None = None,
 ) -> tuple[
     tuple[SideSurfaceContinuityEvidence, ...],
+    tuple[SurfaceFlowCompatibilityEvidence, ...],
     tuple[ScaffoldNodeIncidentEdgeRelation, ...],
     tuple[SharedChainPatchChainRelation, ...],
 ]:
@@ -92,17 +99,26 @@ def build_scaffold_graph_relations(
         loop_corners,
         alignment_classes,
     )
+    shared_chain_relations = build_shared_chain_patch_chain_relations(
+        scaffold_edges,
+        patch_adjacencies,
+    )
+    surface_flow_evidence = build_surface_flow_compatibility_evidence(
+        scaffold_nodes,
+        occurrences_by_node_id,
+        relation_by_sample_pair,
+        shared_chain_relations,
+        alignment_classes,
+        patch_axes or {},
+    )
     incident_edge_relations = build_scaffold_node_incident_edge_relations(
         scaffold_nodes,
         occurrences_by_node_id,
         relation_by_sample_pair,
         side_surface_evidence,
+        surface_flow_evidence,
     )
-    shared_chain_relations = build_shared_chain_patch_chain_relations(
-        scaffold_edges,
-        patch_adjacencies,
-    )
-    return side_surface_evidence, incident_edge_relations, shared_chain_relations
+    return side_surface_evidence, surface_flow_evidence, incident_edge_relations, shared_chain_relations
 
 
 def build_side_surface_continuity_evidence(
@@ -146,10 +162,12 @@ def build_scaffold_node_incident_edge_relations(
     occurrences_by_node_id: Mapping[str, tuple[_IncidentEdgeOccurrence, ...]],
     relation_by_sample_pair: Mapping[tuple[str, str], PatchChainEndpointRelation],
     side_surface_evidence: tuple[SideSurfaceContinuityEvidence, ...],
+    surface_flow_evidence: tuple[SurfaceFlowCompatibilityEvidence, ...] = (),
 ) -> tuple[ScaffoldNodeIncidentEdgeRelation, ...]:
     """Build complete node-local pair relations over edge endpoint occurrences."""
 
     side_surface_evidence_by_pair = _side_surface_evidence_by_pair(side_surface_evidence)
+    surface_flow_evidence_by_pair = _surface_flow_evidence_by_pair(surface_flow_evidence)
     relations: list[ScaffoldNodeIncidentEdgeRelation] = []
     for node in sorted(scaffold_nodes, key=lambda item: item.id):
         occurrences = tuple(sorted(
@@ -168,9 +186,51 @@ def build_scaffold_node_incident_edge_relations(
                 second,
                 endpoint_relation,
                 side_surface_evidence_by_pair.get(_node_occurrence_pair_key(node.id, first, second)),
+                surface_flow_evidence_by_pair.get(_node_occurrence_pair_key(node.id, first, second)),
                 occurrences,
             ))
     return tuple(relations)
+
+
+def build_surface_flow_compatibility_evidence(
+    scaffold_nodes: tuple[ScaffoldNode, ...],
+    occurrences_by_node_id: Mapping[str, tuple[_IncidentEdgeOccurrence, ...]],
+    relation_by_sample_pair: Mapping[tuple[str, str], PatchChainEndpointRelation],
+    shared_chain_relations: tuple[SharedChainPatchChainRelation, ...],
+    alignment_classes: tuple[AlignmentClass, ...],
+    patch_axes: Mapping[PatchId, PatchAxes],
+) -> tuple[SurfaceFlowCompatibilityEvidence, ...]:
+    """Build explicit cross-patch surface-flow family compatibility evidence."""
+
+    direction_family_by_evidence_id = _direction_family_by_evidence_id(alignment_classes)
+    shared_relation_by_pair = _shared_chain_relation_by_patch_chain_pair(shared_chain_relations)
+    records: list[SurfaceFlowCompatibilityEvidence] = []
+    for node in sorted(scaffold_nodes, key=lambda item: item.id):
+        occurrences = tuple(sorted(
+            occurrences_by_node_id.get(node.id, ()),
+            key=_occurrence_sort_key,
+        ))
+        for first, second in combinations(occurrences, 2):
+            endpoint_relation = _endpoint_relation_for_occurrences(
+                first,
+                second,
+                relation_by_sample_pair,
+            )
+            record = _surface_flow_compatibility_evidence(
+                node,
+                first,
+                second,
+                endpoint_relation,
+                shared_relation_by_pair.get(_patch_chain_pair_key(
+                    first.scaffold_edge.patch_chain_id,
+                    second.scaffold_edge.patch_chain_id,
+                )),
+                direction_family_by_evidence_id,
+                patch_axes,
+            )
+            if record is not None:
+                records.append(record)
+    return tuple(records)
 
 
 def build_shared_chain_patch_chain_relations(
@@ -310,6 +370,7 @@ def _incident_edge_relation(
     second: _IncidentEdgeOccurrence,
     endpoint_relation: PatchChainEndpointRelation | None,
     side_surface_evidence: SideSurfaceContinuityEvidence | None,
+    surface_flow_evidence: SurfaceFlowCompatibilityEvidence | None,
     node_occurrences: tuple[_IncidentEdgeOccurrence, ...],
 ) -> ScaffoldNodeIncidentEdgeRelation:
     first_edge = first.scaffold_edge
@@ -323,6 +384,7 @@ def _incident_edge_relation(
         node_occurrences,
         base_kind,
         side_surface_evidence,
+        surface_flow_evidence,
     )
     kind = (
         ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
@@ -359,6 +421,7 @@ def _incident_edge_relation(
             confidence,
             base_kind,
             side_surface_evidence if should_promote_sliding else None,
+            surface_flow_evidence if should_promote_sliding else None,
             recurrence_evidence_present,
         ),),
     )
@@ -464,10 +527,122 @@ def _should_promote_surface_sliding(
     node_occurrences: tuple[_IncidentEdgeOccurrence, ...],
     base_kind: ScaffoldNodeIncidentEdgeRelationKind,
     side_surface_evidence: SideSurfaceContinuityEvidence | None,
+    surface_flow_evidence: SurfaceFlowCompatibilityEvidence | None,
 ) -> bool:
-    if side_surface_evidence is None or base_kind not in SLIDING_BASE_KINDS:
+    if (
+        side_surface_evidence is None
+        and surface_flow_evidence is None
+    ) or base_kind not in SLIDING_BASE_KINDS:
         return False
     return True
+
+
+def _surface_flow_compatibility_evidence(
+    node: ScaffoldNode,
+    first: _IncidentEdgeOccurrence,
+    second: _IncidentEdgeOccurrence,
+    endpoint_relation: PatchChainEndpointRelation | None,
+    shared_chain_relation: SharedChainPatchChainRelation | None,
+    direction_family_by_evidence_id: Mapping[str, str],
+    patch_axes: Mapping[PatchId, PatchAxes],
+) -> SurfaceFlowCompatibilityEvidence | None:
+    if first.endpoint_sample is None or second.endpoint_sample is None:
+        return None
+    if first.scaffold_edge.patch_id == second.scaffold_edge.patch_id:
+        return None
+    direction_dot, normal_dot = _dot_values(first, second, endpoint_relation)
+    base_kind = _incident_edge_kind(first, second, endpoint_relation, direction_dot, normal_dot)
+    if base_kind in {
+        ScaffoldNodeIncidentEdgeRelationKind.MISSING_ENDPOINT_EVIDENCE,
+        ScaffoldNodeIncidentEdgeRelationKind.DEGRADED,
+    }:
+        return None
+    if _is_degraded_sample(first.endpoint_sample) or _is_degraded_sample(second.endpoint_sample):
+        return None
+    first_direction_family_id = direction_family_by_evidence_id.get(
+        first.endpoint_sample.directional_evidence_id
+    )
+    second_direction_family_id = direction_family_by_evidence_id.get(
+        second.endpoint_sample.directional_evidence_id
+    )
+    if (
+        first_direction_family_id is None
+        or second_direction_family_id is None
+        or first_direction_family_id != second_direction_family_id
+    ):
+        return None
+    first_axes = patch_axes.get(first.scaffold_edge.patch_id)
+    second_axes = patch_axes.get(second.scaffold_edge.patch_id)
+    if not _have_matching_dual_patch_axes(first_axes, second_axes):
+        return None
+    first_role = _patch_axes_role(first_axes, first_direction_family_id)
+    second_role = _patch_axes_role(second_axes, second_direction_family_id)
+    if first_role is None or second_role is None or first_role != second_role:
+        return None
+    if shared_chain_relation is None:
+        if base_kind is not ScaffoldNodeIncidentEdgeRelationKind.SAME_RAY_AMBIGUOUS:
+            return None
+        rule = SurfaceFlowCompatibilityRule.CROSS_PATCH_RING_FLOW
+    else:
+        rule = SurfaceFlowCompatibilityRule.SHARED_CHAIN_SIDE_FLOW
+    confidence_values = [
+        node.confidence,
+        first.scaffold_edge.confidence,
+        second.scaffold_edge.confidence,
+        first.endpoint_sample.confidence,
+        second.endpoint_sample.confidence,
+        first_axes.confidence if first_axes is not None else 0.0,
+        second_axes.confidence if second_axes is not None else 0.0,
+    ]
+    if endpoint_relation is not None:
+        confidence_values.append(endpoint_relation.confidence)
+    if shared_chain_relation is not None:
+        confidence_values.append(shared_chain_relation.confidence)
+    confidence = min(confidence_values)
+    evidence_id = (
+        "surface_flow_compatibility_evidence:"
+        f"{node.id}:{_occurrence_id(first)}:{_occurrence_id(second)}"
+    )
+    return SurfaceFlowCompatibilityEvidence(
+        id=evidence_id,
+        rule=rule,
+        scaffold_node_id=node.id,
+        first_scaffold_edge_id=first.scaffold_edge.id,
+        second_scaffold_edge_id=second.scaffold_edge.id,
+        first_patch_chain_id=first.scaffold_edge.patch_chain_id,
+        second_patch_chain_id=second.scaffold_edge.patch_chain_id,
+        first_endpoint_role=first.endpoint_role,
+        second_endpoint_role=second.endpoint_role,
+        first_patch_id=first.scaffold_edge.patch_id,
+        second_patch_id=second.scaffold_edge.patch_id,
+        first_chain_id=first.scaffold_edge.chain_id,
+        second_chain_id=second.scaffold_edge.chain_id,
+        first_endpoint_sample_id=first.endpoint_sample.id,
+        second_endpoint_sample_id=second.endpoint_sample.id,
+        first_direction_family_id=first_direction_family_id,
+        second_direction_family_id=second_direction_family_id,
+        first_patch_axes_role=first_role,
+        second_patch_axes_role=second_role,
+        shared_chain_patch_chain_relation_id=(
+            shared_chain_relation.id if shared_chain_relation is not None else None
+        ),
+        incident_relation_base_kind=base_kind,
+        confidence=confidence,
+        evidence=(_surface_flow_evidence(
+            node,
+            first,
+            second,
+            endpoint_relation,
+            shared_chain_relation,
+            rule,
+            first_direction_family_id,
+            second_direction_family_id,
+            first_role,
+            second_role,
+            base_kind,
+            confidence,
+        ),),
+    )
 
 
 def _side_surface_continuity_evidence(
@@ -603,6 +778,19 @@ def _side_surface_evidence_by_pair(
     }
 
 
+def _surface_flow_evidence_by_pair(
+    evidence_records: tuple[SurfaceFlowCompatibilityEvidence, ...],
+) -> dict[tuple[str, str, str], SurfaceFlowCompatibilityEvidence]:
+    return {
+        (
+            record.scaffold_node_id,
+            f"{record.first_endpoint_role.value}:{record.first_scaffold_edge_id}:{record.first_patch_chain_id}:{record.first_endpoint_sample_id}",
+            f"{record.second_endpoint_role.value}:{record.second_scaffold_edge_id}:{record.second_patch_chain_id}:{record.second_endpoint_sample_id}",
+        ): record
+        for record in evidence_records
+    }
+
+
 def _node_occurrence_pair_key(
     node_id: str,
     first: _IncidentEdgeOccurrence,
@@ -650,6 +838,48 @@ def _direction_family_by_evidence_id(
         for alignment_class in alignment_classes
         for directional_evidence_id in alignment_class.member_directional_evidence_ids
     }
+
+
+def _shared_chain_relation_by_patch_chain_pair(
+    shared_chain_relations: tuple[SharedChainPatchChainRelation, ...],
+) -> dict[tuple[PatchChainId, PatchChainId], SharedChainPatchChainRelation]:
+    return {
+        _patch_chain_pair_key(relation.first_patch_chain_id, relation.second_patch_chain_id): relation
+        for relation in shared_chain_relations
+    }
+
+
+def _patch_chain_pair_key(
+    first_patch_chain_id: PatchChainId,
+    second_patch_chain_id: PatchChainId,
+) -> tuple[PatchChainId, PatchChainId]:
+    return tuple(sorted((first_patch_chain_id, second_patch_chain_id), key=str))
+
+
+def _is_dual_axis_patch(patch_axes: PatchAxes | None) -> bool:
+    return patch_axes is not None and patch_axes.source is PatchAxisSource.DUAL_ALIGNMENT
+
+
+def _have_matching_dual_patch_axes(
+    first_axes: PatchAxes | None,
+    second_axes: PatchAxes | None,
+) -> bool:
+    if not _is_dual_axis_patch(first_axes) or not _is_dual_axis_patch(second_axes):
+        return False
+    return (
+        first_axes.primary_alignment_class_id == second_axes.primary_alignment_class_id
+        and first_axes.secondary_alignment_class_id == second_axes.secondary_alignment_class_id
+    )
+
+
+def _patch_axes_role(patch_axes: PatchAxes | None, direction_family_id: str) -> str | None:
+    if patch_axes is None:
+        return None
+    if patch_axes.primary_alignment_class_id == direction_family_id:
+        return "PRIMARY"
+    if patch_axes.secondary_alignment_class_id == direction_family_id:
+        return "SECONDARY"
+    return None
 
 
 def _has_recurrent_previous_chain(
@@ -718,6 +948,7 @@ def _incident_edge_evidence(
     confidence: float,
     base_kind: ScaffoldNodeIncidentEdgeRelationKind,
     side_surface_evidence: SideSurfaceContinuityEvidence | None,
+    surface_flow_evidence: SurfaceFlowCompatibilityEvidence | None,
     recurrence_evidence_present: bool,
 ) -> Evidence:
     first_edge = first.scaffold_edge
@@ -759,6 +990,25 @@ def _incident_edge_evidence(
             "second_direction_family_id": side_surface_evidence.second_direction_family_id,
             "direction_family_compatible": side_surface_evidence.direction_family_compatible,
             "blocked_by_direction_family": side_surface_evidence.blocked_by_direction_family,
+        })
+    if surface_flow_evidence is not None:
+        data.update({
+            "surface_flow_compatibility_evidence_id": surface_flow_evidence.id,
+            "same_flow_evidence_source": SURFACE_FLOW_COMPATIBILITY_POLICY_NAME,
+            "surface_flow_compatibility_evidence_kind": surface_flow_evidence.rule.value,
+            "shared_chain_patch_chain_relation_id": (
+                surface_flow_evidence.shared_chain_patch_chain_relation_id
+            ),
+            "first_patch_id": str(surface_flow_evidence.first_patch_id),
+            "second_patch_id": str(surface_flow_evidence.second_patch_id),
+            "first_chain_id": str(surface_flow_evidence.first_chain_id),
+            "second_chain_id": str(surface_flow_evidence.second_chain_id),
+            "first_direction_family_id": surface_flow_evidence.first_direction_family_id,
+            "second_direction_family_id": surface_flow_evidence.second_direction_family_id,
+            "direction_family_compatible": True,
+            "first_patch_axes_role": surface_flow_evidence.first_patch_axes_role,
+            "second_patch_axes_role": surface_flow_evidence.second_patch_axes_role,
+            "incident_relation_base_kind": surface_flow_evidence.incident_relation_base_kind.value,
         })
     return Evidence(
         source="layer_3_relations.scaffold_graph_relations",
@@ -810,6 +1060,54 @@ def _side_surface_evidence(
             "second_direction_family_id": second_direction_family_id,
             "direction_family_compatible": True,
             "blocked_by_direction_family": False,
+            "confidence": confidence,
+        },
+    )
+
+
+def _surface_flow_evidence(
+    node: ScaffoldNode,
+    first: _IncidentEdgeOccurrence,
+    second: _IncidentEdgeOccurrence,
+    endpoint_relation: PatchChainEndpointRelation | None,
+    shared_chain_relation: SharedChainPatchChainRelation | None,
+    rule: SurfaceFlowCompatibilityRule,
+    first_direction_family_id: str,
+    second_direction_family_id: str,
+    first_patch_axes_role: str | None,
+    second_patch_axes_role: str | None,
+    base_kind: ScaffoldNodeIncidentEdgeRelationKind,
+    confidence: float,
+) -> Evidence:
+    return Evidence(
+        source="layer_3_relations.scaffold_graph_relations",
+        summary="cross-patch surface-flow family compatibility evidence",
+        data={
+            "policy": SURFACE_FLOW_COMPATIBILITY_POLICY_NAME,
+            "rule": rule.value,
+            "scaffold_node_id": node.id,
+            "first_scaffold_edge_id": first.scaffold_edge.id,
+            "second_scaffold_edge_id": second.scaffold_edge.id,
+            "first_patch_chain_id": str(first.scaffold_edge.patch_chain_id),
+            "second_patch_chain_id": str(second.scaffold_edge.patch_chain_id),
+            "first_endpoint_role": first.endpoint_role.value,
+            "second_endpoint_role": second.endpoint_role.value,
+            "first_patch_id": str(first.scaffold_edge.patch_id),
+            "second_patch_id": str(second.scaffold_edge.patch_id),
+            "first_chain_id": str(first.scaffold_edge.chain_id),
+            "second_chain_id": str(second.scaffold_edge.chain_id),
+            "first_endpoint_sample_id": first.endpoint_sample.id if first.endpoint_sample is not None else None,
+            "second_endpoint_sample_id": second.endpoint_sample.id if second.endpoint_sample is not None else None,
+            "patch_chain_endpoint_relation_id": endpoint_relation.id if endpoint_relation is not None else None,
+            "shared_chain_patch_chain_relation_id": (
+                shared_chain_relation.id if shared_chain_relation is not None else None
+            ),
+            "first_direction_family_id": first_direction_family_id,
+            "second_direction_family_id": second_direction_family_id,
+            "direction_family_compatible": True,
+            "first_patch_axes_role": first_patch_axes_role,
+            "second_patch_axes_role": second_patch_axes_role,
+            "incident_relation_base_kind": base_kind.value,
             "confidence": confidence,
         },
     )

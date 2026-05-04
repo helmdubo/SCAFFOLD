@@ -178,11 +178,6 @@ ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence matrix
 ScaffoldContinuityComponent v0 derived evidence view over ScaffoldEdges
 ScaffoldNodeIncidentEdgeRelationKind SURFACE_SLIDING_CONTINUATION_CANDIDATE v0
 SideSurfaceContinuityEvidence v1 evidence-only same-side surface flow record with direction/flow-family gate
-```
-
-Approved/planned in G3, not implemented:
-
-```text
 SurfaceFlowCompatibilityEvidence v0 evidence-only cross-patch flow-family compatibility record
 ```
 
@@ -252,7 +247,7 @@ ScaffoldContinuityComponent v0 must not propagate directly through
 SideSurfaceContinuityEvidence; it may continue propagating only through
 SURFACE_SLIDING_CONTINUATION_CANDIDATE.
 
-SurfaceFlowCompatibilityEvidence v0 is approved/planned, not implemented. It is
+SurfaceFlowCompatibilityEvidence v0 is implemented. It is
 a Layer 3 derived evidence record over two existing ScaffoldEdge endpoint
 occurrences or edge-pair occurrences across compatible patches. It proves
 cross-patch surface-flow family compatibility only. It is separate from
@@ -260,7 +255,7 @@ SideSurfaceContinuityEvidence, which handles same-patch/same-loop local side
 flow. It is not a trace path choice, selected next edge, rail, circuit, UV
 direction, feature, API, UI, runtime solve or WorldOrientation. Missing
 endpoint fallback, including lower-side P1C0/P2C1-style flow, remains deferred
-unless a future evidence contract explicitly approves it. Once implemented,
+unless a future evidence contract explicitly approves it.
 SURFACE_SLIDING_CONTINUATION_CANDIDATE may consume
 SurfaceFlowCompatibilityEvidence as an additional same-flow evidence source.
 ScaffoldContinuityComponent v0 must not propagate directly through

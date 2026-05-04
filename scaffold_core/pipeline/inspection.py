@@ -150,6 +150,9 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         "scaffold_graph_count": 1 if relations.scaffold_graph is not None else 0,
         "scaffold_junction_count": len(relations.scaffold_junctions),
         "side_surface_continuity_evidence_count": len(relations.side_surface_continuity_evidence),
+        "surface_flow_compatibility_evidence_count": len(
+            relations.surface_flow_compatibility_evidence
+        ),
         "scaffold_node_incident_edge_relation_count": len(
             relations.scaffold_node_incident_edge_relations
         ),
@@ -289,6 +292,13 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
             _side_surface_continuity_evidence_to_dict(evidence)
             for evidence in sorted(relations.side_surface_continuity_evidence, key=lambda item: item.id)
         ],
+        "surface_flow_compatibility_evidence": [
+            _surface_flow_compatibility_evidence_to_dict(evidence)
+            for evidence in sorted(
+                relations.surface_flow_compatibility_evidence,
+                key=lambda item: item.id,
+            )
+        ],
         "scaffold_node_incident_edge_relations": [
             _scaffold_node_incident_edge_relation_to_dict(relation)
             for relation in sorted(relations.scaffold_node_incident_edge_relations, key=lambda item: item.id)
@@ -415,6 +425,9 @@ def scaffold_graph_overlay_to_dict(
         "scaffold_edge_count": len(relations.scaffold_edges),
         "scaffold_junction_count": len(relations.scaffold_junctions),
         "side_surface_continuity_evidence_count": len(relations.side_surface_continuity_evidence),
+        "surface_flow_compatibility_evidence_count": len(
+            relations.surface_flow_compatibility_evidence
+        ),
         "scaffold_node_incident_edge_relation_count": len(
             relations.scaffold_node_incident_edge_relations
         ),
@@ -437,6 +450,13 @@ def scaffold_graph_overlay_to_dict(
         "side_surface_continuity_evidence": [
             _side_surface_continuity_evidence_overlay_to_dict(evidence, node_positions)
             for evidence in sorted(relations.side_surface_continuity_evidence, key=lambda item: item.id)
+        ],
+        "surface_flow_compatibility_evidence": [
+            _surface_flow_compatibility_evidence_overlay_to_dict(evidence, node_positions)
+            for evidence in sorted(
+                relations.surface_flow_compatibility_evidence,
+                key=lambda item: item.id,
+            )
         ],
         "incident_relations": [
             _incident_relation_overlay_to_dict(
@@ -461,6 +481,9 @@ def scaffold_graph_overlay_to_dict(
         "shared_chain_relation_marker_count": len(relations.shared_chain_patch_chain_relations),
         "side_surface_continuity_evidence_marker_count": len(
             relations.side_surface_continuity_evidence
+        ),
+        "surface_flow_compatibility_evidence_marker_count": len(
+            relations.surface_flow_compatibility_evidence
         ),
         "graph": (
             {
@@ -697,6 +720,45 @@ def _side_surface_continuity_evidence_overlay_to_dict(
         "blocked_by_direction_family": evidence.blocked_by_direction_family,
         "normal_dot": evidence.normal_dot,
         "normal_evidence_source": evidence.normal_evidence_source,
+        "confidence": evidence.confidence,
+        "position": list(node_positions.get(evidence.scaffold_node_id, (0.0, 0.0, 0.0))),
+        "evidence": [
+            {
+                "source": item.source,
+                "summary": item.summary,
+                "data": dict(item.data),
+            }
+            for item in evidence.evidence
+        ],
+    }
+
+
+def _surface_flow_compatibility_evidence_overlay_to_dict(
+    evidence,
+    node_positions: dict[str, list[float]],
+) -> dict[str, object]:
+    return {
+        "id": evidence.id,
+        "rule": str(evidence.rule.value),
+        "scaffold_node_id": evidence.scaffold_node_id,
+        "first_scaffold_edge_id": evidence.first_scaffold_edge_id,
+        "second_scaffold_edge_id": evidence.second_scaffold_edge_id,
+        "first_patch_chain_id": str(evidence.first_patch_chain_id),
+        "second_patch_chain_id": str(evidence.second_patch_chain_id),
+        "first_endpoint_role": str(evidence.first_endpoint_role.value),
+        "second_endpoint_role": str(evidence.second_endpoint_role.value),
+        "first_patch_id": str(evidence.first_patch_id),
+        "second_patch_id": str(evidence.second_patch_id),
+        "first_chain_id": str(evidence.first_chain_id),
+        "second_chain_id": str(evidence.second_chain_id),
+        "first_endpoint_sample_id": evidence.first_endpoint_sample_id,
+        "second_endpoint_sample_id": evidence.second_endpoint_sample_id,
+        "first_direction_family_id": evidence.first_direction_family_id,
+        "second_direction_family_id": evidence.second_direction_family_id,
+        "first_patch_axes_role": evidence.first_patch_axes_role,
+        "second_patch_axes_role": evidence.second_patch_axes_role,
+        "shared_chain_patch_chain_relation_id": evidence.shared_chain_patch_chain_relation_id,
+        "incident_relation_base_kind": str(evidence.incident_relation_base_kind.value),
         "confidence": evidence.confidence,
         "position": list(node_positions.get(evidence.scaffold_node_id, (0.0, 0.0, 0.0))),
         "evidence": [
@@ -1014,6 +1076,41 @@ def _side_surface_continuity_evidence_to_dict(evidence) -> dict[str, object]:
         "blocked_by_direction_family": evidence.blocked_by_direction_family,
         "normal_dot": evidence.normal_dot,
         "normal_evidence_source": evidence.normal_evidence_source,
+        "confidence": evidence.confidence,
+        "evidence": [
+            {
+                "source": item.source,
+                "summary": item.summary,
+                "data": dict(item.data),
+            }
+            for item in evidence.evidence
+        ],
+    }
+
+
+def _surface_flow_compatibility_evidence_to_dict(evidence) -> dict[str, object]:
+    return {
+        "id": evidence.id,
+        "rule": str(evidence.rule.value),
+        "scaffold_node_id": evidence.scaffold_node_id,
+        "first_scaffold_edge_id": evidence.first_scaffold_edge_id,
+        "second_scaffold_edge_id": evidence.second_scaffold_edge_id,
+        "first_patch_chain_id": str(evidence.first_patch_chain_id),
+        "second_patch_chain_id": str(evidence.second_patch_chain_id),
+        "first_endpoint_role": str(evidence.first_endpoint_role.value),
+        "second_endpoint_role": str(evidence.second_endpoint_role.value),
+        "first_patch_id": str(evidence.first_patch_id),
+        "second_patch_id": str(evidence.second_patch_id),
+        "first_chain_id": str(evidence.first_chain_id),
+        "second_chain_id": str(evidence.second_chain_id),
+        "first_endpoint_sample_id": evidence.first_endpoint_sample_id,
+        "second_endpoint_sample_id": evidence.second_endpoint_sample_id,
+        "first_direction_family_id": evidence.first_direction_family_id,
+        "second_direction_family_id": evidence.second_direction_family_id,
+        "first_patch_axes_role": evidence.first_patch_axes_role,
+        "second_patch_axes_role": evidence.second_patch_axes_role,
+        "shared_chain_patch_chain_relation_id": evidence.shared_chain_patch_chain_relation_id,
+        "incident_relation_base_kind": str(evidence.incident_relation_base_kind.value),
         "confidence": evidence.confidence,
         "evidence": [
             {

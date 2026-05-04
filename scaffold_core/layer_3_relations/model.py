@@ -123,6 +123,13 @@ class SharedChainPatchChainRelationKind(str, Enum):
     CROSS_PATCH_SHARED_CHAIN = "CROSS_PATCH_SHARED_CHAIN"
 
 
+class SurfaceFlowCompatibilityRule(str, Enum):
+    """Implemented SurfaceFlowCompatibilityEvidence v0 rule labels."""
+
+    CROSS_PATCH_RING_FLOW = "CROSS_PATCH_RING_FLOW"
+    SHARED_CHAIN_SIDE_FLOW = "SHARED_CHAIN_SIDE_FLOW"
+
+
 @dataclass(frozen=True)
 class PatchAdjacency:
     id: str
@@ -364,6 +371,35 @@ class SideSurfaceContinuityEvidence:
 
 
 @dataclass(frozen=True)
+class SurfaceFlowCompatibilityEvidence:
+    """Evidence-only cross-patch surface-flow family compatibility."""
+
+    id: str
+    rule: SurfaceFlowCompatibilityRule
+    scaffold_node_id: str
+    first_scaffold_edge_id: str
+    second_scaffold_edge_id: str
+    first_patch_chain_id: PatchChainId
+    second_patch_chain_id: PatchChainId
+    first_endpoint_role: PatchChainEndpointRole
+    second_endpoint_role: PatchChainEndpointRole
+    first_patch_id: PatchId
+    second_patch_id: PatchId
+    first_chain_id: ChainId
+    second_chain_id: ChainId
+    first_endpoint_sample_id: str
+    second_endpoint_sample_id: str
+    first_direction_family_id: str
+    second_direction_family_id: str
+    first_patch_axes_role: str | None
+    second_patch_axes_role: str | None
+    shared_chain_patch_chain_relation_id: str | None
+    incident_relation_base_kind: ScaffoldNodeIncidentEdgeRelationKind
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class SharedChainPatchChainRelation:
     """Graph-level relation between final PatchChains sharing one Chain."""
 
@@ -412,6 +448,7 @@ class RelationSnapshot:
     scaffold_graph: ScaffoldGraph | None = None
     scaffold_junctions: tuple[ScaffoldJunction, ...] = ()
     side_surface_continuity_evidence: tuple[SideSurfaceContinuityEvidence, ...] = ()
+    surface_flow_compatibility_evidence: tuple[SurfaceFlowCompatibilityEvidence, ...] = ()
     scaffold_node_incident_edge_relations: tuple[ScaffoldNodeIncidentEdgeRelation, ...] = ()
     shared_chain_patch_chain_relations: tuple[SharedChainPatchChainRelation, ...] = ()
     scaffold_continuity_components: tuple[ScaffoldContinuityComponent, ...] = ()

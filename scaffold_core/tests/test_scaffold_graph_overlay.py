@@ -92,6 +92,7 @@ def test_scaffold_graph_overlay_has_required_debug_payload_shape() -> None:
         "scaffold_edge_count",
         "scaffold_junction_count",
         "side_surface_continuity_evidence_count",
+        "surface_flow_compatibility_evidence_count",
         "scaffold_node_incident_edge_relation_count",
         "shared_chain_patch_chain_relation_count",
         "scaffold_continuity_component_count",
@@ -100,11 +101,13 @@ def test_scaffold_graph_overlay_has_required_debug_payload_shape() -> None:
         "continuity_components",
         "junctions",
         "side_surface_continuity_evidence",
+        "surface_flow_compatibility_evidence",
         "incident_relations",
         "shared_chain_relations",
         "incident_relation_marker_count",
         "shared_chain_relation_marker_count",
         "side_surface_continuity_evidence_marker_count",
+        "surface_flow_compatibility_evidence_marker_count",
         "graph",
     }
     assert set(overlay["nodes"][0]) == {
@@ -150,10 +153,16 @@ def test_scaffold_graph_overlay_has_required_debug_payload_shape() -> None:
     assert overlay["side_surface_continuity_evidence_count"] == len(
         overlay["side_surface_continuity_evidence"]
     )
+    assert overlay["surface_flow_compatibility_evidence_count"] == len(
+        overlay["surface_flow_compatibility_evidence"]
+    )
     assert overlay["shared_chain_patch_chain_relation_count"] == len(overlay["shared_chain_relations"])
     assert overlay["incident_relation_marker_count"] == len(overlay["incident_relations"])
     assert overlay["side_surface_continuity_evidence_marker_count"] == len(
         overlay["side_surface_continuity_evidence"]
+    )
+    assert overlay["surface_flow_compatibility_evidence_marker_count"] == len(
+        overlay["surface_flow_compatibility_evidence"]
     )
     assert overlay["shared_chain_relation_marker_count"] == len(overlay["shared_chain_relations"])
     assert len(overlay["junctions"]) == 2

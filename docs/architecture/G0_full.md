@@ -30,7 +30,7 @@ This document is the canonical reference for subsequent implementation plans: G1
 - Implemented SURFACE_SLIDING_CONTINUATION_CANDIDATE relation-kind contract.
 - Implemented SideSurfaceContinuityEvidence v1 same-side surface flow evidence
   contract with direction/flow-family gate.
-- Approved/planned SurfaceFlowCompatibilityEvidence v0 cross-patch
+- Implemented SurfaceFlowCompatibilityEvidence v0 cross-patch
   flow-family compatibility evidence contract.
 - Amended DD-29 to allow topology/materialization-based border coalescing.
 - Marked OQ-11 as partially resolved for polygonal straight/turning Chains.
@@ -265,6 +265,7 @@ Feature-local alignment is expressed as `FeatureConstraint`, not as newly regist
 | `ScaffoldJunction` | Implemented SELF_SEAM/CROSS_PATCH graph-level classification overlay on existing ScaffoldNode records; not a separate graph node identity. |
 | `AlignmentClass` | Implemented Layer 3 direction-family grouping over PatchChainDirectionalEvidence. |
 | `PatchAxes` | Implemented Layer 3 primary/secondary AlignmentClass selection per Patch. |
+| `SurfaceFlowCompatibilityEvidence` | Implemented cross-patch surface-flow family compatibility evidence over existing ScaffoldEdge endpoint occurrences or edge-pair occurrences across compatible patches. |
 
 Implementation status:
 Code has already adopted canonical terms for PatchChain,
@@ -279,7 +280,6 @@ documentation cleanup.
 | `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
-| `SurfaceFlowCompatibilityEvidence` | Approved/planned cross-patch surface-flow family compatibility evidence over existing ScaffoldEdge endpoint occurrences or edge-pair occurrences across compatible patches. Not implemented yet. |
 | `WorldOrientation` | Future/deferred parallel semantic overlay. |
 
 Future terms reserve naming and constraints only. They must not be implemented
@@ -1188,7 +1188,7 @@ Default propagation policy:
   v1 may affect continuity only through a
   SURFACE_SLIDING_CONTINUATION_CANDIDATE relation.
 - SurfaceFlowCompatibilityEvidence must not propagate continuity directly;
-  once implemented it may affect continuity only through a
+  it may affect continuity only through a
   SURFACE_SLIDING_CONTINUATION_CANDIDATE relation.
 - STRAIGHT_CONTINUATION_CANDIDATE is weak evidence and does not propagate by
   default in v0.
@@ -1267,9 +1267,9 @@ Relation kind remains a separate visual channel such as marker, glyph, label,
 dash or warning outline. Component colors must be deterministic pseudo-random
 and stable by component id, never true random.
 
-## DD-42 - SurfaceFlowCompatibilityEvidence v0 is planned cross-patch flow evidence
+## DD-42 - SurfaceFlowCompatibilityEvidence v0 is implemented cross-patch flow evidence
 
-Approved/planned SurfaceFlowCompatibilityEvidence v0 is a Layer 3 derived
+Implemented SurfaceFlowCompatibilityEvidence v0 is a Layer 3 derived
 evidence record over two existing ScaffoldEdge endpoint occurrences or
 edge-pair occurrences across compatible patches. It means the two PatchChains
 are compatible members of the same surface-flow family across patch boundaries.
@@ -1284,7 +1284,7 @@ SurfaceFlowCompatibilityEvidence is separate from SideSurfaceContinuityEvidence.
 SideSurfaceContinuityEvidence handles same-patch, same-loop local side flow.
 SurfaceFlowCompatibilityEvidence handles cross-patch flow-family compatibility.
 
-Planned v0 rule A - ring flow without shared-chain relation:
+Implemented v0 rule A - ring flow without shared-chain relation:
 - current ScaffoldNodeIncidentEdgeRelation kind is SAME_RAY_AMBIGUOUS;
 - endpoint samples are present;
 - same AlignmentClass/direction-family;
@@ -1295,11 +1295,11 @@ Planned v0 rule A - ring flow without shared-chain relation:
 - the pair is not in the same patch;
 - evidence is not missing or degraded.
 
-Planned rule A Cube.001 examples:
+Rule A Cube.001 examples:
 - positive: P1C1/P2C0 and P1C3/P2C2;
 - negative: P0C1/P1C1 and P0C0/P2C0.
 
-Planned v0 rule B - side-side seam flow through shared chain:
+Implemented v0 rule B - side-side seam flow through shared chain:
 - SharedChainPatchChainRelation exists for the pair;
 - both patches are compatible side/dual-axis patches with matching PatchAxes
   structure;
@@ -1309,7 +1309,7 @@ Planned v0 rule B - side-side seam flow through shared chain:
 - evidence is not missing or degraded unless a future edge-level fallback is
   explicitly approved.
 
-Planned rule B Cube.001 examples:
+Rule B Cube.001 examples:
 - positive: P1C2/P2C3;
 - negative: P0C0/P2C0 and P0C1/P1C1.
 
@@ -1321,10 +1321,9 @@ Explicit v0 non-goals:
 - do not reintroduce same-loop alignment:0 <-> alignment:1 false merges;
 - do not implement ScaffoldTrace, ScaffoldCircuit or ScaffoldRail.
 
-Planned v0 consumption rule:
+Implemented v0 consumption rule:
 - SURFACE_SLIDING_CONTINUATION_CANDIDATE may consume
-  SurfaceFlowCompatibilityEvidence as an additional same-flow evidence source
-  once SurfaceFlowCompatibilityEvidence is implemented.
+  SurfaceFlowCompatibilityEvidence as an additional same-flow evidence source.
 - ScaffoldContinuityComponent v0 may continue propagating only through
   SURFACE_*_CONTINUATION_CANDIDATE relation kinds.
 - ScaffoldContinuityComponent v0 must not propagate directly through
@@ -1412,10 +1411,6 @@ Implemented:
 - G3c11 - ScaffoldContinuityComponent v0
 - G3c12 - SURFACE_SLIDING_CONTINUATION_CANDIDATE conservative classifier
 - G3c13 - SideSurfaceContinuityEvidence v1 direction/flow-family gate
-
-Approved/planned, not implemented:
-- SurfaceFlowCompatibilityEvidence v0 cross-patch flow-family compatibility
-  evidence
 
 Deferred:
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
@@ -1555,9 +1550,9 @@ Resolved:
   flow evidence with a direction/flow-family compatibility gate. It does not
   solve lower-side cross-patch or same-chain
   lower-ring flow.
-- SurfaceFlowCompatibilityEvidence v0 is approved/planned as evidence-only
-  cross-patch flow-family compatibility. It is not implemented and must not be
-  consumed directly by ScaffoldContinuityComponent.
+- SurfaceFlowCompatibilityEvidence v0 is implemented as evidence-only
+  cross-patch flow-family compatibility and must not be consumed directly by
+  ScaffoldContinuityComponent.
 
 Still unresolved:
 

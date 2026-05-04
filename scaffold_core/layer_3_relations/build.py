@@ -81,7 +81,17 @@ def build_relation_snapshot(
     scaffold_edges, scaffold_graph = build_scaffold_graph(topology, scaffold_nodes)
     scaffold_junctions = build_scaffold_junctions(scaffold_nodes, scaffold_edges)
     alignment_classes = build_alignment_classes(patch_chain_directional_evidence)
-    side_surface_continuity_evidence, scaffold_node_incident_edge_relations, shared_chain_patch_chain_relations = build_scaffold_graph_relations(
+    patch_axes = build_patch_axes(
+        topology,
+        patch_chain_directional_evidence,
+        alignment_classes,
+    )
+    (
+        side_surface_continuity_evidence,
+        surface_flow_compatibility_evidence,
+        scaffold_node_incident_edge_relations,
+        shared_chain_patch_chain_relations,
+    ) = build_scaffold_graph_relations(
         scaffold_nodes,
         scaffold_edges,
         patch_chain_endpoint_samples,
@@ -89,6 +99,7 @@ def build_relation_snapshot(
         patch_adjacencies,
         loop_corners,
         alignment_classes,
+        patch_axes,
     )
     scaffold_continuity_components = build_scaffold_continuity_components(
         scaffold_edges,
@@ -107,15 +118,12 @@ def build_relation_snapshot(
         scaffold_graph=scaffold_graph,
         scaffold_junctions=scaffold_junctions,
         side_surface_continuity_evidence=side_surface_continuity_evidence,
+        surface_flow_compatibility_evidence=surface_flow_compatibility_evidence,
         scaffold_node_incident_edge_relations=scaffold_node_incident_edge_relations,
         shared_chain_patch_chain_relations=shared_chain_patch_chain_relations,
         scaffold_continuity_components=scaffold_continuity_components,
         alignment_classes=alignment_classes,
-        patch_axes=build_patch_axes(
-            topology,
-            patch_chain_directional_evidence,
-            alignment_classes,
-        ),
+        patch_axes=patch_axes,
     )
 
 

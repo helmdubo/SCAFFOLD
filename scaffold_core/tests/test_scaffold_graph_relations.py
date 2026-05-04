@@ -19,6 +19,8 @@ from scaffold_core.layer_3_relations.model import (
     DihedralKind,
     LoopCorner,
     PatchAdjacency,
+    PatchAxes,
+    PatchAxisSource,
     PatchChainEndpointRole,
     PatchChainEndpointSample,
     OwnerNormalSource,
@@ -27,6 +29,7 @@ from scaffold_core.layer_3_relations.model import (
     ScaffoldJunctionKind,
     ScaffoldNode,
     ScaffoldNodeIncidentEdgeRelationKind,
+    SurfaceFlowCompatibilityRule,
     SharedChainPatchChainRelationKind,
 )
 from scaffold_core.layer_3_relations.patch_chain_endpoint_relations import (
@@ -121,7 +124,7 @@ def test_same_patch_same_loop_end_start_local_normals_emit_side_surface_evidence
         owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
     )
 
-    side_surface_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
+    side_surface_evidence, surface_flow_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
         scaffold_nodes=(_node(end_sample.patch_chain_id, start_sample.patch_chain_id),),
         scaffold_edges=(
             _edge(
@@ -195,7 +198,7 @@ def test_same_patch_same_loop_different_alignment_families_do_not_emit_side_surf
         owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
     )
 
-    side_surface_evidence, incident_relations, _ = build_scaffold_graph_relations(
+    side_surface_evidence, surface_flow_evidence, incident_relations, _ = build_scaffold_graph_relations(
         scaffold_nodes=(_node(end_sample.patch_chain_id, start_sample.patch_chain_id),),
         scaffold_edges=(
             _edge(
@@ -241,7 +244,7 @@ def test_same_ray_without_explicit_direction_family_evidence_does_not_emit_side_
         owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
     )
 
-    side_surface_evidence, incident_relations, _ = build_scaffold_graph_relations(
+    side_surface_evidence, surface_flow_evidence, incident_relations, _ = build_scaffold_graph_relations(
         scaffold_nodes=(_node(end_sample.patch_chain_id, start_sample.patch_chain_id),),
         scaffold_edges=(
             _edge(
@@ -286,7 +289,7 @@ def test_explicit_side_surface_evidence_promotes_orthogonal_pair_without_recurre
         owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
     )
 
-    side_surface_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
+    side_surface_evidence, surface_flow_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
         scaffold_nodes=(_node(end_sample.patch_chain_id, start_sample.patch_chain_id),),
         scaffold_edges=(
             _edge(
@@ -346,7 +349,7 @@ def test_explicit_side_surface_pair_promotes_at_cross_patch_node() -> None:
         owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
     )
 
-    side_surface_evidence, incident_relations, _ = build_scaffold_graph_relations(
+    side_surface_evidence, surface_flow_evidence, incident_relations, _ = build_scaffold_graph_relations(
         scaffold_nodes=(_node(
             end_sample.patch_chain_id,
             start_sample.patch_chain_id,
@@ -447,7 +450,7 @@ def test_same_patch_self_seam_side_pair_becomes_surface_sliding_candidate() -> N
         side_sample.patch_chain_id,
     )
 
-    side_surface_evidence, incident_relations, _ = build_scaffold_graph_relations(
+    side_surface_evidence, surface_flow_evidence, incident_relations, _ = build_scaffold_graph_relations(
         scaffold_nodes=(node,),
         scaffold_edges=edges,
         endpoint_samples=(seam_sample, duplicate_seam_sample, side_sample),
@@ -538,7 +541,7 @@ def test_same_ray_self_seam_side_pair_becomes_surface_sliding_candidate() -> Non
         _edge("side", ChainId("chain:side"), PatchId("patch:one"), loop_id=BoundaryLoopId("loop:one")),
     )
 
-    side_surface_evidence, incident_relations, _ = build_scaffold_graph_relations(
+    side_surface_evidence, surface_flow_evidence, incident_relations, _ = build_scaffold_graph_relations(
         scaffold_nodes=(_node(
             seam_sample.patch_chain_id,
             duplicate_seam_sample.patch_chain_id,
@@ -604,7 +607,7 @@ def test_missing_local_face_fan_normal_evidence_does_not_slide() -> None:
         owner_normal_source=OwnerNormalSource.PATCH_AGGREGATE_NORMAL,
     )
 
-    side_surface_evidence, incident_relations, _ = build_scaffold_graph_relations(
+    side_surface_evidence, surface_flow_evidence, incident_relations, _ = build_scaffold_graph_relations(
         scaffold_nodes=(_node(
             seam_sample.patch_chain_id,
             duplicate_seam_sample.patch_chain_id,
@@ -670,7 +673,7 @@ def test_same_chain_pair_does_not_emit_side_surface_evidence() -> None:
         owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
     )
 
-    side_surface_evidence, incident_relations, _ = build_scaffold_graph_relations(
+    side_surface_evidence, surface_flow_evidence, incident_relations, _ = build_scaffold_graph_relations(
         scaffold_nodes=(_node(first_sample.patch_chain_id, second_sample.patch_chain_id),),
         scaffold_edges=(
             _edge(
@@ -719,7 +722,7 @@ def test_different_loop_pair_does_not_emit_side_surface_evidence() -> None:
         owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
     )
 
-    side_surface_evidence, incident_relations, _ = build_scaffold_graph_relations(
+    side_surface_evidence, surface_flow_evidence, incident_relations, _ = build_scaffold_graph_relations(
         scaffold_nodes=(_node(
             seam_sample.patch_chain_id,
             duplicate_seam_sample.patch_chain_id,
@@ -795,7 +798,7 @@ def test_low_normal_dot_pair_does_not_emit_side_surface_evidence() -> None:
         owner_normal=(0.0, 1.0, 0.0),
     )
 
-    side_surface_evidence, incident_relations, _ = build_scaffold_graph_relations(
+    side_surface_evidence, surface_flow_evidence, incident_relations, _ = build_scaffold_graph_relations(
         scaffold_nodes=(_node(
             seam_sample.patch_chain_id,
             duplicate_seam_sample.patch_chain_id,
@@ -879,7 +882,7 @@ def test_shared_chain_only_cross_patch_pair_does_not_slide() -> None:
         endpoint_role=PatchChainEndpointRole.START,
         owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
     )
-    side_surface_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
+    side_surface_evidence, surface_flow_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
         scaffold_nodes=(_node(first_sample.patch_chain_id, second_sample.patch_chain_id),),
         scaffold_edges=(
             _edge(
@@ -903,6 +906,241 @@ def test_shared_chain_only_cross_patch_pair_does_not_slide() -> None:
         relation.kind is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
         for relation in incident_relations
     )
+
+
+def test_surface_flow_rule_a_emits_for_same_ray_cross_patch_same_family_ring_flow() -> None:
+    first_sample = _sample("a", (1.0, 0.0, 0.0), PatchId("patch:side_a"))
+    second_sample = _sample("b", (1.0, 0.0, 0.0), PatchId("patch:side_b"))
+
+    side_surface_evidence, surface_flow_evidence, incident_relations, shared_relations = (
+        build_scaffold_graph_relations(
+            scaffold_nodes=(_node(first_sample.patch_chain_id, second_sample.patch_chain_id),),
+            scaffold_edges=(
+                _edge("a", ChainId("chain:a"), first_sample.patch_id),
+                _edge("b", ChainId("chain:b"), second_sample.patch_id),
+            ),
+            endpoint_samples=(first_sample, second_sample),
+            endpoint_relations=build_patch_chain_endpoint_relations((first_sample, second_sample)),
+            patch_adjacencies={},
+            alignment_classes=_alignment_classes((first_sample, second_sample)),
+            patch_axes=_dual_patch_axes((first_sample, second_sample)),
+        )
+    )
+
+    assert side_surface_evidence == ()
+    assert shared_relations == ()
+    assert len(surface_flow_evidence) == 1
+    assert surface_flow_evidence[0].rule is SurfaceFlowCompatibilityRule.CROSS_PATCH_RING_FLOW
+    assert surface_flow_evidence[0].first_direction_family_id == "alignment:test:0"
+    assert surface_flow_evidence[0].second_direction_family_id == "alignment:test:0"
+    assert surface_flow_evidence[0].first_patch_axes_role == "PRIMARY"
+    assert surface_flow_evidence[0].second_patch_axes_role == "PRIMARY"
+    assert len(incident_relations) == 1
+    assert (
+        incident_relations[0].kind
+        is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
+    )
+    assert (
+        incident_relations[0].evidence[0].data["surface_flow_compatibility_evidence_id"]
+        == surface_flow_evidence[0].id
+    )
+    assert (
+        incident_relations[0].evidence[0].data["surface_flow_compatibility_evidence_kind"]
+        == "CROSS_PATCH_RING_FLOW"
+    )
+
+
+def test_surface_flow_rule_a_blocks_cap_like_same_ray_false_positive() -> None:
+    cap_sample = _sample("a", (1.0, 0.0, 0.0), PatchId("patch:cap"))
+    side_sample = _sample("b", (1.0, 0.0, 0.0), PatchId("patch:side"))
+
+    _, surface_flow_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
+        scaffold_nodes=(_node(cap_sample.patch_chain_id, side_sample.patch_chain_id),),
+        scaffold_edges=(
+            _edge("a", ChainId("chain:a"), cap_sample.patch_id),
+            _edge("b", ChainId("chain:b"), side_sample.patch_id),
+        ),
+        endpoint_samples=(cap_sample, side_sample),
+        endpoint_relations=build_patch_chain_endpoint_relations((cap_sample, side_sample)),
+        patch_adjacencies={},
+        alignment_classes=_alignment_classes((cap_sample, side_sample)),
+        patch_axes=_single_axis_patch_axes((cap_sample,), (side_sample,)),
+    )
+
+    assert shared_relations == ()
+    assert surface_flow_evidence == ()
+    assert len(incident_relations) == 1
+    assert incident_relations[0].kind is ScaffoldNodeIncidentEdgeRelationKind.SAME_RAY_AMBIGUOUS
+
+
+def test_surface_flow_rule_b_emits_for_side_side_shared_chain_compatible_flow() -> None:
+    first_sample = _sample("a", (1.0, 0.0, 0.0), PatchId("patch:side_a"))
+    second_sample = _sample("b", (0.0, 1.0, 0.0), PatchId("patch:side_b"))
+
+    _, surface_flow_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
+        scaffold_nodes=(_node(first_sample.patch_chain_id, second_sample.patch_chain_id),),
+        scaffold_edges=(
+            _edge("a", ChainId("chain:shared"), first_sample.patch_id),
+            _edge("b", ChainId("chain:shared"), second_sample.patch_id),
+        ),
+        endpoint_samples=(first_sample, second_sample),
+        endpoint_relations=build_patch_chain_endpoint_relations((first_sample, second_sample)),
+        patch_adjacencies={},
+        alignment_classes=_alignment_classes((first_sample, second_sample)),
+        patch_axes=_dual_patch_axes((first_sample, second_sample)),
+    )
+
+    assert len(shared_relations) == 1
+    assert len(surface_flow_evidence) == 1
+    assert surface_flow_evidence[0].rule is SurfaceFlowCompatibilityRule.SHARED_CHAIN_SIDE_FLOW
+    assert surface_flow_evidence[0].shared_chain_patch_chain_relation_id == shared_relations[0].id
+    assert len(incident_relations) == 1
+    assert (
+        incident_relations[0].kind
+        is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
+    )
+
+
+def test_surface_flow_rule_b_blocks_cap_like_shared_chain_participation() -> None:
+    cap_sample = _sample("a", (1.0, 0.0, 0.0), PatchId("patch:cap"))
+    side_sample = _sample("b", (0.0, 1.0, 0.0), PatchId("patch:side"))
+
+    _, surface_flow_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
+        scaffold_nodes=(_node(cap_sample.patch_chain_id, side_sample.patch_chain_id),),
+        scaffold_edges=(
+            _edge("a", ChainId("chain:shared"), cap_sample.patch_id),
+            _edge("b", ChainId("chain:shared"), side_sample.patch_id),
+        ),
+        endpoint_samples=(cap_sample, side_sample),
+        endpoint_relations=build_patch_chain_endpoint_relations((cap_sample, side_sample)),
+        patch_adjacencies={},
+        alignment_classes=_alignment_classes((cap_sample, side_sample)),
+        patch_axes=_single_axis_patch_axes((cap_sample,), (side_sample,)),
+    )
+
+    assert len(shared_relations) == 1
+    assert surface_flow_evidence == ()
+    assert len(incident_relations) == 1
+    assert incident_relations[0].kind is ScaffoldNodeIncidentEdgeRelationKind.ORTHOGONAL_CORNER
+
+
+def test_surface_flow_rule_b_blocks_mismatched_patch_axes_structure() -> None:
+    first_sample = _sample("a", (1.0, 0.0, 0.0), PatchId("patch:side_a"))
+    second_sample = _sample("b", (0.0, 1.0, 0.0), PatchId("patch:side_b"))
+
+    _, surface_flow_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
+        scaffold_nodes=(_node(first_sample.patch_chain_id, second_sample.patch_chain_id),),
+        scaffold_edges=(
+            _edge("a", ChainId("chain:shared"), first_sample.patch_id),
+            _edge("b", ChainId("chain:shared"), second_sample.patch_id),
+        ),
+        endpoint_samples=(first_sample, second_sample),
+        endpoint_relations=build_patch_chain_endpoint_relations((first_sample, second_sample)),
+        patch_adjacencies={},
+        alignment_classes=_alignment_classes((first_sample, second_sample)),
+        patch_axes={
+            first_sample.patch_id: _patch_axes(
+                first_sample.patch_id,
+                "alignment:test:0",
+                "alignment:test:1",
+            ),
+            second_sample.patch_id: _patch_axes(
+                second_sample.patch_id,
+                "alignment:test:0",
+                "alignment:test:other",
+            ),
+        },
+    )
+
+    assert len(shared_relations) == 1
+    assert surface_flow_evidence == ()
+    assert len(incident_relations) == 1
+    assert incident_relations[0].kind is ScaffoldNodeIncidentEdgeRelationKind.ORTHOGONAL_CORNER
+
+
+def test_surface_flow_blocks_direction_family_outside_patch_axes_roles() -> None:
+    first_sample = _sample("a", (1.0, 0.0, 0.0), PatchId("patch:side_a"))
+    second_sample = _sample("b", (1.0, 0.0, 0.0), PatchId("patch:side_b"))
+
+    _, surface_flow_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
+        scaffold_nodes=(_node(first_sample.patch_chain_id, second_sample.patch_chain_id),),
+        scaffold_edges=(
+            _edge("a", ChainId("chain:a"), first_sample.patch_id),
+            _edge("b", ChainId("chain:b"), second_sample.patch_id),
+        ),
+        endpoint_samples=(first_sample, second_sample),
+        endpoint_relations=build_patch_chain_endpoint_relations((first_sample, second_sample)),
+        patch_adjacencies={},
+        alignment_classes=_alignment_classes((first_sample, second_sample)),
+        patch_axes={
+            first_sample.patch_id: _patch_axes(
+                first_sample.patch_id,
+                "alignment:test:1",
+                "alignment:test:2",
+            ),
+            second_sample.patch_id: _patch_axes(
+                second_sample.patch_id,
+                "alignment:test:1",
+                "alignment:test:2",
+            ),
+        },
+    )
+
+    assert shared_relations == ()
+    assert surface_flow_evidence == ()
+    assert len(incident_relations) == 1
+    assert incident_relations[0].kind is ScaffoldNodeIncidentEdgeRelationKind.SAME_RAY_AMBIGUOUS
+
+
+def test_surface_flow_missing_endpoint_fallback_remains_non_emitting() -> None:
+    first_edge = _edge("a", ChainId("chain:a"), PatchId("patch:side_a"))
+    second_edge = _edge("b", ChainId("chain:b"), PatchId("patch:side_b"))
+
+    _, surface_flow_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
+        scaffold_nodes=(_node(first_edge.patch_chain_id, second_edge.patch_chain_id),),
+        scaffold_edges=(first_edge, second_edge),
+        endpoint_samples=(),
+        endpoint_relations=(),
+        patch_adjacencies={},
+        patch_axes={
+            first_edge.patch_id: _patch_axes(first_edge.patch_id, "alignment:test:0", "alignment:test:1"),
+            second_edge.patch_id: _patch_axes(second_edge.patch_id, "alignment:test:0", "alignment:test:1"),
+        },
+    )
+
+    assert shared_relations == ()
+    assert surface_flow_evidence == ()
+    assert len(incident_relations) == 1
+    assert incident_relations[0].kind is ScaffoldNodeIncidentEdgeRelationKind.MISSING_ENDPOINT_EVIDENCE
+
+
+def test_surface_flow_evidence_serializes_in_relation_summary() -> None:
+    first_sample = _sample("a", (1.0, 0.0, 0.0), PatchId("patch:side_a"))
+    second_sample = _sample("b", (1.0, 0.0, 0.0), PatchId("patch:side_b"))
+    _, surface_flow_evidence, _, _ = build_scaffold_graph_relations(
+        scaffold_nodes=(_node(first_sample.patch_chain_id, second_sample.patch_chain_id),),
+        scaffold_edges=(
+            _edge("a", ChainId("chain:a"), first_sample.patch_id),
+            _edge("b", ChainId("chain:b"), second_sample.patch_id),
+        ),
+        endpoint_samples=(first_sample, second_sample),
+        endpoint_relations=build_patch_chain_endpoint_relations((first_sample, second_sample)),
+        patch_adjacencies={},
+        alignment_classes=_alignment_classes((first_sample, second_sample)),
+        patch_axes=_dual_patch_axes((first_sample, second_sample)),
+    )
+
+    report = relation_summary_to_dict(
+        RelationSnapshot(surface_flow_compatibility_evidence=surface_flow_evidence),
+        detail="full",
+    )
+
+    json.dumps(report)
+    assert report["surface_flow_compatibility_evidence_count"] == 1
+    serialized = report["surface_flow_compatibility_evidence"][0]
+    assert serialized["rule"] == "CROSS_PATCH_RING_FLOW"
+    assert serialized["first_direction_family_id"] == "alignment:test:0"
+    assert serialized["second_direction_family_id"] == "alignment:test:0"
 
 
 def test_opposite_collinear_endpoint_relation_becomes_continuation_candidate() -> None:
@@ -986,7 +1224,7 @@ def test_missing_endpoint_relation_pair_still_uses_sample_evidence_for_classific
     )
     node = _node(first_sample.patch_chain_id, second_sample.patch_chain_id)
 
-    side_surface_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
+    side_surface_evidence, surface_flow_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
         scaffold_nodes=(node,),
         scaffold_edges=edges,
         endpoint_samples=(first_sample, second_sample),
@@ -1009,7 +1247,7 @@ def test_missing_endpoint_sample_pair_emits_missing_endpoint_evidence() -> None:
     )
     node = _node(edges[0].patch_chain_id, edges[1].patch_chain_id)
 
-    side_surface_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
+    side_surface_evidence, surface_flow_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
         scaffold_nodes=(node,),
         scaffold_edges=edges,
         endpoint_samples=(),
@@ -1048,7 +1286,7 @@ def test_node_with_five_incident_edge_endpoint_occurrences_emits_ten_relations()
         confidence=1.0,
     )
 
-    side_surface_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
+    side_surface_evidence, surface_flow_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
         scaffold_nodes=(node,),
         scaffold_edges=edges,
         endpoint_samples=samples,
@@ -1077,7 +1315,7 @@ def test_cross_patch_shared_chain_relation_links_patch_adjacency_when_available(
         dihedral_kind=DihedralKind.COPLANAR,
     )
 
-    side_surface_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
+    side_surface_evidence, surface_flow_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
         scaffold_nodes=(),
         scaffold_edges=(first_edge, second_edge),
         endpoint_samples=(),
@@ -1260,7 +1498,7 @@ def _single_incident_relation(
     )
     node = _node(first_sample.patch_chain_id, second_sample.patch_chain_id)
 
-    side_surface_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
+    side_surface_evidence, surface_flow_evidence, incident_relations, shared_relations = build_scaffold_graph_relations(
         scaffold_nodes=(node,),
         scaffold_edges=edges,
         endpoint_samples=(first_sample, second_sample),
@@ -1372,4 +1610,44 @@ def _alignment_classes(
             confidence=1.0,
         )
         for index, samples in enumerate(sample_groups)
+    )
+
+
+def _dual_patch_axes(
+    *sample_groups: tuple[PatchChainEndpointSample, ...],
+) -> dict[PatchId, PatchAxes]:
+    return {
+        sample.patch_id: _patch_axes(sample.patch_id, "alignment:test:0", "alignment:test:1")
+        for samples in sample_groups
+        for sample in samples
+    }
+
+
+def _single_axis_patch_axes(
+    *sample_groups: tuple[PatchChainEndpointSample, ...],
+) -> dict[PatchId, PatchAxes]:
+    return {
+        sample.patch_id: _patch_axes(sample.patch_id, "alignment:test:0", None)
+        for samples in sample_groups
+        for sample in samples
+    }
+
+
+def _patch_axes(
+    patch_id: PatchId,
+    primary_alignment_class_id: str | None,
+    secondary_alignment_class_id: str | None,
+) -> PatchAxes:
+    return PatchAxes(
+        patch_id=patch_id,
+        primary_alignment_class_id=primary_alignment_class_id,
+        secondary_alignment_class_id=secondary_alignment_class_id,
+        primary_direction=(1.0, 0.0, 0.0),
+        secondary_direction=(0.0, 1.0, 0.0) if secondary_alignment_class_id else (0.0, 0.0, 0.0),
+        source=(
+            PatchAxisSource.DUAL_ALIGNMENT
+            if secondary_alignment_class_id is not None
+            else PatchAxisSource.SINGLE_ALIGNMENT
+        ),
+        confidence=1.0,
     )
