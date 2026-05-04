@@ -60,19 +60,15 @@ Implemented:
 - G3c8 - ScaffoldEdge v0 / ScaffoldGraph v0
 - G3c9 - ScaffoldJunction v0 SELF_SEAM/CROSS_PATCH
 - G3c10 - ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence matrix
+- G3c11 - ScaffoldContinuityComponent v0 derived evidence view
 - LocalFaceFanGeometryFacts as Layer 2 geometry evidence consumed by Layer 3
 
 Validation status:
 
 - ScaffoldGraph and ScaffoldJunction compact report expectations are captured
   for representative single patch, cylinder and shared-loop fixtures.
-- Grease Pencil dev debug rendering smoke validation confirms the cylinder
-  graph overlay report shape without adding ScaffoldTrace semantics.
-
-Planned/approved:
-
-- ScaffoldContinuityComponent v0 derived evidence view over existing
-  ScaffoldEdges and ScaffoldNodeIncidentEdgeRelation records
+- ScaffoldContinuityComponent v0 tests cover propagation, non-propagation,
+  ambiguity preservation, singleton components and inspection serialization.
 
 Deferred:
 
@@ -98,7 +94,7 @@ Current terminology for the final boundary graph model:
 | `ScaffoldEdge` | Implemented G3c8 graph-level view of one final PatchChain. |
 | `ScaffoldGraph` | Implemented G3c8 connectivity graph assembled from ScaffoldNodes and ScaffoldEdges. |
 | `ScaffoldJunction` | Implemented SELF_SEAM/CROSS_PATCH graph-level classification overlay on existing ScaffoldNode, not a separate graph node identity. |
-| `ScaffoldContinuityComponent` | Planned G3 derived evidence view grouping existing ScaffoldEdges into continuity families. |
+| `ScaffoldContinuityComponent` | Implemented G3c11 derived evidence view grouping existing ScaffoldEdges into continuity families. |
 | `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
@@ -555,11 +551,11 @@ Rules:
 - no H/V, U/V, WORLD_UP, WorldOrientation, Feature, API, UI, runtime solve or
   UV transfer.
 
-## Planned - ScaffoldContinuityComponent v0
+## G3c11 - ScaffoldContinuityComponent v0
 
-ScaffoldContinuityComponent v0 is planned, not implemented. It is a Layer 3
-derived evidence view over existing ScaffoldEdges and existing
-ScaffoldNodeIncidentEdgeRelation records.
+ScaffoldContinuityComponent v0 is implemented as a Layer 3 derived evidence
+view over existing ScaffoldEdges and existing ScaffoldNodeIncidentEdgeRelation
+records.
 
 It groups ScaffoldEdges into continuity families using continuation-compatible
 incident relations. It is not a trace, path choice, rail, circuit, UV

@@ -242,7 +242,7 @@ Examples:
 
 ## DD-40 - ScaffoldContinuityComponent v0 component coloring is not relation-kind coloring
 
-Planned ScaffoldContinuityComponent v0 is a Layer 3 derived evidence view over
+Implemented ScaffoldContinuityComponent v0 is a Layer 3 derived evidence view over
 existing ScaffoldEdges and existing ScaffoldNodeIncidentEdgeRelation records. It
 groups ScaffoldEdges into continuity families using continuation-compatible
 incident relations.
@@ -305,4 +305,4 @@ That future option should convert sharp information into seam/boundary input bef
 
 ## Open questions
 
-- **OQ-11 - Geometry-based Chain / PatchChain refinement policy.** Status: partially resolved. Final PatchChain is the public source of truth; raw boundary elements are builder internals; Layer 3 may derive directional evidence from final PatchChains; polygonal straight/turning Chains can be described by ChainDirectionalRun / PatchChain directional evidence; directional evidence must not become a competing PatchChain identity; ScaffoldNode may group materialized Vertex occurrences as graph-level evidence but not Layer 1 identity; implemented ScaffoldNodeIncidentEdgeRelation v1 is all-pairs graph evidence over existing ScaffoldNode incident edge-end occurrences and must not choose traces, circuits, rails or continuations; planned ScaffoldContinuityComponent v0 may group existing ScaffoldEdges into continuity-family evidence without choosing trace, circuit, rail or continuation targets. Curved-chain policy, sawtooth tuning, user split marks, closed-loop wrap merge policy, advanced corner detection, local face-fan refinement policy and trace/circuit/rail construction over ScaffoldGraph remain unresolved. See `G0.md` Section 6.
+- **OQ-11 - Geometry-based Chain / PatchChain refinement policy.** Status: partially resolved. Final PatchChain is the public source of truth; raw boundary elements are builder internals; Layer 3 may derive directional evidence from final PatchChains; polygonal straight/turning Chains can be described by ChainDirectionalRun / PatchChain directional evidence; directional evidence must not become a competing PatchChain identity; ScaffoldNode may group materialized Vertex occurrences as graph-level evidence but not Layer 1 identity; implemented ScaffoldNodeIncidentEdgeRelation v1 is all-pairs graph evidence over existing ScaffoldNode incident edge-end occurrences and must not choose traces, circuits, rails or continuations; implemented ScaffoldContinuityComponent v0 may group existing ScaffoldEdges into continuity-family evidence without choosing trace, circuit, rail or continuation targets. Curved-chain policy, sawtooth tuning, user split marks, closed-loop wrap merge policy, advanced corner detection, local face-fan refinement policy and trace/circuit/rail construction over ScaffoldGraph remain unresolved. See `G0.md` Section 6.

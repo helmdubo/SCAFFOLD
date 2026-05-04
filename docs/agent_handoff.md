@@ -98,15 +98,10 @@ Implemented:
 - ScaffoldJunction v0 SELF_SEAM/CROSS_PATCH
 - LocalFaceFanGeometryFacts
 - ScaffoldNodeIncidentEdgeRelation v1 complete all-pairs edge-end occurrence matrix
-
-Planned/approved:
-
-- ScaffoldContinuityComponent v0 derived evidence view over existing
-  ScaffoldEdges and ScaffoldNodeIncidentEdgeRelation records
+- ScaffoldContinuityComponent v0
 
 Not implemented:
 
-- ScaffoldContinuityComponent v0 implementation
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
 - ScaffoldTrace
 - ScaffoldCircuit
@@ -174,7 +169,7 @@ ScaffoldRail:
   future direction-stable ScaffoldTrace usable as a conditional axis.
 
 ScaffoldContinuityComponent:
-  planned Layer 3 derived evidence view grouping existing ScaffoldEdges into
+  implemented Layer 3 derived evidence view grouping existing ScaffoldEdges into
   continuity families from ScaffoldNodeIncidentEdgeRelation records.
 ```
 
@@ -314,8 +309,7 @@ continuations, UV behavior or runtime behavior, and must not change
 ScaffoldNode grouping or ScaffoldEdge, PatchChain, Chain, Vertex or
 BoundaryLoop identity.
 
-ScaffoldContinuityComponent v0 is the next planned implementation slice. It
-should group ScaffoldEdges into continuity families using existing
+ScaffoldContinuityComponent v0 groups ScaffoldEdges into continuity families using existing
 ScaffoldNodeIncidentEdgeRelation records. Default propagation is limited to
 SURFACE_CONTINUATION_CANDIDATE. STRAIGHT_CONTINUATION_CANDIDATE is weak
 non-default evidence. ORTHOGONAL_CORNER, OBLIQUE_CONNECTOR,
@@ -375,10 +369,9 @@ Still unresolved:
 
 ## Next architecture decision
 
-Implement ScaffoldContinuityComponent v0 next as a Layer 3 evidence view over
-existing ScaffoldEdges and ScaffoldNodeIncidentEdgeRelation records. Keep it
-separate from ScaffoldTrace, ScaffoldCircuit and ScaffoldRail construction, and
-do not choose continuation targets, UV directions or solve behavior.
+Use ScaffoldContinuityComponent v0 inspection evidence before any explicit
+ScaffoldTrace task. Keep any later trace work separate from continuity
+component grouping and do not choose UV directions or solve behavior in Layer 3.
 
 Grease Pencil rendering consumes the pipeline inspection overlay payload instead
 of duplicating core graph logic. Do not import Blender into Scaffold Core.

@@ -26,7 +26,7 @@ This document is the canonical reference for subsequent implementation plans: G1
 - Implemented ScaffoldGraph v0 as connectivity assembled from ScaffoldNodes and ScaffoldEdges.
 - Implemented ScaffoldJunction v0 as a SELF_SEAM/CROSS_PATCH classification overlay.
 - Implemented ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence contract.
-- Added planned ScaffoldContinuityComponent v0 continuity-family evidence contract.
+- Implemented ScaffoldContinuityComponent v0 continuity-family evidence contract.
 - Amended DD-29 to allow topology/materialization-based border coalescing.
 - Marked OQ-11 as partially resolved for polygonal straight/turning Chains.
 
@@ -678,7 +678,7 @@ a future connected sequence of ScaffoldEdges through ScaffoldNodes.
 `ScaffoldCircuit` is a closed ScaffoldTrace. `ScaffoldRail` is a future
 direction-stable ScaffoldTrace usable as a conditional axis.
 
-Planned ScaffoldContinuityComponent v0 is a Layer 3 derived evidence view over
+Implemented ScaffoldContinuityComponent v0 is a Layer 3 derived evidence view over
 existing ScaffoldEdges and existing ScaffoldNodeIncidentEdgeRelation records. It
 groups ScaffoldEdges into continuity families using continuation-compatible
 incident relations. It is not a trace, path choice, rail, circuit, UV
@@ -1111,7 +1111,7 @@ Examples:
 
 ## DD-40 - ScaffoldContinuityComponent v0 is continuity-family evidence
 
-Planned ScaffoldContinuityComponent v0 is a Layer 3 derived evidence view over
+Implemented ScaffoldContinuityComponent v0 is a Layer 3 derived evidence view over
 existing ScaffoldEdges and existing ScaffoldNodeIncidentEdgeRelation records. It
 groups ScaffoldEdges into continuity families using continuation-compatible
 incident relations.
@@ -1219,10 +1219,7 @@ Implemented:
 - G3c8 - ScaffoldEdge v0 / ScaffoldGraph v0
 - G3c9 - ScaffoldJunction v0 SELF_SEAM/CROSS_PATCH
 - G3c10 - ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence matrix
-
-Planned/approved:
-- ScaffoldContinuityComponent v0 derived evidence view over existing
-  ScaffoldEdges and ScaffoldNodeIncidentEdgeRelation records
+- G3c11 - ScaffoldContinuityComponent v0
 
 Deferred:
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
@@ -1352,7 +1349,7 @@ Resolved:
 - ScaffoldNodeIncidentEdgeRelation v1 is implemented as all-pairs graph evidence
   over existing ScaffoldNode incident edge-end occurrences and must not choose
   traces, circuits, rails or continuations.
-- ScaffoldContinuityComponent v0 is planned as a continuity-family evidence
+- ScaffoldContinuityComponent v0 is implemented as a continuity-family evidence
   view over existing ScaffoldEdges and incident-edge relations. It may group
   edges but must not choose traces, circuits, rails or continuation targets.
 

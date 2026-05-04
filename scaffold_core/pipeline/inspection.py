@@ -153,6 +153,7 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
             relations.scaffold_node_incident_edge_relations
         ),
         "shared_chain_patch_chain_relation_count": len(relations.shared_chain_patch_chain_relations),
+        "scaffold_continuity_component_count": len(relations.scaffold_continuity_components),
         "alignment_class_count": len(relations.alignment_classes),
         "patch_axes_count": len(relations.patch_axes),
     }
@@ -290,6 +291,10 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         "shared_chain_patch_chain_relations": [
             _shared_chain_patch_chain_relation_to_dict(relation)
             for relation in sorted(relations.shared_chain_patch_chain_relations, key=lambda item: item.id)
+        ],
+        "scaffold_continuity_components": [
+            _scaffold_continuity_component_to_dict(component)
+            for component in sorted(relations.scaffold_continuity_components, key=lambda item: item.id)
         ],
         "patch_axes": [
             {
@@ -836,6 +841,28 @@ def _shared_chain_patch_chain_relation_to_dict(relation) -> dict[str, object]:
                 "data": dict(evidence.data),
             }
             for evidence in relation.evidence
+        ],
+    }
+
+
+def _scaffold_continuity_component_to_dict(component) -> dict[str, object]:
+    return {
+        "id": component.id,
+        "scaffold_edge_ids": list(component.scaffold_edge_ids),
+        "scaffold_node_ids": list(component.scaffold_node_ids),
+        "propagating_incident_relation_ids": list(component.propagating_incident_relation_ids),
+        "ambiguous_incident_relation_ids": list(component.ambiguous_incident_relation_ids),
+        "blocked_incident_relation_ids": list(component.blocked_incident_relation_ids),
+        "propagation_policy": component.propagation_policy,
+        "is_ambiguous": component.is_ambiguous,
+        "confidence": component.confidence,
+        "evidence": [
+            {
+                "source": evidence.source,
+                "summary": evidence.summary,
+                "data": dict(evidence.data),
+            }
+            for evidence in component.evidence
         ],
     }
 

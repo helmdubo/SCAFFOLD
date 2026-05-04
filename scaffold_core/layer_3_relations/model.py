@@ -352,6 +352,22 @@ class SharedChainPatchChainRelation:
 
 
 @dataclass(frozen=True)
+class ScaffoldContinuityComponent:
+    """Evidence-only continuity-family view over existing ScaffoldEdges."""
+
+    id: str
+    scaffold_edge_ids: tuple[str, ...]
+    scaffold_node_ids: tuple[str, ...]
+    propagating_incident_relation_ids: tuple[str, ...]
+    ambiguous_incident_relation_ids: tuple[str, ...]
+    blocked_incident_relation_ids: tuple[str, ...]
+    propagation_policy: str
+    is_ambiguous: bool
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
     chain_continuations: tuple[ChainContinuationRelation, ...] = ()
@@ -366,6 +382,7 @@ class RelationSnapshot:
     scaffold_junctions: tuple[ScaffoldJunction, ...] = ()
     scaffold_node_incident_edge_relations: tuple[ScaffoldNodeIncidentEdgeRelation, ...] = ()
     shared_chain_patch_chain_relations: tuple[SharedChainPatchChainRelation, ...] = ()
+    scaffold_continuity_components: tuple[ScaffoldContinuityComponent, ...] = ()
     alignment_classes: tuple[AlignmentClass, ...] = ()
     patch_axes: Mapping[PatchId, PatchAxes] = field(default_factory=dict)
     diagnostics: tuple[Diagnostic, ...] = ()
