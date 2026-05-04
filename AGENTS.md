@@ -182,6 +182,7 @@ Deferred in G3:
 
 ```text
 ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
+ScaffoldNodeIncidentEdgeRelationKind SURFACE_SLIDING_CONTINUATION_CANDIDATE implementation
 ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 WorldOrientation
 ```
@@ -219,6 +220,13 @@ records. It groups ScaffoldEdges into continuity families without replacing
 ScaffoldEdge or PatchChain identity and without choosing traces, paths, rails,
 circuits, UV direction or solve behavior. It must not introduce H/V, U/V,
 WORLD_UP, WorldOrientation, Feature, API, UI or runtime semantics.
+
+SURFACE_SLIDING_CONTINUATION_CANDIDATE is an approved planned
+ScaffoldNodeIncidentEdgeRelationKind, not implemented in current code. It is a
+node-local relation between existing ScaffoldEdge endpoint occurrences for
+curved/side-surface continuation with explicit same-side-surface evidence and
+compatible local owner normals. It must not choose trace paths, next edges,
+rails, circuits, UV direction or solve behavior.
 
 ---
 

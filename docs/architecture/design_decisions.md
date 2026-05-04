@@ -214,7 +214,7 @@ Implemented v1 relation kinds:
 - STRAIGHT_CONTINUATION_CANDIDATE: opposite tangent/chord evidence;
   compatible owner-normal proof may be absent or weak.
 - SURFACE_CONTINUATION_CANDIDATE: continuation candidate with compatible owner
-  normals.
+  normals for opposite-tangent or straight-ish surface continuation.
 - CROSS_SURFACE_CONNECTOR: tangent may align or connect, but owner normals
   diverge strongly.
 - ORTHOGONAL_CORNER: tangent evidence is orthogonal.
@@ -226,6 +226,22 @@ Implemented v1 relation kinds:
 - DEGRADED: tangent, normal, confidence or evidence is zero, unknown or
   collapsed.
 
+Approved planned relation kind, not implemented by DD-39 v1:
+- SURFACE_SLIDING_CONTINUATION_CANDIDATE: node-local relation between two
+  existing ScaffoldEdge endpoint occurrences whose local tangent/chord
+  classification may otherwise look orthogonal or same-ray, but explicit
+  same-side-surface evidence plus compatible local owner normals support
+  continuation along the same curved or side surface. It is not a trace path
+  choice, not a selected next edge, not a rail/circuit decision and not a UV
+  direction.
+
+SURFACE_SLIDING_CONTINUATION_CANDIDATE requires local owner-normal evidence,
+compatible local owner normals and explicit same-side-surface evidence. Missing
+or degraded evidence must not produce this kind. SharedChainPatchChainRelation
+alone must not produce this kind. Cross-patch cap, corner and shared-boundary
+cases must remain non-propagating unless same-side-surface evidence is explicit
+and safe.
+
 ScaffoldNodeIncidentEdgeRelation v1 must not change ScaffoldNode grouping,
 ScaffoldEdge identity, PatchChain identity, Chain identity, Vertex identity or
 BoundaryLoop identity. It must not use H/V, U/V, WORLD_UP, WorldOrientation,
@@ -233,12 +249,17 @@ Feature, API, UI, runtime solve or UV transfer.
 
 Examples:
 - Tube without caps split by multiple seam chains: top border PatchChains may
-  be SURFACE_CONTINUATION_CANDIDATE through seam nodes even if the 3D chord
-  turns around the tube surface. Bottom border PatchChains follow the same
-  rule.
+  become SURFACE_SLIDING_CONTINUATION_CANDIDATE through seam nodes when
+  explicit same-side-surface evidence and compatible local owner normals prove
+  curved side-surface continuation. The expected continuity result is two side
+  families rather than four singleton side boundary edges.
 - Tube with cap patch: side-to-cap PatchChains may be shared/cross-patch
   neighbors, but they are not side-surface continuation when owner normals
   diverge.
+- Folded 90 seam, cube-like corner and cap-cross-surface cases remain
+  non-propagating unless explicit same-side-surface evidence is safe.
+- Local D:\cylinder.blend is an exploratory smoke fixture, not the canonical
+  synthetic fixture for this contract.
 
 ## DD-40 - ScaffoldContinuityComponent v0 component coloring is not relation-kind coloring
 
@@ -256,6 +277,8 @@ true random.
 
 Default propagation policy:
 - SURFACE_CONTINUATION_CANDIDATE propagates continuity.
+- Approved future behavior: SURFACE_SLIDING_CONTINUATION_CANDIDATE should
+  propagate continuity by default once the kind is implemented.
 - STRAIGHT_CONTINUATION_CANDIDATE is weak evidence and does not propagate by
   default in v0.
 - ORTHOGONAL_CORNER, OBLIQUE_CONNECTOR, CROSS_SURFACE_CONNECTOR,
@@ -305,4 +328,4 @@ That future option should convert sharp information into seam/boundary input bef
 
 ## Open questions
 
-- **OQ-11 - Geometry-based Chain / PatchChain refinement policy.** Status: partially resolved. Final PatchChain is the public source of truth; raw boundary elements are builder internals; Layer 3 may derive directional evidence from final PatchChains; polygonal straight/turning Chains can be described by ChainDirectionalRun / PatchChain directional evidence; directional evidence must not become a competing PatchChain identity; ScaffoldNode may group materialized Vertex occurrences as graph-level evidence but not Layer 1 identity; implemented ScaffoldNodeIncidentEdgeRelation v1 is all-pairs graph evidence over existing ScaffoldNode incident edge-end occurrences and must not choose traces, circuits, rails or continuations; implemented ScaffoldContinuityComponent v0 may group existing ScaffoldEdges into continuity-family evidence without choosing trace, circuit, rail or continuation targets. Curved-chain policy, sawtooth tuning, user split marks, closed-loop wrap merge policy, advanced corner detection, local face-fan refinement policy and trace/circuit/rail construction over ScaffoldGraph remain unresolved. See `G0.md` Section 6.
+- **OQ-11 - Geometry-based Chain / PatchChain refinement policy.** Status: partially resolved. Final PatchChain is the public source of truth; raw boundary elements are builder internals; Layer 3 may derive directional evidence from final PatchChains; polygonal straight/turning Chains can be described by ChainDirectionalRun / PatchChain directional evidence; directional evidence must not become a competing PatchChain identity; ScaffoldNode may group materialized Vertex occurrences as graph-level evidence but not Layer 1 identity; implemented ScaffoldNodeIncidentEdgeRelation v1 is all-pairs graph evidence over existing ScaffoldNode incident edge-end occurrences and must not choose traces, circuits, rails or continuations; implemented ScaffoldContinuityComponent v0 may group existing ScaffoldEdges into continuity-family evidence without choosing trace, circuit, rail or continuation targets; SURFACE_SLIDING_CONTINUATION_CANDIDATE is an approved planned ScaffoldNodeIncidentEdgeRelationKind for curved/side-surface continuation evidence, but classifier and propagation implementation remain unresolved. Curved-chain policy, implementation of SURFACE_SLIDING_CONTINUATION_CANDIDATE, sawtooth tuning, user split marks, closed-loop wrap merge policy, advanced corner detection, local face-fan refinement policy and trace/circuit/rail construction over ScaffoldGraph remain unresolved. See `G0.md` Section 6.

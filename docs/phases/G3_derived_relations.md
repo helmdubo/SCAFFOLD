@@ -63,6 +63,11 @@ Implemented:
 - G3c11 - ScaffoldContinuityComponent v0 derived evidence view
 - LocalFaceFanGeometryFacts as Layer 2 geometry evidence consumed by Layer 3
 
+Approved planned contract, not implemented:
+
+- SURFACE_SLIDING_CONTINUATION_CANDIDATE as a future
+  ScaffoldNodeIncidentEdgeRelationKind.
+
 Validation status:
 
 - ScaffoldGraph and ScaffoldJunction compact report expectations are captured
@@ -73,6 +78,8 @@ Validation status:
 Deferred:
 
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
+- ScaffoldNodeIncidentEdgeRelationKind SURFACE_SLIDING_CONTINUATION_CANDIDATE
+  implementation
 - ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 - WorldOrientation
 - Layer 4 Feature Grammar
@@ -95,6 +102,7 @@ Current terminology for the final boundary graph model:
 | `ScaffoldGraph` | Implemented G3c8 connectivity graph assembled from ScaffoldNodes and ScaffoldEdges. |
 | `ScaffoldJunction` | Implemented SELF_SEAM/CROSS_PATCH graph-level classification overlay on existing ScaffoldNode, not a separate graph node identity. |
 | `ScaffoldContinuityComponent` | Implemented G3c11 derived evidence view grouping existing ScaffoldEdges into continuity families. |
+| `SURFACE_SLIDING_CONTINUATION_CANDIDATE` | Approved planned ScaffoldNodeIncidentEdgeRelationKind; not implemented until the classifier slice lands. |
 | `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
@@ -524,7 +532,7 @@ Implemented v1 kinds:
 | Kind | Meaning |
 |---|---|
 | `STRAIGHT_CONTINUATION_CANDIDATE` | Opposite tangent/chord evidence; compatible owner-normal proof may be absent or weak. |
-| `SURFACE_CONTINUATION_CANDIDATE` | Continuation candidate with compatible owner normals. |
+| `SURFACE_CONTINUATION_CANDIDATE` | Opposite-tangent or straight-ish surface continuation candidate with compatible owner normals. |
 | `CROSS_SURFACE_CONNECTOR` | Tangent may align or connect, but owner normals diverge strongly. |
 | `ORTHOGONAL_CORNER` | Tangent evidence is orthogonal. |
 | `OBLIQUE_CONNECTOR` | Tangent evidence is neither collinear nor orthogonal. |
@@ -532,15 +540,34 @@ Implemented v1 kinds:
 | `MISSING_ENDPOINT_EVIDENCE` | The edge-end pair exists but endpoint sample/relation evidence is absent. |
 | `DEGRADED` | Tangent, normal, confidence or evidence is zero, unknown or collapsed. |
 
+Approved planned kind, not implemented:
+
+| Kind | Meaning |
+|---|---|
+| `SURFACE_SLIDING_CONTINUATION_CANDIDATE` | Node-local relation between two existing ScaffoldEdge endpoint occurrences whose local tangent/chord classification may otherwise look orthogonal or same-ray, but explicit same-side-surface evidence plus compatible local owner normals support continuation along the same curved or side surface. |
+
+`SURFACE_SLIDING_CONTINUATION_CANDIDATE` is not a trace path choice, not a
+selected next edge, not a rail/circuit decision and not a UV direction. It
+requires local owner-normal evidence, compatible local owner normals and
+explicit same-side-surface evidence. Missing or degraded evidence must not
+produce this kind. SharedChainPatchChainRelation alone must not produce this
+kind. Cross-patch cap, corner and shared-boundary cases must remain
+non-propagating unless same-side-surface evidence is explicit and safe.
+
 Tube examples:
 
 - Tube without caps split by multiple seam chains: top border PatchChains may
-  be `SURFACE_CONTINUATION_CANDIDATE` through seam nodes even if the 3D chord
-  turns around the tube surface. Bottom border PatchChains follow the same
-  rule.
+  become `SURFACE_SLIDING_CONTINUATION_CANDIDATE` through seam nodes when
+  explicit same-side-surface evidence and compatible local owner normals prove
+  curved side-surface continuation. The expected continuity result is two side
+  families rather than four singleton side boundary edges.
 - Tube with cap patch: side-to-cap PatchChains may be shared/cross-patch
   neighbors, but they are not side-surface continuation when owner normals
   diverge.
+- Folded 90 seam, cube-like corner and cap-cross-surface cases remain
+  non-propagating unless explicit same-side-surface evidence is safe.
+- Local `D:\cylinder.blend` is an exploratory smoke fixture, not the canonical
+  synthetic fixture for this contract.
 
 Rules:
 
@@ -567,6 +594,7 @@ Default propagation policy:
 | Incident relation kind | v0 propagation |
 |---|---|
 | `SURFACE_CONTINUATION_CANDIDATE` | Propagates continuity. |
+| `SURFACE_SLIDING_CONTINUATION_CANDIDATE` | Approved future behavior: propagates continuity by default once the kind is implemented. |
 | `STRAIGHT_CONTINUATION_CANDIDATE` | Weak evidence; non-default for propagation in v0. |
 | `ORTHOGONAL_CORNER` | Does not propagate. |
 | `OBLIQUE_CONNECTOR` | Does not propagate. |
