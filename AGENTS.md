@@ -177,6 +177,12 @@ LocalFaceFanGeometryFacts
 ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence matrix
 ```
 
+Planned/approved in G3:
+
+```text
+ScaffoldContinuityComponent v0 derived evidence view over ScaffoldEdges
+```
+
 Deferred in G3:
 
 ```text
@@ -211,6 +217,14 @@ PatchChains share the same ChainId and same PatchId. CROSS_PATCH v0 is
 implemented where an existing ScaffoldNode's incident final ScaffoldEdges
 reference more than one distinct PatchId. All other ScaffoldJunction kinds
 remain future/deferred.
+
+ScaffoldContinuityComponent v0 is planned, not implemented. It is a Layer 3
+derived evidence view over existing ScaffoldEdges and existing
+ScaffoldNodeIncidentEdgeRelation records. It groups ScaffoldEdges into
+continuity families without replacing ScaffoldEdge or PatchChain identity and
+without choosing traces, paths, rails, circuits, UV direction or solve behavior.
+It must not introduce H/V, U/V, WORLD_UP, WorldOrientation, Feature, API, UI or
+runtime semantics.
 
 ---
 

@@ -156,6 +156,11 @@ task_routes:
     - docs/phases/G3_derived_relations.md
     - docs/architecture/design_decisions.md
     - docs/agent_handoff.md
+  scaffold_continuity_component:
+    - G0.md
+    - docs/phases/G3_derived_relations.md
+    - docs/architecture/design_decisions.md
+    - docs/agent_handoff.md
   scaffold_junction:
     - docs/phases/G3_derived_relations.md
     - docs/architecture/design_decisions.md

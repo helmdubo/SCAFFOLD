@@ -69,6 +69,11 @@ Validation status:
 - Grease Pencil dev debug rendering smoke validation confirms the cylinder
   graph overlay report shape without adding ScaffoldTrace semantics.
 
+Planned/approved:
+
+- ScaffoldContinuityComponent v0 derived evidence view over existing
+  ScaffoldEdges and ScaffoldNodeIncidentEdgeRelation records
+
 Deferred:
 
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
@@ -93,6 +98,7 @@ Current terminology for the final boundary graph model:
 | `ScaffoldEdge` | Implemented G3c8 graph-level view of one final PatchChain. |
 | `ScaffoldGraph` | Implemented G3c8 connectivity graph assembled from ScaffoldNodes and ScaffoldEdges. |
 | `ScaffoldJunction` | Implemented SELF_SEAM/CROSS_PATCH graph-level classification overlay on existing ScaffoldNode, not a separate graph node identity. |
+| `ScaffoldContinuityComponent` | Planned G3 derived evidence view grouping existing ScaffoldEdges into continuity families. |
 | `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
@@ -546,6 +552,54 @@ Rules:
   behavior selection;
 - no ScaffoldNode grouping changes;
 - no ScaffoldEdge, PatchChain, Chain, Vertex or BoundaryLoop identity changes;
+- no H/V, U/V, WORLD_UP, WorldOrientation, Feature, API, UI, runtime solve or
+  UV transfer.
+
+## Planned - ScaffoldContinuityComponent v0
+
+ScaffoldContinuityComponent v0 is planned, not implemented. It is a Layer 3
+derived evidence view over existing ScaffoldEdges and existing
+ScaffoldNodeIncidentEdgeRelation records.
+
+It groups ScaffoldEdges into continuity families using continuation-compatible
+incident relations. It is not a trace, path choice, rail, circuit, UV
+direction, runtime behavior or replacement for ScaffoldEdge or PatchChain
+identity.
+
+Default propagation policy:
+
+| Incident relation kind | v0 propagation |
+|---|---|
+| `SURFACE_CONTINUATION_CANDIDATE` | Propagates continuity. |
+| `STRAIGHT_CONTINUATION_CANDIDATE` | Weak evidence; non-default for propagation in v0. |
+| `ORTHOGONAL_CORNER` | Does not propagate. |
+| `OBLIQUE_CONNECTOR` | Does not propagate. |
+| `CROSS_SURFACE_CONNECTOR` | Does not propagate. |
+| `SAME_RAY_AMBIGUOUS` | Does not propagate and must mark ambiguity. |
+| `MISSING_ENDPOINT_EVIDENCE` | Does not propagate. |
+| `DEGRADED` | Does not propagate. |
+
+Every ScaffoldEdge belongs to exactly one continuity component, including
+singleton components. If multiple continuation-compatible candidates meet at
+the same ScaffoldNode, the component may be marked ambiguous. v0 must preserve
+ambiguity and must not choose one continuation target.
+
+Debugging contract:
+
+- color represents `continuity_component_id`, not relation kind;
+- relation kind remains a separate visual channel such as marker, glyph, label,
+  dash or warning outline;
+- component colors are deterministic pseudo-random and stable by component id,
+  never true random.
+
+Rules:
+
+- no ScaffoldNode grouping changes;
+- no ScaffoldEdge, ScaffoldGraph, ScaffoldJunction, PatchChain, Chain or Vertex
+  identity changes;
+- no ScaffoldTrace, ScaffoldCircuit or ScaffoldRail construction;
+- no path choice, continuation target choice, runtime behavior or solve
+  behavior.
 - no H/V, U/V, WORLD_UP, WorldOrientation, Feature, API, UI, runtime solve or
   UV transfer.
 

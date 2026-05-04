@@ -240,6 +240,36 @@ Examples:
   neighbors, but they are not side-surface continuation when owner normals
   diverge.
 
+## DD-40 - ScaffoldContinuityComponent v0 component coloring is not relation-kind coloring
+
+Planned ScaffoldContinuityComponent v0 is a Layer 3 derived evidence view over
+existing ScaffoldEdges and existing ScaffoldNodeIncidentEdgeRelation records. It
+groups ScaffoldEdges into continuity families using continuation-compatible
+incident relations.
+
+Continuity components are family memberships, while incident relation kinds are
+local pair classifications. Debug coloring must therefore represent
+continuity_component_id, not relation kind. Relation kind remains a separate
+visual channel such as marker, glyph, label, dash or warning outline. Component
+colors must be deterministic pseudo-random and stable by component id, never
+true random.
+
+Default propagation policy:
+- SURFACE_CONTINUATION_CANDIDATE propagates continuity.
+- STRAIGHT_CONTINUATION_CANDIDATE is weak evidence and does not propagate by
+  default in v0.
+- ORTHOGONAL_CORNER, OBLIQUE_CONNECTOR, CROSS_SURFACE_CONNECTOR,
+  SAME_RAY_AMBIGUOUS, MISSING_ENDPOINT_EVIDENCE and DEGRADED do not propagate.
+- SAME_RAY_AMBIGUOUS must mark ambiguity.
+
+Every ScaffoldEdge belongs to exactly one continuity component, including
+singleton components. If multiple continuation-compatible candidates meet at
+the same ScaffoldNode, the component may be marked ambiguous; v0 must preserve
+that ambiguity and must not choose one continuation target. It is not a trace,
+path choice, rail, circuit, UV direction, runtime behavior or replacement for
+ScaffoldEdge or PatchChain identity, and it must not introduce H/V, U/V,
+WORLD_UP, WorldOrientation, Feature, API, UI, runtime solve or UV transfer.
+
 ## PatchChain directional evidence
 
 Final PatchChain remains the public source of truth.
@@ -275,4 +305,4 @@ That future option should convert sharp information into seam/boundary input bef
 
 ## Open questions
 
-- **OQ-11 - Geometry-based Chain / PatchChain refinement policy.** Status: partially resolved. Final PatchChain is the public source of truth; raw boundary elements are builder internals; Layer 3 may derive directional evidence from final PatchChains; polygonal straight/turning Chains can be described by ChainDirectionalRun / PatchChain directional evidence; directional evidence must not become a competing PatchChain identity; ScaffoldNode may group materialized Vertex occurrences as graph-level evidence but not Layer 1 identity; implemented ScaffoldNodeIncidentEdgeRelation v1 is all-pairs graph evidence over existing ScaffoldNode incident edge-end occurrences and must not choose traces, circuits, rails or continuations. Curved-chain policy, sawtooth tuning, user split marks, closed-loop wrap merge policy, advanced corner detection, local face-fan refinement policy and trace/circuit/rail construction over ScaffoldGraph remain unresolved. See `G0.md` Section 6.
+- **OQ-11 - Geometry-based Chain / PatchChain refinement policy.** Status: partially resolved. Final PatchChain is the public source of truth; raw boundary elements are builder internals; Layer 3 may derive directional evidence from final PatchChains; polygonal straight/turning Chains can be described by ChainDirectionalRun / PatchChain directional evidence; directional evidence must not become a competing PatchChain identity; ScaffoldNode may group materialized Vertex occurrences as graph-level evidence but not Layer 1 identity; implemented ScaffoldNodeIncidentEdgeRelation v1 is all-pairs graph evidence over existing ScaffoldNode incident edge-end occurrences and must not choose traces, circuits, rails or continuations; planned ScaffoldContinuityComponent v0 may group existing ScaffoldEdges into continuity-family evidence without choosing trace, circuit, rail or continuation targets. Curved-chain policy, sawtooth tuning, user split marks, closed-loop wrap merge policy, advanced corner detection, local face-fan refinement policy and trace/circuit/rail construction over ScaffoldGraph remain unresolved. See `G0.md` Section 6.

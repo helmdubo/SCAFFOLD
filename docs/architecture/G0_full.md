@@ -26,6 +26,7 @@ This document is the canonical reference for subsequent implementation plans: G1
 - Implemented ScaffoldGraph v0 as connectivity assembled from ScaffoldNodes and ScaffoldEdges.
 - Implemented ScaffoldJunction v0 as a SELF_SEAM/CROSS_PATCH classification overlay.
 - Implemented ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence contract.
+- Added planned ScaffoldContinuityComponent v0 continuity-family evidence contract.
 - Amended DD-29 to allow topology/materialization-based border coalescing.
 - Marked OQ-11 as partially resolved for polygonal straight/turning Chains.
 
@@ -677,6 +678,13 @@ a future connected sequence of ScaffoldEdges through ScaffoldNodes.
 `ScaffoldCircuit` is a closed ScaffoldTrace. `ScaffoldRail` is a future
 direction-stable ScaffoldTrace usable as a conditional axis.
 
+Planned ScaffoldContinuityComponent v0 is a Layer 3 derived evidence view over
+existing ScaffoldEdges and existing ScaffoldNodeIncidentEdgeRelation records. It
+groups ScaffoldEdges into continuity families using continuation-compatible
+incident relations. It is not a trace, path choice, rail, circuit, UV
+direction, runtime behavior or replacement for ScaffoldEdge or PatchChain
+identity.
+
 ---
 
 # 13. WorldOrientation
@@ -1101,6 +1109,37 @@ Examples:
   neighbors, but they are not side-surface continuation when owner normals
   diverge.
 
+## DD-40 - ScaffoldContinuityComponent v0 is continuity-family evidence
+
+Planned ScaffoldContinuityComponent v0 is a Layer 3 derived evidence view over
+existing ScaffoldEdges and existing ScaffoldNodeIncidentEdgeRelation records. It
+groups ScaffoldEdges into continuity families using continuation-compatible
+incident relations.
+
+It is not a trace, path choice, rail, circuit, UV direction, runtime behavior
+or replacement for ScaffoldEdge or PatchChain identity. It must not change
+ScaffoldNode, ScaffoldEdge, ScaffoldGraph, ScaffoldJunction, PatchChain, Chain
+or Vertex identity semantics. It must not introduce H/V, U/V, WORLD_UP,
+WorldOrientation, Feature, API, UI, runtime solve or UV transfer.
+
+Default propagation policy:
+- SURFACE_CONTINUATION_CANDIDATE propagates continuity.
+- STRAIGHT_CONTINUATION_CANDIDATE is weak evidence and does not propagate by
+  default in v0.
+- ORTHOGONAL_CORNER, OBLIQUE_CONNECTOR, CROSS_SURFACE_CONNECTOR,
+  SAME_RAY_AMBIGUOUS, MISSING_ENDPOINT_EVIDENCE and DEGRADED do not propagate.
+- SAME_RAY_AMBIGUOUS must mark ambiguity.
+
+Every ScaffoldEdge belongs to exactly one continuity component, including
+singleton components. If multiple continuation-compatible candidates meet at
+the same ScaffoldNode, the component may be marked ambiguous; v0 must preserve
+that ambiguity and must not choose one continuation target.
+
+Debug coloring must represent continuity_component_id, not relation kind.
+Relation kind remains a separate visual channel such as marker, glyph, label,
+dash or warning outline. Component colors must be deterministic pseudo-random
+and stable by component id, never true random.
+
 ## PatchChain directional evidence
 
 Final PatchChain remains the public source of truth.
@@ -1179,10 +1218,11 @@ Implemented:
 - G3c7 - ScaffoldNode v0
 - G3c8 - ScaffoldEdge v0 / ScaffoldGraph v0
 - G3c9 - ScaffoldJunction v0 SELF_SEAM/CROSS_PATCH
+- G3c10 - ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence matrix
 
-Next:
-- inspection review of ScaffoldGraph overlay reports
-- Grease Pencil dev debug rendering as a future overlay consumer
+Planned/approved:
+- ScaffoldContinuityComponent v0 derived evidence view over existing
+  ScaffoldEdges and ScaffoldNodeIncidentEdgeRelation records
 
 Deferred:
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
@@ -1312,6 +1352,9 @@ Resolved:
 - ScaffoldNodeIncidentEdgeRelation v1 is implemented as all-pairs graph evidence
   over existing ScaffoldNode incident edge-end occurrences and must not choose
   traces, circuits, rails or continuations.
+- ScaffoldContinuityComponent v0 is planned as a continuity-family evidence
+  view over existing ScaffoldEdges and incident-edge relations. It may group
+  edges but must not choose traces, circuits, rails or continuation targets.
 
 Still unresolved:
 

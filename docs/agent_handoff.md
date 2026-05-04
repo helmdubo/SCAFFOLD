@@ -99,8 +99,14 @@ Implemented:
 - LocalFaceFanGeometryFacts
 - ScaffoldNodeIncidentEdgeRelation v1 complete all-pairs edge-end occurrence matrix
 
+Planned/approved:
+
+- ScaffoldContinuityComponent v0 derived evidence view over existing
+  ScaffoldEdges and ScaffoldNodeIncidentEdgeRelation records
+
 Not implemented:
 
+- ScaffoldContinuityComponent v0 implementation
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
 - ScaffoldTrace
 - ScaffoldCircuit
@@ -166,6 +172,10 @@ ScaffoldCircuit:
 
 ScaffoldRail:
   future direction-stable ScaffoldTrace usable as a conditional axis.
+
+ScaffoldContinuityComponent:
+  planned Layer 3 derived evidence view grouping existing ScaffoldEdges into
+  continuity families from ScaffoldNodeIncidentEdgeRelation records.
 ```
 
 ---
@@ -304,6 +314,21 @@ continuations, UV behavior or runtime behavior, and must not change
 ScaffoldNode grouping or ScaffoldEdge, PatchChain, Chain, Vertex or
 BoundaryLoop identity.
 
+ScaffoldContinuityComponent v0 is the next planned implementation slice. It
+should group ScaffoldEdges into continuity families using existing
+ScaffoldNodeIncidentEdgeRelation records. Default propagation is limited to
+SURFACE_CONTINUATION_CANDIDATE. STRAIGHT_CONTINUATION_CANDIDATE is weak
+non-default evidence. ORTHOGONAL_CORNER, OBLIQUE_CONNECTOR,
+CROSS_SURFACE_CONNECTOR, SAME_RAY_AMBIGUOUS, MISSING_ENDPOINT_EVIDENCE and
+DEGRADED do not propagate; SAME_RAY_AMBIGUOUS must preserve ambiguity. Every
+ScaffoldEdge belongs to exactly one component, including singletons, and
+ambiguous component evidence must not choose one continuation target.
+
+Debug component coloring should represent continuity_component_id, not relation
+kind. Relation kind remains a separate visual channel, and component colors
+must be deterministic pseudo-random and stable by component id, never true
+random.
+
 ScaffoldNode v0 grouping policy:
 
 ```text
@@ -350,9 +375,10 @@ Still unresolved:
 
 ## Next architecture decision
 
-ScaffoldGraph overlay reports for SELF_SEAM/CROSS_PATCH ScaffoldJunctions now
-have compact expectations on representative meshes. Use those reports as
-validation evidence before any explicit ScaffoldTrace task.
+Implement ScaffoldContinuityComponent v0 next as a Layer 3 evidence view over
+existing ScaffoldEdges and ScaffoldNodeIncidentEdgeRelation records. Keep it
+separate from ScaffoldTrace, ScaffoldCircuit and ScaffoldRail construction, and
+do not choose continuation targets, UV directions or solve behavior.
 
 Grease Pencil rendering consumes the pipeline inspection overlay payload instead
 of duplicating core graph logic. Do not import Blender into Scaffold Core.
