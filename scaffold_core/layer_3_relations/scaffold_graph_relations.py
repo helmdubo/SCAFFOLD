@@ -41,6 +41,10 @@ SAME_RAY_COLLINEAR_MIN_DOT = 0.996
 ORTHOGONAL_MAX_ABS_DOT = 0.2
 COMPATIBLE_NORMAL_MIN_DOT = 0.7
 DIVERGENT_NORMAL_MAX_DOT = 0.25
+SLIDING_BASE_KINDS = frozenset({
+    ScaffoldNodeIncidentEdgeRelationKind.ORTHOGONAL_CORNER,
+    ScaffoldNodeIncidentEdgeRelationKind.SAME_RAY_AMBIGUOUS,
+})
 
 
 @dataclass(frozen=True)
@@ -107,7 +111,7 @@ def build_scaffold_node_incident_edge_relations(
                 second,
                 relation_by_sample_pair,
             )
-            relations.append(_incident_edge_relation(node, first, second, endpoint_relation))
+            relations.append(_incident_edge_relation(node, first, second, endpoint_relation, occurrences))
     return tuple(relations)
 
 
@@ -247,11 +251,25 @@ def _incident_edge_relation(
     first: _IncidentEdgeOccurrence,
     second: _IncidentEdgeOccurrence,
     endpoint_relation: PatchChainEndpointRelation | None,
+    node_occurrences: tuple[_IncidentEdgeOccurrence, ...],
 ) -> ScaffoldNodeIncidentEdgeRelation:
     first_edge = first.scaffold_edge
     second_edge = second.scaffold_edge
     direction_dot, normal_dot = _dot_values(first, second, endpoint_relation)
-    kind = _incident_edge_kind(first, second, endpoint_relation, direction_dot, normal_dot)
+    base_kind = _incident_edge_kind(first, second, endpoint_relation, direction_dot, normal_dot)
+    sliding_evidence = _surface_sliding_evidence(
+        node,
+        first,
+        second,
+        node_occurrences,
+        base_kind,
+        normal_dot,
+    )
+    kind = (
+        ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
+        if sliding_evidence is not None
+        else base_kind
+    )
     confidence = _incident_edge_confidence(node, first, second, endpoint_relation, kind)
     return ScaffoldNodeIncidentEdgeRelation(
         id=(
@@ -273,7 +291,16 @@ def _incident_edge_relation(
         direction_dot=direction_dot,
         normal_dot=normal_dot,
         confidence=confidence,
-        evidence=(_incident_edge_evidence(node, first, second, endpoint_relation, kind, confidence),),
+        evidence=(_incident_edge_evidence(
+            node,
+            first,
+            second,
+            endpoint_relation,
+            kind,
+            confidence,
+            base_kind,
+            sliding_evidence,
+        ),),
     )
 
 
@@ -371,6 +398,79 @@ def _has_strong_normal_evidence(
     )
 
 
+def _surface_sliding_evidence(
+    node: ScaffoldNode,
+    first: _IncidentEdgeOccurrence,
+    second: _IncidentEdgeOccurrence,
+    node_occurrences: tuple[_IncidentEdgeOccurrence, ...],
+    base_kind: ScaffoldNodeIncidentEdgeRelationKind,
+    normal_dot: float | None,
+) -> dict[str, object] | None:
+    if base_kind not in SLIDING_BASE_KINDS:
+        return None
+    if first.endpoint_sample is None or second.endpoint_sample is None:
+        return None
+    if first.scaffold_edge.patch_id != second.scaffold_edge.patch_id:
+        return None
+    if first.scaffold_edge.loop_id != second.scaffold_edge.loop_id:
+        return None
+    if first.scaffold_edge.chain_id == second.scaffold_edge.chain_id:
+        return None
+    if first.endpoint_role is not PatchChainEndpointRole.END:
+        return None
+    if second.endpoint_role is not PatchChainEndpointRole.START:
+        return None
+    if first.endpoint_sample.vertex_id != second.endpoint_sample.vertex_id:
+        return None
+    if (
+        first.endpoint_sample.owner_normal_source
+        is not OwnerNormalSource.LOCAL_FACE_FAN_NORMAL
+        or second.endpoint_sample.owner_normal_source
+        is not OwnerNormalSource.LOCAL_FACE_FAN_NORMAL
+    ):
+        return None
+    if not _has_strong_normal_evidence(first.endpoint_sample, second.endpoint_sample, normal_dot):
+        return None
+    if normal_dot is None or normal_dot < COMPATIBLE_NORMAL_MIN_DOT:
+        return None
+
+    duplicated_chain_keys = _same_patch_chain_keys_with_recurrence(node_occurrences)
+    first_key = (first.scaffold_edge.chain_id, first.scaffold_edge.patch_id)
+    second_key = (second.scaffold_edge.chain_id, second.scaffold_edge.patch_id)
+    if first_key not in duplicated_chain_keys or second_key in duplicated_chain_keys:
+        return None
+
+    return {
+        "normal_evidence_source": (
+            first.endpoint_sample.owner_normal_source.value,
+            second.endpoint_sample.owner_normal_source.value,
+        ),
+        "same_side_surface_evidence_source": (
+            "same_patch_same_loop_local_face_fan_at_materialized_vertex_with_self_seam_recurrence"
+        ),
+        "original_tangent_local_category": base_kind.value,
+        "materialized_vertex_id": str(first.endpoint_sample.vertex_id),
+        "self_seam_chain_id": str(first.scaffold_edge.chain_id),
+        "patch_id": str(first.scaffold_edge.patch_id),
+        "loop_id": str(first.scaffold_edge.loop_id),
+        "normal_dot": normal_dot,
+    }
+
+
+def _same_patch_chain_keys_with_recurrence(
+    node_occurrences: tuple[_IncidentEdgeOccurrence, ...],
+) -> frozenset[tuple[ChainId, PatchId]]:
+    edge_ids_by_chain_patch: dict[tuple[ChainId, PatchId], set[str]] = defaultdict(set)
+    for occurrence in node_occurrences:
+        edge = occurrence.scaffold_edge
+        edge_ids_by_chain_patch[(edge.chain_id, edge.patch_id)].add(edge.id)
+    return frozenset(
+        key
+        for key, edge_ids in edge_ids_by_chain_patch.items()
+        if len(edge_ids) >= 2
+    )
+
+
 def _incident_edge_confidence(
     node: ScaffoldNode,
     first: _IncidentEdgeOccurrence,
@@ -410,28 +510,34 @@ def _incident_edge_evidence(
     endpoint_relation: PatchChainEndpointRelation | None,
     kind: ScaffoldNodeIncidentEdgeRelationKind,
     confidence: float,
+    base_kind: ScaffoldNodeIncidentEdgeRelationKind,
+    sliding_evidence: dict[str, object] | None,
 ) -> Evidence:
     first_edge = first.scaffold_edge
     second_edge = second.scaffold_edge
+    data = {
+        "policy": NODE_INCIDENT_EDGE_POLICY_NAME,
+        "scaffold_node_id": node.id,
+        "first_scaffold_edge_id": first_edge.id,
+        "second_scaffold_edge_id": second_edge.id,
+        "first_patch_chain_id": str(first_edge.patch_chain_id),
+        "second_patch_chain_id": str(second_edge.patch_chain_id),
+        "first_endpoint_role": first.endpoint_role.value,
+        "second_endpoint_role": second.endpoint_role.value,
+        "first_endpoint_sample_id": first.endpoint_sample.id if first.endpoint_sample is not None else None,
+        "second_endpoint_sample_id": second.endpoint_sample.id if second.endpoint_sample is not None else None,
+        "patch_chain_endpoint_relation_id": endpoint_relation.id if endpoint_relation is not None else None,
+        "endpoint_relation_kind": endpoint_relation.kind.value if endpoint_relation is not None else None,
+        "kind": kind.value,
+        "original_tangent_local_category": base_kind.value,
+        "confidence": confidence,
+    }
+    if sliding_evidence is not None:
+        data.update(sliding_evidence)
     return Evidence(
         source="layer_3_relations.scaffold_graph_relations",
         summary="node-local ScaffoldEdge endpoint occurrence pair relation",
-        data={
-            "policy": NODE_INCIDENT_EDGE_POLICY_NAME,
-            "scaffold_node_id": node.id,
-            "first_scaffold_edge_id": first_edge.id,
-            "second_scaffold_edge_id": second_edge.id,
-            "first_patch_chain_id": str(first_edge.patch_chain_id),
-            "second_patch_chain_id": str(second_edge.patch_chain_id),
-            "first_endpoint_role": first.endpoint_role.value,
-            "second_endpoint_role": second.endpoint_role.value,
-            "first_endpoint_sample_id": first.endpoint_sample.id if first.endpoint_sample is not None else None,
-            "second_endpoint_sample_id": second.endpoint_sample.id if second.endpoint_sample is not None else None,
-            "patch_chain_endpoint_relation_id": endpoint_relation.id if endpoint_relation is not None else None,
-            "endpoint_relation_kind": endpoint_relation.kind.value if endpoint_relation is not None else None,
-            "kind": kind.value,
-            "confidence": confidence,
-        },
+        data=data,
     )
 
 

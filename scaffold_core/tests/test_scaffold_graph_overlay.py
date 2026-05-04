@@ -337,8 +337,23 @@ def test_scaffold_graph_overlay_exposes_self_seam_junction_markers_for_cylinder(
     }
     assert overlay["scaffold_node_count"] == 2
     assert overlay["scaffold_edge_count"] == 4
-    assert overlay["scaffold_continuity_component_count"] == 4
+    assert overlay["scaffold_continuity_component_count"] == 2
     assert overlay["scaffold_junction_count"] == 2
+    assert {
+        relation["kind"]
+        for relation in overlay["incident_relations"]
+        if relation["kind"] == "SURFACE_SLIDING_CONTINUATION_CANDIDATE"
+    } == {"SURFACE_SLIDING_CONTINUATION_CANDIDATE"}
+    sliding_relations = [
+        relation
+        for relation in overlay["incident_relations"]
+        if relation["kind"] == "SURFACE_SLIDING_CONTINUATION_CANDIDATE"
+    ]
+    assert all(
+        relation["evidence"][0]["data"]["same_side_surface_evidence_source"]
+        == "same_patch_same_loop_local_face_fan_at_materialized_vertex_with_self_seam_recurrence"
+        for relation in sliding_relations
+    )
     assert len(overlay["junctions"]) == 2
     assert {junction["kind"] for junction in overlay["junctions"]} == {"SELF_SEAM"}
     assert all(junction["scaffold_node_id"] in node_ids for junction in overlay["junctions"])
@@ -454,11 +469,11 @@ def test_scaffold_graph_overlay_compact_report_expectations_for_cylinder() -> No
         "scaffold_junction_count": 2,
         "scaffold_node_incident_edge_relation_count": 12,
         "shared_chain_patch_chain_relation_count": 0,
-        "scaffold_continuity_component_count": 4,
+        "scaffold_continuity_component_count": 2,
         "overlay_node_count": 2,
         "overlay_edge_count": 4,
         "overlay_junction_count": 2,
-        "overlay_continuity_component_count": 4,
+        "overlay_continuity_component_count": 2,
         "overlay_incident_relation_count": 12,
         "overlay_shared_chain_relation_count": 0,
         "edge_stroke_count": 4,

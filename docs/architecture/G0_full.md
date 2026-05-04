@@ -27,7 +27,7 @@ This document is the canonical reference for subsequent implementation plans: G1
 - Implemented ScaffoldJunction v0 as a SELF_SEAM/CROSS_PATCH classification overlay.
 - Implemented ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence contract.
 - Implemented ScaffoldContinuityComponent v0 continuity-family evidence contract.
-- Added approved planned SURFACE_SLIDING_CONTINUATION_CANDIDATE relation-kind contract.
+- Implemented SURFACE_SLIDING_CONTINUATION_CANDIDATE relation-kind contract.
 - Amended DD-29 to allow topology/materialization-based border coalescing.
 - Marked OQ-11 as partially resolved for polygonal straight/turning Chains.
 
@@ -649,6 +649,7 @@ continuations, UV behavior or runtime behavior.
 Implemented v1 relation kinds:
 
 ```text
+SURFACE_SLIDING_CONTINUATION_CANDIDATE
 STRAIGHT_CONTINUATION_CANDIDATE
 SURFACE_CONTINUATION_CANDIDATE
 CROSS_SURFACE_CONNECTOR
@@ -657,12 +658,6 @@ OBLIQUE_CONNECTOR
 SAME_RAY_AMBIGUOUS
 MISSING_ENDPOINT_EVIDENCE
 DEGRADED
-```
-
-Approved planned relation kind, not implemented by DD-39 v1:
-
-```text
-SURFACE_SLIDING_CONTINUATION_CANDIDATE
 ```
 
 SURFACE_SLIDING_CONTINUATION_CANDIDATE is a node-local relation between two
@@ -1121,7 +1116,6 @@ Implemented v1 relation kinds:
 - DEGRADED: tangent, normal, confidence or evidence is zero, unknown or
   collapsed.
 
-Approved planned relation kind, not implemented by DD-39 v1:
 - SURFACE_SLIDING_CONTINUATION_CANDIDATE: node-local relation between two
   existing ScaffoldEdge endpoint occurrences whose local tangent/chord
   classification may otherwise look orthogonal or same-ray, but explicit
@@ -1171,8 +1165,7 @@ WorldOrientation, Feature, API, UI, runtime solve or UV transfer.
 
 Default propagation policy:
 - SURFACE_CONTINUATION_CANDIDATE propagates continuity.
-- Approved future behavior: SURFACE_SLIDING_CONTINUATION_CANDIDATE should
-  propagate continuity by default once the kind is implemented.
+- SURFACE_SLIDING_CONTINUATION_CANDIDATE propagates continuity by default.
 - STRAIGHT_CONTINUATION_CANDIDATE is weak evidence and does not propagate by
   default in v0.
 - ORTHOGONAL_CORNER, OBLIQUE_CONNECTOR, CROSS_SURFACE_CONNECTOR,
@@ -1269,14 +1262,10 @@ Implemented:
 - G3c9 - ScaffoldJunction v0 SELF_SEAM/CROSS_PATCH
 - G3c10 - ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence matrix
 - G3c11 - ScaffoldContinuityComponent v0
-
-Approved planned:
-- SURFACE_SLIDING_CONTINUATION_CANDIDATE docs contract
+- G3c12 - SURFACE_SLIDING_CONTINUATION_CANDIDATE conservative classifier
 
 Deferred:
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
-- ScaffoldNodeIncidentEdgeRelationKind SURFACE_SLIDING_CONTINUATION_CANDIDATE
-  implementation
 - ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 - WorldOrientation
 - Layer 4 Feature Grammar
@@ -1406,14 +1395,13 @@ Resolved:
 - ScaffoldContinuityComponent v0 is implemented as a continuity-family evidence
   view over existing ScaffoldEdges and incident-edge relations. It may group
   edges but must not choose traces, circuits, rails or continuation targets.
-- SURFACE_SLIDING_CONTINUATION_CANDIDATE is an approved planned
-  ScaffoldNodeIncidentEdgeRelationKind for curved/side-surface continuation
-  evidence, but classifier and propagation implementation remain unresolved.
+- SURFACE_SLIDING_CONTINUATION_CANDIDATE is implemented as conservative
+  ScaffoldNodeIncidentEdgeRelationKind evidence for curved/side-surface
+  continuation.
 
 Still unresolved:
 
 - curved-chain policy;
-- implementation of SURFACE_SLIDING_CONTINUATION_CANDIDATE;
 - sawtooth tuning;
 - user split marks;
 - closed-loop wrap merge policy;

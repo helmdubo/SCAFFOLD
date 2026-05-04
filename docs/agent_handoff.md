@@ -98,6 +98,7 @@ Implemented:
 - ScaffoldJunction v0 SELF_SEAM/CROSS_PATCH
 - LocalFaceFanGeometryFacts
 - ScaffoldNodeIncidentEdgeRelation v1 complete all-pairs edge-end occurrence matrix
+- ScaffoldNodeIncidentEdgeRelationKind SURFACE_SLIDING_CONTINUATION_CANDIDATE v0
 - ScaffoldContinuityComponent v0
 
 Not implemented:
@@ -106,7 +107,6 @@ Not implemented:
 - ScaffoldTrace
 - ScaffoldCircuit
 - ScaffoldRail
-- ScaffoldNodeIncidentEdgeRelationKind SURFACE_SLIDING_CONTINUATION_CANDIDATE
 - WorldOrientation
 - Layer 4 Feature Grammar
 - Layer 5 Runtime/Solve
@@ -305,8 +305,8 @@ STRAIGHT_CONTINUATION_CANDIDATE, SURFACE_CONTINUATION_CANDIDATE,
 CROSS_SURFACE_CONNECTOR, ORTHOGONAL_CORNER, OBLIQUE_CONNECTOR,
 SAME_RAY_AMBIGUOUS, MISSING_ENDPOINT_EVIDENCE and DEGRADED.
 
-Approved planned kind SURFACE_SLIDING_CONTINUATION_CANDIDATE is not
-implemented yet. It is a node-local relation between two existing ScaffoldEdge
+SURFACE_SLIDING_CONTINUATION_CANDIDATE is implemented as a conservative
+node-local relation between two existing ScaffoldEdge
 endpoint occurrences where tangent/chord classification may otherwise look
 orthogonal or same-ray, but explicit same-side-surface evidence plus compatible
 local owner normals support continuation along the same curved or side surface.
@@ -321,16 +321,15 @@ continuations, UV behavior or runtime behavior, and must not change
 ScaffoldNode grouping or ScaffoldEdge, PatchChain, Chain, Vertex or
 BoundaryLoop identity.
 
-ScaffoldContinuityComponent v0 groups ScaffoldEdges into continuity families using existing
-ScaffoldNodeIncidentEdgeRelation records. Default propagation is limited to
-SURFACE_CONTINUATION_CANDIDATE in current code. Approved future behavior should
-also propagate through SURFACE_SLIDING_CONTINUATION_CANDIDATE by default once
-that kind is implemented. STRAIGHT_CONTINUATION_CANDIDATE is weak non-default
-evidence. ORTHOGONAL_CORNER, OBLIQUE_CONNECTOR, CROSS_SURFACE_CONNECTOR,
-SAME_RAY_AMBIGUOUS, MISSING_ENDPOINT_EVIDENCE and DEGRADED do not propagate;
-SAME_RAY_AMBIGUOUS must preserve ambiguity. Every ScaffoldEdge belongs to
-exactly one component, including singletons, and ambiguous component evidence
-must not choose one continuation target.
+ScaffoldContinuityComponent v0 groups ScaffoldEdges into continuity families
+using existing ScaffoldNodeIncidentEdgeRelation records. Default propagation
+includes SURFACE_CONTINUATION_CANDIDATE and
+SURFACE_SLIDING_CONTINUATION_CANDIDATE. STRAIGHT_CONTINUATION_CANDIDATE is weak
+non-default evidence. ORTHOGONAL_CORNER, OBLIQUE_CONNECTOR,
+CROSS_SURFACE_CONNECTOR, SAME_RAY_AMBIGUOUS, MISSING_ENDPOINT_EVIDENCE and
+DEGRADED do not propagate; SAME_RAY_AMBIGUOUS must preserve ambiguity. Every
+ScaffoldEdge belongs to exactly one component, including singletons, and
+ambiguous component evidence must not choose one continuation target.
 
 Debug component coloring should represent continuity_component_id, not relation
 kind. Relation kind remains a separate visual channel, and component colors
@@ -372,7 +371,6 @@ Resolved:
 Still unresolved:
 
 - curved-chain policy;
-- implementation of SURFACE_SLIDING_CONTINUATION_CANDIDATE;
 - sawtooth tuning;
 - user split marks;
 - closed-loop wrap merge policy;
@@ -384,15 +382,14 @@ Still unresolved:
 
 ## Next architecture decision
 
-Next implementation slice: add
-SURFACE_SLIDING_CONTINUATION_CANDIDATE to ScaffoldNodeIncidentEdgeRelationKind
-and update ScaffoldContinuityComponent propagation to include it by default,
-without implementing ScaffoldTrace, ScaffoldCircuit, ScaffoldRail, UV direction
-or solve behavior. Tube without caps should produce two side continuity
-families rather than four singleton side boundary edges; folded 90 seam,
-cube-like and cap-cross-surface cases must remain non-propagating. Treat local
-`D:\cylinder.blend` as exploratory smoke only, not as the canonical synthetic
-fixture.
+Current implementation checkpoint: SURFACE_SLIDING_CONTINUATION_CANDIDATE is
+implemented as conservative evidence and ScaffoldContinuityComponent v0
+propagates through it by default, without implementing ScaffoldTrace,
+ScaffoldCircuit, ScaffoldRail, UV direction or solve behavior. Tube without
+caps produces two side continuity families rather than four singleton side
+boundary edges; folded 90 seam, cube-like and cap-cross-surface cases remain
+non-propagating. Treat local `D:\cylinder.blend` as exploratory smoke only, not
+as the canonical synthetic fixture.
 
 Grease Pencil rendering consumes the pipeline inspection overlay payload instead
 of duplicating core graph logic. Do not import Blender into Scaffold Core.

@@ -62,10 +62,7 @@ Implemented:
 - G3c10 - ScaffoldNodeIncidentEdgeRelation v1 all-pairs edge-end occurrence matrix
 - G3c11 - ScaffoldContinuityComponent v0 derived evidence view
 - LocalFaceFanGeometryFacts as Layer 2 geometry evidence consumed by Layer 3
-
-Approved planned contract, not implemented:
-
-- SURFACE_SLIDING_CONTINUATION_CANDIDATE as a future
+- SURFACE_SLIDING_CONTINUATION_CANDIDATE as a conservative
   ScaffoldNodeIncidentEdgeRelationKind.
 
 Validation status:
@@ -78,8 +75,6 @@ Validation status:
 Deferred:
 
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
-- ScaffoldNodeIncidentEdgeRelationKind SURFACE_SLIDING_CONTINUATION_CANDIDATE
-  implementation
 - ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
 - WorldOrientation
 - Layer 4 Feature Grammar
@@ -102,7 +97,7 @@ Current terminology for the final boundary graph model:
 | `ScaffoldGraph` | Implemented G3c8 connectivity graph assembled from ScaffoldNodes and ScaffoldEdges. |
 | `ScaffoldJunction` | Implemented SELF_SEAM/CROSS_PATCH graph-level classification overlay on existing ScaffoldNode, not a separate graph node identity. |
 | `ScaffoldContinuityComponent` | Implemented G3c11 derived evidence view grouping existing ScaffoldEdges into continuity families. |
-| `SURFACE_SLIDING_CONTINUATION_CANDIDATE` | Approved planned ScaffoldNodeIncidentEdgeRelationKind; not implemented until the classifier slice lands. |
+| `SURFACE_SLIDING_CONTINUATION_CANDIDATE` | Implemented conservative ScaffoldNodeIncidentEdgeRelationKind for curved/side-surface continuation evidence. |
 | `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
@@ -540,8 +535,6 @@ Implemented v1 kinds:
 | `MISSING_ENDPOINT_EVIDENCE` | The edge-end pair exists but endpoint sample/relation evidence is absent. |
 | `DEGRADED` | Tangent, normal, confidence or evidence is zero, unknown or collapsed. |
 
-Approved planned kind, not implemented:
-
 | Kind | Meaning |
 |---|---|
 | `SURFACE_SLIDING_CONTINUATION_CANDIDATE` | Node-local relation between two existing ScaffoldEdge endpoint occurrences whose local tangent/chord classification may otherwise look orthogonal or same-ray, but explicit same-side-surface evidence plus compatible local owner normals support continuation along the same curved or side surface. |
@@ -594,7 +587,7 @@ Default propagation policy:
 | Incident relation kind | v0 propagation |
 |---|---|
 | `SURFACE_CONTINUATION_CANDIDATE` | Propagates continuity. |
-| `SURFACE_SLIDING_CONTINUATION_CANDIDATE` | Approved future behavior: propagates continuity by default once the kind is implemented. |
+| `SURFACE_SLIDING_CONTINUATION_CANDIDATE` | Propagates continuity by default. |
 | `STRAIGHT_CONTINUATION_CANDIDATE` | Weak evidence; non-default for propagation in v0. |
 | `ORTHOGONAL_CORNER` | Does not propagate. |
 | `OBLIQUE_CONNECTOR` | Does not propagate. |

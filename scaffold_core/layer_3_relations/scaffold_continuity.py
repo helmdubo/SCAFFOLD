@@ -21,7 +21,10 @@ from scaffold_core.layer_3_relations.model import (
 
 
 PROPAGATION_POLICY_NAME = "scaffold_continuity_component_v0"
-PROPAGATING_KIND = ScaffoldNodeIncidentEdgeRelationKind.SURFACE_CONTINUATION_CANDIDATE
+PROPAGATING_KINDS = frozenset({
+    ScaffoldNodeIncidentEdgeRelationKind.SURFACE_CONTINUATION_CANDIDATE,
+    ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE,
+})
 AMBIGUOUS_KIND = ScaffoldNodeIncidentEdgeRelationKind.SAME_RAY_AMBIGUOUS
 
 
@@ -49,7 +52,7 @@ def build_scaffold_continuity_components(
         )
     )
     for relation in sorted(valid_relations, key=lambda item: item.id):
-        if relation.kind is PROPAGATING_KIND:
+        if relation.kind in PROPAGATING_KINDS:
             _union(parent, relation.first_scaffold_edge_id, relation.second_scaffold_edge_id)
 
     component_edge_ids: dict[str, list[str]] = defaultdict(list)
@@ -80,13 +83,13 @@ def build_scaffold_continuity_components(
         propagating_relation_ids = tuple(
             relation.id
             for relation in component_relations
-            if relation.kind is PROPAGATING_KIND
+            if relation.kind in PROPAGATING_KINDS
         )
         ambiguous_relation_ids = _ambiguous_relation_ids(component_relations)
         blocked_relation_ids = tuple(
             relation.id
             for relation in component_relations
-            if relation.kind is not PROPAGATING_KIND
+            if relation.kind not in PROPAGATING_KINDS
         )
         node_ids = _component_node_ids(edge_ids, edge_by_id)
         confidence = _component_confidence(edge_ids, edge_by_id, component_relations)
@@ -145,7 +148,7 @@ def _ambiguous_relation_ids(
     }
     propagating_by_node_id: dict[str, list[str]] = defaultdict(list)
     for relation in relations:
-        if relation.kind is PROPAGATING_KIND:
+        if relation.kind in PROPAGATING_KINDS:
             propagating_by_node_id[relation.scaffold_node_id].append(relation.id)
     for relation_ids in propagating_by_node_id.values():
         if len(relation_ids) > 1:
@@ -198,7 +201,7 @@ def _evidence(
             "propagating_incident_relation_ids": list(propagating_relation_ids),
             "ambiguous_incident_relation_ids": list(ambiguous_relation_ids),
             "blocked_incident_relation_ids": list(blocked_relation_ids),
-            "propagating_kind": PROPAGATING_KIND.value,
+            "propagating_kinds": sorted(kind.value for kind in PROPAGATING_KINDS),
             "confidence": confidence,
         },
     )

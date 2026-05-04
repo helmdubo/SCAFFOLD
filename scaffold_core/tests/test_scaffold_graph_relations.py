@@ -35,6 +35,7 @@ from scaffold_core.pipeline.inspection import inspect_pipeline_context
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_boundary_loop_source
 from scaffold_core.tests.fixtures.cylinder_tube import (
+    make_cylinder_tube_without_caps_with_one_seam_source,
     make_segmented_cylinder_tube_without_caps_with_one_seam_source,
 )
 from scaffold_core.tests.fixtures.l_shape import make_two_patch_source_with_two_edge_seam_run
@@ -98,6 +99,278 @@ def test_orthogonal_tangent_with_compatible_normals_stays_corner_relation() -> N
 
     assert relation.kind is ScaffoldNodeIncidentEdgeRelationKind.ORTHOGONAL_CORNER
     assert relation.normal_dot == 1.0
+
+
+def test_same_patch_self_seam_side_pair_becomes_surface_sliding_candidate() -> None:
+    seam_sample = _sample(
+        "seam_a",
+        (0.0, 0.0, 1.0),
+        PatchId("patch:one"),
+        endpoint_role=PatchChainEndpointRole.END,
+        owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
+    )
+    duplicate_seam_sample = _sample(
+        "seam_b",
+        (0.0, 0.0, 1.0),
+        PatchId("patch:one"),
+        endpoint_role=PatchChainEndpointRole.END,
+        owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
+    )
+    side_sample = _sample(
+        "side",
+        (1.0, 0.0, 0.0),
+        PatchId("patch:one"),
+        endpoint_role=PatchChainEndpointRole.START,
+        owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
+    )
+    edges = (
+        _edge(
+            "seam_a",
+            ChainId("chain:seam"),
+            PatchId("patch:one"),
+            start_node_id="scaffold_node:two",
+            end_node_id="scaffold_node:one",
+            loop_id=BoundaryLoopId("loop:one"),
+        ),
+        _edge(
+            "seam_b",
+            ChainId("chain:seam"),
+            PatchId("patch:one"),
+            start_node_id="scaffold_node:two",
+            end_node_id="scaffold_node:one",
+            loop_id=BoundaryLoopId("loop:one"),
+        ),
+        _edge("side", ChainId("chain:side"), PatchId("patch:one"), loop_id=BoundaryLoopId("loop:one")),
+    )
+    node = _node(
+        seam_sample.patch_chain_id,
+        duplicate_seam_sample.patch_chain_id,
+        side_sample.patch_chain_id,
+    )
+
+    incident_relations, _ = build_scaffold_graph_relations(
+        scaffold_nodes=(node,),
+        scaffold_edges=edges,
+        endpoint_samples=(seam_sample, duplicate_seam_sample, side_sample),
+        endpoint_relations=build_patch_chain_endpoint_relations((
+            seam_sample,
+            duplicate_seam_sample,
+            side_sample,
+        )),
+        patch_adjacencies={},
+    )
+
+    sliding_relations = [
+        relation
+        for relation in incident_relations
+        if relation.kind is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
+    ]
+    assert len(sliding_relations) == 2
+    assert {
+        relation.evidence[0].data["original_tangent_local_category"]
+        for relation in sliding_relations
+    } == {"ORTHOGONAL_CORNER"}
+    assert all(
+        relation.evidence[0].data["normal_evidence_source"]
+        == ("LOCAL_FACE_FAN_NORMAL", "LOCAL_FACE_FAN_NORMAL")
+        for relation in sliding_relations
+    )
+    assert all(
+        "same_side_surface_evidence_source" in relation.evidence[0].data
+        for relation in sliding_relations
+    )
+
+
+def test_same_ray_self_seam_side_pair_becomes_surface_sliding_candidate() -> None:
+    seam_sample = _sample(
+        "seam_a",
+        (1.0, 0.0, 0.0),
+        PatchId("patch:one"),
+        endpoint_role=PatchChainEndpointRole.END,
+        owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
+    )
+    duplicate_seam_sample = _sample(
+        "seam_b",
+        (1.0, 0.0, 0.0),
+        PatchId("patch:one"),
+        endpoint_role=PatchChainEndpointRole.END,
+        owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
+    )
+    side_sample = _sample(
+        "side",
+        (1.0, 0.0, 0.0),
+        PatchId("patch:one"),
+        endpoint_role=PatchChainEndpointRole.START,
+        owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
+    )
+    edges = (
+        _edge(
+            "seam_a",
+            ChainId("chain:seam"),
+            PatchId("patch:one"),
+            start_node_id="scaffold_node:two",
+            end_node_id="scaffold_node:one",
+            loop_id=BoundaryLoopId("loop:one"),
+        ),
+        _edge(
+            "seam_b",
+            ChainId("chain:seam"),
+            PatchId("patch:one"),
+            start_node_id="scaffold_node:two",
+            end_node_id="scaffold_node:one",
+            loop_id=BoundaryLoopId("loop:one"),
+        ),
+        _edge("side", ChainId("chain:side"), PatchId("patch:one"), loop_id=BoundaryLoopId("loop:one")),
+    )
+
+    incident_relations, _ = build_scaffold_graph_relations(
+        scaffold_nodes=(_node(
+            seam_sample.patch_chain_id,
+            duplicate_seam_sample.patch_chain_id,
+            side_sample.patch_chain_id,
+        ),),
+        scaffold_edges=edges,
+        endpoint_samples=(seam_sample, duplicate_seam_sample, side_sample),
+        endpoint_relations=build_patch_chain_endpoint_relations((
+            seam_sample,
+            duplicate_seam_sample,
+            side_sample,
+        )),
+        patch_adjacencies={},
+    )
+
+    sliding_relations = [
+        relation
+        for relation in incident_relations
+        if relation.kind is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
+    ]
+    assert len(sliding_relations) == 2
+    assert {
+        relation.evidence[0].data["original_tangent_local_category"]
+        for relation in sliding_relations
+    } == {"SAME_RAY_AMBIGUOUS"}
+
+
+def test_missing_local_face_fan_normal_evidence_does_not_slide() -> None:
+    seam_sample = _sample(
+        "seam_a",
+        (0.0, 0.0, 1.0),
+        PatchId("patch:one"),
+        endpoint_role=PatchChainEndpointRole.END,
+        owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
+    )
+    duplicate_seam_sample = _sample(
+        "seam_b",
+        (0.0, 0.0, 1.0),
+        PatchId("patch:one"),
+        endpoint_role=PatchChainEndpointRole.END,
+        owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
+    )
+    side_sample = _sample(
+        "side",
+        (1.0, 0.0, 0.0),
+        PatchId("patch:one"),
+        endpoint_role=PatchChainEndpointRole.START,
+        owner_normal_source=OwnerNormalSource.PATCH_AGGREGATE_NORMAL,
+    )
+
+    incident_relations, _ = build_scaffold_graph_relations(
+        scaffold_nodes=(_node(
+            seam_sample.patch_chain_id,
+            duplicate_seam_sample.patch_chain_id,
+            side_sample.patch_chain_id,
+        ),),
+        scaffold_edges=(
+            _edge(
+                "seam_a",
+                ChainId("chain:seam"),
+                PatchId("patch:one"),
+                start_node_id="scaffold_node:two",
+                end_node_id="scaffold_node:one",
+                loop_id=BoundaryLoopId("loop:one"),
+            ),
+            _edge(
+                "seam_b",
+                ChainId("chain:seam"),
+                PatchId("patch:one"),
+                start_node_id="scaffold_node:two",
+                end_node_id="scaffold_node:one",
+                loop_id=BoundaryLoopId("loop:one"),
+            ),
+            _edge("side", ChainId("chain:side"), PatchId("patch:one"), loop_id=BoundaryLoopId("loop:one")),
+        ),
+        endpoint_samples=(seam_sample, duplicate_seam_sample, side_sample),
+        endpoint_relations=build_patch_chain_endpoint_relations((
+            seam_sample,
+            duplicate_seam_sample,
+            side_sample,
+        )),
+        patch_adjacencies={},
+    )
+
+    assert not any(
+        relation.kind is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
+        for relation in incident_relations
+    )
+
+
+def test_degraded_normal_evidence_does_not_slide() -> None:
+    relation = _single_incident_relation(
+        _sample(
+            "a",
+            (1.0, 0.0, 0.0),
+            PatchId("patch:one"),
+            owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
+        ),
+        _sample(
+            "b",
+            (0.0, 1.0, 0.0),
+            PatchId("patch:one"),
+            owner_normal_source=OwnerNormalSource.PATCH_AGGREGATE_NORMAL,
+        ),
+    )
+
+    assert relation.kind is ScaffoldNodeIncidentEdgeRelationKind.ORTHOGONAL_CORNER
+
+
+def test_shared_chain_only_cross_patch_pair_does_not_slide() -> None:
+    first_sample = _sample(
+        "a",
+        (1.0, 0.0, 0.0),
+        PatchId("patch:one"),
+        endpoint_role=PatchChainEndpointRole.END,
+        owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
+    )
+    second_sample = _sample(
+        "b",
+        (0.0, 1.0, 0.0),
+        PatchId("patch:two"),
+        endpoint_role=PatchChainEndpointRole.START,
+        owner_normal_source=OwnerNormalSource.LOCAL_FACE_FAN_NORMAL,
+    )
+    incident_relations, shared_relations = build_scaffold_graph_relations(
+        scaffold_nodes=(_node(first_sample.patch_chain_id, second_sample.patch_chain_id),),
+        scaffold_edges=(
+            _edge(
+                "a",
+                ChainId("chain:shared"),
+                PatchId("patch:one"),
+                start_node_id="scaffold_node:two",
+                end_node_id="scaffold_node:one",
+                loop_id=BoundaryLoopId("loop:one"),
+            ),
+            _edge("b", ChainId("chain:shared"), PatchId("patch:two"), loop_id=BoundaryLoopId("loop:one")),
+        ),
+        endpoint_samples=(first_sample, second_sample),
+        endpoint_relations=build_patch_chain_endpoint_relations((first_sample, second_sample)),
+        patch_adjacencies={},
+    )
+
+    assert len(shared_relations) == 1
+    assert not any(
+        relation.kind is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
+        for relation in incident_relations
+    )
 
 
 def test_opposite_collinear_endpoint_relation_becomes_continuation_candidate() -> None:
@@ -336,6 +609,10 @@ def test_closed_shared_loop_emits_one_pair_per_node_local_edge_occurrence_pair()
     } == {
         ScaffoldNodeIncidentEdgeRelationKind.ORTHOGONAL_CORNER,
     }
+    assert not any(
+        relation.kind is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
+        for relation in snapshot.scaffold_node_incident_edge_relations
+    )
     assert len({
         relation.patch_chain_endpoint_relation_id
         for relation in snapshot.scaffold_node_incident_edge_relations
@@ -386,6 +663,26 @@ def test_cylinder_seam_nodes_emit_complete_incident_edge_occurrence_matrix() -> 
     assert ScaffoldNodeIncidentEdgeRelationKind.MISSING_ENDPOINT_EVIDENCE not in relation_kinds
     assert ScaffoldNodeIncidentEdgeRelationKind.DEGRADED not in relation_kinds
     assert ScaffoldNodeIncidentEdgeRelationKind.ORTHOGONAL_CORNER in relation_kinds
+
+
+def test_simple_tube_without_caps_emits_surface_sliding_relations_as_data() -> None:
+    context = run_pass_1_relations(
+        run_pass_0(make_cylinder_tube_without_caps_with_one_seam_source())
+    )
+
+    snapshot = context.relation_snapshot
+    assert snapshot is not None
+    sliding_relations = [
+        relation
+        for relation in snapshot.scaffold_node_incident_edge_relations
+        if relation.kind is ScaffoldNodeIncidentEdgeRelationKind.SURFACE_SLIDING_CONTINUATION_CANDIDATE
+    ]
+    assert len(sliding_relations) == 2
+    assert all(
+        relation.evidence[0].data["same_side_surface_evidence_source"]
+        == "same_patch_same_loop_local_face_fan_at_materialized_vertex_with_self_seam_recurrence"
+        for relation in sliding_relations
+    )
 
 
 def test_scaffold_graph_relations_code_does_not_introduce_deferred_terms_or_imports() -> None:
@@ -446,6 +743,7 @@ def _sample(
     confidence: float = 1.0,
     owner_normal=(0.0, 0.0, 1.0),
     owner_normal_source: OwnerNormalSource = OwnerNormalSource.PATCH_AGGREGATE_NORMAL,
+    endpoint_role: PatchChainEndpointRole = PatchChainEndpointRole.START,
 ) -> PatchChainEndpointSample:
     return PatchChainEndpointSample(
         id=f"sample:{suffix}",
@@ -453,7 +751,7 @@ def _sample(
         directional_evidence_id=f"directional_evidence:{suffix}",
         patch_chain_id=PatchChainId(f"patch_chain:{suffix}"),
         patch_id=patch_id,
-        endpoint_role=PatchChainEndpointRole.START,
+        endpoint_role=endpoint_role,
         tangent_away_from_vertex=tangent,
         owner_normal=owner_normal,
         owner_normal_source=owner_normal_source,
@@ -465,15 +763,18 @@ def _edge(
     suffix: str,
     chain_id: ChainId,
     patch_id: PatchId,
+    start_node_id: str = "scaffold_node:one",
+    end_node_id: str = "scaffold_node:two",
+    loop_id: BoundaryLoopId | None = None,
 ) -> ScaffoldEdge:
     return ScaffoldEdge(
         id=f"scaffold_edge:patch_chain:{suffix}",
         patch_chain_id=PatchChainId(f"patch_chain:{suffix}"),
         chain_id=chain_id,
         patch_id=patch_id,
-        loop_id=BoundaryLoopId(f"loop:{suffix}"),
-        start_scaffold_node_id="scaffold_node:one",
-        end_scaffold_node_id="scaffold_node:two",
+        loop_id=loop_id if loop_id is not None else BoundaryLoopId(f"loop:{suffix}"),
+        start_scaffold_node_id=start_node_id,
+        end_scaffold_node_id=end_node_id,
         confidence=1.0,
     )
 
@@ -481,6 +782,7 @@ def _edge(
 def _node(
     first_patch_chain_id: PatchChainId,
     second_patch_chain_id: PatchChainId,
+    *extra_patch_chain_ids: PatchChainId,
 ) -> ScaffoldNode:
     return ScaffoldNode(
         id="scaffold_node:one",
@@ -489,7 +791,10 @@ def _node(
         loop_corner_ids=(),
         patch_chain_endpoint_sample_ids=("sample:a", "sample:b"),
         patch_chain_endpoint_relation_ids=(),
-        incident_patch_chain_ids=tuple(sorted((first_patch_chain_id, second_patch_chain_id), key=str)),
+        incident_patch_chain_ids=tuple(sorted(
+            (first_patch_chain_id, second_patch_chain_id, *extra_patch_chain_ids),
+            key=str,
+        )),
         patch_ids=(PatchId("patch:one"),),
         confidence=1.0,
     )
