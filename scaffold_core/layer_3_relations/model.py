@@ -400,13 +400,41 @@ class SurfaceFlowCompatibilityEvidence:
 
 
 @dataclass(frozen=True)
+class CrossingRecord:
+    """Typed ConnectedDirectionFamily crossing provenance."""
+
+    kind: str
+    scaffold_node_id: str | None
+    shared_chain_id: ChainId | None
+    patch_adjacency_id: str | None
+    first_directional_evidence_id: str
+    second_directional_evidence_id: str
+    first_patch_chain_id: PatchChainId
+    second_patch_chain_id: PatchChainId
+    first_patch_id: PatchId
+    second_patch_id: PatchId
+    signed_dihedral_radians: float
+    transported_direction_dot: float
+    transported_normal_dot: float | None
+    confidence: float
+
+    def get(self, field_name: str, default: object = None) -> object:
+        """Compatibility shim for pre-F1 tests that treated crossings as mappings."""
+
+        return getattr(self, field_name, default)
+
+
+@dataclass(frozen=True)
 class ConnectedDirectionFamily:
     """Connectivity-propagated direction-family evidence over directional records."""
 
     id: str
     member_directional_evidence_ids: tuple[str, ...]
     patch_ids: tuple[PatchId, ...]
-    crossing_records: tuple[Mapping[str, object], ...]
+    crossing_records: tuple[CrossingRecord, ...]
+    ordered_member_directional_evidence_ids: tuple[str, ...]
+    branch_records: Mapping[str, tuple[str, ...]]
+    member_map: Mapping[str, tuple[PatchChainId, str | None, VertexId | None, VertexId | None]]
     confidence: float
     evidence: tuple[Evidence, ...] = ()
 

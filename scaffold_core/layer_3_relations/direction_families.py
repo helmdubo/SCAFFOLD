@@ -15,13 +15,15 @@ from math import cos, sin
 from typing import Mapping
 
 from scaffold_core.core.evidence import Evidence
-from scaffold_core.ids import PatchChainId, PatchId
+from scaffold_core.ids import PatchChainId, PatchId, VertexId
 from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot, Vector3
 from scaffold_core.layer_2_geometry.measures import EPSILON, add, cross, dot, length, normalize, scale
 from scaffold_core.layer_3_relations.model import (
     ConnectedDirectionFamily,
+    CrossingRecord,
     PatchAdjacency,
     PatchChainDirectionalEvidence,
+    PatchChainEndpointRole,
     PatchChainEndpointSample,
     ScaffoldEdge,
     ScaffoldNode,
@@ -34,11 +36,12 @@ from scaffold_core.layer_3_relations.scaffold_graph_relations import COMPATIBLE_
 POLICY_NAME = "connected_direction_family_v0"
 DIRECTION_COMPATIBILITY_MIN_DOT = 0.996
 
+
 @dataclass(frozen=True)
 class _CrossingCandidate:
     first_directional_evidence_id: str
     second_directional_evidence_id: str
-    record: Mapping[str, object]
+    record: CrossingRecord
     confidence: float
 
 
@@ -109,15 +112,22 @@ def build_connected_direction_families(
         crossings = tuple(sorted(
             family_crossings.get(tuple(member_ids), ()),
             key=lambda item: (
-                str(item.get("kind", "")),
-                str(item.get("scaffold_node_id", "")),
-                str(item.get("shared_chain_id", "")),
-                str(item.get("first_directional_evidence_id", "")),
-                str(item.get("second_directional_evidence_id", "")),
+                item.kind,
+                item.scaffold_node_id or "",
+                str(item.shared_chain_id or ""),
+                item.first_directional_evidence_id,
+                item.second_directional_evidence_id,
             ),
         ))
+        ordered_member_ids, branch_records = _ordered_members_and_branches(member_ids, crossings)
+        member_map = _family_member_map(
+            member_ids,
+            evidence_by_id,
+            edge_by_patch_chain_id,
+            samples_by_evidence_id,
+        )
         confidence_values = [member.confidence for member in members]
-        confidence_values.extend(float(crossing.get("confidence", 0.0)) for crossing in crossings)
+        confidence_values.extend(crossing.confidence for crossing in crossings)
         confidence = min(confidence_values) if confidence_values else 0.0
         families.append(
             ConnectedDirectionFamily(
@@ -125,6 +135,9 @@ def build_connected_direction_families(
                 member_directional_evidence_ids=tuple(member_ids),
                 patch_ids=tuple(sorted({member.patch_id for member in members}, key=str)),
                 crossing_records=crossings,
+                ordered_member_directional_evidence_ids=ordered_member_ids,
+                branch_records=branch_records,
+                member_map=member_map,
                 confidence=confidence,
                 evidence=(_family_evidence(member_ids, crossings, confidence),),
             )
@@ -171,23 +184,22 @@ def _shared_chain_crossings(
                 candidates.append(_CrossingCandidate(
                     first_directional_evidence_id=first.id,
                     second_directional_evidence_id=second.id,
-                    record={
-                        "kind": "SHARED_CHAIN",
-                        "first_directional_evidence_id": first.id,
-                        "second_directional_evidence_id": second.id,
-                        "first_patch_chain_id": str(first.patch_chain_id),
-                        "second_patch_chain_id": str(second.patch_chain_id),
-                        "first_patch_id": str(first.patch_id),
-                        "second_patch_id": str(second.patch_id),
-                        "shared_chain_id": str(relation.chain_id),
-                        "patch_adjacency_id": relation.patch_adjacency_id,
-                        "signed_dihedral_radians": signed_dihedral,
-                        "transported_direction_dot": transport_dot,
-                        "transported_normal_dot": normal_dot,
-                        "normal_gate_passed": normal_gate,
-                        "shared_source_edge_ids": [str(edge_id) for edge_id in shared_source_edge_ids],
-                        "confidence": confidence,
-                    },
+                    record=CrossingRecord(
+                        kind="SHARED_CHAIN",
+                        scaffold_node_id=None,
+                        shared_chain_id=relation.chain_id,
+                        patch_adjacency_id=relation.patch_adjacency_id,
+                        first_directional_evidence_id=first.id,
+                        second_directional_evidence_id=second.id,
+                        first_patch_chain_id=first.patch_chain_id,
+                        second_patch_chain_id=second.patch_chain_id,
+                        first_patch_id=first.patch_id,
+                        second_patch_id=second.patch_id,
+                        signed_dihedral_radians=signed_dihedral,
+                        transported_direction_dot=transport_dot,
+                        transported_normal_dot=normal_dot,
+                        confidence=confidence,
+                    ),
                     confidence=confidence,
                 ))
     return tuple(candidates)
@@ -199,17 +211,17 @@ def _same_patch_shared_chain_bridges(
 ) -> tuple[_CrossingCandidate, ...]:
     shared_chain_ids_by_evidence_id: dict[str, set[str]] = {}
     for candidate in shared_chain_candidates:
-        shared_chain_id = candidate.record.get("shared_chain_id")
-        if not isinstance(shared_chain_id, str):
+        shared_chain_id = candidate.record.shared_chain_id
+        if shared_chain_id is None:
             continue
         shared_chain_ids_by_evidence_id.setdefault(
             candidate.first_directional_evidence_id,
             set(),
-        ).add(shared_chain_id)
+        ).add(str(shared_chain_id))
         shared_chain_ids_by_evidence_id.setdefault(
             candidate.second_directional_evidence_id,
             set(),
-        ).add(shared_chain_id)
+        ).add(str(shared_chain_id))
 
     evidence_by_patch: dict[PatchId, list[PatchChainDirectionalEvidence]] = {}
     for evidence_id in shared_chain_ids_by_evidence_id:
@@ -229,31 +241,26 @@ def _same_patch_shared_chain_bridges(
                 )
                 if transport_dot < DIRECTION_COMPATIBILITY_MIN_DOT:
                     continue
-                first_shared_chain_ids = tuple(sorted(
-                    shared_chain_ids_by_evidence_id.get(first.id, ()),
-                    key=str,
-                ))
-                second_shared_chain_ids = tuple(sorted(
-                    shared_chain_ids_by_evidence_id.get(second.id, ()),
-                    key=str,
-                ))
                 confidence = min(first.confidence, second.confidence)
                 candidates.append(_CrossingCandidate(
                     first_directional_evidence_id=first.id,
                     second_directional_evidence_id=second.id,
-                    record={
-                        "kind": "SAME_PATCH_SHARED_CHAIN_BRIDGE",
-                        "first_directional_evidence_id": first.id,
-                        "second_directional_evidence_id": second.id,
-                        "first_patch_chain_id": str(first.patch_chain_id),
-                        "second_patch_chain_id": str(second.patch_chain_id),
-                        "patch_id": str(patch_id),
-                        "signed_dihedral_radians": 0.0,
-                        "transported_direction_dot": transport_dot,
-                        "first_shared_chain_ids": list(first_shared_chain_ids),
-                        "second_shared_chain_ids": list(second_shared_chain_ids),
-                        "confidence": confidence,
-                    },
+                    record=CrossingRecord(
+                        kind="SAME_PATCH_SHARED_CHAIN_BRIDGE",
+                        scaffold_node_id=None,
+                        shared_chain_id=None,
+                        patch_adjacency_id=None,
+                        first_directional_evidence_id=first.id,
+                        second_directional_evidence_id=second.id,
+                        first_patch_chain_id=first.patch_chain_id,
+                        second_patch_chain_id=second.patch_chain_id,
+                        first_patch_id=patch_id,
+                        second_patch_id=patch_id,
+                        signed_dihedral_radians=0.0,
+                        transported_direction_dot=transport_dot,
+                        transported_normal_dot=None,
+                        confidence=confidence,
+                    ),
                     confidence=confidence,
                 ))
     return tuple(candidates)
@@ -319,25 +326,22 @@ def _node_crossings(
                 candidates.append(_CrossingCandidate(
                     first_directional_evidence_id=first.id,
                     second_directional_evidence_id=second.id,
-                    record={
-                        "kind": "SCAFFOLD_NODE",
-                        "scaffold_node_id": relation.scaffold_node_id,
-                        "first_directional_evidence_id": first.id,
-                        "second_directional_evidence_id": second.id,
-                        "first_patch_chain_id": str(first.patch_chain_id),
-                        "second_patch_chain_id": str(second.patch_chain_id),
-                        "first_patch_id": str(first.patch_id),
-                        "second_patch_id": str(second.patch_id),
-                        "first_chain_id": str(first_edge.chain_id),
-                        "second_chain_id": str(second_edge.chain_id),
-                        "shared_chain_id": str(adjacency.chain_id) if adjacency is not None else None,
-                        "patch_adjacency_id": adjacency.id if adjacency is not None else None,
-                        "signed_dihedral_radians": signed_dihedral,
-                        "transported_direction_dot": transport_dot,
-                        "first_endpoint_sample_id": first_sample.id,
-                        "second_endpoint_sample_id": second_sample.id,
-                        "confidence": confidence,
-                    },
+                    record=CrossingRecord(
+                        kind="SCAFFOLD_NODE",
+                        scaffold_node_id=relation.scaffold_node_id,
+                        shared_chain_id=adjacency.chain_id if adjacency is not None else None,
+                        patch_adjacency_id=adjacency.id if adjacency is not None else None,
+                        first_directional_evidence_id=first.id,
+                        second_directional_evidence_id=second.id,
+                        first_patch_chain_id=first.patch_chain_id,
+                        second_patch_chain_id=second.patch_chain_id,
+                        first_patch_id=first.patch_id,
+                        second_patch_id=second.patch_id,
+                        signed_dihedral_radians=signed_dihedral,
+                        transported_direction_dot=transport_dot,
+                        transported_normal_dot=None,
+                        confidence=confidence,
+                    ),
                     confidence=confidence,
                 ))
     return tuple(_deduplicate_crossings(candidates))
@@ -517,17 +521,17 @@ def _deduplicate_crossings(
         key=lambda item: (
             min(item.first_directional_evidence_id, item.second_directional_evidence_id),
             max(item.first_directional_evidence_id, item.second_directional_evidence_id),
-            str(item.record.get("kind", "")),
-            str(item.record.get("scaffold_node_id", "")),
-            str(item.record.get("shared_chain_id", "")),
+            item.record.kind,
+            item.record.scaffold_node_id or "",
+            str(item.record.shared_chain_id or ""),
         ),
     ):
         key = (
             min(candidate.first_directional_evidence_id, candidate.second_directional_evidence_id),
             max(candidate.first_directional_evidence_id, candidate.second_directional_evidence_id),
-            str(candidate.record.get("kind", "")),
-            str(candidate.record.get("scaffold_node_id", "")),
-            str(candidate.record.get("shared_chain_id", "")),
+            candidate.record.kind,
+            candidate.record.scaffold_node_id or "",
+            str(candidate.record.shared_chain_id or ""),
         )
         if key in seen:
             continue
@@ -573,13 +577,13 @@ def _connected_components(
 def _crossings_by_component(
     components: Mapping[str, tuple[str, ...]],
     crossing_candidates: tuple[_CrossingCandidate, ...],
-) -> dict[tuple[str, ...], tuple[Mapping[str, object], ...]]:
+) -> dict[tuple[str, ...], tuple[CrossingRecord, ...]]:
     component_by_member_id = {
         member_id: tuple(member_ids)
         for member_ids in components.values()
         for member_id in member_ids
     }
-    crossings: dict[tuple[str, ...], list[Mapping[str, object]]] = {}
+    crossings: dict[tuple[str, ...], list[CrossingRecord]] = {}
     for candidate in crossing_candidates:
         first_component = component_by_member_id[candidate.first_directional_evidence_id]
         second_component = component_by_member_id[candidate.second_directional_evidence_id]
@@ -592,9 +596,80 @@ def _crossings_by_component(
     }
 
 
+def _ordered_members_and_branches(
+    member_ids: tuple[str, ...],
+    crossings: tuple[CrossingRecord, ...],
+) -> tuple[tuple[str, ...], Mapping[str, tuple[str, ...]]]:
+    graph: dict[str, set[str]] = {member_id: set() for member_id in member_ids}
+    member_set = set(member_ids)
+    for crossing in crossings:
+        first_id = crossing.first_directional_evidence_id
+        second_id = crossing.second_directional_evidence_id
+        if first_id not in member_set or second_id not in member_set:
+            continue
+        graph[first_id].add(second_id)
+        graph[second_id].add(first_id)
+
+    branch_records = {
+        member_id: tuple(sorted(neighbor_ids))
+        for member_id, neighbor_ids in sorted(graph.items())
+        if len(neighbor_ids) > 2
+    }
+    if not crossings:
+        return member_ids, branch_records
+
+    ordered: list[str] = []
+    visited: set[str] = set()
+    start_candidates = sorted(member_id for member_id, neighbors in graph.items() if len(neighbors) <= 1)
+    start_candidates.extend(member_id for member_id in sorted(member_ids) if member_id not in start_candidates)
+    for start_id in start_candidates:
+        if start_id in visited:
+            continue
+        stack = [start_id]
+        while stack:
+            member_id = stack.pop()
+            if member_id in visited:
+                continue
+            visited.add(member_id)
+            ordered.append(member_id)
+            stack.extend(sorted(graph[member_id] - visited, reverse=True))
+    ordered.extend(member_id for member_id in member_ids if member_id not in visited)
+    return tuple(ordered), branch_records
+
+
+def _family_member_map(
+    member_ids: tuple[str, ...],
+    evidence_by_id: Mapping[str, PatchChainDirectionalEvidence],
+    edge_by_patch_chain_id: Mapping[PatchChainId, ScaffoldEdge],
+    samples_by_evidence_id: Mapping[str, tuple[PatchChainEndpointSample, ...]],
+) -> Mapping[str, tuple[PatchChainId, str | None, VertexId | None, VertexId | None]]:
+    member_map: dict[str, tuple[PatchChainId, str | None, VertexId | None, VertexId | None]] = {}
+    for member_id in member_ids:
+        evidence = evidence_by_id[member_id]
+        edge = edge_by_patch_chain_id.get(evidence.patch_chain_id)
+        samples = samples_by_evidence_id.get(member_id, ())
+        member_map[member_id] = (
+            evidence.patch_chain_id,
+            edge.id if edge is not None else None,
+            _sample_vertex_id(samples, PatchChainEndpointRole.START),
+            _sample_vertex_id(samples, PatchChainEndpointRole.END),
+        )
+    return member_map
+
+
+def _sample_vertex_id(
+    samples: tuple[PatchChainEndpointSample, ...],
+    role: PatchChainEndpointRole,
+) -> VertexId | None:
+    role_samples = tuple(sample for sample in samples if sample.endpoint_role is role)
+    if not role_samples:
+        return None
+    return sorted(role_samples, key=lambda item: item.id)[0].vertex_id
+
+
 def _family_evidence(
     member_ids: tuple[str, ...],
-    crossings: tuple[Mapping[str, object], ...],
+    crossings: tuple[CrossingRecord, ...],
     confidence: float,
 ) -> Evidence:
     return Evidence(

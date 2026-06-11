@@ -30,16 +30,12 @@
       "vertex_ids": [
         "vertex:v0",
         "vertex:v0",
-        "vertex:v1",
         "vertex:v2",
         "vertex:v2",
-        "vertex:v3",
         "vertex:v4",
         "vertex:v4",
-        "vertex:v5",
         "vertex:v6",
-        "vertex:v6",
-        "vertex:v7"
+        "vertex:v6"
       ]
     }
   ],
@@ -49,6 +45,7 @@
         "vertex:v4",
         "vertex:v6"
       ],
+      "branch_records": {},
       "id": "connected_direction_family:1:island:0",
       "island_id": "island:0",
       "member_directional_evidence_ids": [
@@ -62,6 +59,7 @@
         "vertex:v0",
         "vertex:v2"
       ],
+      "branch_records": {},
       "id": "connected_direction_family:3:island:0",
       "island_id": "island:0",
       "member_directional_evidence_ids": [
@@ -77,6 +75,7 @@
         "vertex:v4",
         "vertex:v6"
       ],
+      "branch_records": {},
       "id": "patch_axes:island:0:patch:seed:f0:SECONDARY",
       "island_id": "island:0",
       "member_directional_evidence_ids": [
@@ -92,6 +91,7 @@
         "vertex:v4",
         "vertex:v6"
       ],
+      "branch_records": {},
       "id": "patch_axes:island:0:patch:seed:f2:SECONDARY",
       "island_id": "island:0",
       "member_directional_evidence_ids": [
@@ -141,18 +141,6 @@
       ],
       "vertex_id": "vertex:v0"
     },
-    "vertex:v1": {
-      "assignment_sources": [
-        "fallback patch-axis projection"
-      ],
-      "island_id": "island:0",
-      "pinned": false,
-      "uv": [
-        1.0,
-        5.0
-      ],
-      "vertex_id": "vertex:v1"
-    },
     "vertex:v2": {
       "assignment_sources": [
         "connected_direction_family:3:island:0",
@@ -166,18 +154,6 @@
         1.75
       ],
       "vertex_id": "vertex:v2"
-    },
-    "vertex:v3": {
-      "assignment_sources": [
-        "fallback patch-axis projection"
-      ],
-      "island_id": "island:0",
-      "pinned": false,
-      "uv": [
-        1.0,
-        5.0
-      ],
-      "vertex_id": "vertex:v3"
     },
     "vertex:v4": {
       "assignment_sources": [
@@ -193,18 +169,6 @@
       ],
       "vertex_id": "vertex:v4"
     },
-    "vertex:v5": {
-      "assignment_sources": [
-        "fallback patch-axis projection"
-      ],
-      "island_id": "island:0",
-      "pinned": false,
-      "uv": [
-        1.0,
-        4.0
-      ],
-      "vertex_id": "vertex:v5"
-    },
     "vertex:v6": {
       "assignment_sources": [
         "connected_direction_family:1:island:0",
@@ -218,18 +182,6 @@
         1.25
       ],
       "vertex_id": "vertex:v6"
-    },
-    "vertex:v7": {
-      "assignment_sources": [
-        "fallback patch-axis projection"
-      ],
-      "island_id": "island:0",
-      "pinned": false,
-      "uv": [
-        1.0,
-        4.0
-      ],
-      "vertex_id": "vertex:v7"
     }
   }
 }

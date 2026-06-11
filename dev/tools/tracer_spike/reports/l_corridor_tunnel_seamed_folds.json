@@ -1,11 +1,7 @@
 {
   "ambiguities": [
-    "vertex:g0: multiple rail UV assignments collapsed by arithmetic mean",
     "vertex:g1: multiple rail UV assignments collapsed by arithmetic mean",
     "vertex:g2: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:g3: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:t0: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:t1: multiple rail UV assignments collapsed by arithmetic mean",
     "vertex:w0: multiple rail UV assignments collapsed by arithmetic mean",
     "vertex:w1: multiple rail UV assignments collapsed by arithmetic mean"
   ],
@@ -33,14 +29,10 @@
       "seed_connected_family_presence": 2.0,
       "seed_patch_id": "patch:seed:f_wall",
       "vertex_ids": [
-        "vertex:g0",
         "vertex:g1",
         "vertex:g1",
         "vertex:g2",
         "vertex:g2",
-        "vertex:g3",
-        "vertex:t0",
-        "vertex:t1",
         "vertex:w0",
         "vertex:w0",
         "vertex:w1",
@@ -51,11 +43,10 @@
   "rails": [
     {
       "assigned_vertex_ids": [
-        "vertex:g0",
         "vertex:g1",
-        "vertex:t0",
         "vertex:w0"
       ],
+      "branch_records": {},
       "id": "connected_direction_family:0:island:0",
       "island_id": "island:0",
       "member_directional_evidence_ids": [
@@ -68,10 +59,9 @@
     {
       "assigned_vertex_ids": [
         "vertex:g2",
-        "vertex:g3",
-        "vertex:t1",
         "vertex:w1"
       ],
+      "branch_records": {},
       "id": "connected_direction_family:2:island:0",
       "island_id": "island:0",
       "member_directional_evidence_ids": [
@@ -88,6 +78,7 @@
         "vertex:w0",
         "vertex:w1"
       ],
+      "branch_records": {},
       "id": "connected_direction_family:3:island:0",
       "island_id": "island:0",
       "member_directional_evidence_ids": [
@@ -99,10 +90,8 @@
       "source": "ConnectedDirectionFamily"
     },
     {
-      "assigned_vertex_ids": [
-        "vertex:t0",
-        "vertex:t1"
-      ],
+      "assigned_vertex_ids": [],
+      "branch_records": {},
       "id": "patch_axes:island:0:patch:seed:f_ceiling:SECONDARY",
       "island_id": "island:0",
       "member_directional_evidence_ids": [
@@ -111,10 +100,8 @@
       "source": "PatchAxes fallback for singleton or ungrouped in-patch rail"
     },
     {
-      "assigned_vertex_ids": [
-        "vertex:g0",
-        "vertex:g3"
-      ],
+      "assigned_vertex_ids": [],
+      "branch_records": {},
       "id": "patch_axes:island:0:patch:seed:f_floor:SECONDARY",
       "island_id": "island:0",
       "member_directional_evidence_ids": [
@@ -151,7 +138,7 @@
     }
   ],
   "summary": {
-    "ambiguity_count": 8,
+    "ambiguity_count": 4,
     "blocked_patch_pairs": 0,
     "fixture": "l_corridor_tunnel_seamed_folds",
     "improvisation_count": 2,
@@ -161,19 +148,6 @@
     "stitched_patch_pairs": 2
   },
   "vertices": {
-    "vertex:g0": {
-      "assignment_sources": [
-        "connected_direction_family:0:island:0",
-        "patch_axes:island:0:patch:seed:f_floor:SECONDARY"
-      ],
-      "island_id": "island:0",
-      "pinned": true,
-      "uv": [
-        1.5,
-        2.0
-      ],
-      "vertex_id": "vertex:g0"
-    },
     "vertex:g1": {
       "assignment_sources": [
         "connected_direction_family:0:island:0",
@@ -195,49 +169,10 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        2.25,
+        2.5,
         1.5
       ],
       "vertex_id": "vertex:g2"
-    },
-    "vertex:g3": {
-      "assignment_sources": [
-        "connected_direction_family:2:island:0",
-        "patch_axes:island:0:patch:seed:f_floor:SECONDARY"
-      ],
-      "island_id": "island:0",
-      "pinned": true,
-      "uv": [
-        1.5,
-        2.5
-      ],
-      "vertex_id": "vertex:g3"
-    },
-    "vertex:t0": {
-      "assignment_sources": [
-        "connected_direction_family:0:island:0",
-        "patch_axes:island:0:patch:seed:f_ceiling:SECONDARY"
-      ],
-      "island_id": "island:0",
-      "pinned": true,
-      "uv": [
-        0.5,
-        1.5
-      ],
-      "vertex_id": "vertex:t0"
-    },
-    "vertex:t1": {
-      "assignment_sources": [
-        "connected_direction_family:2:island:0",
-        "patch_axes:island:0:patch:seed:f_ceiling:SECONDARY"
-      ],
-      "island_id": "island:0",
-      "pinned": true,
-      "uv": [
-        0.5,
-        2.0
-      ],
-      "vertex_id": "vertex:t1"
     },
     "vertex:w0": {
       "assignment_sources": [
@@ -260,7 +195,7 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        1.25,
+        1.0,
         1.5
       ],
       "vertex_id": "vertex:w1"

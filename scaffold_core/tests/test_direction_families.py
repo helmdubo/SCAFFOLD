@@ -87,7 +87,7 @@ def test_two_seam_cylinder_connected_families_keep_top_and_bottom_rings() -> Non
         for family in relations.connected_direction_families
         if set(str(patch_id) for patch_id in family.patch_ids) == {"patch:seed:f0", "patch:seed:f2"}
         and len(family.member_directional_evidence_ids) == 2
-        and all(record.get("kind") == "SCAFFOLD_NODE" for record in family.crossing_records)
+        and all(record.kind == "SCAFFOLD_NODE" for record in family.crossing_records)
     )
     assert len(ring_families) == 2
     assert all(len(family.crossing_records) == 2 for family in ring_families)
@@ -101,19 +101,36 @@ def test_connected_direction_families_carry_provenance_and_inspect_full() -> Non
     assert family.member_directional_evidence_ids
     assert family.crossing_records
     assert family.confidence > 0.0
-    assert all("signed_dihedral_radians" in record for record in family.crossing_records)
+    assert all(record.signed_dihedral_radians is not None for record in family.crossing_records)
     assert any(
-        "scaffold_node_id" in record
-        or "shared_chain_id" in record
-        or "first_shared_chain_ids" in record
+        record.scaffold_node_id is not None
+        or record.shared_chain_id is not None
         for record in family.crossing_records
     )
+    assert set(family.ordered_member_directional_evidence_ids) == set(family.member_directional_evidence_ids)
+    assert set(family.member_map) == set(family.member_directional_evidence_ids)
+    for member_id, member in family.member_map.items():
+        evidence = next(
+            evidence
+            for evidence in relations.patch_chain_directional_evidence
+            if evidence.id == member_id
+        )
+        assert member[0] == evidence.patch_chain_id
+        assert member[1] is not None
+        assert member[2] is not None
+        assert member[3] is not None
 
     report = inspect_pipeline_context(context, detail="full")
     json.dumps(report)
     serialized_families = report["relations"]["connected_direction_families"]
     assert len(serialized_families) == len(relations.connected_direction_families)
     assert any(serialized["crossing_records"] for serialized in serialized_families)
+    serialized_family = next(serialized for serialized in serialized_families if serialized["crossing_records"])
+    serialized_crossing = serialized_family["crossing_records"][0]
+    assert "first_directional_evidence_id" in serialized_crossing
+    assert "transported_direction_dot" in serialized_crossing
+    assert "ordered_member_directional_evidence_ids" in serialized_family
+    assert "member_map" in serialized_family
 
 
 def _has_family_with_patches(relations, patch_fragments, directions) -> bool:

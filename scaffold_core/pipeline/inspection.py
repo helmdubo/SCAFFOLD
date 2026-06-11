@@ -1189,7 +1189,26 @@ def _connected_direction_family_to_dict(family) -> dict[str, object]:
         "id": family.id,
         "member_directional_evidence_ids": list(family.member_directional_evidence_ids),
         "patch_ids": [str(patch_id) for patch_id in family.patch_ids],
-        "crossing_records": [dict(record) for record in family.crossing_records],
+        "crossing_records": [
+            _connected_direction_family_crossing_record_to_dict(record)
+            for record in family.crossing_records
+        ],
+        "ordered_member_directional_evidence_ids": list(
+            family.ordered_member_directional_evidence_ids
+        ),
+        "branch_records": {
+            member_id: list(neighbor_ids)
+            for member_id, neighbor_ids in family.branch_records.items()
+        },
+        "member_map": {
+            member_id: {
+                "patch_chain_id": str(member[0]),
+                "scaffold_edge_id": member[1],
+                "start_vertex_id": str(member[2]) if member[2] is not None else None,
+                "end_vertex_id": str(member[3]) if member[3] is not None else None,
+            }
+            for member_id, member in family.member_map.items()
+        },
         "confidence": family.confidence,
         "evidence": [
             {
@@ -1199,6 +1218,25 @@ def _connected_direction_family_to_dict(family) -> dict[str, object]:
             }
             for evidence in family.evidence
         ],
+    }
+
+
+def _connected_direction_family_crossing_record_to_dict(record) -> dict[str, object]:
+    return {
+        "kind": record.kind,
+        "scaffold_node_id": record.scaffold_node_id,
+        "shared_chain_id": str(record.shared_chain_id) if record.shared_chain_id is not None else None,
+        "patch_adjacency_id": record.patch_adjacency_id,
+        "first_directional_evidence_id": record.first_directional_evidence_id,
+        "second_directional_evidence_id": record.second_directional_evidence_id,
+        "first_patch_chain_id": str(record.first_patch_chain_id),
+        "second_patch_chain_id": str(record.second_patch_chain_id),
+        "first_patch_id": str(record.first_patch_id),
+        "second_patch_id": str(record.second_patch_id),
+        "signed_dihedral_radians": record.signed_dihedral_radians,
+        "transported_direction_dot": record.transported_direction_dot,
+        "transported_normal_dot": record.transported_normal_dot,
+        "confidence": record.confidence,
     }
 
 

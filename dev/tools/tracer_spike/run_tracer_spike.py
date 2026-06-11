@@ -83,7 +83,8 @@ def build_layout_dump(fixture_name: str, context) -> dict[str, object]:
     geometry = context.geometry_facts
     relations = context.relation_snapshot
     evidence_by_id = {evidence.id: evidence for evidence in relations.patch_chain_directional_evidence}
-    patch_vertices = _patch_vertices(topology, geometry)
+    member_info_by_id = _member_info_by_id(relations)
+    patch_vertices = _patch_vertices(topology)
     islands, stitch_decisions, self_seam_chain_ids = _build_islands(
         topology,
         geometry,
@@ -102,24 +103,24 @@ def build_layout_dump(fixture_name: str, context) -> dict[str, object]:
             rail_assignments = []
             for member_id in member_order:
                 evidence = evidence_by_id[member_id]
-                start_ids = _topology_vertex_ids_for_source(topology, evidence.start_source_vertex_id)
-                end_ids = _topology_vertex_ids_for_source(topology, evidence.end_source_vertex_id)
+                member_info = member_info_by_id[member_id]
                 u0 = cursor
                 u1 = cursor + evidence.length
                 cursor = u1
-                for vertex_id in start_ids:
-                    if vertex_id in patch_vertices[evidence.patch_id]:
-                        _assign(assignments, vertex_id, island["id"], (u0, float(row_index)), True, rail["id"])
-                        rail_assignments.append(str(vertex_id))
-                for vertex_id in end_ids:
-                    if vertex_id in patch_vertices[evidence.patch_id]:
-                        _assign(assignments, vertex_id, island["id"], (u1, float(row_index)), True, rail["id"])
-                        rail_assignments.append(str(vertex_id))
+                start_vertex_id = member_info["start_vertex_id"]
+                end_vertex_id = member_info["end_vertex_id"]
+                if start_vertex_id in patch_vertices[evidence.patch_id]:
+                    _assign(assignments, start_vertex_id, island["id"], (u0, float(row_index)), True, rail["id"])
+                    rail_assignments.append(str(start_vertex_id))
+                if end_vertex_id in patch_vertices[evidence.patch_id]:
+                    _assign(assignments, end_vertex_id, island["id"], (u1, float(row_index)), True, rail["id"])
+                    rail_assignments.append(str(end_vertex_id))
             rail_records.append({
                 "id": rail["id"],
                 "island_id": island["id"],
                 "source": rail["source"],
                 "member_directional_evidence_ids": list(member_order),
+                "branch_records": dict(rail.get("branch_records", {})),
                 "assigned_vertex_ids": sorted(set(rail_assignments)),
             })
         _assign_missing_island_vertices(
@@ -283,6 +284,11 @@ def _build_rails(islands, relations, evidence_by_id):
                 "family_id": family.id,
                 "island_id": island_id,
                 "member_directional_evidence_ids": tuple(sorted(member_ids)),
+                "branch_records": {
+                    member_id: tuple(neighbor_ids)
+                    for member_id, neighbor_ids in family.branch_records.items()
+                    if member_id in member_ids
+                },
             })
 
     fallback_groups: dict[tuple[str, str, str], list[str]] = defaultdict(list)
@@ -301,6 +307,7 @@ def _build_rails(islands, relations, evidence_by_id):
             "family_id": None,
             "island_id": island_id,
             "member_directional_evidence_ids": tuple(sorted(member_ids)),
+            "branch_records": {},
         })
         improvisations.append(
             f"{island_id} {patch_id} {role}: PatchAxes grouped {len(member_ids)} singleton/ungrouped rail runs"
@@ -330,34 +337,17 @@ def _ordered_member_ids(rail, relations):
         family for family in relations.connected_direction_families
         if family.id == family_id
     )
-    graph = defaultdict(set)
     member_set = set(member_ids)
-    for record in family.crossing_records:
-        first = record.get("first_directional_evidence_id")
-        second = record.get("second_directional_evidence_id")
-        if first in member_set and second in member_set:
-            graph[first].add(second)
-            graph[second].add(first)
-    if not graph:
-        return member_ids
-    leaves = sorted(member_id for member_id in member_ids if len(graph[member_id]) <= 1)
-    start = leaves[0] if leaves else sorted(member_ids)[0]
-    visited = set()
-    ordered = []
-    stack = [start]
-    while stack:
-        member_id = stack.pop()
-        if member_id in visited:
-            continue
-        visited.add(member_id)
-        ordered.append(member_id)
-        stack.extend(sorted(graph[member_id] - visited, reverse=True))
-    ordered.extend(member_id for member_id in member_ids if member_id not in visited)
+    ordered = [
+        member_id
+        for member_id in family.ordered_member_directional_evidence_ids
+        if member_id in member_set
+    ]
+    ordered.extend(member_id for member_id in member_ids if member_id not in ordered)
     return tuple(ordered)
 
 
-def _patch_vertices(topology, geometry):
-    source_to_topology_ids = _source_to_topology_vertex_ids(topology)
+def _patch_vertices(topology):
     patch_vertices = defaultdict(set)
     for patch in topology.patches.values():
         for loop_id in patch.loop_ids:
@@ -368,24 +358,20 @@ def _patch_vertices(topology, geometry):
                     patch_vertices[patch.id].add(patch_chain.start_vertex_id)
                 if patch_chain.end_vertex_id is not None:
                     patch_vertices[patch.id].add(patch_chain.end_vertex_id)
-                chain_facts = geometry.chain_facts.get(patch_chain.chain_id)
-                if chain_facts is None:
-                    continue
-                for source_vertex_id in chain_facts.source_vertex_run:
-                    patch_vertices[patch.id].update(source_to_topology_ids.get(source_vertex_id, ()))
     return patch_vertices
 
 
-def _source_to_topology_vertex_ids(topology):
-    result = defaultdict(list)
-    for vertex in topology.vertices.values():
-        for source_vertex_id in vertex.source_vertex_ids:
-            result[source_vertex_id].append(vertex.id)
-    return result
-
-
-def _topology_vertex_ids_for_source(topology, source_vertex_id):
-    return tuple(_source_to_topology_vertex_ids(topology).get(source_vertex_id, ()))
+def _member_info_by_id(relations):
+    member_info = {}
+    for family in relations.connected_direction_families:
+        for member_id, member in family.member_map.items():
+            member_info[member_id] = {
+                "patch_chain_id": member[0],
+                "scaffold_edge_id": member[1],
+                "start_vertex_id": member[2],
+                "end_vertex_id": member[3],
+            }
+    return member_info
 
 
 def _assign(assignments, vertex_id, island_id, uv, pinned, source):
@@ -501,9 +487,9 @@ JSON layout dumps live next to this report:
 
 - Island seed: `connected_direction_families`, `patch_chain_directional_evidence`.
 - Patch stitch gate: `patch_adjacencies`, `scaffold_junctions`; paired with `GeometryFactSnapshot.vertex_facts.angle_defect` and `SurfaceModel.chains`.
-- Rail extraction: `connected_direction_families`, `patch_chain_directional_evidence`.
+- Rail extraction: `connected_direction_families.member_directional_evidence_ids`, `connected_direction_families.ordered_member_directional_evidence_ids`, `connected_direction_families.branch_records`, `connected_direction_families.member_map`, `patch_chain_directional_evidence`.
 - In-patch singleton pairing fallback: `patch_axes`.
-- Vertex/arc-length layout support: `patch_chain_directional_evidence`; paired with `GeometryFactSnapshot.chain_facts`, `GeometryFactSnapshot.vertex_facts`, `SurfaceModel.patch_chains`, `SurfaceModel.loops`, and `SurfaceModel.vertices`.
+- Vertex/arc-length layout support: `connected_direction_families.member_map`, `patch_chain_directional_evidence`; paired with `GeometryFactSnapshot.vertex_facts`, `SurfaceModel.patch_chains`, and `SurfaceModel.loops`.
 
 ## RelationSnapshot Fields Never Read
 
@@ -511,17 +497,15 @@ JSON layout dumps live next to this report:
 
 ## Missing Information Improvised
 
-- No direct rail-order/orientation record exists for a `ConnectedDirectionFamily`; the spike ordered members by the crossing-record graph and then by id when necessary.
-- No explicit family-to-ScaffoldEdge segment map exists; the spike mapped directional evidence back through source vertices and patch membership.
 - No approved in-patch opposite-rail grouping exists for singleton families; the spike used `PatchAxes` to group singleton or ungrouped runs inside one patch.
 - No UV scale, packing, island origin, or pin policy exists in Layer 3; the spike used raw arc length, row offsets, and pinned all rail endpoints.
 - The stitch rule says "vertices that become interior"; the spike approximated that set as the two endpoints of the shared `Chain`.
-- Reports need topology vertex ids, but directional evidence stores source vertex ids; the spike mapped source vertices to topology vertices and emitted per-island duplicates if one topology id crossed islands.
-- `ConnectedDirectionFamily.crossing_records` are untyped dictionaries; the spike consumed `first_directional_evidence_id` and `second_directional_evidence_id` keys as a shadow API.
+- `ConnectedDirectionFamily.member_map` gives start/end topology vertices only; the spike no longer emits mid-chain vertices unless they are endpoints of a directional member.
+- `ConnectedDirectionFamily.branch_records` preserves branch ambiguity but does not define a branch traversal policy for UV rows.
 
 ## Arbitrary Choices And Ambiguity
 
-- If a family crossing graph had multiple leaves or valence greater than 2, the spike picked the lexicographically first leaf/id as the rail start.
+- If `ConnectedDirectionFamily.branch_records` is non-empty, the spike records the branch ambiguity and still uses the exported deterministic member order for row placement.
 - If multiple rails assigned different UVs to the same vertex inside one island, the spike collapsed them with an arithmetic mean and recorded the ambiguity in the JSON dump.
 - If several patches tied for longest family presence, the seed patch was chosen lexicographically.
 - When a patch pair had multiple admissible shared seams, the first BFS stitch reached the neighbor and later equivalent seams were not separately used for island membership.
@@ -529,11 +513,10 @@ JSON layout dumps live next to this report:
 
 ## Slice F Inputs
 
-- Promote family crossing records from untyped payloads or provide a typed read API if consumers are expected to order rails.
-- Provide an explicit directional-evidence-to-graph-edge/endpoint map if tracer consumers should avoid source-vertex reverse lookup.
 - Decide whether singleton in-patch rail pairing belongs in core evidence or remains a consumer fallback via `PatchAxes`.
 - Clarify the exact vertex set for the angle-defect stitch gate on multi-segment shared chains.
 - Define whether pinned UV skeleton output is future core behavior or remains external spike/tooling.
+- Decide whether mid-chain skeleton vertices should be exposed in `member_map` or remain outside the typed family API.
 """
 
 

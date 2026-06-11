@@ -1,13 +1,7 @@
 {
   "ambiguities": [
     "vertex:a0: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:a1: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:a2: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:a3: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:b0: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:b1: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:b2: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:b3: multiple rail UV assignments collapsed by arithmetic mean"
+    "vertex:b0: multiple rail UV assignments collapsed by arithmetic mean"
   ],
   "angle_defect_stitch_limit": 0.001,
   "consumed_relation_fields": [
@@ -33,10 +27,7 @@
       "seed_connected_family_presence": 1.0,
       "seed_patch_id": "patch:seed:f_a",
       "vertex_ids": [
-        "vertex:a0",
-        "vertex:a1",
-        "vertex:a2",
-        "vertex:a3"
+        "vertex:a0"
       ]
     },
     {
@@ -47,21 +38,16 @@
       "seed_connected_family_presence": 1.0,
       "seed_patch_id": "patch:seed:f_b",
       "vertex_ids": [
-        "vertex:b0",
-        "vertex:b1",
-        "vertex:b2",
-        "vertex:b3"
+        "vertex:b0"
       ]
     }
   ],
   "rails": [
     {
       "assigned_vertex_ids": [
-        "vertex:a0",
-        "vertex:a1",
-        "vertex:a2",
-        "vertex:a3"
+        "vertex:a0"
       ],
+      "branch_records": {},
       "id": "patch_axes:island:0:patch:seed:f_a:PRIMARY",
       "island_id": "island:0",
       "member_directional_evidence_ids": [
@@ -72,11 +58,9 @@
     },
     {
       "assigned_vertex_ids": [
-        "vertex:a0",
-        "vertex:a1",
-        "vertex:a2",
-        "vertex:a3"
+        "vertex:a0"
       ],
+      "branch_records": {},
       "id": "patch_axes:island:0:patch:seed:f_a:SECONDARY",
       "island_id": "island:0",
       "member_directional_evidence_ids": [
@@ -87,11 +71,9 @@
     },
     {
       "assigned_vertex_ids": [
-        "vertex:b0",
-        "vertex:b1",
-        "vertex:b2",
-        "vertex:b3"
+        "vertex:b0"
       ],
+      "branch_records": {},
       "id": "patch_axes:island:1:patch:seed:f_b:PRIMARY",
       "island_id": "island:1",
       "member_directional_evidence_ids": [
@@ -102,11 +84,9 @@
     },
     {
       "assigned_vertex_ids": [
-        "vertex:b0",
-        "vertex:b1",
-        "vertex:b2",
-        "vertex:b3"
+        "vertex:b0"
       ],
+      "branch_records": {},
       "id": "patch_axes:island:1:patch:seed:f_b:SECONDARY",
       "island_id": "island:1",
       "member_directional_evidence_ids": [
@@ -119,7 +99,7 @@
   "self_seam_chain_ids": [],
   "stitch_decisions": [],
   "summary": {
-    "ambiguity_count": 8,
+    "ambiguity_count": 2,
     "blocked_patch_pairs": 0,
     "fixture": "detached_parallel_walls",
     "improvisation_count": 4,
@@ -142,45 +122,6 @@
       ],
       "vertex_id": "vertex:a0"
     },
-    "vertex:a1": {
-      "assignment_sources": [
-        "patch_axes:island:0:patch:seed:f_a:PRIMARY",
-        "patch_axes:island:0:patch:seed:f_a:SECONDARY"
-      ],
-      "island_id": "island:0",
-      "pinned": true,
-      "uv": [
-        0.5,
-        0.5
-      ],
-      "vertex_id": "vertex:a1"
-    },
-    "vertex:a2": {
-      "assignment_sources": [
-        "patch_axes:island:0:patch:seed:f_a:PRIMARY",
-        "patch_axes:island:0:patch:seed:f_a:SECONDARY"
-      ],
-      "island_id": "island:0",
-      "pinned": true,
-      "uv": [
-        1.0,
-        0.5
-      ],
-      "vertex_id": "vertex:a2"
-    },
-    "vertex:a3": {
-      "assignment_sources": [
-        "patch_axes:island:0:patch:seed:f_a:PRIMARY",
-        "patch_axes:island:0:patch:seed:f_a:SECONDARY"
-      ],
-      "island_id": "island:0",
-      "pinned": true,
-      "uv": [
-        1.5,
-        0.5
-      ],
-      "vertex_id": "vertex:a3"
-    },
     "vertex:b0": {
       "assignment_sources": [
         "patch_axes:island:1:patch:seed:f_b:PRIMARY",
@@ -193,45 +134,6 @@
         0.5
       ],
       "vertex_id": "vertex:b0"
-    },
-    "vertex:b1": {
-      "assignment_sources": [
-        "patch_axes:island:1:patch:seed:f_b:PRIMARY",
-        "patch_axes:island:1:patch:seed:f_b:SECONDARY"
-      ],
-      "island_id": "island:1",
-      "pinned": true,
-      "uv": [
-        0.5,
-        0.5
-      ],
-      "vertex_id": "vertex:b1"
-    },
-    "vertex:b2": {
-      "assignment_sources": [
-        "patch_axes:island:1:patch:seed:f_b:PRIMARY",
-        "patch_axes:island:1:patch:seed:f_b:SECONDARY"
-      ],
-      "island_id": "island:1",
-      "pinned": true,
-      "uv": [
-        1.0,
-        0.5
-      ],
-      "vertex_id": "vertex:b2"
-    },
-    "vertex:b3": {
-      "assignment_sources": [
-        "patch_axes:island:1:patch:seed:f_b:PRIMARY",
-        "patch_axes:island:1:patch:seed:f_b:SECONDARY"
-      ],
-      "island_id": "island:1",
-      "pinned": true,
-      "uv": [
-        1.5,
-        0.5
-      ],
-      "vertex_id": "vertex:b3"
     }
   }
 }
