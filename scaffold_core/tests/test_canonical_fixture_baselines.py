@@ -50,6 +50,16 @@ def _relation_kind_counts(relation_snapshot) -> dict[str, int]:
     return counts
 
 
+def _connected_family_spans(relation_snapshot, patch_fragments) -> bool:
+    return any(
+        all(
+            any(fragment in str(patch_id) for patch_id in family.patch_ids)
+            for fragment in patch_fragments
+        )
+        for family in relation_snapshot.connected_direction_families
+    )
+
+
 def test_detached_parallel_walls_share_no_topology() -> None:
     context = _run(make_detached_parallel_walls_source())
     topology = context.topology_snapshot
@@ -71,6 +81,7 @@ def test_detached_parallel_walls_merge_into_world_alignment_families() -> None:
     assert len(relations.alignment_classes) == 2
     for alignment_class in relations.alignment_classes:
         assert len(alignment_class.patch_ids) == 2
+    assert all(len(family.patch_ids) == 1 for family in relations.connected_direction_families)
 
 
 def test_beveled_wall_corner_baseline_topology() -> None:
@@ -110,6 +121,8 @@ def test_beveled_wall_corner_horizontal_flow_is_currently_lost() -> None:
     assert len(horizontal_classes) == 3
     for alignment_class in horizontal_classes:
         assert len(alignment_class.patch_ids) == 1
+
+    assert _connected_family_spans(relations, ("f_wall_a", "f_chamfer", "f_wall_b"))
 
     assert len(relations.scaffold_continuity_components) == 8
     for component in relations.scaffold_continuity_components:
@@ -172,6 +185,8 @@ def test_l_corridor_tunnel_seamed_folds_length_flow_is_currently_lost() -> None:
     kind_counts = _relation_kind_counts(relations)
     assert kind_counts.get("MISSING_ENDPOINT_EVIDENCE", 0) == 0
 
+    assert _connected_family_spans(relations, ("f_floor", "f_wall", "f_ceiling"))
+
     for component in relations.scaffold_continuity_components:
         assert len(component.scaffold_edge_ids) == 1
 
@@ -218,6 +233,7 @@ def test_tube_with_cap_keeps_cap_and_side_continuity_separate() -> None:
         and any("f_cap" in str(edge_id) for edge_id in component.scaffold_edge_ids)
     )
     assert cap_and_side_components == ()
+    assert not _connected_family_spans(relations, ("f_cap", "f0"))
 
 
 def test_tube_with_two_seams_keeps_cross_patch_side_ring_flow() -> None:
@@ -248,3 +264,12 @@ def test_tube_with_two_seams_keeps_cross_patch_side_ring_flow() -> None:
         first, second = (edges_by_id[edge_id] for edge_id in component.scaffold_edge_ids)
         assert first.patch_id != second.patch_id
         assert first.chain_id != second.chain_id
+
+    ring_families = tuple(
+        family
+        for family in relations.connected_direction_families
+        if len(family.member_directional_evidence_ids) == 2
+        and set(str(patch_id) for patch_id in family.patch_ids) == {"patch:seed:f0", "patch:seed:f2"}
+        and all(record.get("kind") == "SCAFFOLD_NODE" for record in family.crossing_records)
+    )
+    assert len(ring_families) == 2

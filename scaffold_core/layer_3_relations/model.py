@@ -400,6 +400,18 @@ class SurfaceFlowCompatibilityEvidence:
 
 
 @dataclass(frozen=True)
+class ConnectedDirectionFamily:
+    """Connectivity-propagated direction-family evidence over directional records."""
+
+    id: str
+    member_directional_evidence_ids: tuple[str, ...]
+    patch_ids: tuple[PatchId, ...]
+    crossing_records: tuple[Mapping[str, object], ...]
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class SharedChainPatchChainRelation:
     """Graph-level relation between final PatchChains sharing one Chain."""
 
@@ -452,6 +464,7 @@ class RelationSnapshot:
     scaffold_node_incident_edge_relations: tuple[ScaffoldNodeIncidentEdgeRelation, ...] = ()
     shared_chain_patch_chain_relations: tuple[SharedChainPatchChainRelation, ...] = ()
     scaffold_continuity_components: tuple[ScaffoldContinuityComponent, ...] = ()
+    connected_direction_families: tuple[ConnectedDirectionFamily, ...] = ()
     alignment_classes: tuple[AlignmentClass, ...] = ()
     patch_axes: Mapping[PatchId, PatchAxes] = field(default_factory=dict)
     diagnostics: tuple[Diagnostic, ...] = ()

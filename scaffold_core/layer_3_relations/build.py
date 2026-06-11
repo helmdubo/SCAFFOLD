@@ -22,6 +22,7 @@ from scaffold_core.layer_3_relations.chain_refinement import (
     build_chain_directional_runs,
 )
 from scaffold_core.layer_3_relations.continuation import build_chain_continuations
+from scaffold_core.layer_3_relations.direction_families import build_connected_direction_families
 from scaffold_core.layer_3_relations.loop_corners import build_loop_corners
 from scaffold_core.layer_3_relations.model import DihedralKind, PatchAdjacency, RelationSnapshot
 from scaffold_core.layer_3_relations.patch_chain_incidence import (
@@ -109,6 +110,16 @@ def build_relation_snapshot(
         scaffold_edges,
         scaffold_node_incident_edge_relations,
     )
+    connected_direction_families = build_connected_direction_families(
+        geometry,
+        patch_adjacencies,
+        patch_chain_directional_evidence,
+        patch_chain_endpoint_samples,
+        scaffold_nodes,
+        scaffold_edges,
+        scaffold_node_incident_edge_relations,
+        shared_chain_patch_chain_relations,
+    )
     return RelationSnapshot(
         patch_adjacencies=patch_adjacencies,
         chain_continuations=build_chain_continuations(topology, patch_chain_vertex_incidence),
@@ -126,6 +137,7 @@ def build_relation_snapshot(
         scaffold_node_incident_edge_relations=scaffold_node_incident_edge_relations,
         shared_chain_patch_chain_relations=shared_chain_patch_chain_relations,
         scaffold_continuity_components=scaffold_continuity_components,
+        connected_direction_families=connected_direction_families,
         alignment_classes=alignment_classes,
         patch_axes=patch_axes,
     )

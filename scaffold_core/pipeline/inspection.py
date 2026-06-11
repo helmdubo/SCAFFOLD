@@ -321,6 +321,10 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
             _scaffold_continuity_component_to_dict(component)
             for component in sorted(relations.scaffold_continuity_components, key=lambda item: item.id)
         ],
+        "connected_direction_families": [
+            _connected_direction_family_to_dict(family)
+            for family in sorted(relations.connected_direction_families, key=lambda item: item.id)
+        ],
         "patch_axes": [
             {
                 "patch_id": str(patch_axes.patch_id),
@@ -1176,6 +1180,24 @@ def _scaffold_continuity_component_to_dict(component) -> dict[str, object]:
                 "data": dict(evidence.data),
             }
             for evidence in component.evidence
+        ],
+    }
+
+
+def _connected_direction_family_to_dict(family) -> dict[str, object]:
+    return {
+        "id": family.id,
+        "member_directional_evidence_ids": list(family.member_directional_evidence_ids),
+        "patch_ids": [str(patch_id) for patch_id in family.patch_ids],
+        "crossing_records": [dict(record) for record in family.crossing_records],
+        "confidence": family.confidence,
+        "evidence": [
+            {
+                "source": evidence.source,
+                "summary": evidence.summary,
+                "data": dict(evidence.data),
+            }
+            for evidence in family.evidence
         ],
     }
 
