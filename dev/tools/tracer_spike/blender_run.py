@@ -12,6 +12,7 @@ layout dump, then writes only UV coordinates and UV pins on the active mesh.
 
 from __future__ import annotations
 
+import os
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -19,15 +20,74 @@ from pathlib import Path
 from typing import Any
 
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPT_DIR.parents[2]
+def _candidate_repo_roots() -> list[Path]:
+    candidates: list[Path] = []
+    env_root = os.environ.get("SCAFFOLD_REPO_ROOT")
+    if env_root:
+        candidates.append(Path(env_root).expanduser())
+    raw_file = globals().get("__file__")
+    if raw_file:
+        file_path = Path(raw_file)
+        if file_path.exists():
+            candidates.append(file_path.resolve().parent)
+    blender_text_path = _blender_text_filepath()
+    if blender_text_path is not None:
+        candidates.append(blender_text_path.parent)
+    candidates.append(Path.cwd())
+    candidates.append(Path.cwd() / "dev" / "tools" / "tracer_spike")
+    return candidates
+
+
+def _blender_text_filepath() -> Path | None:
+    try:
+        import bpy  # type: ignore[import-not-found]
+    except ModuleNotFoundError:
+        return None
+    space_data = getattr(getattr(bpy, "context", None), "space_data", None)
+    text = getattr(space_data, "text", None)
+    filepath = getattr(text, "filepath", "")
+    if not filepath:
+        return None
+    path = Path(filepath)
+    if not path.exists():
+        return None
+    return path.resolve()
+
+
+def _find_repo_root() -> Path:
+    checked: list[str] = []
+    for start in _candidate_repo_roots():
+        for candidate in (start, *start.parents):
+            checked.append(str(candidate))
+            if (
+                (candidate / "scaffold_core").is_dir()
+                and (candidate / "dev" / "tools" / "tracer_spike" / "run_tracer_spike.py").is_file()
+            ):
+                return candidate
+    checked_text = "\n".join(f"- {path}" for path in dict.fromkeys(checked))
+    raise RuntimeError(
+        "Could not locate the SCAFFOLD repo root. Open this script from disk, "
+        "run Blender from E:\\GITHUB\\SCAFFOLD, or set SCAFFOLD_REPO_ROOT.\n"
+        f"Checked:\n{checked_text}"
+    )
+
+
+REPO_ROOT = _find_repo_root()
+SCRIPT_DIR = REPO_ROOT / "dev" / "tools" / "tracer_spike"
 REPORT_PATH = SCRIPT_DIR / "blender_run_report.md"
 ISLAND_OFFSET_MARGIN = 2.0
 
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
-from dev.tools.tracer_spike.run_tracer_spike import build_layout_dump
+try:
+    from dev.tools.tracer_spike.run_tracer_spike import build_layout_dump
+except ModuleNotFoundError as exc:
+    if exc.name != "dev":
+        raise
+    from run_tracer_spike import build_layout_dump
 from scaffold_core.layer_0_source.blender_io import read_source_mesh_from_blender
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 
