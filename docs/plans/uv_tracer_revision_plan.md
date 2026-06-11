@@ -595,6 +595,19 @@ Spike-only.
 Replace lexicographic placement with anchor discovery + a reduced
 FrontierRank (viability, role, ingress, length). Card 1-2. Spike-only.
 
+### Task Card G3.3 — FINAL spike card: P7 solve safety (hard stop after)
+
+Declared the last spike iteration regardless of outcome. Real-mesh
+walls.013 evidence: coverage fixed (both=90%) but residual A=1.55 from
+non-grid geometry (sloped/trapezoid wall section) force-averaged by
+lstsq. Port P7's safety semantics: component 3D-spread check, exclusion
+of UNCONSTRAINED components and their equations from the solve (their
+vertices fall back to frontier placement, unpinned), and an audit that
+oblique/diagonal chains classify OBLIQUE instead of polluting axis
+graphs. After G3.3: G4 verdict is issued on whatever walls.013 shows,
+the spike is frozen (guard 1), and the next slice drafts Layer 5
+contracts from the accumulated consumption reports and failure catalog.
+
 ### Task Card G4 — walls.004 validation gate
 
 User reruns Blender spike v3 on walls.004 after G1-G3. Pass criteria:
