@@ -9,6 +9,8 @@ Rules:
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from scaffold_core.ids import SourceEdgeId, SourceFaceId, SourceMeshId, SourceVertexId
 from scaffold_core.layer_0_source.marks import SourceMark, SourceMarkKind
 from scaffold_core.layer_0_source.snapshot import (
@@ -215,5 +217,25 @@ def make_segmented_cylinder_tube_without_caps_with_one_seam_source() -> SourceMe
         marks=(
             SourceMark(kind=SourceMarkKind.SEAM, target_id=edge_ids["e_va_top"]),
             SourceMark(kind=SourceMarkKind.SEAM, target_id=edge_ids["e_va_bot"]),
+        ),
+    )
+
+
+def make_cylinder_tube_without_caps_with_two_seams_source() -> SourceMeshSnapshot:
+    """Return the four-sided tube split by two opposite seam cuts.
+
+    Two side Patches of two faces each. The top and bottom border ring halves
+    of the two Patches are different Chains meeting at seam nodes; per the
+    DD-39 example they form two side continuity families (top pair and bottom
+    pair) through cross-patch ring flow, not four singleton border edges.
+    """
+
+    source = make_cylinder_tube_without_caps_with_one_seam_source()
+    return replace(
+        source,
+        id=SourceMeshId("cylinder_tube_without_caps_two_seams"),
+        marks=(
+            SourceMark(kind=SourceMarkKind.SEAM, target_id=SourceEdgeId("e_v0")),
+            SourceMark(kind=SourceMarkKind.SEAM, target_id=SourceEdgeId("e_v2")),
         ),
     )

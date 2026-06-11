@@ -17,6 +17,9 @@ from scaffold_core.tests.fixtures.beveled_wall_corner import (
     make_beveled_wall_corner_source,
     make_rounded_wall_corner_two_segment_source,
 )
+from scaffold_core.tests.fixtures.cylinder_tube import (
+    make_cylinder_tube_without_caps_with_two_seams_source,
+)
 from scaffold_core.tests.fixtures.detached_parallel_walls import (
     make_detached_parallel_walls_source,
 )
@@ -215,3 +218,33 @@ def test_tube_with_cap_keeps_cap_and_side_continuity_separate() -> None:
         and any("f_cap" in str(edge_id) for edge_id in component.scaffold_edge_ids)
     )
     assert cap_and_side_components == ()
+
+
+def test_tube_with_two_seams_keeps_cross_patch_side_ring_flow() -> None:
+    # DD-39 positive example: a tube split by two seam chains must keep its
+    # top and bottom border ring flow across the seam nodes — two side
+    # continuity families, not four singleton border edges. This guards the
+    # cap/side gate (test above) against over-blocking legitimate rule A
+    # ring flow, where owner normals diverge around the curved surface.
+    context = _run(make_cylinder_tube_without_caps_with_two_seams_source())
+    topology = context.topology_snapshot
+    relations = context.relation_snapshot
+
+    assert len(topology.patches) == 2
+
+    kind_counts = _relation_kind_counts(relations)
+    assert kind_counts.get("SURFACE_SLIDING_CONTINUATION_CANDIDATE", 0) == 4
+    assert kind_counts.get("MISSING_ENDPOINT_EVIDENCE", 0) == 0
+    assert len(relations.surface_flow_compatibility_evidence) == 4
+
+    edges_by_id = {edge.id: edge for edge in relations.scaffold_edges}
+    ring_components = tuple(
+        component
+        for component in relations.scaffold_continuity_components
+        if len(component.scaffold_edge_ids) == 2
+    )
+    assert len(ring_components) == 2
+    for component in ring_components:
+        first, second = (edges_by_id[edge_id] for edge_id in component.scaffold_edge_ids)
+        assert first.patch_id != second.patch_id
+        assert first.chain_id != second.chain_id
