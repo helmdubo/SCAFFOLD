@@ -192,27 +192,22 @@ def test_tube_with_cap_baseline_topology() -> None:
     assert len(seam_self_codes) == 1
 
 
-def test_tube_with_cap_documents_known_cap_side_sliding_violation() -> None:
-    # KNOWN CONTRACT VIOLATION (DD-39): "Tube with cap patch: side-to-cap
-    # PatchChains may be shared/cross-patch neighbors, but they are not
-    # side-surface continuation when owner normals diverge." The planar
-    # diamond cap currently presents dual-axis PatchAxes, slips past the
-    # cap-like single-axis gate, and SURFACE_SLIDING_CONTINUATION_CANDIDATE
-    # is emitted between the tube top ring and the cap rim, merging them
-    # into one continuity component. Flip these assertions to the contract
-    # (no sliding pair, no shared component) when the gate is fixed.
+def test_tube_with_cap_keeps_cap_and_side_continuity_separate() -> None:
+    # DD-39: side-to-cap PatchChains may be shared/cross-patch neighbors, but
+    # diverging owner normals must not promote side-surface continuation.
     context = _run(make_tube_with_cap_source())
     relations = context.relation_snapshot
 
-    sliding = tuple(
+    sliding_touching_cap = tuple(
         relation
         for relation in relations.scaffold_node_incident_edge_relations
         if relation.kind.value == "SURFACE_SLIDING_CONTINUATION_CANDIDATE"
+        and any(
+            "f_cap" in str(edge_id)
+            for edge_id in {relation.first_scaffold_edge_id, relation.second_scaffold_edge_id}
+        )
     )
-    assert len(sliding) == 2
-    for relation in sliding:
-        edge_pair = {relation.first_scaffold_edge_id, relation.second_scaffold_edge_id}
-        assert any("f_cap" in str(edge_id) for edge_id in edge_pair)
+    assert sliding_touching_cap == ()
 
     cap_and_side_components = tuple(
         component
@@ -220,4 +215,4 @@ def test_tube_with_cap_documents_known_cap_side_sliding_violation() -> None:
         if len(component.scaffold_edge_ids) == 2
         and any("f_cap" in str(edge_id) for edge_id in component.scaffold_edge_ids)
     )
-    assert len(cap_and_side_components) == 1
+    assert cap_and_side_components == ()
