@@ -119,6 +119,37 @@ Landed via PR #2. See "Current state" above.
   the spike lives outside scaffold_core as consumer tooling).
 - F3 endpoint part is resolved by C1; F1/F2/F3 family-grouping parts
   await D2.
+- D2: DONE, merged to main (`d3e7b3e`). Architect review: PASS.
+  All five DD-43 fixture expectations verified empirically; parallel
+  transport is real (45-degree chamfer crossing rotates wall A's
+  direction exactly onto the chamfer chord, tunnel folds transport at
+  90 degrees, two-seam ring flow spans both side patches);
+  AlignmentClass outputs untouched; no new relation kinds.
+
+D2 review notes — known v0 conservatism, input for the tracer (E1):
+
+```text
+1. Isolated single-patch shapes yield only singleton families (lone
+   wall quad, single-patch tunnel): the coalesced border chain is one
+   ScaffoldEdge, and same-chain node crossings are skipped, so in-patch
+   opposite rails are not grouped. The frontier must rely on PatchAxes
+   for in-patch rail pairing, or a future in-patch grouping slice.
+2. In the bevel fixture the outer vertical border runs of walls A/B stay
+   singletons; the vertical family spans only seam-touching evidence.
+   Same root cause as (1).
+3. The rounded two-segment corner spans all three patches only by
+   symmetry: the turning chain's chord coincides with the
+   patch-average-normal dihedral. Asymmetric curved strips will
+   conservatively split — this is the curved-chain OQ-11 remainder,
+   now confirmed empirically. Fails closed, never over-merges.
+4. adjacency_by_patch_pair keeps one PatchAdjacency per patch pair;
+   pairs sharing two different chains (two-seam tube) keep an arbitrary
+   one. Masked by symmetric fixtures; conservative on asymmetric ones.
+   Candidate cleanup in Slice F.
+5. direction_families digs source_edge_id/segment_index out of
+   Evidence.data payloads — the shadow-API smell again; add to the
+   Slice F evidence-payload cleanup list.
+```
 
 ---
 
