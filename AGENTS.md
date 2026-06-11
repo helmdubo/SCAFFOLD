@@ -182,6 +182,21 @@ SideSurfaceContinuityEvidence v1 evidence-only same-side surface flow record wit
 SurfaceFlowCompatibilityEvidence v0 evidence-only cross-patch flow-family compatibility record
 ```
 
+Contract-approved during G3, implementation pending:
+
+```text
+ConnectedDirectionFamily v0 (G0 DD-43)
+```
+
+Approved tracer spike home (consumer tooling, outside scaffold_core):
+
+```text
+dev/tools/tracer_spike/
+```
+
+The tracer spike consumes pipeline outputs like the debug addon. It must not
+be imported by scaffold_core and must not move solve logic into the core.
+
 Deferred in G3:
 
 ```text
