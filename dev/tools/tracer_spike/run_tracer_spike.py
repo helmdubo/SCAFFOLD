@@ -28,6 +28,11 @@ from scaffold_core.layer_2_geometry.measures import dot, length, normalize, subt
 from scaffold_core.layer_1_topology.model import BoundaryLoopKind
 from scaffold_core.layer_3_relations.model import ScaffoldJunctionKind
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
+from dev.tools.tracer_spike.frontier import (
+    apply_anchor_frontier,
+    build_console_diagnostics,
+    rejected_stitch_defect_histogram,
+)
 from dev.tools.tracer_spike.skeleton_solve import apply_skeleton_solve
 from scaffold_core.tests.fixtures.beveled_wall_corner import make_beveled_wall_corner_source
 from scaffold_core.tests.fixtures.cylinder_tube import (
@@ -120,7 +125,8 @@ def make_wall_with_window_spike_source() -> SourceMeshSnapshot:
     )
 
 
-ANGLE_DEFECT_STITCH_LIMIT = 1.0e-3
+STITCH_DEFECT_TOLERANCE = 1.0e-3
+ANGLE_DEFECT_STITCH_LIMIT = STITCH_DEFECT_TOLERANCE
 AXIS_MATCH_DOT = 0.99
 AXIS_ROLE_MIN_DOT = 0.85
 AXIS_ROLE_TIE_EPSILON = 1.0e-6
@@ -139,6 +145,8 @@ RELATION_FIELDS_READ = {
     "scaffold_junctions",
     "connected_direction_families",
     "patch_axes",
+    "scaffold_nodes",
+    "scaffold_edges",
 }
 RELATION_FIELDS_NEVER_READ = (
     "chain_continuations",
@@ -146,8 +154,6 @@ RELATION_FIELDS_NEVER_READ = (
     "loop_corners",
     "patch_chain_endpoint_samples",
     "patch_chain_endpoint_relations",
-    "scaffold_nodes",
-    "scaffold_edges",
     "scaffold_graph",
     "side_surface_continuity_evidence",
     "surface_flow_compatibility_evidence",
@@ -162,14 +168,20 @@ RELATION_FIELDS_NEVER_READ = (
 def main() -> None:
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     fixture_summaries = []
+    layouts = []
     for fixture_name, factory in FIXTURES.items():
         context = run_pass_1_relations(run_pass_0(factory()))
         layout = build_layout_dump(fixture_name, context)
+        layouts.append(layout)
         fixture_summaries.append(layout["summary"])
         output_path = REPORTS_DIR / f"{fixture_name}.json"
         output_path.write_text(json.dumps(layout, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     report = build_consumption_report(fixture_summaries)
     (REPORTS_DIR / "consumption_report.md").write_text(report, encoding="utf-8")
+    (REPORTS_DIR / "summary.json").write_text(
+        json.dumps(build_summary_dump(layouts), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def build_layout_dump(fixture_name: str, context) -> dict[str, object]:
@@ -252,7 +264,12 @@ def build_layout_dump(fixture_name: str, context) -> dict[str, object]:
             relations,
             len(island_rails),
         )
+    _mark_frontier_seed_uv(assignments)
     skeleton_solve = apply_skeleton_solve(context, islands, rail_records, assignments)
+    frontier = apply_anchor_frontier(context, islands, rail_records, assignments, skeleton_solve)
+    frontier["diagnostics"]["rejected_stitch_defect_histogram"] = rejected_stitch_defect_histogram(
+        stitch_decisions
+    )
     vertices, assignment_ambiguities = _final_vertex_dump(assignments)
     ambiguities.extend(assignment_ambiguities)
     inner_loop_placement = _finalize_inner_loop_placement(
@@ -298,10 +315,14 @@ def build_layout_dump(fixture_name: str, context) -> dict[str, object]:
             len(system["unconstrained_components"])
             for system in skeleton_solve["axis_systems"].values()
         ),
+        "frontier_degenerate_island_count": len(frontier["diagnostics"]["degenerate_island_ids"]),
+        "frontier_axis_coords_both_percent": frontier["diagnostics"]["axis_coord_coverage_percent"]["both"],
+        "frontier_axis_coords_one_percent": frontier["diagnostics"]["axis_coord_coverage_percent"]["one"],
+        "frontier_axis_coords_zero_percent": frontier["diagnostics"]["axis_coord_coverage_percent"]["zero"],
     }
-    return {
+    layout = {
         "fixture": fixture_name,
-        "angle_defect_stitch_limit": ANGLE_DEFECT_STITCH_LIMIT,
+        "stitch_defect_tolerance": STITCH_DEFECT_TOLERANCE,
         "axis_role_min_dot": AXIS_ROLE_MIN_DOT,
         "vertices": vertices,
         "islands": islands,
@@ -311,11 +332,14 @@ def build_layout_dump(fixture_name: str, context) -> dict[str, object]:
         "self_seam_chain_ids": sorted(self_seam_chain_ids),
         "inner_loop_placement": inner_loop_placement,
         "skeleton_solve": skeleton_solve,
+        "frontier": frontier,
         "improvisations": improvisations,
         "ambiguities": ambiguities,
         "consumed_relation_fields": sorted(RELATION_FIELDS_READ),
         "summary": summary,
     }
+    layout["console_diagnostics_block"] = build_console_diagnostics(layout)
+    return layout
 
 
 def _build_islands(topology, geometry, relations, evidence_by_id):
@@ -935,6 +959,12 @@ def _assign(assignments, vertex_id, island_id, uv, pinned, source):
     })
 
 
+def _mark_frontier_seed_uv(assignments):
+    for values in assignments.values():
+        for value in values:
+            value["frontier_seed_uv"] = list(value["uv"])
+
+
 def _assign_missing_island_vertices(assignments, island, patch_vertices, topology, geometry, relations, row_offset):
     patch_ids = island["patch_ids"]
     origin = _island_origin(patch_ids, patch_vertices, geometry)
@@ -1062,7 +1092,9 @@ def build_consumption_report(fixture_summaries) -> str:
         "axis_families={axis_role_family_count}, inner_chains={inner_loop_chains_placed}/"
         "{inner_loop_chain_count}, inner_fallback_vertices={inner_loop_fallback_vertex_count}, "
         "solve_residuals=(A:{skeleton_solve_residual_A}, B:{skeleton_solve_residual_B}), "
-        "unconstrained={skeleton_solve_unconstrained_component_count}, "
+        "unconstrained={skeleton_solve_unconstrained_component_count}, degenerate_islands="
+        "{frontier_degenerate_island_count}, axis_coords=(both:{frontier_axis_coords_both_percent}%, "
+        "one:{frontier_axis_coords_one_percent}%, zero:{frontier_axis_coords_zero_percent}%), "
         "improvisations={improvisation_count}, ambiguities={ambiguity_count}".format(**summary)
         for summary in fixture_summaries
     )
@@ -1091,6 +1123,7 @@ JSON layout dumps live next to this report:
 - Island-local axis roles: `connected_direction_families`, `patch_chain_directional_evidence`.
 - Inner loop placement: Layer 1 `BoundaryLoop.loop_index/kind`, `PatchChain`, `Chain.source_edge_ids`; paired with `SourceMeshSnapshot.edges/vertices`.
 - Skeleton solve: `scaffold_nodes`, `scaffold_edges`, `patch_chain_directional_evidence`, and the recomputed island-local axis-role view.
+- Anchor frontier: `scaffold_nodes`, `scaffold_edges`, placed rail vertices, and G2 canonical component coordinates.
 - In-patch singleton pairing fallback: `patch_axes`.
 - Vertex/arc-length layout support: `connected_direction_families.member_map`, `patch_chain_directional_evidence`; paired with `GeometryFactSnapshot.vertex_facts`, `SurfaceModel.patch_chains`, and `SurfaceModel.loops`.
 
@@ -1108,12 +1141,13 @@ JSON layout dumps live next to this report:
 - Axis roles are island-local consumer classifications; the spike used weighted family directions and deterministic tie-breaks, not stored frame-role labels.
 - Inner closed chains expose only one topology endpoint in `member_map`; the spike walked `Chain.source_edge_ids` to pin all rim vertices.
 - Skeleton solve v0 does not implement sibling equivalence for repeated openings; `skeleton_solve.level_b_placeholder` records the LEVEL_B_PLACEHOLDER hook for G4/G5.
+- Frontier v0 uses reduced rank only; patch-fit, anchor-tier and closure-risk tiers remain deferred.
 
 ## Arbitrary Choices And Ambiguity
 
 - If `ConnectedDirectionFamily.branch_records` is non-empty, the spike records the branch ambiguity and still uses the exported deterministic member order for row placement.
 - If multiple rails assigned different UVs to the same vertex inside one island, the spike collapsed them with an arithmetic mean and recorded the ambiguity in the JSON dump.
-- After skeleton solve, per-vertex write-back averages per-axis canonical contributions when several solved rails touch the same vertex.
+- After skeleton solve, anchor frontier composes canonical coordinates with frontier station fallback for missing axes.
 - If several patches tied for longest family presence, the seed patch was chosen lexicographically.
 - If two families tied while selecting AXIS_A or AXIS_B, the spike recorded the tie and picked lexicographically.
 - When a patch pair had multiple admissible shared seams, the first BFS stitch reached the neighbor and later equivalent seams were not separately used for island membership.
@@ -1126,6 +1160,31 @@ JSON layout dumps live next to this report:
 - Define whether pinned UV skeleton output is future core behavior or remains external spike/tooling.
 - Decide whether mid-chain skeleton vertices should be exposed in `member_map` or remain outside the typed family API.
 """
+
+
+def build_summary_dump(layouts):
+    summaries = [layout["summary"] for layout in layouts]
+    architect_lines = [
+        "ARCHITECT SUMMARY",
+        f"fixtures={len(layouts)}",
+        "canonical decisions unchanged by G3",
+        "frontier=anchor reduced-rank v0",
+        "composition=canonical axes with frontier fallback",
+        "degenerate shared-line guard=max coordinate share <=60%",
+        f"degenerate_islands={sum(item['frontier_degenerate_island_count'] for item in summaries)}",
+        "scaffold_core untouched by spike",
+    ]
+    return {
+        "architect_summary": architect_lines[:15],
+        "fixtures": {
+            layout["fixture"]: {
+                "summary": layout["summary"],
+                "console_diagnostics_block": layout["console_diagnostics_block"],
+                "frontier_diagnostics": layout["frontier"]["diagnostics"],
+            }
+            for layout in layouts
+        },
+    }
 
 
 if __name__ == "__main__":

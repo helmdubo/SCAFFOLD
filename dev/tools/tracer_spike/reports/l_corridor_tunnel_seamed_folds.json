@@ -2,16 +2,195 @@
   "ambiguities": [
     "island:0: AXIS_B orthogonality/length tie ['connected_direction_family:0', 'connected_direction_family:2']; picked connected_direction_family:0"
   ],
-  "angle_defect_stitch_limit": 0.001,
   "axis_role_min_dot": 0.85,
+  "console_diagnostics_block": "ARCHITECT SUMMARY\nfixture=l_corridor_tunnel_seamed_folds islands=1 rails=5\nstitches accepted=2 rejected=0\nrejected |defect| buckets <1e-3=0 1e-3..1e-2=0 1e-2..1e-1=0 >1e-1=0\naxis coords skeleton vertices both=0.0% one=50.0% zero=50.0%\ncomponents A=2 B=1\nlstsq residuals A=0.0 B=0.0\ndegenerate islands=none",
   "consumed_relation_fields": [
     "connected_direction_families",
     "patch_adjacencies",
     "patch_axes",
     "patch_chain_directional_evidence",
-    "scaffold_junctions"
+    "scaffold_edges",
+    "scaffold_junctions",
+    "scaffold_nodes"
   ],
   "fixture": "l_corridor_tunnel_seamed_folds",
+  "frontier": {
+    "composition": {
+      "both_axis": 0,
+      "one_axis": 4,
+      "updated_assignments": 24,
+      "vertex_axis_counts": {
+        "vertex:g0": {
+          "axis_count": 0,
+          "uv": [
+            0.5,
+            2.0
+          ]
+        },
+        "vertex:g1": {
+          "axis_count": 1,
+          "uv": [
+            2.25,
+            0.0
+          ]
+        },
+        "vertex:g2": {
+          "axis_count": 1,
+          "uv": [
+            1.75,
+            0.0
+          ]
+        },
+        "vertex:g3": {
+          "axis_count": 0,
+          "uv": [
+            1.0,
+            3.0
+          ]
+        },
+        "vertex:t0": {
+          "axis_count": 0,
+          "uv": [
+            1.5,
+            3.0
+          ]
+        },
+        "vertex:t1": {
+          "axis_count": 0,
+          "uv": [
+            2.0,
+            3.0
+          ]
+        },
+        "vertex:w0": {
+          "axis_count": 1,
+          "uv": [
+            2.75,
+            1.0
+          ]
+        },
+        "vertex:w1": {
+          "axis_count": 1,
+          "uv": [
+            2.75,
+            1.0
+          ]
+        }
+      },
+      "zero_axis": 4
+    },
+    "diagnostics": {
+      "axis_components": {
+        "A_component_count": 2,
+        "B_component_count": 1
+      },
+      "axis_coord_coverage_percent": {
+        "both": 0.0,
+        "one": 50.0,
+        "zero": 50.0
+      },
+      "canonical_vertex_count": 4,
+      "coordinate_share_by_island": {
+        "island:0": {
+          "A": 0.25,
+          "B": 0.375
+        }
+      },
+      "degenerate_island_ids": [],
+      "frontier_updated_assignments": 24,
+      "rejected_stitch_defect_histogram": {
+        "1e-2_to_1e-1": 0,
+        "1e-3_to_1e-2": 0,
+        "gt_1e-1": 0,
+        "lt_1e-3": 0
+      }
+    },
+    "placement_order": [
+      {
+        "anchor_vertex_ids": [],
+        "axis_role": "AXIS_A",
+        "ingress": "none",
+        "island_id": "island:0",
+        "placed_vertex_count": 4,
+        "rail_id": "connected_direction_family:3:island:0",
+        "rank": [
+          1,
+          1,
+          0,
+          4.0
+        ]
+      },
+      {
+        "anchor_vertex_ids": [
+          "vertex:g2",
+          "vertex:w1"
+        ],
+        "axis_role": "AXIS_B",
+        "ingress": "both-anchored",
+        "island_id": "island:0",
+        "placed_vertex_count": 4,
+        "rail_id": "connected_direction_family:2:island:0",
+        "rank": [
+          2,
+          1,
+          2,
+          0.0
+        ]
+      },
+      {
+        "anchor_vertex_ids": [
+          "vertex:g1",
+          "vertex:w0"
+        ],
+        "axis_role": "AXIS_B",
+        "ingress": "both-anchored",
+        "island_id": "island:0",
+        "placed_vertex_count": 4,
+        "rail_id": "connected_direction_family:0:island:0",
+        "rank": [
+          2,
+          1,
+          2,
+          0.0
+        ]
+      },
+      {
+        "anchor_vertex_ids": [],
+        "axis_role": "OBLIQUE",
+        "ingress": "none",
+        "island_id": "island:0",
+        "placed_vertex_count": 2,
+        "rail_id": "patch_axes:island:0:patch:seed:f_floor:SECONDARY",
+        "rank": [
+          1,
+          0,
+          0,
+          1.0
+        ]
+      },
+      {
+        "anchor_vertex_ids": [],
+        "axis_role": "OBLIQUE",
+        "ingress": "none",
+        "island_id": "island:0",
+        "placed_vertex_count": 2,
+        "rail_id": "patch_axes:island:0:patch:seed:f_ceiling:SECONDARY",
+        "rank": [
+          1,
+          0,
+          0,
+          1.0
+        ]
+      }
+    ],
+    "policy": "tracer_spike_anchor_frontier_v0",
+    "rank_tuple": [
+      "viability",
+      "axis_role_tier",
+      "ingress",
+      "length"
+    ]
+  },
   "improvisations": [
     "island:0 patch:seed:f_ceiling SECONDARY: PatchAxes grouped 1 singleton/ungrouped rail runs",
     "island:0 patch:seed:f_floor SECONDARY: PatchAxes grouped 1 singleton/ungrouped rail runs"
@@ -437,12 +616,17 @@
       }
     }
   ],
+  "stitch_defect_tolerance": 0.001,
   "summary": {
     "ambiguity_count": 1,
     "axis_role_ambiguity_count": 1,
     "axis_role_family_count": 5,
     "blocked_patch_pairs": 0,
     "fixture": "l_corridor_tunnel_seamed_folds",
+    "frontier_axis_coords_both_percent": 0.0,
+    "frontier_axis_coords_one_percent": 50.0,
+    "frontier_axis_coords_zero_percent": 50.0,
+    "frontier_degenerate_island_count": 0,
     "improvisation_count": 2,
     "inner_loop_chain_count": 0,
     "inner_loop_chains_placed": 0,
@@ -464,8 +648,8 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        0.0,
-        0.0
+        0.5,
+        2.0
       ],
       "vertex_id": "vertex:g0"
     },
@@ -477,8 +661,8 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        0.5,
-        -0.25
+        2.25,
+        0.0
       ],
       "vertex_id": "vertex:g1"
     },
@@ -490,8 +674,8 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        0.5,
-        -0.25
+        1.75,
+        0.0
       ],
       "vertex_id": "vertex:g2"
     },
@@ -503,8 +687,8 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        0.0,
-        1.0
+        1.0,
+        3.0
       ],
       "vertex_id": "vertex:g3"
     },
@@ -516,8 +700,8 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        0.0,
-        -1.0
+        1.5,
+        3.0
       ],
       "vertex_id": "vertex:t0"
     },
@@ -529,8 +713,8 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        0.0,
-        -1.0
+        2.0,
+        3.0
       ],
       "vertex_id": "vertex:t1"
     },
@@ -542,8 +726,8 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        -0.5,
-        -0.75
+        2.75,
+        1.0
       ],
       "vertex_id": "vertex:w0"
     },
@@ -555,8 +739,8 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        -0.5,
-        -0.75
+        2.75,
+        1.0
       ],
       "vertex_id": "vertex:w1"
     }

@@ -1,0 +1,328 @@
+{
+  "architect_summary": [
+    "ARCHITECT SUMMARY",
+    "fixtures=6",
+    "canonical decisions unchanged by G3",
+    "frontier=anchor reduced-rank v0",
+    "composition=canonical axes with frontier fallback",
+    "degenerate shared-line guard=max coordinate share <=60%",
+    "degenerate_islands=0",
+    "scaffold_core untouched by spike"
+  ],
+  "fixtures": {
+    "beveled_wall_corner": {
+      "console_diagnostics_block": "ARCHITECT SUMMARY\nfixture=beveled_wall_corner islands=1 rails=5\nstitches accepted=2 rejected=0\nrejected |defect| buckets <1e-3=0 1e-3..1e-2=0 1e-2..1e-1=0 >1e-1=0\naxis coords skeleton vertices both=0.0% one=50.0% zero=50.0%\ncomponents A=2 B=1\nlstsq residuals A=0.0 B=0.0\ndegenerate islands=none",
+      "frontier_diagnostics": {
+        "axis_components": {
+          "A_component_count": 2,
+          "B_component_count": 1
+        },
+        "axis_coord_coverage_percent": {
+          "both": 0.0,
+          "one": 50.0,
+          "zero": 50.0
+        },
+        "canonical_vertex_count": 4,
+        "coordinate_share_by_island": {
+          "island:0": {
+            "A": 0.25,
+            "B": 0.25
+          }
+        },
+        "degenerate_island_ids": [],
+        "frontier_updated_assignments": 24,
+        "rejected_stitch_defect_histogram": {
+          "1e-2_to_1e-1": 0,
+          "1e-3_to_1e-2": 0,
+          "gt_1e-1": 0,
+          "lt_1e-3": 0
+        }
+      },
+      "summary": {
+        "ambiguity_count": 1,
+        "axis_role_ambiguity_count": 1,
+        "axis_role_family_count": 5,
+        "blocked_patch_pairs": 0,
+        "fixture": "beveled_wall_corner",
+        "frontier_axis_coords_both_percent": 0.0,
+        "frontier_axis_coords_one_percent": 50.0,
+        "frontier_axis_coords_zero_percent": 50.0,
+        "frontier_degenerate_island_count": 0,
+        "improvisation_count": 2,
+        "inner_loop_chain_count": 0,
+        "inner_loop_chains_placed": 0,
+        "inner_loop_fallback_vertex_count": 0,
+        "island_count": 1,
+        "rail_count": 5,
+        "self_seam_chain_count": 0,
+        "skeleton_solve_residual_A": 0.0,
+        "skeleton_solve_residual_B": 0.0,
+        "skeleton_solve_unconstrained_component_count": 0,
+        "stitched_patch_pairs": 2
+      }
+    },
+    "cylinder_tube_two_seams": {
+      "console_diagnostics_block": "ARCHITECT SUMMARY\nfixture=cylinder_tube_two_seams islands=1 rails=4\nstitches accepted=1 rejected=0\nrejected |defect| buckets <1e-3=0 1e-3..1e-2=0 1e-2..1e-1=0 >1e-1=0\naxis coords skeleton vertices both=0.0% one=100.0% zero=0.0%\ncomponents A=2 B=4\nlstsq residuals A=0.0 B=0.0\ndegenerate islands=none",
+      "frontier_diagnostics": {
+        "axis_components": {
+          "A_component_count": 2,
+          "B_component_count": 4
+        },
+        "axis_coord_coverage_percent": {
+          "both": 0.0,
+          "one": 100.0,
+          "zero": 0.0
+        },
+        "canonical_vertex_count": 4,
+        "coordinate_share_by_island": {
+          "island:0": {
+            "A": 0.25,
+            "B": 0.25
+          }
+        },
+        "degenerate_island_ids": [],
+        "frontier_updated_assignments": 16,
+        "rejected_stitch_defect_histogram": {
+          "1e-2_to_1e-1": 0,
+          "1e-3_to_1e-2": 0,
+          "gt_1e-1": 0,
+          "lt_1e-3": 0
+        }
+      },
+      "summary": {
+        "ambiguity_count": 2,
+        "axis_role_ambiguity_count": 2,
+        "axis_role_family_count": 6,
+        "blocked_patch_pairs": 0,
+        "fixture": "cylinder_tube_two_seams",
+        "frontier_axis_coords_both_percent": 0.0,
+        "frontier_axis_coords_one_percent": 100.0,
+        "frontier_axis_coords_zero_percent": 0.0,
+        "frontier_degenerate_island_count": 0,
+        "improvisation_count": 2,
+        "inner_loop_chain_count": 0,
+        "inner_loop_chains_placed": 0,
+        "inner_loop_fallback_vertex_count": 0,
+        "island_count": 1,
+        "rail_count": 4,
+        "self_seam_chain_count": 0,
+        "skeleton_solve_residual_A": 0.0,
+        "skeleton_solve_residual_B": 0.0,
+        "skeleton_solve_unconstrained_component_count": 1,
+        "stitched_patch_pairs": 1
+      }
+    },
+    "detached_parallel_walls": {
+      "console_diagnostics_block": "ARCHITECT SUMMARY\nfixture=detached_parallel_walls islands=2 rails=4\nstitches accepted=0 rejected=0\nrejected |defect| buckets <1e-3=0 1e-3..1e-2=0 1e-2..1e-1=0 >1e-1=0\naxis coords skeleton vertices both=0.0% one=0.0% zero=100.0%\ncomponents A=2 B=2\nlstsq residuals A=0.0 B=0.0\ndegenerate islands=none",
+      "frontier_diagnostics": {
+        "axis_components": {
+          "A_component_count": 2,
+          "B_component_count": 2
+        },
+        "axis_coord_coverage_percent": {
+          "both": 0.0,
+          "one": 0.0,
+          "zero": 100.0
+        },
+        "canonical_vertex_count": 2,
+        "coordinate_share_by_island": {
+          "island:0": {
+            "A": 0.5,
+            "B": 0.25
+          },
+          "island:1": {
+            "A": 0.5,
+            "B": 0.25
+          }
+        },
+        "degenerate_island_ids": [],
+        "frontier_updated_assignments": 16,
+        "rejected_stitch_defect_histogram": {
+          "1e-2_to_1e-1": 0,
+          "1e-3_to_1e-2": 0,
+          "gt_1e-1": 0,
+          "lt_1e-3": 0
+        }
+      },
+      "summary": {
+        "ambiguity_count": 4,
+        "axis_role_ambiguity_count": 4,
+        "axis_role_family_count": 8,
+        "blocked_patch_pairs": 0,
+        "fixture": "detached_parallel_walls",
+        "frontier_axis_coords_both_percent": 0.0,
+        "frontier_axis_coords_one_percent": 0.0,
+        "frontier_axis_coords_zero_percent": 100.0,
+        "frontier_degenerate_island_count": 0,
+        "improvisation_count": 4,
+        "inner_loop_chain_count": 0,
+        "inner_loop_chains_placed": 0,
+        "inner_loop_fallback_vertex_count": 0,
+        "island_count": 2,
+        "rail_count": 4,
+        "self_seam_chain_count": 0,
+        "skeleton_solve_residual_A": 0.0,
+        "skeleton_solve_residual_B": 0.0,
+        "skeleton_solve_unconstrained_component_count": 0,
+        "stitched_patch_pairs": 0
+      }
+    },
+    "l_corridor_tunnel_seamed_folds": {
+      "console_diagnostics_block": "ARCHITECT SUMMARY\nfixture=l_corridor_tunnel_seamed_folds islands=1 rails=5\nstitches accepted=2 rejected=0\nrejected |defect| buckets <1e-3=0 1e-3..1e-2=0 1e-2..1e-1=0 >1e-1=0\naxis coords skeleton vertices both=0.0% one=50.0% zero=50.0%\ncomponents A=2 B=1\nlstsq residuals A=0.0 B=0.0\ndegenerate islands=none",
+      "frontier_diagnostics": {
+        "axis_components": {
+          "A_component_count": 2,
+          "B_component_count": 1
+        },
+        "axis_coord_coverage_percent": {
+          "both": 0.0,
+          "one": 50.0,
+          "zero": 50.0
+        },
+        "canonical_vertex_count": 4,
+        "coordinate_share_by_island": {
+          "island:0": {
+            "A": 0.25,
+            "B": 0.375
+          }
+        },
+        "degenerate_island_ids": [],
+        "frontier_updated_assignments": 24,
+        "rejected_stitch_defect_histogram": {
+          "1e-2_to_1e-1": 0,
+          "1e-3_to_1e-2": 0,
+          "gt_1e-1": 0,
+          "lt_1e-3": 0
+        }
+      },
+      "summary": {
+        "ambiguity_count": 1,
+        "axis_role_ambiguity_count": 1,
+        "axis_role_family_count": 5,
+        "blocked_patch_pairs": 0,
+        "fixture": "l_corridor_tunnel_seamed_folds",
+        "frontier_axis_coords_both_percent": 0.0,
+        "frontier_axis_coords_one_percent": 50.0,
+        "frontier_axis_coords_zero_percent": 50.0,
+        "frontier_degenerate_island_count": 0,
+        "improvisation_count": 2,
+        "inner_loop_chain_count": 0,
+        "inner_loop_chains_placed": 0,
+        "inner_loop_fallback_vertex_count": 0,
+        "island_count": 1,
+        "rail_count": 5,
+        "self_seam_chain_count": 0,
+        "skeleton_solve_residual_A": 0.0,
+        "skeleton_solve_residual_B": 0.0,
+        "skeleton_solve_unconstrained_component_count": 0,
+        "stitched_patch_pairs": 2
+      }
+    },
+    "tube_with_cap": {
+      "console_diagnostics_block": "ARCHITECT SUMMARY\nfixture=tube_with_cap islands=2 rails=5\nstitches accepted=0 rejected=1\nrejected |defect| buckets <1e-3=0 1e-3..1e-2=0 1e-2..1e-1=0 >1e-1=2\naxis coords skeleton vertices both=0.0% one=0.0% zero=100.0%\ncomponents A=2 B=2\nlstsq residuals A=0.0 B=0.0\ndegenerate islands=none",
+      "frontier_diagnostics": {
+        "axis_components": {
+          "A_component_count": 2,
+          "B_component_count": 2
+        },
+        "axis_coord_coverage_percent": {
+          "both": 0.0,
+          "one": 0.0,
+          "zero": 100.0
+        },
+        "canonical_vertex_count": 5,
+        "coordinate_share_by_island": {
+          "island:0": {
+            "A": 0.2,
+            "B": 0.3
+          },
+          "island:1": {
+            "A": 0.25,
+            "B": 0.25
+          }
+        },
+        "degenerate_island_ids": [],
+        "frontier_updated_assignments": 28,
+        "rejected_stitch_defect_histogram": {
+          "1e-2_to_1e-1": 0,
+          "1e-3_to_1e-2": 0,
+          "gt_1e-1": 2,
+          "lt_1e-3": 0
+        }
+      },
+      "summary": {
+        "ambiguity_count": 10,
+        "axis_role_ambiguity_count": 4,
+        "axis_role_family_count": 14,
+        "blocked_patch_pairs": 1,
+        "fixture": "tube_with_cap",
+        "frontier_axis_coords_both_percent": 0.0,
+        "frontier_axis_coords_one_percent": 0.0,
+        "frontier_axis_coords_zero_percent": 100.0,
+        "frontier_degenerate_island_count": 0,
+        "improvisation_count": 5,
+        "inner_loop_chain_count": 0,
+        "inner_loop_chains_placed": 0,
+        "inner_loop_fallback_vertex_count": 0,
+        "island_count": 2,
+        "rail_count": 5,
+        "self_seam_chain_count": 1,
+        "skeleton_solve_residual_A": 0.0,
+        "skeleton_solve_residual_B": 0.0,
+        "skeleton_solve_unconstrained_component_count": 2,
+        "stitched_patch_pairs": 0
+      }
+    },
+    "wall_with_window_spike": {
+      "console_diagnostics_block": "ARCHITECT SUMMARY\nfixture=wall_with_window_spike islands=1 rails=3\nstitches accepted=0 rejected=0\nrejected |defect| buckets <1e-3=0 1e-3..1e-2=0 1e-2..1e-1=0 >1e-1=0\naxis coords skeleton vertices both=0.0% one=25.0% zero=75.0%\ncomponents A=2 B=2\nlstsq residuals A=0.0 B=0.0\ndegenerate islands=none",
+      "frontier_diagnostics": {
+        "axis_components": {
+          "A_component_count": 2,
+          "B_component_count": 2
+        },
+        "axis_coord_coverage_percent": {
+          "both": 0.0,
+          "one": 25.0,
+          "zero": 75.0
+        },
+        "canonical_vertex_count": 2,
+        "coordinate_share_by_island": {
+          "island:0": {
+            "A": 0.25,
+            "B": 0.5
+          }
+        },
+        "degenerate_island_ids": [],
+        "frontier_updated_assignments": 24,
+        "rejected_stitch_defect_histogram": {
+          "1e-2_to_1e-1": 0,
+          "1e-3_to_1e-2": 0,
+          "gt_1e-1": 0,
+          "lt_1e-3": 0
+        }
+      },
+      "summary": {
+        "ambiguity_count": 2,
+        "axis_role_ambiguity_count": 2,
+        "axis_role_family_count": 8,
+        "blocked_patch_pairs": 0,
+        "fixture": "wall_with_window_spike",
+        "frontier_axis_coords_both_percent": 0.0,
+        "frontier_axis_coords_one_percent": 25.0,
+        "frontier_axis_coords_zero_percent": 75.0,
+        "frontier_degenerate_island_count": 0,
+        "improvisation_count": 2,
+        "inner_loop_chain_count": 1,
+        "inner_loop_chains_placed": 1,
+        "inner_loop_fallback_vertex_count": 0,
+        "island_count": 1,
+        "rail_count": 3,
+        "self_seam_chain_count": 0,
+        "skeleton_solve_residual_A": 0.0,
+        "skeleton_solve_residual_B": 0.0,
+        "skeleton_solve_unconstrained_component_count": 1,
+        "stitched_patch_pairs": 0
+      }
+    }
+  }
+}
