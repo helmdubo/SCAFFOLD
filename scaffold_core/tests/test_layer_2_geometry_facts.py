@@ -8,7 +8,7 @@ Rules:
 
 from __future__ import annotations
 
-from math import isclose
+from math import isclose, pi
 
 from scaffold_core.core.diagnostics import DiagnosticSeverity
 from scaffold_core.ids import (
@@ -43,12 +43,14 @@ from scaffold_core.layer_1_topology.model import (
 )
 from scaffold_core.layer_2_geometry.build import build_geometry_facts
 from scaffold_core.layer_2_geometry.facts import ChainShapeHint
+from scaffold_core.pipeline.inspection import geometry_summary_to_dict
 from scaffold_core.tests.fixtures.chain_shape_geometry import make_chain_shape_source_and_topology
 from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_boundary_loop_source
 from scaffold_core.tests.fixtures.cylinder_tube import (
     make_segmented_cylinder_tube_without_caps_with_one_seam_source,
 )
 from scaffold_core.tests.fixtures.degenerate_geometry import make_degenerate_triangle_source
+from scaffold_core.tests.fixtures.l_corridor_tunnel import make_l_corridor_tunnel_seamed_folds_source
 from scaffold_core.tests.fixtures.l_shape import make_two_quad_l_source
 from scaffold_core.tests.fixtures.single_patch import make_single_quad_source
 
@@ -192,6 +194,167 @@ def test_chain_segment_order_degraded_diagnostic_keeps_deterministic_segments() 
         diagnostic.code
         for diagnostic in facts.diagnostics
     }
+
+
+def test_cube_corner_vertex_angle_defect_is_measured() -> None:
+    source = _make_cube_corner_angle_source()
+    topology = _topology_with_vertices("cube_corner_angle", (SourceVertexId("v000"),))
+
+    facts = build_geometry_facts(source, topology)
+
+    vertex = facts.vertex_facts[VertexId("vertex:v000")]
+    assert isclose(vertex.interior_angle_sum, 1.5 * pi)
+    assert not vertex.is_boundary
+    assert isclose(vertex.angle_defect, 0.5 * pi)
+
+
+def test_flat_interior_vertex_angle_defect_is_zero() -> None:
+    source = _make_flat_interior_angle_source()
+    topology = _topology_with_vertices("flat_interior_angle", (SourceVertexId("v11"),))
+
+    facts = build_geometry_facts(source, topology)
+
+    vertex = facts.vertex_facts[VertexId("vertex:v11")]
+    assert isclose(vertex.interior_angle_sum, 2.0 * pi)
+    assert not vertex.is_boundary
+    assert isclose(vertex.angle_defect, 0.0, abs_tol=1.0e-9)
+
+
+def test_l_corridor_tunnel_fold_vertex_angle_defects_are_zero() -> None:
+    source = make_l_corridor_tunnel_seamed_folds_source()
+    topology = build_topology_snapshot(source)
+
+    facts = build_geometry_facts(source, topology)
+
+    fold_source_vertex_ids = {
+        SourceVertexId("g1"),
+        SourceVertexId("g2"),
+        SourceVertexId("w0"),
+        SourceVertexId("w1"),
+    }
+    fold_vertices = tuple(
+        facts.vertex_facts[vertex.id]
+        for vertex in topology.vertices.values()
+        if any(source_vertex_id in fold_source_vertex_ids for source_vertex_id in vertex.source_vertex_ids)
+    )
+    assert fold_vertices
+    for vertex in fold_vertices:
+        assert isclose(vertex.interior_angle_sum, pi)
+        assert vertex.is_boundary
+        assert isclose(vertex.angle_defect, 0.0, abs_tol=1.0e-9)
+
+
+def test_full_geometry_inspection_includes_vertex_angle_facts() -> None:
+    source = _make_flat_interior_angle_source()
+    topology = _topology_with_vertices("flat_interior_angle", (SourceVertexId("v11"),))
+    facts = build_geometry_facts(source, topology)
+
+    report = geometry_summary_to_dict(facts, detail="full")
+
+    vertex = report["vertices"][0]
+    assert vertex["id"] == "vertex:v11"
+    assert isclose(vertex["interior_angle_sum"], 2.0 * pi)
+    assert isclose(vertex["angle_defect"], 0.0, abs_tol=1.0e-9)
+    assert vertex["is_boundary"] is False
+
+
+def _topology_with_vertices(
+    suffix: str,
+    source_vertex_ids: tuple[SourceVertexId, ...],
+) -> SurfaceModel:
+    vertices = {
+        VertexId(f"vertex:{source_vertex_id}"): Vertex(
+            id=VertexId(f"vertex:{source_vertex_id}"),
+            source_vertex_ids=(source_vertex_id,),
+        )
+        for source_vertex_id in source_vertex_ids
+    }
+    return SurfaceModel(id=SurfaceModelId(f"surface:{suffix}"), vertices=vertices)
+
+
+def _make_cube_corner_angle_source() -> SourceMeshSnapshot:
+    return _source_from_faces(
+        "cube_corner_angle",
+        {
+            "v000": (0.0, 0.0, 0.0),
+            "v100": (1.0, 0.0, 0.0),
+            "v010": (0.0, 1.0, 0.0),
+            "v110": (1.0, 1.0, 0.0),
+            "v001": (0.0, 0.0, 1.0),
+            "v101": (1.0, 0.0, 1.0),
+            "v011": (0.0, 1.0, 1.0),
+        },
+        {
+            "f_bottom": ("v000", "v100", "v110", "v010"),
+            "f_front": ("v000", "v001", "v101", "v100"),
+            "f_left": ("v000", "v010", "v011", "v001"),
+        },
+    )
+
+
+def _make_flat_interior_angle_source() -> SourceMeshSnapshot:
+    return _source_from_faces(
+        "flat_interior_angle",
+        {
+            "v00": (-1.0, -1.0, 0.0),
+            "v10": (0.0, -1.0, 0.0),
+            "v20": (1.0, -1.0, 0.0),
+            "v01": (-1.0, 0.0, 0.0),
+            "v11": (0.0, 0.0, 0.0),
+            "v21": (1.0, 0.0, 0.0),
+            "v02": (-1.0, 1.0, 0.0),
+            "v12": (0.0, 1.0, 0.0),
+            "v22": (1.0, 1.0, 0.0),
+        },
+        {
+            "f_bottom_left": ("v00", "v10", "v11", "v01"),
+            "f_bottom_right": ("v10", "v20", "v21", "v11"),
+            "f_top_right": ("v11", "v21", "v22", "v12"),
+            "f_top_left": ("v01", "v11", "v12", "v02"),
+        },
+    )
+
+
+def _source_from_faces(
+    mesh_id: str,
+    vertex_positions: dict[str, tuple[float, float, float]],
+    face_vertex_names: dict[str, tuple[str, ...]],
+) -> SourceMeshSnapshot:
+    vertices = {
+        SourceVertexId(vertex_name): MeshVertexRef(
+            SourceVertexId(vertex_name),
+            position,
+        )
+        for vertex_name, position in vertex_positions.items()
+    }
+    edges: dict[SourceEdgeId, MeshEdgeRef] = {}
+    faces: dict[SourceFaceId, MeshFaceRef] = {}
+    for face_name, vertex_names in face_vertex_names.items():
+        edge_ids: list[SourceEdgeId] = []
+        for first_name, second_name in zip(vertex_names, vertex_names[1:] + vertex_names[:1]):
+            edge_key = tuple(sorted((first_name, second_name)))
+            edge_id = SourceEdgeId(f"edge:{edge_key[0]}:{edge_key[1]}")
+            edges.setdefault(
+                edge_id,
+                MeshEdgeRef(
+                    edge_id,
+                    (SourceVertexId(edge_key[0]), SourceVertexId(edge_key[1])),
+                ),
+            )
+            edge_ids.append(edge_id)
+        source_face_id = SourceFaceId(face_name)
+        faces[source_face_id] = MeshFaceRef(
+            source_face_id,
+            tuple(SourceVertexId(vertex_name) for vertex_name in vertex_names),
+            tuple(edge_ids),
+        )
+    return SourceMeshSnapshot(
+        id=SourceMeshId(mesh_id),
+        vertices=vertices,
+        edges=edges,
+        faces=faces,
+        selected_face_ids=tuple(faces),
+    )
 
 
 def _make_broken_chain_order_source_and_topology() -> tuple[SourceMeshSnapshot, SurfaceModel]:

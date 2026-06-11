@@ -9,7 +9,7 @@ Rules:
 
 from __future__ import annotations
 
-from math import sqrt
+from math import acos, sqrt
 
 from scaffold_core.layer_2_geometry.facts import Vector3
 
@@ -50,6 +50,15 @@ def normalize(vector: Vector3) -> Vector3:
     if vector_length <= EPSILON:
         return (0.0, 0.0, 0.0)
     return scale(vector, 1.0 / vector_length)
+
+
+def angle_between(left: Vector3, right: Vector3) -> float:
+    left_normal = normalize(left)
+    right_normal = normalize(right)
+    if length(left_normal) <= EPSILON or length(right_normal) <= EPSILON:
+        return 0.0
+    cosine = max(-1.0, min(1.0, dot(left_normal, right_normal)))
+    return acos(cosine)
 
 
 def average(points: tuple[Vector3, ...]) -> Vector3:

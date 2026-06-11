@@ -67,6 +67,9 @@ class ChainGeometryFacts:
 class VertexGeometryFacts:
     vertex_id: VertexId
     position: Vector3
+    interior_angle_sum: float = 0.0
+    angle_defect: float = 0.0
+    is_boundary: bool = False
 
 
 @dataclass(frozen=True)

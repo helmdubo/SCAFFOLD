@@ -9,8 +9,10 @@ Rules:
 
 from __future__ import annotations
 
-from scaffold_core.core.diagnostics import Diagnostic, DiagnosticSeverity
 from collections import defaultdict
+from math import pi
+
+from scaffold_core.core.diagnostics import Diagnostic, DiagnosticSeverity
 
 from scaffold_core.ids import PatchId, SourceEdgeId, SourceFaceId, SourceVertexId, VertexId
 from scaffold_core.layer_0_source.marks import SourceMarkKind
@@ -29,6 +31,7 @@ from scaffold_core.layer_2_geometry.facts import (
 from scaffold_core.layer_2_geometry.measures import (
     EPSILON,
     add,
+    angle_between,
     average,
     dot,
     length,
@@ -58,8 +61,17 @@ def build_geometry_facts(
         chain.id: _build_chain_geometry_facts(source, topology, chain, diagnostics)
         for chain in topology.chains.values()
     }
+    selected_face_ids = _selected_face_ids(source)
+    source_vertex_angle_sums = _source_vertex_angle_sums(source, selected_face_ids)
+    source_vertex_boundary_flags = _source_vertex_boundary_flags(source, selected_face_ids)
     vertex_facts = {
-        vertex.id: _build_vertex_geometry_facts(source, vertex, diagnostics)
+        vertex.id: _build_vertex_geometry_facts(
+            source,
+            vertex,
+            diagnostics,
+            source_vertex_angle_sums,
+            source_vertex_boundary_flags,
+        )
         for vertex in topology.vertices.values()
     }
     local_face_fan_facts = _build_local_face_fan_geometry_facts(source, topology)
@@ -308,6 +320,8 @@ def _build_vertex_geometry_facts(
     source: SourceMeshSnapshot,
     vertex: Vertex,
     diagnostics: list[Diagnostic],
+    source_vertex_angle_sums: dict[SourceVertexId, float],
+    source_vertex_boundary_flags: dict[SourceVertexId, bool],
 ) -> VertexGeometryFacts:
     points = tuple(_source_vertex_point(source, source_vertex_id) for source_vertex_id in vertex.source_vertex_ids)
     if not points:
@@ -320,7 +334,63 @@ def _build_vertex_geometry_facts(
                 entity_ids=(str(vertex.id),),
             )
         )
-    return VertexGeometryFacts(vertex_id=vertex.id, position=average(points))
+    interior_angle_sum = sum(
+        source_vertex_angle_sums.get(source_vertex_id, 0.0)
+        for source_vertex_id in vertex.source_vertex_ids
+    )
+    is_boundary = any(
+        source_vertex_boundary_flags.get(source_vertex_id, True)
+        for source_vertex_id in vertex.source_vertex_ids
+    )
+    angle_defect = (pi if is_boundary else 2.0 * pi) - interior_angle_sum if points else 0.0
+    return VertexGeometryFacts(
+        vertex_id=vertex.id,
+        position=average(points),
+        interior_angle_sum=interior_angle_sum,
+        angle_defect=angle_defect,
+        is_boundary=is_boundary,
+    )
+
+
+def _selected_face_ids(source: SourceMeshSnapshot) -> tuple[SourceFaceId, ...]:
+    return tuple(source.selected_face_ids) if source.selected_face_ids else tuple(source.faces)
+
+
+def _source_vertex_angle_sums(
+    source: SourceMeshSnapshot,
+    source_face_ids: tuple[SourceFaceId, ...],
+) -> dict[SourceVertexId, float]:
+    angle_sums: dict[SourceVertexId, float] = defaultdict(float)
+    for source_face_id in source_face_ids:
+        vertex_ids = source.faces[source_face_id].vertex_ids
+        if len(vertex_ids) < 3:
+            continue
+        for index, source_vertex_id in enumerate(vertex_ids):
+            point = _source_vertex_point(source, source_vertex_id)
+            previous_point = _source_vertex_point(source, vertex_ids[index - 1])
+            next_point = _source_vertex_point(source, vertex_ids[(index + 1) % len(vertex_ids)])
+            angle_sums[source_vertex_id] += angle_between(
+                subtract(previous_point, point),
+                subtract(next_point, point),
+            )
+    return dict(angle_sums)
+
+
+def _source_vertex_boundary_flags(
+    source: SourceMeshSnapshot,
+    source_face_ids: tuple[SourceFaceId, ...],
+) -> dict[SourceVertexId, bool]:
+    boundary_flags = {
+        source_vertex_id: False
+        for source_vertex_id in source.vertices
+    }
+    edge_incidence = _selected_edge_incidence(source, source_face_ids)
+    for source_edge_id, incident_face_ids in edge_incidence.items():
+        if len(incident_face_ids) == 2:
+            continue
+        for source_vertex_id in source.edges[source_edge_id].vertex_ids:
+            boundary_flags[source_vertex_id] = True
+    return boundary_flags
 
 
 def _build_local_face_fan_geometry_facts(

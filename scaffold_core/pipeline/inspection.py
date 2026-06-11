@@ -126,6 +126,16 @@ def geometry_summary_to_dict(geometry: GeometryFactSnapshot, detail: str = "comp
             }
             for facts in sorted(geometry.chain_facts.values(), key=lambda item: str(item.chain_id))
         ],
+        "vertices": [
+            {
+                "id": str(facts.vertex_id),
+                "position": list(facts.position),
+                "interior_angle_sum": facts.interior_angle_sum,
+                "angle_defect": facts.angle_defect,
+                "is_boundary": facts.is_boundary,
+            }
+            for facts in sorted(geometry.vertex_facts.values(), key=lambda item: str(item.vertex_id))
+        ],
         "local_face_fans": [
             _local_face_fan_to_dict(facts)
             for facts in sorted(geometry.local_face_fan_facts.values(), key=lambda item: item.id)
