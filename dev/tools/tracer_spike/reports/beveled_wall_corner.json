@@ -1,0 +1,269 @@
+{
+  "ambiguities": [
+    "vertex:a0: multiple rail UV assignments collapsed by arithmetic mean",
+    "vertex:a1: multiple rail UV assignments collapsed by arithmetic mean",
+    "vertex:a2: multiple rail UV assignments collapsed by arithmetic mean",
+    "vertex:a3: multiple rail UV assignments collapsed by arithmetic mean",
+    "vertex:b0: multiple rail UV assignments collapsed by arithmetic mean",
+    "vertex:b1: multiple rail UV assignments collapsed by arithmetic mean",
+    "vertex:c0: multiple rail UV assignments collapsed by arithmetic mean",
+    "vertex:c1: multiple rail UV assignments collapsed by arithmetic mean"
+  ],
+  "angle_defect_stitch_limit": 0.001,
+  "consumed_relation_fields": [
+    "connected_direction_families",
+    "patch_adjacencies",
+    "patch_axes",
+    "patch_chain_directional_evidence",
+    "scaffold_junctions"
+  ],
+  "fixture": "beveled_wall_corner",
+  "improvisations": [
+    "island:0 patch:seed:f_wall_a PRIMARY: PatchAxes grouped 1 singleton/ungrouped rail runs",
+    "island:0 patch:seed:f_wall_b PRIMARY: PatchAxes grouped 1 singleton/ungrouped rail runs"
+  ],
+  "islands": [
+    {
+      "id": "island:0",
+      "patch_ids": [
+        "patch:seed:f_chamfer",
+        "patch:seed:f_wall_a",
+        "patch:seed:f_wall_b"
+      ],
+      "seed_connected_family_presence": 2.0,
+      "seed_patch_id": "patch:seed:f_chamfer",
+      "vertex_ids": [
+        "vertex:a0",
+        "vertex:a1",
+        "vertex:a1",
+        "vertex:a2",
+        "vertex:a2",
+        "vertex:a3",
+        "vertex:b0",
+        "vertex:b1",
+        "vertex:c0",
+        "vertex:c0",
+        "vertex:c1",
+        "vertex:c1"
+      ]
+    }
+  ],
+  "rails": [
+    {
+      "assigned_vertex_ids": [
+        "vertex:a0",
+        "vertex:a1",
+        "vertex:b0",
+        "vertex:c0"
+      ],
+      "id": "connected_direction_family:0:island:0",
+      "island_id": "island:0",
+      "member_directional_evidence_ids": [
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_wall_a:0:0:2",
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_chamfer:0:0:0",
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_wall_b:0:0:0"
+      ],
+      "source": "ConnectedDirectionFamily"
+    },
+    {
+      "assigned_vertex_ids": [
+        "vertex:a1",
+        "vertex:a2",
+        "vertex:c0",
+        "vertex:c1"
+      ],
+      "id": "connected_direction_family:1:island:0",
+      "island_id": "island:0",
+      "member_directional_evidence_ids": [
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_wall_a:0:1:0",
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_chamfer:0:3:0",
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_chamfer:0:1:0",
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_wall_b:0:1:0"
+      ],
+      "source": "ConnectedDirectionFamily"
+    },
+    {
+      "assigned_vertex_ids": [
+        "vertex:a2",
+        "vertex:a3",
+        "vertex:b1",
+        "vertex:c1"
+      ],
+      "id": "connected_direction_family:2:island:0",
+      "island_id": "island:0",
+      "member_directional_evidence_ids": [
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_wall_a:0:0:0",
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_chamfer:0:2:0",
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_wall_b:0:0:2"
+      ],
+      "source": "ConnectedDirectionFamily"
+    },
+    {
+      "assigned_vertex_ids": [
+        "vertex:a0",
+        "vertex:a3"
+      ],
+      "id": "patch_axes:island:0:patch:seed:f_wall_a:PRIMARY",
+      "island_id": "island:0",
+      "member_directional_evidence_ids": [
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_wall_a:0:0:1"
+      ],
+      "source": "PatchAxes fallback for singleton or ungrouped in-patch rail"
+    },
+    {
+      "assigned_vertex_ids": [
+        "vertex:b0",
+        "vertex:b1"
+      ],
+      "id": "patch_axes:island:0:patch:seed:f_wall_b:PRIMARY",
+      "island_id": "island:0",
+      "member_directional_evidence_ids": [
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_wall_b:0:0:1"
+      ],
+      "source": "PatchAxes fallback for singleton or ungrouped in-patch rail"
+    }
+  ],
+  "self_seam_chain_ids": [],
+  "stitch_decisions": [
+    {
+      "accepted": true,
+      "chain_id": "chain:e_a_inner",
+      "from_patch_id": "patch:seed:f_chamfer",
+      "patch_adjacency_id": "adjacency:chain:e_a_inner:patch:seed:f_wall_a:patch:seed:f_chamfer",
+      "reason": "all would-be interior vertices have near-zero angle defect",
+      "to_patch_id": "patch:seed:f_wall_a",
+      "vertex_angle_defects": {
+        "vertex:a1": 0.0,
+        "vertex:a2": 0.0
+      }
+    },
+    {
+      "accepted": true,
+      "chain_id": "chain:e_ch_far",
+      "from_patch_id": "patch:seed:f_chamfer",
+      "patch_adjacency_id": "adjacency:chain:e_ch_far:patch:seed:f_chamfer:patch:seed:f_wall_b",
+      "reason": "all would-be interior vertices have near-zero angle defect",
+      "to_patch_id": "patch:seed:f_wall_b",
+      "vertex_angle_defects": {
+        "vertex:c0": 0.0,
+        "vertex:c1": 0.0
+      }
+    }
+  ],
+  "summary": {
+    "ambiguity_count": 8,
+    "blocked_patch_pairs": 0,
+    "fixture": "beveled_wall_corner",
+    "improvisation_count": 2,
+    "island_count": 1,
+    "rail_count": 5,
+    "self_seam_chain_count": 0,
+    "stitched_patch_pairs": 2
+  },
+  "vertices": {
+    "vertex:a0": {
+      "assignment_sources": [
+        "connected_direction_family:0:island:0",
+        "patch_axes:island:0:patch:seed:f_wall_a:PRIMARY"
+      ],
+      "island_id": "island:0",
+      "pinned": true,
+      "uv": [
+        0.5,
+        1.5
+      ],
+      "vertex_id": "vertex:a0"
+    },
+    "vertex:a1": {
+      "assignment_sources": [
+        "connected_direction_family:0:island:0",
+        "connected_direction_family:1:island:0"
+      ],
+      "island_id": "island:0",
+      "pinned": true,
+      "uv": [
+        0.95,
+        0.5
+      ],
+      "vertex_id": "vertex:a1"
+    },
+    "vertex:a2": {
+      "assignment_sources": [
+        "connected_direction_family:1:island:0",
+        "connected_direction_family:2:island:0"
+      ],
+      "island_id": "island:0",
+      "pinned": true,
+      "uv": [
+        0.760355,
+        1.5
+      ],
+      "vertex_id": "vertex:a2"
+    },
+    "vertex:a3": {
+      "assignment_sources": [
+        "connected_direction_family:2:island:0",
+        "patch_axes:island:0:patch:seed:f_wall_a:PRIMARY"
+      ],
+      "island_id": "island:0",
+      "pinned": true,
+      "uv": [
+        0.45,
+        2.5
+      ],
+      "vertex_id": "vertex:a3"
+    },
+    "vertex:b0": {
+      "assignment_sources": [
+        "connected_direction_family:0:island:0",
+        "patch_axes:island:0:patch:seed:f_wall_b:PRIMARY"
+      ],
+      "island_id": "island:0",
+      "pinned": true,
+      "uv": [
+        0.970711,
+        2.0
+      ],
+      "vertex_id": "vertex:b0"
+    },
+    "vertex:b1": {
+      "assignment_sources": [
+        "connected_direction_family:2:island:0",
+        "patch_axes:island:0:patch:seed:f_wall_b:PRIMARY"
+      ],
+      "island_id": "island:0",
+      "pinned": true,
+      "uv": [
+        1.02071,
+        3.0
+      ],
+      "vertex_id": "vertex:b1"
+    },
+    "vertex:c0": {
+      "assignment_sources": [
+        "connected_direction_family:0:island:0",
+        "connected_direction_family:1:island:0"
+      ],
+      "island_id": "island:0",
+      "pinned": true,
+      "uv": [
+        2.02071,
+        0.5
+      ],
+      "vertex_id": "vertex:c0"
+    },
+    "vertex:c1": {
+      "assignment_sources": [
+        "connected_direction_family:1:island:0",
+        "connected_direction_family:2:island:0"
+      ],
+      "island_id": "island:0",
+      "pinned": true,
+      "uv": [
+        2.210355,
+        1.5
+      ],
+      "vertex_id": "vertex:c1"
+    }
+  }
+}

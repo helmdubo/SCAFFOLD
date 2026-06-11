@@ -1,0 +1,235 @@
+{
+  "ambiguities": [
+    "vertex:v0: multiple rail UV assignments collapsed by arithmetic mean",
+    "vertex:v2: multiple rail UV assignments collapsed by arithmetic mean",
+    "vertex:v4: multiple rail UV assignments collapsed by arithmetic mean",
+    "vertex:v6: multiple rail UV assignments collapsed by arithmetic mean"
+  ],
+  "angle_defect_stitch_limit": 0.001,
+  "consumed_relation_fields": [
+    "connected_direction_families",
+    "patch_adjacencies",
+    "patch_axes",
+    "patch_chain_directional_evidence",
+    "scaffold_junctions"
+  ],
+  "fixture": "cylinder_tube_two_seams",
+  "improvisations": [
+    "island:0 patch:seed:f0 SECONDARY: PatchAxes grouped 2 singleton/ungrouped rail runs",
+    "island:0 patch:seed:f2 SECONDARY: PatchAxes grouped 2 singleton/ungrouped rail runs"
+  ],
+  "islands": [
+    {
+      "id": "island:0",
+      "patch_ids": [
+        "patch:seed:f0",
+        "patch:seed:f2"
+      ],
+      "seed_connected_family_presence": 2.8284271247461903,
+      "seed_patch_id": "patch:seed:f0",
+      "vertex_ids": [
+        "vertex:v0",
+        "vertex:v0",
+        "vertex:v1",
+        "vertex:v2",
+        "vertex:v2",
+        "vertex:v3",
+        "vertex:v4",
+        "vertex:v4",
+        "vertex:v5",
+        "vertex:v6",
+        "vertex:v6",
+        "vertex:v7"
+      ]
+    }
+  ],
+  "rails": [
+    {
+      "assigned_vertex_ids": [
+        "vertex:v4",
+        "vertex:v6"
+      ],
+      "id": "connected_direction_family:1:island:0",
+      "island_id": "island:0",
+      "member_directional_evidence_ids": [
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f0:0:1:0",
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f2:0:1:0"
+      ],
+      "source": "ConnectedDirectionFamily"
+    },
+    {
+      "assigned_vertex_ids": [
+        "vertex:v0",
+        "vertex:v2"
+      ],
+      "id": "connected_direction_family:3:island:0",
+      "island_id": "island:0",
+      "member_directional_evidence_ids": [
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f0:0:3:0",
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f2:0:3:0"
+      ],
+      "source": "ConnectedDirectionFamily"
+    },
+    {
+      "assigned_vertex_ids": [
+        "vertex:v0",
+        "vertex:v2",
+        "vertex:v4",
+        "vertex:v6"
+      ],
+      "id": "patch_axes:island:0:patch:seed:f0:SECONDARY",
+      "island_id": "island:0",
+      "member_directional_evidence_ids": [
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f0:0:0:0",
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f0:0:2:0"
+      ],
+      "source": "PatchAxes fallback for singleton or ungrouped in-patch rail"
+    },
+    {
+      "assigned_vertex_ids": [
+        "vertex:v0",
+        "vertex:v2",
+        "vertex:v4",
+        "vertex:v6"
+      ],
+      "id": "patch_axes:island:0:patch:seed:f2:SECONDARY",
+      "island_id": "island:0",
+      "member_directional_evidence_ids": [
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f2:0:0:0",
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f2:0:2:0"
+      ],
+      "source": "PatchAxes fallback for singleton or ungrouped in-patch rail"
+    }
+  ],
+  "self_seam_chain_ids": [],
+  "stitch_decisions": [
+    {
+      "accepted": true,
+      "chain_id": "chain:e_v0",
+      "from_patch_id": "patch:seed:f0",
+      "patch_adjacency_id": "adjacency:chain:e_v0:patch:seed:f0:patch:seed:f2",
+      "reason": "all would-be interior vertices have near-zero angle defect",
+      "to_patch_id": "patch:seed:f2",
+      "vertex_angle_defects": {
+        "vertex:v0": 0.0,
+        "vertex:v4": 0.0
+      }
+    }
+  ],
+  "summary": {
+    "ambiguity_count": 4,
+    "blocked_patch_pairs": 0,
+    "fixture": "cylinder_tube_two_seams",
+    "improvisation_count": 2,
+    "island_count": 1,
+    "rail_count": 4,
+    "self_seam_chain_count": 0,
+    "stitched_patch_pairs": 1
+  },
+  "vertices": {
+    "vertex:v0": {
+      "assignment_sources": [
+        "connected_direction_family:3:island:0",
+        "patch_axes:island:0:patch:seed:f0:SECONDARY",
+        "patch_axes:island:0:patch:seed:f2:SECONDARY"
+      ],
+      "island_id": "island:0",
+      "pinned": true,
+      "uv": [
+        1.914214,
+        1.75
+      ],
+      "vertex_id": "vertex:v0"
+    },
+    "vertex:v1": {
+      "assignment_sources": [
+        "fallback patch-axis projection"
+      ],
+      "island_id": "island:0",
+      "pinned": false,
+      "uv": [
+        1.0,
+        5.0
+      ],
+      "vertex_id": "vertex:v1"
+    },
+    "vertex:v2": {
+      "assignment_sources": [
+        "connected_direction_family:3:island:0",
+        "patch_axes:island:0:patch:seed:f0:SECONDARY",
+        "patch_axes:island:0:patch:seed:f2:SECONDARY"
+      ],
+      "island_id": "island:0",
+      "pinned": true,
+      "uv": [
+        1.914214,
+        1.75
+      ],
+      "vertex_id": "vertex:v2"
+    },
+    "vertex:v3": {
+      "assignment_sources": [
+        "fallback patch-axis projection"
+      ],
+      "island_id": "island:0",
+      "pinned": false,
+      "uv": [
+        1.0,
+        5.0
+      ],
+      "vertex_id": "vertex:v3"
+    },
+    "vertex:v4": {
+      "assignment_sources": [
+        "connected_direction_family:1:island:0",
+        "patch_axes:island:0:patch:seed:f0:SECONDARY",
+        "patch_axes:island:0:patch:seed:f2:SECONDARY"
+      ],
+      "island_id": "island:0",
+      "pinned": true,
+      "uv": [
+        1.914214,
+        1.25
+      ],
+      "vertex_id": "vertex:v4"
+    },
+    "vertex:v5": {
+      "assignment_sources": [
+        "fallback patch-axis projection"
+      ],
+      "island_id": "island:0",
+      "pinned": false,
+      "uv": [
+        1.0,
+        4.0
+      ],
+      "vertex_id": "vertex:v5"
+    },
+    "vertex:v6": {
+      "assignment_sources": [
+        "connected_direction_family:1:island:0",
+        "patch_axes:island:0:patch:seed:f0:SECONDARY",
+        "patch_axes:island:0:patch:seed:f2:SECONDARY"
+      ],
+      "island_id": "island:0",
+      "pinned": true,
+      "uv": [
+        1.914214,
+        1.25
+      ],
+      "vertex_id": "vertex:v6"
+    },
+    "vertex:v7": {
+      "assignment_sources": [
+        "fallback patch-axis projection"
+      ],
+      "island_id": "island:0",
+      "pinned": false,
+      "uv": [
+        1.0,
+        4.0
+      ],
+      "vertex_id": "vertex:v7"
+    }
+  }
+}
