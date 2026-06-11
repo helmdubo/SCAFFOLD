@@ -554,9 +554,14 @@ into CFTUV's shapes:
    Layer 4 grammar -> FeatureConstraint channel (DD-26). The spike may
    hardcode ONE simple default but must label it LEVEL_B_PLACEHOLDER in
    code and report, so contracts later claim it explicitly.
-6. One file per concept inside the spike too; if the spike grows past
-   ~1500 lines total, stop and reslice - a growing spike is how solve.py
-   became 6479 lines.
+6. One file per concept inside the spike too; per-file hard cap ~600
+   lines, spike total soft cap ~3000. Skeleton solve (G2) and the
+   frontier (G3) live in their own modules. Amended after G1: the
+   original ~1500 total was hit by run_tracer_spike.py (1118) +
+   blender_run.py (582); raised consciously with a per-file cap instead
+   of silently eroded - the guarded failure mode is a single growing
+   monolith, not total volume. The spike death clause (guard 1) is
+   unchanged.
 ```
 
 ### Task Card G1 — Island-local axis roles + inner loops (spike)
