@@ -15,6 +15,7 @@ from scaffold_core.ids import VertexId
 from scaffold_core.layer_1_topology.build import build_topology_snapshot
 from scaffold_core.layer_1_topology.queries import patch_chain_vertices
 from scaffold_core.layer_3_relations.patch_chain_incidence import (
+    build_patch_chain_vertex_incidence_index,
     has_branching_patch_chain_incidence,
     incident_patch_chains_for_vertex,
     patch_chain_incidence_valence,
@@ -102,6 +103,22 @@ def test_non_manifold_vertex_incidence_is_represented_without_correction() -> No
     assert patch_chain_incidence_valence(topology, vertex_id) == 3
     assert has_branching_patch_chain_incidence(topology, vertex_id)
     _assert_deterministic_order(use_ids)
+
+
+def test_vertex_incidence_index_preserves_scan_query_order_and_content() -> None:
+    topology = build_topology_snapshot(make_two_quad_l_source_with_seam_on_shared_edge())
+    incidence_index = build_patch_chain_vertex_incidence_index(topology)
+
+    for vertex_id in sorted(topology.vertices, key=str):
+        scanned_uses = incident_patch_chains_for_vertex(topology, vertex_id)
+        indexed_uses = incident_patch_chains_for_vertex(topology, vertex_id, incidence_index)
+
+        assert [use.id for use in indexed_uses] == [use.id for use in scanned_uses]
+        assert patch_chain_incidence_valence(topology, vertex_id, incidence_index) == len(scanned_uses)
+        assert (
+            has_branching_patch_chain_incidence(topology, vertex_id, incidence_index)
+            is (len(scanned_uses) >= 3)
+        )
 
 
 def test_patch_chain_incidence_queries_do_not_introduce_deferred_semantic_terms() -> None:

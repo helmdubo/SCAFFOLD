@@ -13,7 +13,10 @@ from __future__ import annotations
 from scaffold_core.core.evidence import Evidence
 from scaffold_core.ids import PatchChainId, VertexId
 from scaffold_core.layer_1_topology.model import PatchChain, SurfaceModel
-from scaffold_core.layer_3_relations.patch_chain_incidence import incident_patch_chains_for_vertex
+from scaffold_core.layer_3_relations.patch_chain_incidence import (
+    PatchChainVertexIncidenceIndex,
+    incident_patch_chains_for_vertex,
+)
 from scaffold_core.layer_3_relations.model import (
     ChainContinuationRelation,
     ContinuationKind,
@@ -26,12 +29,13 @@ POLICY_NAME = "conservative_g3b2"
 
 def build_chain_continuations(
     topology: SurfaceModel,
+    incidence_index: PatchChainVertexIncidenceIndex | None = None,
 ) -> tuple[ChainContinuationRelation, ...]:
     """Build conservative TERMINUS/SPLIT relations for Layer 1 PatchChains."""
 
     relations: list[ChainContinuationRelation] = []
     for vertex_id in sorted(topology.vertices, key=str):
-        incident_uses = incident_patch_chains_for_vertex(topology, vertex_id)
+        incident_uses = incident_patch_chains_for_vertex(topology, vertex_id, incidence_index)
         for source_use in incident_uses:
             candidates = tuple(use for use in incident_uses if use.id != source_use.id)
             if len(candidates) >= 2:

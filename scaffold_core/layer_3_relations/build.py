@@ -24,6 +24,9 @@ from scaffold_core.layer_3_relations.chain_refinement import (
 from scaffold_core.layer_3_relations.continuation import build_chain_continuations
 from scaffold_core.layer_3_relations.loop_corners import build_loop_corners
 from scaffold_core.layer_3_relations.model import DihedralKind, PatchAdjacency, RelationSnapshot
+from scaffold_core.layer_3_relations.patch_chain_incidence import (
+    build_patch_chain_vertex_incidence_index,
+)
 from scaffold_core.layer_3_relations.patch_chain_endpoint_relations import (
     build_patch_chain_endpoint_relations,
 )
@@ -60,6 +63,7 @@ def build_relation_snapshot(
         )
         patch_adjacencies[adjacency.id] = adjacency
 
+    patch_chain_vertex_incidence = build_patch_chain_vertex_incidence_index(topology)
     chain_directional_runs = build_chain_directional_runs(topology, geometry)
     patch_chain_directional_evidence = build_patch_chain_directional_evidence(
         topology,
@@ -107,7 +111,7 @@ def build_relation_snapshot(
     )
     return RelationSnapshot(
         patch_adjacencies=patch_adjacencies,
-        chain_continuations=build_chain_continuations(topology),
+        chain_continuations=build_chain_continuations(topology, patch_chain_vertex_incidence),
         chain_directional_runs=chain_directional_runs,
         patch_chain_directional_evidence=patch_chain_directional_evidence,
         loop_corners=loop_corners,
