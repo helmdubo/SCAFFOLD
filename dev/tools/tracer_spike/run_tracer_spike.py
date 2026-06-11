@@ -18,6 +18,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scaffold_core.ids import SourceEdgeId, SourceFaceId, SourceMeshId, SourceVertexId
+from scaffold_core.layer_0_source.marks import SourceMark, SourceMarkKind
 from scaffold_core.layer_0_source.snapshot import (
     MeshEdgeRef,
     MeshFaceRef,
@@ -34,6 +35,7 @@ from dev.tools.tracer_spike.frontier import (
     rejected_stitch_defect_histogram,
 )
 from dev.tools.tracer_spike.skeleton_solve import apply_skeleton_solve
+from dev.tools.tracer_spike.stitch_gate import build_stitch_gate_context, decide_stitch
 from scaffold_core.tests.fixtures.beveled_wall_corner import make_beveled_wall_corner_source
 from scaffold_core.tests.fixtures.cylinder_tube import (
     make_cylinder_tube_without_caps_with_two_seams_source,
@@ -125,8 +127,68 @@ def make_wall_with_window_spike_source() -> SourceMeshSnapshot:
     )
 
 
+def make_t_junction_walls_spike_source() -> SourceMeshSnapshot:
+    """Return three single-face panels meeting at one three-face junction."""
+
+    v0 = SourceVertexId("v0")
+    vx = SourceVertexId("vx")
+    vy = SourceVertexId("vy")
+    vxy = SourceVertexId("vxy")
+    vz = SourceVertexId("vz")
+    vxz = SourceVertexId("vxz")
+    vyz = SourceVertexId("vyz")
+
+    e_x = SourceEdgeId("e_x_shared")
+    e_y = SourceEdgeId("e_y_shared")
+    e_z = SourceEdgeId("e_z_shared")
+    e_xy_right = SourceEdgeId("e_xy_right")
+    e_xy_top = SourceEdgeId("e_xy_top")
+    e_xz_top = SourceEdgeId("e_xz_top_border")
+    e_xz_right = SourceEdgeId("e_xz_right_border")
+    e_yz_right = SourceEdgeId("e_yz_right_border")
+    e_yz_top = SourceEdgeId("e_yz_top_border")
+
+    f_xy = SourceFaceId("f_xy")
+    f_xz = SourceFaceId("f_xz")
+    f_yz = SourceFaceId("f_yz")
+
+    return SourceMeshSnapshot(
+        id=SourceMeshId("t_junction_walls_spike"),
+        vertices={
+            v0: MeshVertexRef(v0, (0.0, 0.0, 0.0)),
+            vx: MeshVertexRef(vx, (1.0, 0.0, 0.0)),
+            vy: MeshVertexRef(vy, (0.0, 1.0, 0.0)),
+            vxy: MeshVertexRef(vxy, (1.0, 1.0, 0.0)),
+            vz: MeshVertexRef(vz, (0.0, 0.0, 1.0)),
+            vxz: MeshVertexRef(vxz, (1.0, 0.0, 1.0)),
+            vyz: MeshVertexRef(vyz, (0.0, 1.0, 1.0)),
+        },
+        edges={
+            e_x: MeshEdgeRef(e_x, (v0, vx)),
+            e_y: MeshEdgeRef(e_y, (vy, v0)),
+            e_z: MeshEdgeRef(e_z, (v0, vz)),
+            e_xy_right: MeshEdgeRef(e_xy_right, (vx, vxy)),
+            e_xy_top: MeshEdgeRef(e_xy_top, (vxy, vy)),
+            e_xz_top: MeshEdgeRef(e_xz_top, (vz, vxz)),
+            e_xz_right: MeshEdgeRef(e_xz_right, (vxz, vx)),
+            e_yz_right: MeshEdgeRef(e_yz_right, (vyz, vz)),
+            e_yz_top: MeshEdgeRef(e_yz_top, (vy, vyz)),
+        },
+        faces={
+            f_xy: MeshFaceRef(f_xy, (v0, vx, vxy, vy), (e_x, e_xy_right, e_xy_top, e_y)),
+            f_xz: MeshFaceRef(f_xz, (v0, vz, vxz, vx), (e_z, e_xz_top, e_xz_right, e_x)),
+            f_yz: MeshFaceRef(f_yz, (v0, vy, vyz, vz), (e_y, e_yz_top, e_yz_right, e_z)),
+        },
+        selected_face_ids=(f_xy, f_xz, f_yz),
+        marks=(
+            SourceMark(kind=SourceMarkKind.SEAM, target_id=e_x),
+            SourceMark(kind=SourceMarkKind.SEAM, target_id=e_y),
+            SourceMark(kind=SourceMarkKind.SEAM, target_id=e_z),
+        ),
+    )
+
+
 STITCH_DEFECT_TOLERANCE = 1.0e-3
-ANGLE_DEFECT_STITCH_LIMIT = STITCH_DEFECT_TOLERANCE
 AXIS_MATCH_DOT = 0.99
 AXIS_ROLE_MIN_DOT = 0.85
 AXIS_ROLE_TIE_EPSILON = 1.0e-6
@@ -138,6 +200,7 @@ FIXTURES = {
     "tube_with_cap": make_tube_with_cap_source,
     "detached_parallel_walls": make_detached_parallel_walls_source,
     "wall_with_window_spike": make_wall_with_window_spike_source,
+    "t_junction_walls": make_t_junction_walls_spike_source,
 }
 RELATION_FIELDS_READ = {
     "patch_adjacencies",
@@ -356,6 +419,7 @@ def _build_islands(topology, geometry, relations, evidence_by_id):
         for junction in relations.scaffold_junctions
         if junction.kind is ScaffoldJunctionKind.SELF_SEAM and junction.matched_chain_id is not None
     }
+    stitch_gate_context = build_stitch_gate_context(topology, relations, self_seam_chain_ids)
     unvisited = set(topology.patches)
     islands = []
     stitch_decisions = []
@@ -376,11 +440,13 @@ def _build_islands(topology, geometry, relations, evidence_by_id):
                 )
                 if neighbor not in unvisited:
                     continue
-                accepted, reason, vertex_defects = _stitch_decision(
+                accepted, reason, gate = decide_stitch(
                     topology,
                     geometry,
                     adjacency,
                     self_seam_chain_ids,
+                    stitch_gate_context,
+                    STITCH_DEFECT_TOLERANCE,
                 )
                 stitch_decisions.append({
                     "from_patch_id": str(patch_id),
@@ -389,7 +455,11 @@ def _build_islands(topology, geometry, relations, evidence_by_id):
                     "chain_id": str(adjacency.chain_id),
                     "accepted": accepted,
                     "reason": reason,
-                    "vertex_angle_defects": vertex_defects,
+                    "would_be_interior_vertex_ids": gate["would_be_interior_vertex_ids"],
+                    "excluded_endpoint_vertex_ids": gate["excluded_endpoint_vertex_ids"],
+                    "excluded_endpoint_reasons": gate["excluded_endpoint_reasons"],
+                    "vertex_angle_defects": gate["vertex_angle_defects"],
+                    "vertex_interior_angle_sums": gate["vertex_interior_angle_sums"],
                 })
                 if not accepted:
                     continue
@@ -416,23 +486,6 @@ def _patch_family_presence_score(patch_id, relations, evidence_by_id) -> float:
         )
         score = max(score, family_patch_length)
     return score
-
-
-def _stitch_decision(topology, geometry, adjacency, self_seam_chain_ids):
-    if str(adjacency.chain_id) in self_seam_chain_ids:
-        return False, "SEAM_SELF chains always remain island boundaries", {}
-    chain = topology.chains[adjacency.chain_id]
-    vertex_ids = tuple(dict.fromkeys((chain.start_vertex_id, chain.end_vertex_id)))
-    vertex_defects = {}
-    for vertex_id in vertex_ids:
-        facts = geometry.vertex_facts.get(vertex_id)
-        if facts is None:
-            vertex_defects[str(vertex_id)] = None
-            return False, "missing VertexGeometryFacts.angle_defect", vertex_defects
-        vertex_defects[str(vertex_id)] = facts.angle_defect
-    if all(abs(value) < ANGLE_DEFECT_STITCH_LIMIT for value in vertex_defects.values()):
-        return True, "all would-be interior vertices have near-zero angle defect", vertex_defects
-    return False, "angle defect exceeds stitch limit", vertex_defects
 
 
 def _build_island_axis_roles(islands, relations, evidence_by_id):
@@ -1118,7 +1171,7 @@ JSON layout dumps live next to this report:
 ## RelationSnapshot Fields Read Per Decision
 
 - Island seed: `connected_direction_families`, `patch_chain_directional_evidence`.
-- Patch stitch gate: `patch_adjacencies`, `scaffold_junctions`; paired with `GeometryFactSnapshot.vertex_facts.angle_defect` and `SurfaceModel.chains`.
+- Patch stitch gate: `patch_adjacencies`, `scaffold_junctions`; paired with `SurfaceModel.chains`, `ChainGeometryFacts.source_vertex_run`, and `VertexGeometryFacts.interior_angle_sum/is_boundary`.
 - Rail extraction: `connected_direction_families.member_directional_evidence_ids`, `connected_direction_families.ordered_member_directional_evidence_ids`, `connected_direction_families.branch_records`, `connected_direction_families.member_map`, `patch_chain_directional_evidence`.
 - Island-local axis roles: `connected_direction_families`, `patch_chain_directional_evidence`.
 - Inner loop placement: Layer 1 `BoundaryLoop.loop_index/kind`, `PatchChain`, `Chain.source_edge_ids`; paired with `SourceMeshSnapshot.edges/vertices`.
@@ -1135,7 +1188,7 @@ JSON layout dumps live next to this report:
 
 - No approved in-patch opposite-rail grouping exists for singleton families; the spike used `PatchAxes` to group singleton or ungrouped runs inside one patch.
 - No UV scale, packing, island origin, or pin policy exists in Layer 3; the spike used raw arc length, row offsets, and pinned all rail endpoints.
-- The stitch rule says "vertices that become interior"; the spike approximated that set as the two endpoints of the shared `Chain`.
+- The stitch gate now derives the pairwise would-be-interior set: mid-chain vertices are tested against 2*pi, endpoints are tested only when they have no mesh/selection border and no other remaining cut incidence.
 - `ConnectedDirectionFamily.member_map` gives start/end topology vertices only; the spike no longer emits mid-chain vertices unless they are endpoints of a directional member.
 - `ConnectedDirectionFamily.branch_records` preserves branch ambiguity but does not define a branch traversal policy for UV rows.
 - Axis roles are island-local consumer classifications; the spike used weighted family directions and deterministic tie-breaks, not stored frame-role labels.
@@ -1163,15 +1216,17 @@ JSON layout dumps live next to this report:
 
 
 def build_summary_dump(layouts):
-    summaries = [layout["summary"] for layout in layouts]
     architect_lines = [
         "ARCHITECT SUMMARY",
-        f"fixtures={len(layouts)}",
-        "canonical decisions unchanged by G3",
-        "frontier=anchor reduced-rank v0",
-        "composition=canonical axes with frontier fallback",
-        "degenerate shared-line guard=max coordinate share <=60%",
-        f"degenerate_islands={sum(item['frontier_degenerate_island_count'] for item in summaries)}",
+        f"fixtures={len(layouts)} stitch_gate=would_be_interior_v1",
+        *(
+            f"{layout['fixture']}: islands={layout['summary']['island_count']} "
+            f"accepted={layout['summary']['stitched_patch_pairs']} "
+            f"rejected={layout['summary']['blocked_patch_pairs']}"
+            for layout in layouts
+        ),
+        "t_junction endpoints excluded by remaining cut incidence",
+        "tube_with_cap still blocked on mid-chain rim vertices",
         "scaffold_core untouched by spike",
     ]
     return {

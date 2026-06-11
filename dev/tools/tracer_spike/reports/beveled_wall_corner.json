@@ -594,26 +594,40 @@
     {
       "accepted": true,
       "chain_id": "chain:e_a_inner",
+      "excluded_endpoint_reasons": {
+        "vertex:a1": "mesh_or_selection_boundary",
+        "vertex:a2": "mesh_or_selection_boundary"
+      },
+      "excluded_endpoint_vertex_ids": [
+        "vertex:a1",
+        "vertex:a2"
+      ],
       "from_patch_id": "patch:seed:f_chamfer",
       "patch_adjacency_id": "adjacency:chain:e_a_inner:patch:seed:f_wall_a:patch:seed:f_chamfer",
-      "reason": "all would-be interior vertices have near-zero angle defect",
+      "reason": "no would-be interior vertices after endpoint exclusions",
       "to_patch_id": "patch:seed:f_wall_a",
-      "vertex_angle_defects": {
-        "vertex:a1": 0.0,
-        "vertex:a2": 0.0
-      }
+      "vertex_angle_defects": {},
+      "vertex_interior_angle_sums": {},
+      "would_be_interior_vertex_ids": []
     },
     {
       "accepted": true,
       "chain_id": "chain:e_ch_far",
+      "excluded_endpoint_reasons": {
+        "vertex:c0": "mesh_or_selection_boundary",
+        "vertex:c1": "mesh_or_selection_boundary"
+      },
+      "excluded_endpoint_vertex_ids": [
+        "vertex:c0",
+        "vertex:c1"
+      ],
       "from_patch_id": "patch:seed:f_chamfer",
       "patch_adjacency_id": "adjacency:chain:e_ch_far:patch:seed:f_chamfer:patch:seed:f_wall_b",
-      "reason": "all would-be interior vertices have near-zero angle defect",
+      "reason": "no would-be interior vertices after endpoint exclusions",
       "to_patch_id": "patch:seed:f_wall_b",
-      "vertex_angle_defects": {
-        "vertex:c0": 0.0,
-        "vertex:c1": 0.0
-      }
+      "vertex_angle_defects": {},
+      "vertex_interior_angle_sums": {},
+      "would_be_interior_vertex_ids": []
     }
   ],
   "stitch_defect_tolerance": 0.001,

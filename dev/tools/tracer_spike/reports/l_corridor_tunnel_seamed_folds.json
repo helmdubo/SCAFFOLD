@@ -594,26 +594,40 @@
     {
       "accepted": true,
       "chain_id": "chain:e_fold_bottom",
+      "excluded_endpoint_reasons": {
+        "vertex:g1": "mesh_or_selection_boundary",
+        "vertex:g2": "mesh_or_selection_boundary"
+      },
+      "excluded_endpoint_vertex_ids": [
+        "vertex:g1",
+        "vertex:g2"
+      ],
       "from_patch_id": "patch:seed:f_wall",
       "patch_adjacency_id": "adjacency:chain:e_fold_bottom:patch:seed:f_floor:patch:seed:f_wall",
-      "reason": "all would-be interior vertices have near-zero angle defect",
+      "reason": "no would-be interior vertices after endpoint exclusions",
       "to_patch_id": "patch:seed:f_floor",
-      "vertex_angle_defects": {
-        "vertex:g1": 0.0,
-        "vertex:g2": 0.0
-      }
+      "vertex_angle_defects": {},
+      "vertex_interior_angle_sums": {},
+      "would_be_interior_vertex_ids": []
     },
     {
       "accepted": true,
       "chain_id": "chain:e_fold_top",
+      "excluded_endpoint_reasons": {
+        "vertex:w0": "mesh_or_selection_boundary",
+        "vertex:w1": "mesh_or_selection_boundary"
+      },
+      "excluded_endpoint_vertex_ids": [
+        "vertex:w0",
+        "vertex:w1"
+      ],
       "from_patch_id": "patch:seed:f_wall",
       "patch_adjacency_id": "adjacency:chain:e_fold_top:patch:seed:f_wall:patch:seed:f_ceiling",
-      "reason": "all would-be interior vertices have near-zero angle defect",
+      "reason": "no would-be interior vertices after endpoint exclusions",
       "to_patch_id": "patch:seed:f_ceiling",
-      "vertex_angle_defects": {
-        "vertex:w0": 0.0,
-        "vertex:w1": 0.0
-      }
+      "vertex_angle_defects": {},
+      "vertex_interior_angle_sums": {},
+      "would_be_interior_vertex_ids": []
     }
   ],
   "stitch_defect_tolerance": 0.001,

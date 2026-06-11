@@ -12,7 +12,7 @@
     "vertex:v3: assigned to multiple islands ['island:0', 'island:1']; emitted one entry per island"
   ],
   "axis_role_min_dot": 0.85,
-  "console_diagnostics_block": "ARCHITECT SUMMARY\nfixture=tube_with_cap islands=2 rails=5\nstitches accepted=0 rejected=1\nrejected |defect| buckets <1e-3=0 1e-3..1e-2=0 1e-2..1e-1=0 >1e-1=2\naxis coords skeleton vertices both=0.0% one=0.0% zero=100.0%\ncomponents A=2 B=2\nlstsq residuals A=0.0 B=0.0\ndegenerate islands=none",
+  "console_diagnostics_block": "ARCHITECT SUMMARY\nfixture=tube_with_cap islands=2 rails=5\nstitches accepted=0 rejected=1\nrejected |defect| buckets <1e-3=0 1e-3..1e-2=0 1e-2..1e-1=0 >1e-1=3\naxis coords skeleton vertices both=0.0% one=0.0% zero=100.0%\ncomponents A=2 B=2\nlstsq residuals A=0.0 B=0.0\ndegenerate islands=none",
   "consumed_relation_fields": [
     "connected_direction_families",
     "patch_adjacencies",
@@ -139,7 +139,7 @@
       "rejected_stitch_defect_histogram": {
         "1e-2_to_1e-1": 0,
         "1e-3_to_1e-2": 0,
-        "gt_1e-1": 2,
+        "gt_1e-1": 3,
         "lt_1e-3": 0
       }
     },
@@ -804,14 +804,33 @@
     {
       "accepted": false,
       "chain_id": "chain:e_t3:e_t2:e_t1:e_t0",
+      "excluded_endpoint_reasons": {
+        "vertex:v0:patch_chain:patch:seed:f0:0": "remaining_cut_incidence:chain:e_v0",
+        "vertex:v0:patch_chain:patch:seed:f0:1": "remaining_cut_incidence:chain:e_v0"
+      },
+      "excluded_endpoint_vertex_ids": [
+        "vertex:v0:patch_chain:patch:seed:f0:1",
+        "vertex:v0:patch_chain:patch:seed:f0:0"
+      ],
       "from_patch_id": "patch:seed:f0",
       "patch_adjacency_id": "adjacency:chain:e_t3:e_t2:e_t1:e_t0:patch:seed:f0:patch:seed:f_cap",
-      "reason": "angle defect exceeds stitch limit",
+      "reason": "would-be interior angle defect exceeds stitch limit",
       "to_patch_id": "patch:seed:f_cap",
       "vertex_angle_defects": {
-        "vertex:v0:patch_chain:patch:seed:f0:0": 1.5707963267948966,
-        "vertex:v0:patch_chain:patch:seed:f0:1": 1.5707963267948966
-      }
+        "vertex:v1": 1.5707963267948966,
+        "vertex:v2": 1.5707963267948966,
+        "vertex:v3": 1.5707963267948966
+      },
+      "vertex_interior_angle_sums": {
+        "vertex:v1": 4.71238898038469,
+        "vertex:v2": 4.71238898038469,
+        "vertex:v3": 4.71238898038469
+      },
+      "would_be_interior_vertex_ids": [
+        "vertex:v3",
+        "vertex:v2",
+        "vertex:v1"
+      ]
     }
   ],
   "stitch_defect_tolerance": 0.001,
