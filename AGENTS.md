@@ -72,6 +72,7 @@ Before coding, read only the routed docs needed for the task.
 | Task | Read |
 |---|---|
 | Any architecture question | `G0.md` |
+| Active slice / Task Card roadmap | `docs/plans/uv_tracer_revision_plan.md` |
 | Planning / Architect workflow | `docs/agent_rules/planning_workflow.md` |
 | Codex workflow | `docs/agent_rules/codex_workflow.md` |
 | Codex subagent workflow | `docs/agent_rules/codex_subagents.md` |
