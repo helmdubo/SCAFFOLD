@@ -502,7 +502,58 @@ retire). Includes the original doc hygiene: DD-41/42 rewritten against
 fixtures, DD text deduplication to one canonical home, G0
 constitution/status split (pending decision 3).
 
-### Task Card E2 — Spike v2: real mesh in Blender (run AFTER F1 merges)
+### Task Card E2 — Spike v2: real mesh in Blender (DONE, verdict below)
+
+Spike v2 ran on a real wall mesh (walls.004, walls with window openings).
+Structural pipeline executed end-to-end; the resulting layout was unusable:
+fragments with partially aligned rails, islands strewn horizontally.
+Reference CFTUV run on the same mesh produced clean aligned strips.
+Root causes identified by extracting CFTUV behavior
+(docs/migration/cftuv_frontier_algorithm_cards.md):
+
+```text
+1. Spike has no skeleton solve: CFTUV's visual quality comes from a global
+   LSQ pass over junction row/col-graphs (P7) AFTER placement. (Card 4)
+2. Spike ignores inner boundary loops: window/door holes are first-class
+   skeleton citizens in CFTUV; spike dumped their vertices into fallback
+   projection. (Card 5)
+3. Spike has no anchor-based frontier: lexicographic choice + arithmetic
+   mean collapse vs CFTUV's 7-tier FrontierRank + anchors. (Cards 1-2)
+4. No global texel scale / cross-island row alignment. (Card 6)
+```
+
+## Slice G — Port CFTUV placement invariants into spike v3 (validate before contracting)
+
+Strategy: keep porting in the spike until walls.004 looks right, THEN write
+G5 contracts from validated behavior. Order chosen so each card is visible
+on the real mesh.
+
+### Task Card G1 — Island-local axis roles + inner loops (spike)
+
+Project ConnectedDirectionFamily members onto two island-local axis roles
+(the H/V replacement, per Card 1/4 mapping); place inner boundary loops
+chain-by-chain like outer loops (Card 5). Spike-only.
+
+### Task Card G2 — Skeleton solve v0 (spike)
+
+P7 Card 4 in SCAFFOLD terms: union-find row/col graphs over ScaffoldNodes
+through axis-classified families; one variable per component; length
+equations with orientation_sign; gauge fixing; numpy dense lstsq; write
+canonical coords; linear chain rebuild. Sibling equivalence deferred to G4.
+Spike-only.
+
+### Task Card G3 — Anchor frontier v0 (spike)
+
+Replace lexicographic placement with anchor discovery + a reduced
+FrontierRank (viability, role, ingress, length). Card 1-2. Spike-only.
+
+### Task Card G4 — walls.004 validation gate
+
+User reruns Blender spike v3 on walls.004 after G1-G3. Pass criteria:
+rails straight, rows aligned, windows preserved, islands comparable to the
+CFTUV reference. Only after PASS: draft G5 phase-start contracts
+(FeatureConstraint-free skeleton solve + frontier as Layer 5 modules) from
+the validated spike behavior.
 
 First visible end-to-end UV result. Validates the pinned-skeleton +
 conformal-fill split on real geometry. The user runs and validates this
