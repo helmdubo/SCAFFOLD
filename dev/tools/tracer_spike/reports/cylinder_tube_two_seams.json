@@ -1,11 +1,7 @@
 {
   "ambiguities": [
     "island:0: AXIS_A family length tie ['connected_direction_family:1', 'connected_direction_family:3']; picked connected_direction_family:1",
-    "island:0: AXIS_B orthogonality/length tie ['connected_direction_family:0', 'connected_direction_family:2', 'connected_direction_family:4', 'connected_direction_family:5']; picked connected_direction_family:0",
-    "vertex:v0: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:v2: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:v4: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:v6: multiple rail UV assignments collapsed by arithmetic mean"
+    "island:0: AXIS_B orthogonality/length tie ['connected_direction_family:0', 'connected_direction_family:2', 'connected_direction_family:4', 'connected_direction_family:5']; picked connected_direction_family:0"
   ],
   "angle_defect_stitch_limit": 0.001,
   "axis_role_min_dot": 0.85,
@@ -246,6 +242,189 @@
     }
   ],
   "self_seam_chain_ids": [],
+  "skeleton_solve": {
+    "axis_systems": {
+      "A": {
+        "component_graph": "B",
+        "coordinate": "A",
+        "equation_count": 4,
+        "equation_role": "AXIS_A",
+        "residual_rms": 0.0,
+        "unconstrained_components": [],
+        "variable_count": 4
+      },
+      "B": {
+        "component_graph": "A",
+        "coordinate": "B",
+        "equation_count": 0,
+        "equation_role": "AXIS_B",
+        "residual_rms": 0.0,
+        "unconstrained_components": [
+          "scaffold_node:source:v4"
+        ],
+        "variable_count": 2
+      }
+    },
+    "component_graphs": {
+      "A": {
+        "component_count": 2,
+        "components": [
+          {
+            "canonical_coordinate": 0.0,
+            "id": "scaffold_node:source:v0",
+            "node_ids": [
+              "scaffold_node:source:v0",
+              "scaffold_node:source:v2"
+            ],
+            "post_hoc_3d_spread": {
+              "source_position_spread": 2.0,
+              "unconstrained_by_spread": false
+            },
+            "unconstrained": false
+          },
+          {
+            "canonical_coordinate": 0.0,
+            "id": "scaffold_node:source:v4",
+            "node_ids": [
+              "scaffold_node:source:v4",
+              "scaffold_node:source:v6"
+            ],
+            "post_hoc_3d_spread": {
+              "source_position_spread": 2.0,
+              "unconstrained_by_spread": false
+            },
+            "unconstrained": true
+          }
+        ]
+      },
+      "B": {
+        "component_count": 4,
+        "components": [
+          {
+            "canonical_coordinate": -0.0,
+            "id": "scaffold_node:source:v0",
+            "node_ids": [
+              "scaffold_node:source:v0"
+            ],
+            "post_hoc_3d_spread": {
+              "source_position_spread": 0.0,
+              "unconstrained_by_spread": false
+            },
+            "unconstrained": false
+          },
+          {
+            "canonical_coordinate": 2.828427,
+            "id": "scaffold_node:source:v2",
+            "node_ids": [
+              "scaffold_node:source:v2"
+            ],
+            "post_hoc_3d_spread": {
+              "source_position_spread": 0.0,
+              "unconstrained_by_spread": false
+            },
+            "unconstrained": false
+          },
+          {
+            "canonical_coordinate": -1.414214,
+            "id": "scaffold_node:source:v4",
+            "node_ids": [
+              "scaffold_node:source:v4"
+            ],
+            "post_hoc_3d_spread": {
+              "source_position_spread": 0.0,
+              "unconstrained_by_spread": false
+            },
+            "unconstrained": false
+          },
+          {
+            "canonical_coordinate": 1.414214,
+            "id": "scaffold_node:source:v6",
+            "node_ids": [
+              "scaffold_node:source:v6"
+            ],
+            "post_hoc_3d_spread": {
+              "source_position_spread": 0.0,
+              "unconstrained_by_spread": false
+            },
+            "unconstrained": false
+          }
+        ]
+      }
+    },
+    "level_b_placeholder": "LEVEL_B_PLACEHOLDER: sibling equivalence for repeated openings is deferred until walls.004/G4 validates which grammar constraint should own it.",
+    "per_island": {
+      "island:0": {
+        "axis_a_chain_count": 4,
+        "axis_b_chain_count": 0,
+        "residual_A": 0.0,
+        "residual_B": 0.0,
+        "skeleton_chains": [
+          {
+            "axis_role": "AXIS_A",
+            "chain_id": "chain:e_b0:e_b1",
+            "length": 2.828427,
+            "rail_id": "connected_direction_family:1:island:0"
+          },
+          {
+            "axis_role": "AXIS_A",
+            "chain_id": "chain:e_b2:e_b3",
+            "length": 2.828427,
+            "rail_id": "connected_direction_family:1:island:0"
+          },
+          {
+            "axis_role": "AXIS_A",
+            "chain_id": "chain:e_t1:e_t0",
+            "length": 2.828427,
+            "rail_id": "connected_direction_family:3:island:0"
+          },
+          {
+            "axis_role": "AXIS_A",
+            "chain_id": "chain:e_t3:e_t2",
+            "length": 2.828427,
+            "rail_id": "connected_direction_family:3:island:0"
+          }
+        ]
+      }
+    },
+    "policy": "tracer_spike_skeleton_solve_v0",
+    "post_hoc_3d_spread_check": {
+      "A": {
+        "scaffold_node:source:v0": {
+          "source_position_spread": 2.0,
+          "unconstrained_by_spread": false
+        },
+        "scaffold_node:source:v4": {
+          "source_position_spread": 2.0,
+          "unconstrained_by_spread": false
+        }
+      },
+      "B": {
+        "scaffold_node:source:v0": {
+          "source_position_spread": 0.0,
+          "unconstrained_by_spread": false
+        },
+        "scaffold_node:source:v2": {
+          "source_position_spread": 0.0,
+          "unconstrained_by_spread": false
+        },
+        "scaffold_node:source:v4": {
+          "source_position_spread": 0.0,
+          "unconstrained_by_spread": false
+        },
+        "scaffold_node:source:v6": {
+          "source_position_spread": 0.0,
+          "unconstrained_by_spread": false
+        }
+      },
+      "used_for_regrouping": false
+    },
+    "write_back": {
+      "note": "Canonical write-back solved rail-station constraints after dense component solve.",
+      "pinned_assignment_updates": 16,
+      "skeleton_vertex_count": 4,
+      "vertex_writeback_residual_rms": 1.333333274527
+    }
+  },
   "stitch_decisions": [
     {
       "accepted": true,
@@ -261,7 +440,7 @@
     }
   ],
   "summary": {
-    "ambiguity_count": 6,
+    "ambiguity_count": 2,
     "axis_role_ambiguity_count": 2,
     "axis_role_family_count": 6,
     "blocked_patch_pairs": 0,
@@ -273,6 +452,9 @@
     "island_count": 1,
     "rail_count": 4,
     "self_seam_chain_count": 0,
+    "skeleton_solve_residual_A": 0.0,
+    "skeleton_solve_residual_B": 0.0,
+    "skeleton_solve_unconstrained_component_count": 1,
     "stitched_patch_pairs": 1
   },
   "vertices": {
@@ -285,8 +467,8 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        1.914214,
-        1.75
+        0.0,
+        0.0
       ],
       "vertex_id": "vertex:v0"
     },
@@ -311,8 +493,8 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        1.914214,
-        1.75
+        0.0,
+        0.0
       ],
       "vertex_id": "vertex:v2"
     },
@@ -337,8 +519,8 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        1.914214,
-        1.25
+        0.942809,
+        0.0
       ],
       "vertex_id": "vertex:v4"
     },
@@ -363,8 +545,8 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        1.914214,
-        1.25
+        0.942809,
+        0.0
       ],
       "vertex_id": "vertex:v6"
     },

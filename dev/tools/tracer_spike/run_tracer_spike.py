@@ -28,6 +28,7 @@ from scaffold_core.layer_2_geometry.measures import dot, length, normalize, subt
 from scaffold_core.layer_1_topology.model import BoundaryLoopKind
 from scaffold_core.layer_3_relations.model import ScaffoldJunctionKind
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
+from dev.tools.tracer_spike.skeleton_solve import apply_skeleton_solve
 from scaffold_core.tests.fixtures.beveled_wall_corner import make_beveled_wall_corner_source
 from scaffold_core.tests.fixtures.cylinder_tube import (
     make_cylinder_tube_without_caps_with_two_seams_source,
@@ -251,6 +252,7 @@ def build_layout_dump(fixture_name: str, context) -> dict[str, object]:
             relations,
             len(island_rails),
         )
+    skeleton_solve = apply_skeleton_solve(context, islands, rail_records, assignments)
     vertices, assignment_ambiguities = _final_vertex_dump(assignments)
     ambiguities.extend(assignment_ambiguities)
     inner_loop_placement = _finalize_inner_loop_placement(
@@ -290,6 +292,12 @@ def build_layout_dump(fixture_name: str, context) -> dict[str, object]:
             stats["fallback_vertex_count"]
             for stats in inner_loop_placement.values()
         ),
+        "skeleton_solve_residual_A": skeleton_solve["axis_systems"]["A"]["residual_rms"],
+        "skeleton_solve_residual_B": skeleton_solve["axis_systems"]["B"]["residual_rms"],
+        "skeleton_solve_unconstrained_component_count": sum(
+            len(system["unconstrained_components"])
+            for system in skeleton_solve["axis_systems"].values()
+        ),
     }
     return {
         "fixture": fixture_name,
@@ -302,6 +310,7 @@ def build_layout_dump(fixture_name: str, context) -> dict[str, object]:
         "stitch_decisions": stitch_decisions,
         "self_seam_chain_ids": sorted(self_seam_chain_ids),
         "inner_loop_placement": inner_loop_placement,
+        "skeleton_solve": skeleton_solve,
         "improvisations": improvisations,
         "ambiguities": ambiguities,
         "consumed_relation_fields": sorted(RELATION_FIELDS_READ),
@@ -1052,6 +1061,8 @@ def build_consumption_report(fixture_summaries) -> str:
         "blocked={blocked_patch_pairs}, self_seam_chains={self_seam_chain_count}, "
         "axis_families={axis_role_family_count}, inner_chains={inner_loop_chains_placed}/"
         "{inner_loop_chain_count}, inner_fallback_vertices={inner_loop_fallback_vertex_count}, "
+        "solve_residuals=(A:{skeleton_solve_residual_A}, B:{skeleton_solve_residual_B}), "
+        "unconstrained={skeleton_solve_unconstrained_component_count}, "
         "improvisations={improvisation_count}, ambiguities={ambiguity_count}".format(**summary)
         for summary in fixture_summaries
     )
@@ -1079,6 +1090,7 @@ JSON layout dumps live next to this report:
 - Rail extraction: `connected_direction_families.member_directional_evidence_ids`, `connected_direction_families.ordered_member_directional_evidence_ids`, `connected_direction_families.branch_records`, `connected_direction_families.member_map`, `patch_chain_directional_evidence`.
 - Island-local axis roles: `connected_direction_families`, `patch_chain_directional_evidence`.
 - Inner loop placement: Layer 1 `BoundaryLoop.loop_index/kind`, `PatchChain`, `Chain.source_edge_ids`; paired with `SourceMeshSnapshot.edges/vertices`.
+- Skeleton solve: `scaffold_nodes`, `scaffold_edges`, `patch_chain_directional_evidence`, and the recomputed island-local axis-role view.
 - In-patch singleton pairing fallback: `patch_axes`.
 - Vertex/arc-length layout support: `connected_direction_families.member_map`, `patch_chain_directional_evidence`; paired with `GeometryFactSnapshot.vertex_facts`, `SurfaceModel.patch_chains`, and `SurfaceModel.loops`.
 
@@ -1095,11 +1107,13 @@ JSON layout dumps live next to this report:
 - `ConnectedDirectionFamily.branch_records` preserves branch ambiguity but does not define a branch traversal policy for UV rows.
 - Axis roles are island-local consumer classifications; the spike used weighted family directions and deterministic tie-breaks, not stored frame-role labels.
 - Inner closed chains expose only one topology endpoint in `member_map`; the spike walked `Chain.source_edge_ids` to pin all rim vertices.
+- Skeleton solve v0 does not implement sibling equivalence for repeated openings; `skeleton_solve.level_b_placeholder` records the LEVEL_B_PLACEHOLDER hook for G4/G5.
 
 ## Arbitrary Choices And Ambiguity
 
 - If `ConnectedDirectionFamily.branch_records` is non-empty, the spike records the branch ambiguity and still uses the exported deterministic member order for row placement.
 - If multiple rails assigned different UVs to the same vertex inside one island, the spike collapsed them with an arithmetic mean and recorded the ambiguity in the JSON dump.
+- After skeleton solve, per-vertex write-back averages per-axis canonical contributions when several solved rails touch the same vertex.
 - If several patches tied for longest family presence, the seed patch was chosen lexicographically.
 - If two families tied while selecting AXIS_A or AXIS_B, the spike recorded the tie and picked lexicographically.
 - When a patch pair had multiple admissible shared seams, the first BFS stitch reached the neighbor and later equivalent seams were not separately used for island membership.

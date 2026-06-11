@@ -5,11 +5,7 @@
     "vertex:o0: multiple rail UV assignments collapsed by arithmetic mean",
     "vertex:o1: multiple rail UV assignments collapsed by arithmetic mean",
     "vertex:o2: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:o3: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:w0: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:w1: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:w2: multiple rail UV assignments collapsed by arithmetic mean",
-    "vertex:w3: multiple rail UV assignments collapsed by arithmetic mean"
+    "vertex:o3: multiple rail UV assignments collapsed by arithmetic mean"
   ],
   "angle_defect_stitch_limit": 0.001,
   "axis_role_min_dot": 0.85,
@@ -273,9 +269,146 @@
     }
   ],
   "self_seam_chain_ids": [],
+  "skeleton_solve": {
+    "axis_systems": {
+      "A": {
+        "component_graph": "B",
+        "coordinate": "A",
+        "equation_count": 2,
+        "equation_role": "AXIS_A",
+        "residual_rms": 0.0,
+        "unconstrained_components": [],
+        "variable_count": 2
+      },
+      "B": {
+        "component_graph": "A",
+        "coordinate": "B",
+        "equation_count": 0,
+        "equation_role": "AXIS_B",
+        "residual_rms": 0.0,
+        "unconstrained_components": [
+          "scaffold_node:source:w1"
+        ],
+        "variable_count": 2
+      }
+    },
+    "component_graphs": {
+      "A": {
+        "component_count": 2,
+        "components": [
+          {
+            "canonical_coordinate": 0.0,
+            "id": "scaffold_node:source:o0",
+            "node_ids": [
+              "scaffold_node:source:o0"
+            ],
+            "post_hoc_3d_spread": {
+              "source_position_spread": 0.0,
+              "unconstrained_by_spread": false
+            },
+            "unconstrained": false
+          },
+          {
+            "canonical_coordinate": 0.0,
+            "id": "scaffold_node:source:w1",
+            "node_ids": [
+              "scaffold_node:source:w1"
+            ],
+            "post_hoc_3d_spread": {
+              "source_position_spread": 0.0,
+              "unconstrained_by_spread": false
+            },
+            "unconstrained": true
+          }
+        ]
+      },
+      "B": {
+        "component_count": 2,
+        "components": [
+          {
+            "canonical_coordinate": 0.0,
+            "id": "scaffold_node:source:o0",
+            "node_ids": [
+              "scaffold_node:source:o0"
+            ],
+            "post_hoc_3d_spread": {
+              "source_position_spread": 0.0,
+              "unconstrained_by_spread": false
+            },
+            "unconstrained": false
+          },
+          {
+            "canonical_coordinate": 0.0,
+            "id": "scaffold_node:source:w1",
+            "node_ids": [
+              "scaffold_node:source:w1"
+            ],
+            "post_hoc_3d_spread": {
+              "source_position_spread": 0.0,
+              "unconstrained_by_spread": false
+            },
+            "unconstrained": false
+          }
+        ]
+      }
+    },
+    "level_b_placeholder": "LEVEL_B_PLACEHOLDER: sibling equivalence for repeated openings is deferred until walls.004/G4 validates which grammar constraint should own it.",
+    "per_island": {
+      "island:0": {
+        "axis_a_chain_count": 2,
+        "axis_b_chain_count": 0,
+        "residual_A": 0.0,
+        "residual_B": 0.0,
+        "skeleton_chains": [
+          {
+            "axis_role": "AXIS_A",
+            "chain_id": "chain:z_window_bottom:z_window_left:z_window_top:z_window_right",
+            "length": 2.0,
+            "rail_id": "inner_loop:island:0:patch_chain:patch:seed:f_bottom:1:0"
+          },
+          {
+            "axis_role": "AXIS_A",
+            "chain_id": "chain:z_window_bottom:z_window_left:z_window_top:z_window_right",
+            "length": 1.0,
+            "rail_id": "inner_loop:island:0:patch_chain:patch:seed:f_bottom:1:0"
+          }
+        ]
+      }
+    },
+    "policy": "tracer_spike_skeleton_solve_v0",
+    "post_hoc_3d_spread_check": {
+      "A": {
+        "scaffold_node:source:o0": {
+          "source_position_spread": 0.0,
+          "unconstrained_by_spread": false
+        },
+        "scaffold_node:source:w1": {
+          "source_position_spread": 0.0,
+          "unconstrained_by_spread": false
+        }
+      },
+      "B": {
+        "scaffold_node:source:o0": {
+          "source_position_spread": 0.0,
+          "unconstrained_by_spread": false
+        },
+        "scaffold_node:source:w1": {
+          "source_position_spread": 0.0,
+          "unconstrained_by_spread": false
+        }
+      },
+      "used_for_regrouping": false
+    },
+    "write_back": {
+      "note": "Canonical write-back solved rail-station constraints after dense component solve.",
+      "pinned_assignment_updates": 16,
+      "skeleton_vertex_count": 4,
+      "vertex_writeback_residual_rms": 1.236693884802
+    }
+  },
   "stitch_decisions": [],
   "summary": {
-    "ambiguity_count": 10,
+    "ambiguity_count": 6,
     "axis_role_ambiguity_count": 2,
     "axis_role_family_count": 8,
     "blocked_patch_pairs": 0,
@@ -287,6 +420,9 @@
     "island_count": 1,
     "rail_count": 3,
     "self_seam_chain_count": 0,
+    "skeleton_solve_residual_A": 0.0,
+    "skeleton_solve_residual_B": 0.0,
+    "skeleton_solve_unconstrained_component_count": 1,
     "stitched_patch_pairs": 0
   },
   "vertices": {
@@ -349,7 +485,7 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        5.5,
+        0.0,
         0.0
       ],
       "vertex_id": "vertex:w0"
@@ -361,7 +497,7 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        7.5,
+        2.0,
         0.0
       ],
       "vertex_id": "vertex:w1"
@@ -373,7 +509,7 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        2.5,
+        -3.0,
         0.0
       ],
       "vertex_id": "vertex:w2"
@@ -385,7 +521,7 @@
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        4.5,
+        -1.0,
         0.0
       ],
       "vertex_id": "vertex:w3"

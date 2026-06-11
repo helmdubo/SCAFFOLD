@@ -317,6 +317,135 @@
     }
   ],
   "self_seam_chain_ids": [],
+  "skeleton_solve": {
+    "axis_systems": {
+      "A": {
+        "component_graph": "B",
+        "coordinate": "A",
+        "equation_count": 0,
+        "equation_role": "AXIS_A",
+        "residual_rms": 0.0,
+        "unconstrained_components": [],
+        "variable_count": 2
+      },
+      "B": {
+        "component_graph": "A",
+        "coordinate": "B",
+        "equation_count": 0,
+        "equation_role": "AXIS_B",
+        "residual_rms": 0.0,
+        "unconstrained_components": [],
+        "variable_count": 2
+      }
+    },
+    "component_graphs": {
+      "A": {
+        "component_count": 2,
+        "components": [
+          {
+            "canonical_coordinate": 0.0,
+            "id": "scaffold_node:source:a0",
+            "node_ids": [
+              "scaffold_node:source:a0"
+            ],
+            "post_hoc_3d_spread": {
+              "source_position_spread": 0.0,
+              "unconstrained_by_spread": false
+            },
+            "unconstrained": false
+          },
+          {
+            "canonical_coordinate": 0.0,
+            "id": "scaffold_node:source:b0",
+            "node_ids": [
+              "scaffold_node:source:b0"
+            ],
+            "post_hoc_3d_spread": {
+              "source_position_spread": 0.0,
+              "unconstrained_by_spread": false
+            },
+            "unconstrained": false
+          }
+        ]
+      },
+      "B": {
+        "component_count": 2,
+        "components": [
+          {
+            "canonical_coordinate": 0.0,
+            "id": "scaffold_node:source:a0",
+            "node_ids": [
+              "scaffold_node:source:a0"
+            ],
+            "post_hoc_3d_spread": {
+              "source_position_spread": 0.0,
+              "unconstrained_by_spread": false
+            },
+            "unconstrained": false
+          },
+          {
+            "canonical_coordinate": 0.0,
+            "id": "scaffold_node:source:b0",
+            "node_ids": [
+              "scaffold_node:source:b0"
+            ],
+            "post_hoc_3d_spread": {
+              "source_position_spread": 0.0,
+              "unconstrained_by_spread": false
+            },
+            "unconstrained": false
+          }
+        ]
+      }
+    },
+    "level_b_placeholder": "LEVEL_B_PLACEHOLDER: sibling equivalence for repeated openings is deferred until walls.004/G4 validates which grammar constraint should own it.",
+    "per_island": {
+      "island:0": {
+        "axis_a_chain_count": 0,
+        "axis_b_chain_count": 0,
+        "residual_A": 0.0,
+        "residual_B": 0.0,
+        "skeleton_chains": []
+      },
+      "island:1": {
+        "axis_a_chain_count": 0,
+        "axis_b_chain_count": 0,
+        "residual_A": 0.0,
+        "residual_B": 0.0,
+        "skeleton_chains": []
+      }
+    },
+    "policy": "tracer_spike_skeleton_solve_v0",
+    "post_hoc_3d_spread_check": {
+      "A": {
+        "scaffold_node:source:a0": {
+          "source_position_spread": 0.0,
+          "unconstrained_by_spread": false
+        },
+        "scaffold_node:source:b0": {
+          "source_position_spread": 0.0,
+          "unconstrained_by_spread": false
+        }
+      },
+      "B": {
+        "scaffold_node:source:a0": {
+          "source_position_spread": 0.0,
+          "unconstrained_by_spread": false
+        },
+        "scaffold_node:source:b0": {
+          "source_position_spread": 0.0,
+          "unconstrained_by_spread": false
+        }
+      },
+      "used_for_regrouping": false
+    },
+    "write_back": {
+      "note": "Canonical write-back solved rail-station constraints after dense component solve.",
+      "pinned_assignment_updates": 0,
+      "skeleton_vertex_count": 0,
+      "vertex_writeback_residual_rms": 0.0
+    }
+  },
   "stitch_decisions": [],
   "summary": {
     "ambiguity_count": 12,
@@ -331,6 +460,9 @@
     "island_count": 2,
     "rail_count": 4,
     "self_seam_chain_count": 0,
+    "skeleton_solve_residual_A": 0.0,
+    "skeleton_solve_residual_B": 0.0,
+    "skeleton_solve_unconstrained_component_count": 0,
     "stitched_patch_pairs": 0
   },
   "vertices": {
