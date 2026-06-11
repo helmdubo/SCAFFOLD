@@ -528,6 +528,37 @@ Strategy: keep porting in the spike until walls.004 looks right, THEN write
 G5 contracts from validated behavior. Order chosen so each card is visible
 on the real mesh.
 
+### Anti-CFTUV guards (binding for every Slice G card)
+
+CFTUV is a behavior reference for four ideas only: first-frontier,
+continuity, cascading growth, rigid skeleton. SCAFFOLD must not regress
+into CFTUV's shapes:
+
+```text
+1. The spike is condemned-by-design. G4 PASS triggers writing Layer 5
+   contracts and a fresh implementation from those contracts; the spike
+   is then archived/deleted, never promoted or imported. No file outside
+   dev/tools/tracer_spike/ may import from it at any point.
+2. No stored roles. H/V, WALL/FLOOR/SLOPE, frame roles must not appear in
+   spike data models either - island-local AXIS_A/AXIS_B projections are
+   computed views over ConnectedDirectionFamily, recomputed per run.
+3. Solve never feeds back. The spike consumes Pass 0/1 snapshots
+   read-only; any "the relation layer should have told me X" goes into
+   the consumption report, becoming a Layer 3 slice, not a spike-local
+   re-derivation that ossifies.
+4. Skeleton scope is the whole selection, not the patch: row/col
+   components are built over all ScaffoldNodes across islands (CFTUV's
+   quilt-global rows generalized to mesh/shell level via families).
+5. Decision rules that CFTUV hid inside solve branches (semantic pair
+   scores, stitch preferences) are Level B and belong to the future
+   Layer 4 grammar -> FeatureConstraint channel (DD-26). The spike may
+   hardcode ONE simple default but must label it LEVEL_B_PLACEHOLDER in
+   code and report, so contracts later claim it explicitly.
+6. One file per concept inside the spike too; if the spike grows past
+   ~1500 lines total, stop and reslice - a growing spike is how solve.py
+   became 6479 lines.
+```
+
 ### Task Card G1 — Island-local axis roles + inner loops (spike)
 
 Project ConnectedDirectionFamily members onto two island-local axis roles
