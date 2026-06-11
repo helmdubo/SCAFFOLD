@@ -64,6 +64,8 @@ def _node_by_vertex(scaffold_nodes):
 
 
 def _canonical_coords_by_vertex(scaffold_nodes, skeleton_solve):
+    if skeleton_solve.get("canonical_vertices"):
+        return skeleton_solve["canonical_vertices"]
     graph_a = _component_lookup(skeleton_solve, "A")
     graph_b = _component_lookup(skeleton_solve, "B")
     axis_a_available = _axis_available(skeleton_solve, "A")
@@ -259,11 +261,14 @@ def _compose_uv(assignments, canonical, frontier_uv):
             b_value = fallback[1] if b_value is None else b_value
         axis_count = int(has_a) + int(has_b)
         if axis_count == 2:
-            stats["both_axis"] += 1
+            if vertex_id in canonical:
+                stats["both_axis"] += 1
         elif axis_count == 1:
-            stats["one_axis"] += 1
+            if vertex_id in canonical:
+                stats["one_axis"] += 1
         else:
-            stats["zero_axis"] += 1
+            if vertex_id in canonical:
+                stats["zero_axis"] += 1
         uv = [round(float(a_value), 6), round(float(b_value), 6)]
         rows[vertex_id] = {"uv": uv, "axis_count": axis_count}
         for value in values:

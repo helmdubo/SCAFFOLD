@@ -60,12 +60,14 @@ class AxisSystem:
     equation_count: int
     variable_count: int
     unconstrained_components: tuple[str, ...]
+    worst_equation_residuals: tuple[dict[str, Any], ...]
 
 
 def apply_skeleton_solve(context: Any, islands: list[dict[str, Any]], rails: list[dict[str, Any]], assignments):
     relations = context.relation_snapshot
     evidence_by_id = {item.id: item for item in relations.patch_chain_directional_evidence}
     edge_by_patch_chain_id = {edge.patch_chain_id: edge for edge in relations.scaffold_edges}
+    node_position_by_id = _node_position_by_id(relations.scaffold_nodes, context.geometry_facts)
     node_ids = tuple(node.id for node in relations.scaffold_nodes)
     island_by_patch_id = {
         patch_id: island["id"]
@@ -75,8 +77,13 @@ def apply_skeleton_solve(context: Any, islands: list[dict[str, Any]], rails: lis
 
     graph_a = UnionFind(node_ids)
     graph_b = UnionFind(node_ids)
-    rail_by_id = {rail["id"]: rail for rail in rails}
-    chain_rows = _axis_chain_rows(rails, evidence_by_id, edge_by_patch_chain_id, island_by_patch_id)
+    chain_rows = _axis_chain_rows(
+        rails,
+        evidence_by_id,
+        edge_by_patch_chain_id,
+        island_by_patch_id,
+        node_position_by_id,
+    )
     for row in chain_rows:
         if row["axis_role"] == "AXIS_A":
             graph_a.union(row["start_node_id"], row["end_node_id"])
@@ -113,7 +120,8 @@ def apply_skeleton_solve(context: Any, islands: list[dict[str, Any]], rails: lis
         "B": _spread_report(components_b, relations.scaffold_nodes, context.source_snapshot),
     }
 
-    write_stats = _write_back(assignments, rail_by_id, systems)
+    canonical_vertices = _canonical_vertices(relations.scaffold_nodes, systems, chain_rows)
+    write_stats = _write_back(assignments, canonical_vertices)
     return {
         "policy": "tracer_spike_skeleton_solve_v0",
         "level_b_placeholder": LEVEL_B_PLACEHOLDER_NOTE,
@@ -125,6 +133,7 @@ def apply_skeleton_solve(context: Any, islands: list[dict[str, Any]], rails: lis
             axis: _axis_system_report(system)
             for axis, system in systems.items()
         },
+        "canonical_vertices": canonical_vertices,
         "per_island": _per_island_report(islands, chain_rows, systems),
         "post_hoc_3d_spread_check": {
             "used_for_regrouping": False,
@@ -135,13 +144,16 @@ def apply_skeleton_solve(context: Any, islands: list[dict[str, Any]], rails: lis
     }
 
 
-def _axis_chain_rows(rails, evidence_by_id, edge_by_patch_chain_id, island_by_patch_id):
-    rows = []
-    seen = set()
+def _axis_chain_rows(rails, evidence_by_id, edge_by_patch_chain_id, island_by_patch_id, node_position_by_id):
+    rows_by_key = {}
     for rail in rails:
         role = rail.get("axis_role")
         if role not in ("AXIS_A", "AXIS_B"):
             continue
+        rail_direction = rail.get("axis_direction") or _rail_direction(
+            evidence_by_id.get(member_id)
+            for member_id in rail.get("member_directional_evidence_ids", ())
+        )
         for member_id in rail.get("member_directional_evidence_ids", ()):
             evidence = evidence_by_id.get(member_id)
             if evidence is None:
@@ -152,18 +164,8 @@ def _axis_chain_rows(rails, evidence_by_id, edge_by_patch_chain_id, island_by_pa
             island_id = rail["island_id"]
             if island_by_patch_id.get(str(evidence.patch_id)) != island_id:
                 continue
-            key = (
-                island_id,
-                role,
-                str(edge.chain_id),
-                edge.start_scaffold_node_id,
-                edge.end_scaffold_node_id,
-                round(float(evidence.length), 12),
-            )
-            if key in seen:
-                continue
-            seen.add(key)
-            rows.append({
+            key = (island_id, role, str(edge.chain_id))
+            row = {
                 "island_id": island_id,
                 "rail_id": rail["id"],
                 "axis_role": role,
@@ -171,10 +173,85 @@ def _axis_chain_rows(rails, evidence_by_id, edge_by_patch_chain_id, island_by_pa
                 "chain_id": str(edge.chain_id),
                 "start_node_id": edge.start_scaffold_node_id,
                 "end_node_id": edge.end_scaffold_node_id,
-                "orientation_sign": int(evidence.orientation_sign),
+                "orientation_sign": _edge_axis_sign(
+                    edge.start_scaffold_node_id,
+                    edge.end_scaffold_node_id,
+                    node_position_by_id,
+                    rail_direction,
+                    evidence,
+                ),
                 "length": float(evidence.length),
-            })
+            }
+            if key not in rows_by_key or row["patch_chain_id"] < rows_by_key[key]["patch_chain_id"]:
+                rows_by_key[key] = row
+    return [
+        rows_by_key[key]
+        for key in sorted(rows_by_key)
+    ]
+
+
+def _rail_direction(evidence_items):
+    items = [item for item in evidence_items if item is not None]
+    if not items:
+        return (0.0, 0.0, 0.0)
+    seed = max(items, key=lambda item: (item.length, item.id)).direction
+    if _vector_length(seed) == 0.0:
+        return (0.0, 0.0, 0.0)
+    seed = _normalize(seed)
+    total = [0.0, 0.0, 0.0]
+    for evidence in items:
+        direction = evidence.direction
+        if _vector_length(direction) == 0.0:
+            continue
+        direction = _normalize(direction)
+        if _dot(direction, seed) < 0.0:
+            direction = tuple(-value for value in direction)
+        for index in range(3):
+            total[index] += direction[index] * evidence.length
+    vector = tuple(total)
+    return _normalize(vector) if _vector_length(vector) > 0.0 else seed
+
+
+def _node_position_by_id(scaffold_nodes, geometry):
+    rows = {}
+    for node in scaffold_nodes:
+        positions = [
+            geometry.vertex_facts[vertex_id].position
+            for vertex_id in node.vertex_ids
+            if vertex_id in geometry.vertex_facts
+        ]
+        if positions:
+            rows[node.id] = tuple(
+                sum(position[index] for position in positions) / len(positions)
+                for index in range(3)
+            )
     return rows
+
+
+def _edge_axis_sign(start_node_id, end_node_id, node_position_by_id, rail_direction, evidence):
+    start = node_position_by_id.get(start_node_id)
+    end = node_position_by_id.get(end_node_id)
+    if start is None or end is None or _vector_length(rail_direction) == 0.0:
+        return int(evidence.orientation_sign)
+    edge_direction = tuple(end[index] - start[index] for index in range(3))
+    if _vector_length(edge_direction) == 0.0:
+        return int(evidence.orientation_sign)
+    return 1 if _dot(_normalize(edge_direction), rail_direction) >= 0.0 else -1
+
+
+def _dot(first, second):
+    return sum(first[index] * second[index] for index in range(3))
+
+
+def _vector_length(vector):
+    return sqrt(sum(value * value for value in vector))
+
+
+def _normalize(vector):
+    size = _vector_length(vector)
+    if size == 0.0:
+        return (0.0, 0.0, 0.0)
+    return tuple(value / size for value in vector)
 
 
 def _component_by_node(components):
@@ -216,6 +293,7 @@ def _solve_axis(
     variable_index = {component_id: index for index, component_id in enumerate(component_ids)}
     matrix_rows = []
     rhs = []
+    length_equations = []
     for row in chain_rows:
         if row["axis_role"] != equation_role:
             continue
@@ -224,15 +302,20 @@ def _solve_axis(
         if first_component is None or second_component is None or first_component == second_component:
             continue
         rhs_value = row["orientation_sign"] * row["length"]
-        if second_component < first_component:
-            first_component, second_component = second_component, first_component
-            rhs_value = -rhs_value
-        rhs_value = abs(rhs_value)
         matrix_row = [0.0] * len(component_ids)
         matrix_row[variable_index[first_component]] = -1.0
         matrix_row[variable_index[second_component]] = 1.0
         matrix_rows.append(matrix_row)
         rhs.append(rhs_value)
+        length_equations.append({
+            "chain_id": row["chain_id"],
+            "patch_chain_id": row["patch_chain_id"],
+            "first_component": first_component,
+            "second_component": second_component,
+            "rhs": rhs_value,
+            "length": row["length"],
+            "orientation_sign": row["orientation_sign"],
+        })
 
     gauged = set()
     for seed_node_id in seed_nodes_by_island.values():
@@ -257,12 +340,15 @@ def _solve_axis(
         matrix = np.asarray(matrix_rows, dtype=float)
         target = np.asarray(rhs, dtype=float)
         solution, *_ = np.linalg.lstsq(matrix, target, rcond=None)
-        residual = matrix @ solution - target
-        residual_rms = float(sqrt(float(np.mean(residual * residual)))) if len(residual) else 0.0
+        equation_residuals = _equation_residuals(solution, variable_index, length_equations)
+        residual_rms = _residual_rms(equation_residuals)
         values = {
             component_id: round(float(solution[index]), 6)
             for component_id, index in variable_index.items()
         }
+        worst_equation_residuals = _worst_equation_residuals(equation_residuals)
+    if not matrix_rows:
+        worst_equation_residuals = ()
 
     constrained = _constrained_components(chain_rows, equation_role, component_by_node) | gauged
     unconstrained = tuple(
@@ -276,9 +362,10 @@ def _solve_axis(
         component_by_node=dict(component_by_node),
         values_by_component=values,
         residual_rms=round(residual_rms, 12),
-        equation_count=sum(1 for row in chain_rows if row["axis_role"] == equation_role),
+        equation_count=len(length_equations),
         variable_count=len(component_ids),
         unconstrained_components=unconstrained,
+        worst_equation_residuals=worst_equation_residuals,
     )
 
 
@@ -294,20 +381,95 @@ def _constrained_components(chain_rows, equation_role, component_by_node):
     return constrained
 
 
-def _write_back(assignments, rail_by_id, systems):
-    del systems
-    axis_rows = []
-    for vertex_id, rows in assignments.items():
-        for row in rows:
-            rail = rail_by_id.get(str(row.get("source")))
-            if rail is None or rail.get("axis_role") not in ("AXIS_A", "AXIS_B"):
-                continue
-            u, v = row["uv"]
-            axis_rows.append((vertex_id, rail["id"], rail["axis_role"], float(u), float(v)))
-    solved_vertices, residual_rms = _solve_vertex_writeback(axis_rows)
+def _equation_residuals(solution, variable_index, equations):
+    rows = []
+    for equation in equations:
+        first = solution[variable_index[equation["first_component"]]]
+        second = solution[variable_index[equation["second_component"]]]
+        residual = float(second - first - equation["rhs"])
+        rows.append({
+            **equation,
+            "residual": residual,
+            "abs_residual": abs(residual),
+        })
+    return rows
+
+
+def _residual_rms(equation_residuals):
+    if not equation_residuals:
+        return 0.0
+    return float(sqrt(sum(row["residual"] ** 2 for row in equation_residuals) / len(equation_residuals)))
+
+
+def _worst_equation_residuals(equation_residuals):
+    rows = sorted(equation_residuals, key=lambda row: (-row["abs_residual"], row["chain_id"]))[:3]
+    return tuple(
+        {
+            "chain_id": row["chain_id"],
+            "patch_chain_id": row["patch_chain_id"],
+            "residual": round(row["residual"], 12),
+            "abs_residual": round(row["abs_residual"], 12),
+            "rhs": round(row["rhs"], 6),
+            "length": round(row["length"], 6),
+            "orientation_sign": row["orientation_sign"],
+        }
+        for row in rows
+    )
+
+
+def _canonical_vertices(scaffold_nodes, systems, chain_rows):
+    axis_node_ids = {
+        row[field]
+        for row in chain_rows
+        for field in ("start_node_id", "end_node_id")
+    }
+    rows = {}
+    for node in scaffold_nodes:
+        if node.id not in axis_node_ids:
+            continue
+        coord_a, component_a = _coord_for_node(systems["A"], node.id)
+        coord_b, component_b = _coord_for_node(systems["B"], node.id)
+        for vertex_id in node.vertex_ids:
+            rows[str(vertex_id)] = {
+                "A": coord_a,
+                "B": coord_b,
+                "component_A": component_a,
+                "component_B": component_b,
+                "axis_count": int(coord_a is not None) + int(coord_b is not None),
+            }
+    return rows
+
+
+def _coord_for_node(system, node_id):
+    component_id = system.component_by_node.get(node_id)
+    if component_id is None or component_id in system.unconstrained_components:
+        return None, component_id
+    return system.values_by_component.get(component_id), component_id
+
+
+def _write_back(assignments, canonical_vertices):
+    solved_vertices = {
+        vertex_id: row
+        for vertex_id, row in canonical_vertices.items()
+        if row["A"] is not None and row["B"] is not None
+    }
     changed = 0
-    for vertex_id, solved_uv in solved_vertices.items():
-        for row in assignments.get(vertex_id, ()):
+    added = 0
+    for vertex_id, canonical in solved_vertices.items():
+        solved_uv = [round(float(canonical["A"]), 6), round(float(canonical["B"]), 6)]
+        rows = assignments.setdefault(vertex_id, [])
+        pinned_rows = [row for row in rows if row.get("pinned")]
+        if not pinned_rows:
+            rows.append({
+                "island_id": None,
+                "uv": solved_uv,
+                "pinned": True,
+                "source": "skeleton canonical component write-back",
+                "skeleton_solve": True,
+            })
+            added += 1
+            continue
+        for row in pinned_rows:
             if not row.get("pinned"):
                 continue
             row["uv"] = solved_uv
@@ -315,59 +477,25 @@ def _write_back(assignments, rail_by_id, systems):
             changed += 1
     return {
         "pinned_assignment_updates": changed,
+        "pinned_assignment_additions": added,
         "skeleton_vertex_count": len(solved_vertices),
-        "vertex_writeback_residual_rms": residual_rms,
-        "note": "Canonical write-back solved rail-station constraints after dense component solve.",
+        "axis_coord_coverage_percent": _canonical_coverage(canonical_vertices),
+        "note": "Canonical component write-back owns vertices with both axis coordinates; frontier handles one/zero-axis fallback.",
     }
 
 
-def _solve_vertex_writeback(axis_rows):
-    vertex_ids = sorted({row[0] for row in axis_rows})
-    if not vertex_ids:
-        return {}, 0.0
-    variable_names = []
-    for vertex_id in vertex_ids:
-        variable_names.extend((f"vertex:{vertex_id}:A", f"vertex:{vertex_id}:B"))
-    for rail_id in sorted({row[1] for row in axis_rows}):
-        variable_names.extend((f"rail:{rail_id}:offset", f"rail:{rail_id}:fixed"))
-    variable_index = {name: index for index, name in enumerate(variable_names)}
-    rows = []
-    rhs = []
-
-    def add_equation(coefficients, target, weight=1.0):
-        row = [0.0] * len(variable_names)
-        for name, coefficient in coefficients.items():
-            row[variable_index[name]] = coefficient * weight
-        rows.append(row)
-        rhs.append(target * weight)
-
-    for vertex_id, rail_id, axis_role, station_u, station_v in axis_rows:
-        vertex_a = f"vertex:{vertex_id}:A"
-        vertex_b = f"vertex:{vertex_id}:B"
-        rail_offset = f"rail:{rail_id}:offset"
-        rail_fixed = f"rail:{rail_id}:fixed"
-        if axis_role == "AXIS_A":
-            add_equation({vertex_a: 1.0, rail_offset: -1.0}, station_u)
-            add_equation({vertex_b: 1.0, rail_fixed: -1.0}, 0.0)
-        elif axis_role == "AXIS_B":
-            add_equation({vertex_a: 1.0, rail_fixed: -1.0}, 0.0)
-            add_equation({vertex_b: 1.0, rail_offset: -1.0}, station_u if station_u else station_v)
-
-    first_vertex = vertex_ids[0]
-    add_equation({f"vertex:{first_vertex}:A": 1.0}, 0.0, GAUGE_WEIGHT)
-    add_equation({f"vertex:{first_vertex}:B": 1.0}, 0.0, GAUGE_WEIGHT)
-    matrix = np.asarray(rows, dtype=float)
-    target = np.asarray(rhs, dtype=float)
-    solution, *_ = np.linalg.lstsq(matrix, target, rcond=None)
-    residual = matrix @ solution - target
-    residual_rms = float(sqrt(float(np.mean(residual * residual)))) if len(residual) else 0.0
-    solved = {}
-    for vertex_id in vertex_ids:
-        solved[vertex_id] = [
-            round(float(solution[variable_index[f"vertex:{vertex_id}:A"]]), 6),
-            round(float(solution[variable_index[f"vertex:{vertex_id}:B"]]), 6),
-        ]
-    return solved, round(residual_rms, 12)
+def _canonical_coverage(canonical_vertices):
+    counts = {0: 0, 1: 0, 2: 0}
+    for row in canonical_vertices.values():
+        counts[row["axis_count"]] += 1
+    total = sum(counts.values())
+    if total == 0:
+        return {"both": 0.0, "one": 0.0, "zero": 0.0}
+    return {
+        "both": round(100.0 * counts[2] / total, 2),
+        "one": round(100.0 * counts[1] / total, 2),
+        "zero": round(100.0 * counts[0] / total, 2),
+    }
 
 
 def _spread_report(components, scaffold_nodes, source_snapshot):
@@ -425,6 +553,7 @@ def _axis_system_report(system):
         "variable_count": system.variable_count,
         "equation_count": system.equation_count,
         "residual_rms": system.residual_rms,
+        "worst_equation_residuals": list(system.worst_equation_residuals),
         "unconstrained_components": list(system.unconstrained_components),
     }
 

@@ -128,62 +128,65 @@ def make_wall_with_window_spike_source() -> SourceMeshSnapshot:
 
 
 def make_t_junction_walls_spike_source() -> SourceMeshSnapshot:
-    """Return three single-face panels meeting at one three-face junction."""
+    """Return three single-face panels around a topological T-junction."""
 
-    v0 = SourceVertexId("v0")
-    vx = SourceVertexId("vx")
-    vy = SourceVertexId("vy")
-    vxy = SourceVertexId("vxy")
-    vz = SourceVertexId("vz")
-    vxz = SourceVertexId("vxz")
-    vyz = SourceVertexId("vyz")
+    c = SourceVertexId("c")
+    x = SourceVertexId("x")
+    y = SourceVertexId("y")
+    xy = SourceVertexId("xy")
+    lx = SourceVertexId("lx")
+    lxy = SourceVertexId("lxy")
+    d = SourceVertexId("d")
+    dx = SourceVertexId("dx")
 
     e_x = SourceEdgeId("e_x_shared")
     e_y = SourceEdgeId("e_y_shared")
-    e_z = SourceEdgeId("e_z_shared")
-    e_xy_right = SourceEdgeId("e_xy_right")
-    e_xy_top = SourceEdgeId("e_xy_top")
-    e_xz_top = SourceEdgeId("e_xz_top_border")
-    e_xz_right = SourceEdgeId("e_xz_right_border")
-    e_yz_right = SourceEdgeId("e_yz_right_border")
-    e_yz_top = SourceEdgeId("e_yz_top_border")
+    e_ne_right = SourceEdgeId("e_ne_right")
+    e_ne_top = SourceEdgeId("e_ne_top")
+    e_nw_bottom = SourceEdgeId("e_nw_bottom")
+    e_nw_left = SourceEdgeId("e_nw_left")
+    e_nw_top = SourceEdgeId("e_nw_top")
+    e_se_bottom = SourceEdgeId("e_se_bottom")
+    e_se_right = SourceEdgeId("e_se_right")
+    e_se_left = SourceEdgeId("e_se_left")
 
-    f_xy = SourceFaceId("f_xy")
-    f_xz = SourceFaceId("f_xz")
-    f_yz = SourceFaceId("f_yz")
+    f_ne = SourceFaceId("f_ne")
+    f_nw = SourceFaceId("f_nw")
+    f_se = SourceFaceId("f_se")
 
     return SourceMeshSnapshot(
         id=SourceMeshId("t_junction_walls_spike"),
         vertices={
-            v0: MeshVertexRef(v0, (0.0, 0.0, 0.0)),
-            vx: MeshVertexRef(vx, (1.0, 0.0, 0.0)),
-            vy: MeshVertexRef(vy, (0.0, 1.0, 0.0)),
-            vxy: MeshVertexRef(vxy, (1.0, 1.0, 0.0)),
-            vz: MeshVertexRef(vz, (0.0, 0.0, 1.0)),
-            vxz: MeshVertexRef(vxz, (1.0, 0.0, 1.0)),
-            vyz: MeshVertexRef(vyz, (0.0, 1.0, 1.0)),
+            c: MeshVertexRef(c, (0.0, 0.0, 0.0)),
+            x: MeshVertexRef(x, (1.0, 0.0, 0.0)),
+            y: MeshVertexRef(y, (0.0, 1.0, 0.0)),
+            xy: MeshVertexRef(xy, (1.0, 1.0, 0.0)),
+            lx: MeshVertexRef(lx, (-1.0, 0.0, 0.0)),
+            lxy: MeshVertexRef(lxy, (-1.0, 1.0, 0.0)),
+            d: MeshVertexRef(d, (0.0, -1.0, 0.0)),
+            dx: MeshVertexRef(dx, (1.0, -1.0, 0.0)),
         },
         edges={
-            e_x: MeshEdgeRef(e_x, (v0, vx)),
-            e_y: MeshEdgeRef(e_y, (vy, v0)),
-            e_z: MeshEdgeRef(e_z, (v0, vz)),
-            e_xy_right: MeshEdgeRef(e_xy_right, (vx, vxy)),
-            e_xy_top: MeshEdgeRef(e_xy_top, (vxy, vy)),
-            e_xz_top: MeshEdgeRef(e_xz_top, (vz, vxz)),
-            e_xz_right: MeshEdgeRef(e_xz_right, (vxz, vx)),
-            e_yz_right: MeshEdgeRef(e_yz_right, (vyz, vz)),
-            e_yz_top: MeshEdgeRef(e_yz_top, (vy, vyz)),
+            e_x: MeshEdgeRef(e_x, (c, x)),
+            e_y: MeshEdgeRef(e_y, (y, c)),
+            e_ne_right: MeshEdgeRef(e_ne_right, (x, xy)),
+            e_ne_top: MeshEdgeRef(e_ne_top, (xy, y)),
+            e_nw_bottom: MeshEdgeRef(e_nw_bottom, (lx, c)),
+            e_nw_left: MeshEdgeRef(e_nw_left, (lxy, lx)),
+            e_nw_top: MeshEdgeRef(e_nw_top, (y, lxy)),
+            e_se_bottom: MeshEdgeRef(e_se_bottom, (d, dx)),
+            e_se_right: MeshEdgeRef(e_se_right, (dx, x)),
+            e_se_left: MeshEdgeRef(e_se_left, (c, d)),
         },
         faces={
-            f_xy: MeshFaceRef(f_xy, (v0, vx, vxy, vy), (e_x, e_xy_right, e_xy_top, e_y)),
-            f_xz: MeshFaceRef(f_xz, (v0, vz, vxz, vx), (e_z, e_xz_top, e_xz_right, e_x)),
-            f_yz: MeshFaceRef(f_yz, (v0, vy, vyz, vz), (e_y, e_yz_top, e_yz_right, e_z)),
+            f_ne: MeshFaceRef(f_ne, (c, x, xy, y), (e_x, e_ne_right, e_ne_top, e_y)),
+            f_nw: MeshFaceRef(f_nw, (lx, c, y, lxy), (e_nw_bottom, e_y, e_nw_top, e_nw_left)),
+            f_se: MeshFaceRef(f_se, (d, dx, x, c), (e_se_bottom, e_se_right, e_x, e_se_left)),
         },
-        selected_face_ids=(f_xy, f_xz, f_yz),
+        selected_face_ids=(f_ne, f_nw, f_se),
         marks=(
             SourceMark(kind=SourceMarkKind.SEAM, target_id=e_x),
             SourceMark(kind=SourceMarkKind.SEAM, target_id=e_y),
-            SourceMark(kind=SourceMarkKind.SEAM, target_id=e_z),
         ),
     )
 
@@ -312,6 +315,7 @@ def build_layout_dump(fixture_name: str, context) -> dict[str, object]:
                 "island_id": island["id"],
                 "source": rail["source"],
                 "axis_role": rail.get("axis_role"),
+                "axis_direction": rail.get("axis_direction"),
                 "loop_kind": rail.get("loop_kind"),
                 "patch_chain_id": rail.get("patch_chain_id"),
                 "member_directional_evidence_ids": list(member_order),
@@ -374,6 +378,10 @@ def build_layout_dump(fixture_name: str, context) -> dict[str, object]:
         ),
         "skeleton_solve_residual_A": skeleton_solve["axis_systems"]["A"]["residual_rms"],
         "skeleton_solve_residual_B": skeleton_solve["axis_systems"]["B"]["residual_rms"],
+        "both_pct": skeleton_solve["write_back"]["axis_coord_coverage_percent"]["both"],
+        "residual_a": skeleton_solve["axis_systems"]["A"]["residual_rms"],
+        "residual_b": skeleton_solve["axis_systems"]["B"]["residual_rms"],
+        "worst_equation_residuals": _worst_equation_summary(skeleton_solve),
         "skeleton_solve_unconstrained_component_count": sum(
             len(system["unconstrained_components"])
             for system in skeleton_solve["axis_systems"].values()
@@ -760,12 +768,14 @@ def _build_rails(islands, topology, relations, evidence_by_id, axis_roles_by_isl
             if len(member_ids) < 2:
                 continue
             covered_member_ids.update(member_ids)
+            axis_role = family_axis_roles.get((island_id, family.id), "OBLIQUE")
             rails.append({
                 "id": f"{family.id}:{island_id}",
                 "source": "ConnectedDirectionFamily",
                 "family_id": family.id,
                 "island_id": island_id,
-                "axis_role": family_axis_roles.get((island_id, family.id), "OBLIQUE"),
+                "axis_role": axis_role,
+                "axis_direction": _axis_direction_for_role(axis_roles_by_island.get(island_id, {}), axis_role),
                 "loop_kind": "OUTER_OR_SHARED",
                 "member_directional_evidence_ids": tuple(sorted(member_ids)),
                 "branch_records": {
@@ -793,6 +803,7 @@ def _build_rails(islands, topology, relations, evidence_by_id, axis_roles_by_isl
                 "family_id": None,
                 "island_id": island_id,
                 "axis_role": role,
+                "axis_direction": _axis_direction_for_role(axis_roles_by_island.get(island_id, {}), role),
                 "loop_kind": "INNER",
                 "patch_chain_id": str(patch_chain_id),
                 "member_directional_evidence_ids": tuple(member_ids),
@@ -812,11 +823,18 @@ def _build_rails(islands, topology, relations, evidence_by_id, axis_roles_by_isl
         role = _patch_axes_role(evidence, relations.patch_axes.get(evidence.patch_id))
         fallback_groups[(island_id, str(evidence.patch_id), role)].append(evidence.id)
     for (island_id, patch_id, role), member_ids in sorted(fallback_groups.items()):
+        axis_role = _axis_role_for_direction(
+            _weighted_direction([evidence_by_id[member_id] for member_id in member_ids]),
+            axis_roles_by_island.get(island_id, {}),
+        )
         rails.append({
             "id": f"patch_axes:{island_id}:{patch_id}:{role}",
             "source": "PatchAxes fallback for singleton or ungrouped in-patch rail",
             "family_id": None,
             "island_id": island_id,
+            "axis_role": axis_role,
+            "axis_direction": _axis_direction_for_role(axis_roles_by_island.get(island_id, {}), axis_role),
+            "patch_axes_role": role,
             "member_directional_evidence_ids": tuple(sorted(member_ids)),
             "branch_records": {},
         })
@@ -824,6 +842,14 @@ def _build_rails(islands, topology, relations, evidence_by_id, axis_roles_by_isl
             f"{island_id} {patch_id} {role}: PatchAxes grouped {len(member_ids)} singleton/ungrouped rail runs"
         )
     return rails, improvisations, inner_loop_placement
+
+
+def _axis_direction_for_role(axis_context, role):
+    if role == "AXIS_A" and axis_context.get("axis_a") is not None:
+        return tuple(axis_context["axis_a"]["direction"])
+    if role == "AXIS_B" and axis_context.get("axis_b") is not None:
+        return tuple(axis_context["axis_b"]["direction"])
+    return None
 
 
 def _patch_axes_role(evidence, axes) -> str:
@@ -1145,6 +1171,7 @@ def build_consumption_report(fixture_summaries) -> str:
         "axis_families={axis_role_family_count}, inner_chains={inner_loop_chains_placed}/"
         "{inner_loop_chain_count}, inner_fallback_vertices={inner_loop_fallback_vertex_count}, "
         "solve_residuals=(A:{skeleton_solve_residual_A}, B:{skeleton_solve_residual_B}), "
+        "both_pct={both_pct}, residuals=({residual_a},{residual_b}), "
         "unconstrained={skeleton_solve_unconstrained_component_count}, degenerate_islands="
         "{frontier_degenerate_island_count}, axis_coords=(both:{frontier_axis_coords_both_percent}%, "
         "one:{frontier_axis_coords_one_percent}%, zero:{frontier_axis_coords_zero_percent}%), "
@@ -1215,6 +1242,20 @@ JSON layout dumps live next to this report:
 """
 
 
+def _worst_equation_summary(skeleton_solve):
+    rows = []
+    for axis_name, system in skeleton_solve["axis_systems"].items():
+        for row in system.get("worst_equation_residuals", ()):
+            rows.append({
+                "axis": axis_name,
+                "chain_id": row["chain_id"],
+                "residual": row["residual"],
+                "abs_residual": row["abs_residual"],
+            })
+    rows.sort(key=lambda item: (-float(item["abs_residual"]), item["axis"], item["chain_id"]))
+    return rows[:3]
+
+
 def build_summary_dump(layouts):
     architect_lines = [
         "ARCHITECT SUMMARY",
@@ -1222,11 +1263,12 @@ def build_summary_dump(layouts):
         *(
             f"{layout['fixture']}: islands={layout['summary']['island_count']} "
             f"accepted={layout['summary']['stitched_patch_pairs']} "
-            f"rejected={layout['summary']['blocked_patch_pairs']}"
+            f"rejected={layout['summary']['blocked_patch_pairs']} "
+            f"both={layout['summary']['both_pct']}% "
+            f"res=({layout['summary']['residual_a']},{layout['summary']['residual_b']})"
             for layout in layouts
         ),
-        "t_junction endpoints excluded by remaining cut incidence",
-        "tube_with_cap still blocked on mid-chain rim vertices",
+        "worst residual chain ids are serialized per fixture",
         "scaffold_core untouched by spike",
     ]
     return {

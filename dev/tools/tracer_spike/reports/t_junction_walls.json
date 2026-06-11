@@ -1,7 +1,9 @@
 {
-  "ambiguities": [],
+  "ambiguities": [
+    "island:0: AXIS_A family length tie ['connected_direction_family:0', 'connected_direction_family:2']; picked connected_direction_family:0"
+  ],
   "axis_role_min_dot": 0.85,
-  "console_diagnostics_block": "ARCHITECT SUMMARY\nfixture=t_junction_walls islands=1 rails=4\nstitches accepted=2 rejected=0\nrejected |defect| buckets <1e-3=0 1e-3..1e-2=0 1e-2..1e-1=0 >1e-1=0\naxis coords skeleton vertices both=0.0% one=100.0% zero=0.0%\ncomponents A=1 B=4\nlstsq residuals A=0.0 B=0.0\ndegenerate islands=none",
+  "console_diagnostics_block": "ARCHITECT SUMMARY\nfixture=t_junction_walls islands=1 rails=7\nstitches accepted=2 rejected=0\nrejected |defect| buckets <1e-3=0 1e-3..1e-2=0 1e-2..1e-1=0 >1e-1=0\naxis coords skeleton vertices both=100.0% one=0.0% zero=0.0%\ncomponents A=1 B=1\nlstsq residuals A=0.0 B=0.0\ndegenerate islands=none",
   "consumed_relation_fields": [
     "connected_direction_families",
     "patch_adjacencies",
@@ -14,39 +16,57 @@
   "fixture": "t_junction_walls",
   "frontier": {
     "composition": {
-      "both_axis": 0,
-      "one_axis": 4,
-      "updated_assignments": 18,
+      "both_axis": 3,
+      "one_axis": 0,
+      "updated_assignments": 22,
       "vertex_axis_counts": {
-        "vertex:v0": {
-          "axis_count": 1,
+        "vertex:c": {
+          "axis_count": 2,
           "uv": [
-            -0.0,
-            3.0
+            0.0,
+            0.0
           ]
         },
-        "vertex:vx": {
-          "axis_count": 1,
-          "degenerate_break": "A",
+        "vertex:d": {
+          "axis_count": 0,
           "uv": [
-            1.01,
-            1.25
+            1.5,
+            1.5
           ]
         },
-        "vertex:vy": {
-          "axis_count": 1,
-          "degenerate_break": "A",
+        "vertex:dx": {
+          "axis_count": 0,
           "uv": [
-            1.02,
-            2.5
+            0.5,
+            0.5
           ]
         },
-        "vertex:vz": {
-          "axis_count": 1,
-          "degenerate_break": "A",
+        "vertex:lx": {
+          "axis_count": 0,
           "uv": [
-            1.03,
-            3.75
+            0.0,
+            0.0
+          ]
+        },
+        "vertex:lxy": {
+          "axis_count": 0,
+          "uv": [
+            1.0,
+            1.0
+          ]
+        },
+        "vertex:x": {
+          "axis_count": 2,
+          "uv": [
+            0.0,
+            0.0
+          ]
+        },
+        "vertex:y": {
+          "axis_count": 2,
+          "uv": [
+            0.0,
+            0.0
           ]
         }
       },
@@ -55,22 +75,22 @@
     "diagnostics": {
       "axis_components": {
         "A_component_count": 1,
-        "B_component_count": 4
+        "B_component_count": 1
       },
       "axis_coord_coverage_percent": {
-        "both": 0.0,
-        "one": 100.0,
+        "both": 100.0,
+        "one": 0.0,
         "zero": 0.0
       },
-      "canonical_vertex_count": 4,
+      "canonical_vertex_count": 3,
       "coordinate_share_by_island": {
         "island:0": {
-          "A": 0.25,
-          "B": 0.25
+          "A": 0.571429,
+          "B": 0.571429
         }
       },
       "degenerate_island_ids": [],
-      "frontier_updated_assignments": 18,
+      "frontier_updated_assignments": 22,
       "rejected_stitch_defect_histogram": {
         "1e-2_to_1e-1": 0,
         "1e-3_to_1e-2": 0,
@@ -84,25 +104,73 @@
         "axis_role": "AXIS_A",
         "ingress": "none",
         "island_id": "island:0",
-        "placed_vertex_count": 4,
+        "placed_vertex_count": 3,
         "rail_id": "connected_direction_family:0:island:0",
         "rank": [
           1,
           1,
           0,
-          6.0
+          3.0
         ]
       },
       {
         "anchor_vertex_ids": [
-          "vertex:vy",
-          "vertex:vz"
+          "vertex:x"
+        ],
+        "axis_role": "AXIS_B",
+        "ingress": "single",
+        "island_id": "island:0",
+        "placed_vertex_count": 2,
+        "rail_id": "patch_axes:island:0:patch:seed:f_se:SECONDARY",
+        "rank": [
+          2,
+          1,
+          1,
+          0.0
+        ]
+      },
+      {
+        "anchor_vertex_ids": [
+          "vertex:c"
+        ],
+        "axis_role": "AXIS_B",
+        "ingress": "single",
+        "island_id": "island:0",
+        "placed_vertex_count": 3,
+        "rail_id": "connected_direction_family:2:island:0",
+        "rank": [
+          2,
+          1,
+          1,
+          0.0
+        ]
+      },
+      {
+        "anchor_vertex_ids": [
+          "vertex:y"
+        ],
+        "axis_role": "AXIS_A",
+        "ingress": "single",
+        "island_id": "island:0",
+        "placed_vertex_count": 2,
+        "rail_id": "patch_axes:island:0:patch:seed:f_nw:PRIMARY",
+        "rank": [
+          2,
+          1,
+          1,
+          1.0
+        ]
+      },
+      {
+        "anchor_vertex_ids": [
+          "vertex:x",
+          "vertex:y"
         ],
         "axis_role": "OBLIQUE",
         "ingress": "both-anchored",
         "island_id": "island:0",
         "placed_vertex_count": 2,
-        "rail_id": "patch_axes:island:0:patch:seed:f_yz:PRIMARY",
+        "rail_id": "patch_axes:island:0:patch:seed:f_ne:PRIMARY",
         "rank": [
           2,
           0,
@@ -111,37 +179,31 @@
         ]
       },
       {
-        "anchor_vertex_ids": [
-          "vertex:vx",
-          "vertex:vz"
-        ],
-        "axis_role": "OBLIQUE",
-        "ingress": "both-anchored",
+        "anchor_vertex_ids": [],
+        "axis_role": "AXIS_A",
+        "ingress": "none",
         "island_id": "island:0",
         "placed_vertex_count": 2,
-        "rail_id": "patch_axes:island:0:patch:seed:f_xz:PRIMARY",
+        "rail_id": "patch_axes:island:0:patch:seed:f_se:PRIMARY",
         "rank": [
-          2,
+          1,
+          1,
           0,
-          2,
-          2.0
+          1.0
         ]
       },
       {
-        "anchor_vertex_ids": [
-          "vertex:vx",
-          "vertex:vy"
-        ],
-        "axis_role": "OBLIQUE",
-        "ingress": "both-anchored",
+        "anchor_vertex_ids": [],
+        "axis_role": "AXIS_B",
+        "ingress": "none",
         "island_id": "island:0",
         "placed_vertex_count": 2,
-        "rail_id": "patch_axes:island:0:patch:seed:f_xy:PRIMARY",
+        "rail_id": "patch_axes:island:0:patch:seed:f_nw:SECONDARY",
         "rank": [
-          2,
+          1,
+          1,
           0,
-          2,
-          2.0
+          0.0
         ]
       }
     ],
@@ -154,9 +216,11 @@
     ]
   },
   "improvisations": [
-    "island:0 patch:seed:f_xy PRIMARY: PatchAxes grouped 1 singleton/ungrouped rail runs",
-    "island:0 patch:seed:f_xz PRIMARY: PatchAxes grouped 1 singleton/ungrouped rail runs",
-    "island:0 patch:seed:f_yz PRIMARY: PatchAxes grouped 1 singleton/ungrouped rail runs"
+    "island:0 patch:seed:f_ne PRIMARY: PatchAxes grouped 1 singleton/ungrouped rail runs",
+    "island:0 patch:seed:f_nw PRIMARY: PatchAxes grouped 1 singleton/ungrouped rail runs",
+    "island:0 patch:seed:f_nw SECONDARY: PatchAxes grouped 1 singleton/ungrouped rail runs",
+    "island:0 patch:seed:f_se PRIMARY: PatchAxes grouped 1 singleton/ungrouped rail runs",
+    "island:0 patch:seed:f_se SECONDARY: PatchAxes grouped 1 singleton/ungrouped rail runs"
   ],
   "inner_loop_placement": {},
   "island_axis_roles": {
@@ -164,39 +228,39 @@
       "ambiguities": [],
       "axis_a": {
         "direction": [
+          -1.0,
           0.0,
-          0.0,
-          -1.0
+          0.0
         ],
-        "length": 6.0,
+        "length": 3.0,
         "seed_family_id": "connected_direction_family:0"
       },
       "axis_b": {
         "direction": [
-          -0.707107,
-          0.707107,
+          0.0,
+          -1.0,
           0.0
         ],
-        "length": 2.0,
+        "length": 3.0,
         "orthogonality_score": 1.0,
-        "seed_family_id": "connected_direction_family:1"
+        "seed_family_id": "connected_direction_family:2"
       },
       "families": [
         {
           "direction": [
+            -1.0,
             0.0,
-            0.0,
-            -1.0
+            0.0
           ],
           "dot_axis_a": 1.0,
           "dot_axis_b": 0.0,
           "family_id": "connected_direction_family:0",
-          "length": 6.0,
-          "member_count": 6,
+          "length": 3.0,
+          "member_count": 3,
           "patch_ids": [
-            "patch:seed:f_xy",
-            "patch:seed:f_xz",
-            "patch:seed:f_yz"
+            "patch:seed:f_ne",
+            "patch:seed:f_nw",
+            "patch:seed:f_se"
           ],
           "role": "AXIS_A"
         },
@@ -206,47 +270,97 @@
             0.707107,
             0.0
           ],
-          "dot_axis_a": 0.0,
-          "dot_axis_b": 1.0,
+          "dot_axis_a": 0.707107,
+          "dot_axis_b": 0.707107,
           "family_id": "connected_direction_family:1",
           "length": 2.0,
           "member_count": 1,
           "patch_ids": [
-            "patch:seed:f_xy"
+            "patch:seed:f_ne"
+          ],
+          "role": "OBLIQUE"
+        },
+        {
+          "direction": [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          "dot_axis_a": 0.0,
+          "dot_axis_b": 1.0,
+          "family_id": "connected_direction_family:2",
+          "length": 3.0,
+          "member_count": 3,
+          "patch_ids": [
+            "patch:seed:f_ne",
+            "patch:seed:f_nw",
+            "patch:seed:f_se"
           ],
           "role": "AXIS_B"
         },
         {
           "direction": [
-            0.707107,
+            -1.0,
             0.0,
-            -0.707107
+            0.0
           ],
-          "dot_axis_a": 0.707107,
-          "dot_axis_b": 0.5,
-          "family_id": "connected_direction_family:2",
-          "length": 2.0,
+          "dot_axis_a": 1.0,
+          "dot_axis_b": 0.0,
+          "family_id": "connected_direction_family:3",
+          "length": 1.0,
           "member_count": 1,
           "patch_ids": [
-            "patch:seed:f_xz"
+            "patch:seed:f_nw"
           ],
-          "role": "OBLIQUE"
+          "role": "AXIS_A"
         },
         {
           "direction": [
             0.0,
-            -0.707107,
-            0.707107
+            -1.0,
+            0.0
           ],
-          "dot_axis_a": 0.707107,
-          "dot_axis_b": 0.5,
-          "family_id": "connected_direction_family:3",
-          "length": 2.0,
+          "dot_axis_a": 0.0,
+          "dot_axis_b": 1.0,
+          "family_id": "connected_direction_family:4",
+          "length": 1.0,
           "member_count": 1,
           "patch_ids": [
-            "patch:seed:f_yz"
+            "patch:seed:f_nw"
           ],
-          "role": "OBLIQUE"
+          "role": "AXIS_B"
+        },
+        {
+          "direction": [
+            1.0,
+            0.0,
+            0.0
+          ],
+          "dot_axis_a": 1.0,
+          "dot_axis_b": 0.0,
+          "family_id": "connected_direction_family:5",
+          "length": 1.0,
+          "member_count": 1,
+          "patch_ids": [
+            "patch:seed:f_se"
+          ],
+          "role": "AXIS_A"
+        },
+        {
+          "direction": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "dot_axis_a": 0.0,
+          "dot_axis_b": 1.0,
+          "family_id": "connected_direction_family:6",
+          "length": 1.0,
+          "member_count": 1,
+          "patch_ids": [
+            "patch:seed:f_se"
+          ],
+          "role": "AXIS_B"
         }
       ]
     }
@@ -255,35 +369,39 @@
     {
       "id": "island:0",
       "patch_ids": [
-        "patch:seed:f_xy",
-        "patch:seed:f_xz",
-        "patch:seed:f_yz"
+        "patch:seed:f_ne",
+        "patch:seed:f_nw",
+        "patch:seed:f_se"
       ],
       "seed_connected_family_presence": 2.0,
-      "seed_patch_id": "patch:seed:f_xy",
+      "seed_patch_id": "patch:seed:f_ne",
       "vertex_ids": [
-        "vertex:v0",
-        "vertex:v0",
-        "vertex:v0",
-        "vertex:vx",
-        "vertex:vx",
-        "vertex:vxy",
-        "vertex:vxz",
-        "vertex:vy",
-        "vertex:vy",
-        "vertex:vyz",
-        "vertex:vz",
-        "vertex:vz"
+        "vertex:c",
+        "vertex:c",
+        "vertex:c",
+        "vertex:d",
+        "vertex:dx",
+        "vertex:lx",
+        "vertex:lxy",
+        "vertex:x",
+        "vertex:x",
+        "vertex:xy",
+        "vertex:y",
+        "vertex:y"
       ]
     }
   ],
   "rails": [
     {
       "assigned_vertex_ids": [
-        "vertex:v0",
-        "vertex:vx",
-        "vertex:vy",
-        "vertex:vz"
+        "vertex:c",
+        "vertex:lx",
+        "vertex:x"
+      ],
+      "axis_direction": [
+        -1.0,
+        0.0,
+        0.0
       ],
       "axis_role": "AXIS_A",
       "branch_records": {},
@@ -291,60 +409,134 @@
       "island_id": "island:0",
       "loop_kind": "OUTER_OR_SHARED",
       "member_directional_evidence_ids": [
-        "patch_chain_directional_evidence:patch_chain:patch:seed:f_xy:0:0:0",
-        "patch_chain_directional_evidence:patch_chain:patch:seed:f_xz:0:2:0",
-        "patch_chain_directional_evidence:patch_chain:patch:seed:f_yz:0:0:0",
-        "patch_chain_directional_evidence:patch_chain:patch:seed:f_xy:0:2:0",
-        "patch_chain_directional_evidence:patch_chain:patch:seed:f_xz:0:0:0",
-        "patch_chain_directional_evidence:patch_chain:patch:seed:f_yz:0:2:0"
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_nw:0:0:2",
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_ne:0:0:0",
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_se:0:1:0"
       ],
       "patch_chain_id": null,
       "source": "ConnectedDirectionFamily"
     },
     {
       "assigned_vertex_ids": [
-        "vertex:vx",
-        "vertex:vy"
+        "vertex:c",
+        "vertex:d",
+        "vertex:y"
       ],
-      "axis_role": null,
+      "axis_direction": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "axis_role": "AXIS_B",
       "branch_records": {},
-      "id": "patch_axes:island:0:patch:seed:f_xy:PRIMARY",
+      "id": "connected_direction_family:2:island:0",
+      "island_id": "island:0",
+      "loop_kind": "OUTER_OR_SHARED",
+      "member_directional_evidence_ids": [
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_nw:0:1:0",
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_ne:0:2:0",
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_se:0:0:0"
+      ],
+      "patch_chain_id": null,
+      "source": "ConnectedDirectionFamily"
+    },
+    {
+      "assigned_vertex_ids": [
+        "vertex:x",
+        "vertex:y"
+      ],
+      "axis_direction": null,
+      "axis_role": "OBLIQUE",
+      "branch_records": {},
+      "id": "patch_axes:island:0:patch:seed:f_ne:PRIMARY",
       "island_id": "island:0",
       "loop_kind": null,
       "member_directional_evidence_ids": [
-        "patch_chain_directional_evidence:patch_chain:patch:seed:f_xy:0:1:0"
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_ne:0:1:0"
       ],
       "patch_chain_id": null,
       "source": "PatchAxes fallback for singleton or ungrouped in-patch rail"
     },
     {
       "assigned_vertex_ids": [
-        "vertex:vx",
-        "vertex:vz"
+        "vertex:lxy",
+        "vertex:y"
       ],
-      "axis_role": null,
+      "axis_direction": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "axis_role": "AXIS_A",
       "branch_records": {},
-      "id": "patch_axes:island:0:patch:seed:f_xz:PRIMARY",
+      "id": "patch_axes:island:0:patch:seed:f_nw:PRIMARY",
       "island_id": "island:0",
       "loop_kind": null,
       "member_directional_evidence_ids": [
-        "patch_chain_directional_evidence:patch_chain:patch:seed:f_xz:0:1:0"
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_nw:0:0:0"
       ],
       "patch_chain_id": null,
       "source": "PatchAxes fallback for singleton or ungrouped in-patch rail"
     },
     {
       "assigned_vertex_ids": [
-        "vertex:vy",
-        "vertex:vz"
+        "vertex:lx",
+        "vertex:lxy"
       ],
-      "axis_role": null,
+      "axis_direction": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "axis_role": "AXIS_B",
       "branch_records": {},
-      "id": "patch_axes:island:0:patch:seed:f_yz:PRIMARY",
+      "id": "patch_axes:island:0:patch:seed:f_nw:SECONDARY",
       "island_id": "island:0",
       "loop_kind": null,
       "member_directional_evidence_ids": [
-        "patch_chain_directional_evidence:patch_chain:patch:seed:f_yz:0:1:0"
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_nw:0:0:1"
+      ],
+      "patch_chain_id": null,
+      "source": "PatchAxes fallback for singleton or ungrouped in-patch rail"
+    },
+    {
+      "assigned_vertex_ids": [
+        "vertex:d",
+        "vertex:dx"
+      ],
+      "axis_direction": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "axis_role": "AXIS_A",
+      "branch_records": {},
+      "id": "patch_axes:island:0:patch:seed:f_se:PRIMARY",
+      "island_id": "island:0",
+      "loop_kind": null,
+      "member_directional_evidence_ids": [
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_se:0:0:1"
+      ],
+      "patch_chain_id": null,
+      "source": "PatchAxes fallback for singleton or ungrouped in-patch rail"
+    },
+    {
+      "assigned_vertex_ids": [
+        "vertex:dx",
+        "vertex:x"
+      ],
+      "axis_direction": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "axis_role": "AXIS_B",
+      "branch_records": {},
+      "id": "patch_axes:island:0:patch:seed:f_se:SECONDARY",
+      "island_id": "island:0",
+      "loop_kind": null,
+      "member_directional_evidence_ids": [
+        "patch_chain_directional_evidence:patch_chain:patch:seed:f_se:0:0:2"
       ],
       "patch_chain_id": null,
       "source": "PatchAxes fallback for singleton or ungrouped in-patch rail"
@@ -356,11 +548,12 @@
       "A": {
         "component_graph": "B",
         "coordinate": "A",
-        "equation_count": 6,
+        "equation_count": 0,
         "equation_role": "AXIS_A",
         "residual_rms": 0.0,
         "unconstrained_components": [],
-        "variable_count": 4
+        "variable_count": 1,
+        "worst_equation_residuals": []
       },
       "B": {
         "component_graph": "A",
@@ -369,7 +562,31 @@
         "equation_role": "AXIS_B",
         "residual_rms": 0.0,
         "unconstrained_components": [],
-        "variable_count": 1
+        "variable_count": 1,
+        "worst_equation_residuals": []
+      }
+    },
+    "canonical_vertices": {
+      "vertex:c": {
+        "A": 0.0,
+        "B": 0.0,
+        "axis_count": 2,
+        "component_A": "scaffold_node:source:c",
+        "component_B": "scaffold_node:source:c"
+      },
+      "vertex:x": {
+        "A": 0.0,
+        "B": 0.0,
+        "axis_count": 2,
+        "component_A": "scaffold_node:source:c",
+        "component_B": "scaffold_node:source:c"
+      },
+      "vertex:y": {
+        "A": 0.0,
+        "B": 0.0,
+        "axis_count": 2,
+        "component_A": "scaffold_node:source:c",
+        "component_B": "scaffold_node:source:c"
       }
     },
     "component_graphs": {
@@ -378,12 +595,11 @@
         "components": [
           {
             "canonical_coordinate": 0.0,
-            "id": "scaffold_node:source:v0",
+            "id": "scaffold_node:source:c",
             "node_ids": [
-              "scaffold_node:source:v0",
-              "scaffold_node:source:vx",
-              "scaffold_node:source:vy",
-              "scaffold_node:source:vz"
+              "scaffold_node:source:c",
+              "scaffold_node:source:x",
+              "scaffold_node:source:y"
             ],
             "post_hoc_3d_spread": {
               "source_position_spread": 1.414214,
@@ -394,52 +610,18 @@
         ]
       },
       "B": {
-        "component_count": 4,
+        "component_count": 1,
         "components": [
           {
-            "canonical_coordinate": -0.0,
-            "id": "scaffold_node:source:v0",
+            "canonical_coordinate": 0.0,
+            "id": "scaffold_node:source:c",
             "node_ids": [
-              "scaffold_node:source:v0"
+              "scaffold_node:source:c",
+              "scaffold_node:source:x",
+              "scaffold_node:source:y"
             ],
             "post_hoc_3d_spread": {
-              "source_position_spread": 0.0,
-              "unconstrained_by_spread": false
-            },
-            "unconstrained": false
-          },
-          {
-            "canonical_coordinate": 1.0,
-            "id": "scaffold_node:source:vx",
-            "node_ids": [
-              "scaffold_node:source:vx"
-            ],
-            "post_hoc_3d_spread": {
-              "source_position_spread": 0.0,
-              "unconstrained_by_spread": false
-            },
-            "unconstrained": false
-          },
-          {
-            "canonical_coordinate": 1.0,
-            "id": "scaffold_node:source:vy",
-            "node_ids": [
-              "scaffold_node:source:vy"
-            ],
-            "post_hoc_3d_spread": {
-              "source_position_spread": 0.0,
-              "unconstrained_by_spread": false
-            },
-            "unconstrained": false
-          },
-          {
-            "canonical_coordinate": 1.0,
-            "id": "scaffold_node:source:vz",
-            "node_ids": [
-              "scaffold_node:source:vz"
-            ],
-            "post_hoc_3d_spread": {
-              "source_position_spread": 0.0,
+              "source_position_spread": 1.414214,
               "unconstrained_by_spread": false
             },
             "unconstrained": false
@@ -450,16 +632,22 @@
     "level_b_placeholder": "LEVEL_B_PLACEHOLDER: sibling equivalence for repeated openings is deferred until walls.004/G4 validates which grammar constraint should own it.",
     "per_island": {
       "island:0": {
-        "axis_a_chain_count": 6,
-        "axis_b_chain_count": 0,
+        "axis_a_chain_count": 3,
+        "axis_b_chain_count": 3,
         "residual_A": 0.0,
         "residual_B": 0.0,
         "skeleton_chains": [
           {
             "axis_role": "AXIS_A",
-            "chain_id": "chain:e_x_shared",
+            "chain_id": "chain:e_nw_top:e_nw_left:e_nw_bottom",
             "length": 1.0,
             "rail_id": "connected_direction_family:0:island:0"
+          },
+          {
+            "axis_role": "AXIS_A",
+            "chain_id": "chain:e_se_left:e_se_bottom:e_se_right",
+            "length": 1.0,
+            "rail_id": "patch_axes:island:0:patch:seed:f_se:PRIMARY"
           },
           {
             "axis_role": "AXIS_A",
@@ -468,28 +656,22 @@
             "rail_id": "connected_direction_family:0:island:0"
           },
           {
-            "axis_role": "AXIS_A",
+            "axis_role": "AXIS_B",
+            "chain_id": "chain:e_nw_top:e_nw_left:e_nw_bottom",
+            "length": 1.0,
+            "rail_id": "patch_axes:island:0:patch:seed:f_nw:SECONDARY"
+          },
+          {
+            "axis_role": "AXIS_B",
+            "chain_id": "chain:e_se_left:e_se_bottom:e_se_right",
+            "length": 1.0,
+            "rail_id": "connected_direction_family:2:island:0"
+          },
+          {
+            "axis_role": "AXIS_B",
             "chain_id": "chain:e_y_shared",
             "length": 1.0,
-            "rail_id": "connected_direction_family:0:island:0"
-          },
-          {
-            "axis_role": "AXIS_A",
-            "chain_id": "chain:e_y_shared",
-            "length": 1.0,
-            "rail_id": "connected_direction_family:0:island:0"
-          },
-          {
-            "axis_role": "AXIS_A",
-            "chain_id": "chain:e_z_shared",
-            "length": 1.0,
-            "rail_id": "connected_direction_family:0:island:0"
-          },
-          {
-            "axis_role": "AXIS_A",
-            "chain_id": "chain:e_z_shared",
-            "length": 1.0,
-            "rail_id": "connected_direction_family:0:island:0"
+            "rail_id": "connected_direction_family:2:island:0"
           }
         ]
       }
@@ -497,36 +679,29 @@
     "policy": "tracer_spike_skeleton_solve_v0",
     "post_hoc_3d_spread_check": {
       "A": {
-        "scaffold_node:source:v0": {
+        "scaffold_node:source:c": {
           "source_position_spread": 1.414214,
           "unconstrained_by_spread": false
         }
       },
       "B": {
-        "scaffold_node:source:v0": {
-          "source_position_spread": 0.0,
-          "unconstrained_by_spread": false
-        },
-        "scaffold_node:source:vx": {
-          "source_position_spread": 0.0,
-          "unconstrained_by_spread": false
-        },
-        "scaffold_node:source:vy": {
-          "source_position_spread": 0.0,
-          "unconstrained_by_spread": false
-        },
-        "scaffold_node:source:vz": {
-          "source_position_spread": 0.0,
+        "scaffold_node:source:c": {
+          "source_position_spread": 1.414214,
           "unconstrained_by_spread": false
         }
       },
       "used_for_regrouping": false
     },
     "write_back": {
-      "note": "Canonical write-back solved rail-station constraints after dense component solve.",
-      "pinned_assignment_updates": 18,
-      "skeleton_vertex_count": 4,
-      "vertex_writeback_residual_rms": 0.919866211008
+      "axis_coord_coverage_percent": {
+        "both": 100.0,
+        "one": 0.0,
+        "zero": 0.0
+      },
+      "note": "Canonical component write-back owns vertices with both axis coordinates; frontier handles one/zero-axis fallback.",
+      "pinned_assignment_additions": 0,
+      "pinned_assignment_updates": 14,
+      "skeleton_vertex_count": 3
     }
   },
   "stitch_decisions": [
@@ -534,17 +709,17 @@
       "accepted": true,
       "chain_id": "chain:e_x_shared",
       "excluded_endpoint_reasons": {
-        "vertex:v0": "remaining_cut_incidence:chain:e_y_shared,chain:e_z_shared",
-        "vertex:vx": "mesh_or_selection_boundary"
+        "vertex:c": "mesh_or_selection_boundary",
+        "vertex:x": "mesh_or_selection_boundary"
       },
       "excluded_endpoint_vertex_ids": [
-        "vertex:v0",
-        "vertex:vx"
+        "vertex:c",
+        "vertex:x"
       ],
-      "from_patch_id": "patch:seed:f_xy",
-      "patch_adjacency_id": "adjacency:chain:e_x_shared:patch:seed:f_xy:patch:seed:f_xz",
+      "from_patch_id": "patch:seed:f_ne",
+      "patch_adjacency_id": "adjacency:chain:e_x_shared:patch:seed:f_ne:patch:seed:f_se",
       "reason": "no would-be interior vertices after endpoint exclusions",
-      "to_patch_id": "patch:seed:f_xz",
+      "to_patch_id": "patch:seed:f_se",
       "vertex_angle_defects": {},
       "vertex_interior_angle_sums": {},
       "would_be_interior_vertex_ids": []
@@ -553,17 +728,17 @@
       "accepted": true,
       "chain_id": "chain:e_y_shared",
       "excluded_endpoint_reasons": {
-        "vertex:v0": "remaining_cut_incidence:chain:e_x_shared,chain:e_z_shared",
-        "vertex:vy": "mesh_or_selection_boundary"
+        "vertex:c": "mesh_or_selection_boundary",
+        "vertex:y": "mesh_or_selection_boundary"
       },
       "excluded_endpoint_vertex_ids": [
-        "vertex:vy",
-        "vertex:v0"
+        "vertex:y",
+        "vertex:c"
       ],
-      "from_patch_id": "patch:seed:f_xy",
-      "patch_adjacency_id": "adjacency:chain:e_y_shared:patch:seed:f_xy:patch:seed:f_yz",
+      "from_patch_id": "patch:seed:f_ne",
+      "patch_adjacency_id": "adjacency:chain:e_y_shared:patch:seed:f_ne:patch:seed:f_nw",
       "reason": "no would-be interior vertices after endpoint exclusions",
-      "to_patch_id": "patch:seed:f_yz",
+      "to_patch_id": "patch:seed:f_nw",
       "vertex_angle_defects": {},
       "vertex_interior_angle_sums": {},
       "would_be_interior_vertex_ids": []
@@ -571,55 +746,112 @@
   ],
   "stitch_defect_tolerance": 0.001,
   "summary": {
-    "ambiguity_count": 0,
-    "axis_role_ambiguity_count": 0,
-    "axis_role_family_count": 4,
+    "ambiguity_count": 1,
+    "axis_role_ambiguity_count": 1,
+    "axis_role_family_count": 7,
     "blocked_patch_pairs": 0,
+    "both_pct": 100.0,
     "fixture": "t_junction_walls",
-    "frontier_axis_coords_both_percent": 0.0,
-    "frontier_axis_coords_one_percent": 100.0,
+    "frontier_axis_coords_both_percent": 100.0,
+    "frontier_axis_coords_one_percent": 0.0,
     "frontier_axis_coords_zero_percent": 0.0,
     "frontier_degenerate_island_count": 0,
-    "improvisation_count": 3,
+    "improvisation_count": 5,
     "inner_loop_chain_count": 0,
     "inner_loop_chains_placed": 0,
     "inner_loop_fallback_vertex_count": 0,
     "island_count": 1,
-    "rail_count": 4,
+    "rail_count": 7,
+    "residual_a": 0.0,
+    "residual_b": 0.0,
     "self_seam_chain_count": 0,
     "skeleton_solve_residual_A": 0.0,
     "skeleton_solve_residual_B": 0.0,
     "skeleton_solve_unconstrained_component_count": 0,
-    "stitched_patch_pairs": 2
+    "stitched_patch_pairs": 2,
+    "worst_equation_residuals": []
   },
   "vertices": {
-    "vertex:v0": {
+    "vertex:c": {
       "assignment_sources": [
-        "connected_direction_family:0:island:0"
+        "connected_direction_family:0:island:0",
+        "connected_direction_family:2:island:0"
       ],
       "island_id": "island:0",
       "pinned": true,
       "uv": [
         0.0,
-        3.0
+        0.0
       ],
-      "vertex_id": "vertex:v0"
+      "vertex_id": "vertex:c"
     },
-    "vertex:vx": {
+    "vertex:d": {
       "assignment_sources": [
-        "connected_direction_family:0:island:0",
-        "patch_axes:island:0:patch:seed:f_xy:PRIMARY",
-        "patch_axes:island:0:patch:seed:f_xz:PRIMARY"
+        "connected_direction_family:2:island:0",
+        "patch_axes:island:0:patch:seed:f_se:PRIMARY"
       ],
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        1.01,
-        1.25
+        1.5,
+        1.5
       ],
-      "vertex_id": "vertex:vx"
+      "vertex_id": "vertex:d"
     },
-    "vertex:vxy": {
+    "vertex:dx": {
+      "assignment_sources": [
+        "patch_axes:island:0:patch:seed:f_se:PRIMARY",
+        "patch_axes:island:0:patch:seed:f_se:SECONDARY"
+      ],
+      "island_id": "island:0",
+      "pinned": true,
+      "uv": [
+        0.5,
+        0.5
+      ],
+      "vertex_id": "vertex:dx"
+    },
+    "vertex:lx": {
+      "assignment_sources": [
+        "connected_direction_family:0:island:0",
+        "patch_axes:island:0:patch:seed:f_nw:SECONDARY"
+      ],
+      "island_id": "island:0",
+      "pinned": true,
+      "uv": [
+        0.0,
+        0.0
+      ],
+      "vertex_id": "vertex:lx"
+    },
+    "vertex:lxy": {
+      "assignment_sources": [
+        "patch_axes:island:0:patch:seed:f_nw:PRIMARY",
+        "patch_axes:island:0:patch:seed:f_nw:SECONDARY"
+      ],
+      "island_id": "island:0",
+      "pinned": true,
+      "uv": [
+        1.0,
+        1.0
+      ],
+      "vertex_id": "vertex:lxy"
+    },
+    "vertex:x": {
+      "assignment_sources": [
+        "connected_direction_family:0:island:0",
+        "patch_axes:island:0:patch:seed:f_ne:PRIMARY",
+        "patch_axes:island:0:patch:seed:f_se:SECONDARY"
+      ],
+      "island_id": "island:0",
+      "pinned": true,
+      "uv": [
+        0.0,
+        0.0
+      ],
+      "vertex_id": "vertex:x"
+    },
+    "vertex:xy": {
       "assignment_sources": [
         "fallback patch-axis projection"
       ],
@@ -627,61 +859,23 @@
       "pinned": false,
       "uv": [
         0.0,
-        5.0
+        9.0
       ],
-      "vertex_id": "vertex:vxy"
+      "vertex_id": "vertex:xy"
     },
-    "vertex:vxz": {
+    "vertex:y": {
       "assignment_sources": [
-        "fallback patch-axis projection"
-      ],
-      "island_id": "island:0",
-      "pinned": false,
-      "uv": [
-        0.0,
-        4.0
-      ],
-      "vertex_id": "vertex:vxz"
-    },
-    "vertex:vy": {
-      "assignment_sources": [
-        "connected_direction_family:0:island:0",
-        "patch_axes:island:0:patch:seed:f_xy:PRIMARY",
-        "patch_axes:island:0:patch:seed:f_yz:PRIMARY"
+        "connected_direction_family:2:island:0",
+        "patch_axes:island:0:patch:seed:f_ne:PRIMARY",
+        "patch_axes:island:0:patch:seed:f_nw:PRIMARY"
       ],
       "island_id": "island:0",
       "pinned": true,
       "uv": [
-        1.02,
-        2.5
-      ],
-      "vertex_id": "vertex:vy"
-    },
-    "vertex:vyz": {
-      "assignment_sources": [
-        "fallback patch-axis projection"
-      ],
-      "island_id": "island:0",
-      "pinned": false,
-      "uv": [
         0.0,
-        5.0
+        0.0
       ],
-      "vertex_id": "vertex:vyz"
-    },
-    "vertex:vz": {
-      "assignment_sources": [
-        "connected_direction_family:0:island:0",
-        "patch_axes:island:0:patch:seed:f_xz:PRIMARY",
-        "patch_axes:island:0:patch:seed:f_yz:PRIMARY"
-      ],
-      "island_id": "island:0",
-      "pinned": true,
-      "uv": [
-        1.03,
-        3.75
-      ],
-      "vertex_id": "vertex:vz"
+      "vertex_id": "vertex:y"
     }
   }
 }
