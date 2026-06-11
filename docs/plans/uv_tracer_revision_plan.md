@@ -14,6 +14,18 @@ producing pinned UVs) before any further evidence kinds are added.
 
 ## Standing rules for all Task Cards in this plan
 
+0. **Reporting protocol (token economy).** Every executed card produces:
+   (a) `reports/summary.json` — flat key->number/boolean dict, <= 25 keys,
+   with the card's acceptance numbers and guard-compliance booleans;
+   (b) an ARCHITECT SUMMARY block at the end of the agent's reply,
+   <= 15 lines: commit hash, acceptance pass/fail per item (one line
+   each), anomalies, open questions. Verbose JSON/MD dumps stay on disk
+   for targeted queries — the Architect reads summary.json and the
+   block by default and deep-dives only on anomaly. The user pastes
+   only the ARCHITECT SUMMARY block, never full agent logs. Blender
+   runs print the same block (<= 15 lines) to the console for
+   copy-paste.
+
 1. **Evidence moratorium.** Do not add new Layer 3 evidence record types or
    relation kinds. New distinctions must wait until the tracer (Slice E)
    shows they are consumed. Exception: ConnectedDirectionFamily v0 (Slice D),
