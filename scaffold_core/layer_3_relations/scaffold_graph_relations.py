@@ -559,10 +559,18 @@ def _surface_flow_compatibility_evidence(
         return None
     if _is_degraded_sample(first.endpoint_sample) or _is_degraded_sample(second.endpoint_sample):
         return None
-    if not _has_strong_normal_evidence(first.endpoint_sample, second.endpoint_sample, normal_dot):
-        return None
-    if normal_dot is None or normal_dot < COMPATIBLE_NORMAL_MIN_DOT:
-        return None
+    # Same-chain pairs (rule B seam flow, cap rims) flow across a locally
+    # flat junction, so diverging owner normals disprove the flow (DD-39
+    # cap/side). Different-chain rule A ring flow runs around a curved
+    # surface where owner normals legitimately diverge and must not be
+    # normal-gated.
+    if first.scaffold_edge.chain_id == second.scaffold_edge.chain_id:
+        if not _has_strong_normal_evidence(
+            first.endpoint_sample, second.endpoint_sample, normal_dot
+        ):
+            return None
+        if normal_dot is None or normal_dot < COMPATIBLE_NORMAL_MIN_DOT:
+            return None
     first_direction_family_id = direction_family_by_evidence_id.get(
         first.endpoint_sample.directional_evidence_id
     )
