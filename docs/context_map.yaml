@@ -51,6 +51,9 @@ phase_forbidden_dirs:
 task_routes:
   architecture:
     - G0.md
+  active_roadmap:
+    - docs/plans/uv_tracer_revision_plan.md
+    - AGENTS.md
   planning_workflow:
     - AGENTS.md
     - docs/agent_rules/planning_workflow.md
