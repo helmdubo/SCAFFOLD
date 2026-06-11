@@ -502,12 +502,53 @@ retire). Includes the original doc hygiene: DD-41/42 rewritten against
 fixtures, DD text deduplication to one canonical home, G0
 constitution/status split (pending decision 3).
 
-### Recommended next vertical after F1: spike v2 in Blender
+### Task Card E2 — Spike v2: real mesh in Blender (run AFTER F1 merges)
 
-Run the frontier on a real beveled-wall mesh inside Blender: write pins
-from the skeleton layout, call the built-in pinned conformal unwrap,
-screenshot the UV editor. First visible end-to-end UV result; validates
-the pinned-skeleton + conformal-fill split on real geometry.
+First visible end-to-end UV result. Validates the pinned-skeleton +
+conformal-fill split on real geometry. The user runs and validates this
+inside Blender (Tier 3); agents only prepare the script.
+
+```text
+GOAL
+  dev/tools/tracer_spike/blender_run.py — a script the user runs from
+  Blender's Text Editor or `blender --python`, which:
+  1. reads the active object's selected faces via
+     scaffold_core.layer_0_source.blender_io.read_source_mesh_from_blender;
+  2. runs Pass 0 / Pass 1;
+  3. runs the (typed, post-F1) tracer frontier to get islands + skeleton
+     UVs + pinned flags;
+  4. writes skeleton UVs into the active UV layer, sets pin flags on
+     those loops, offsets islands so they do not overlap;
+  5. calls bpy.ops.uv.unwrap (conformal) so Blender fills the interior
+     between pinned rails;
+  6. prints a compact per-island report (patches, stitched/blocked
+     seams with angle-defect reasons, rails, pinned counts) to console
+     and saves it next to the script.
+
+RULES
+  - bpy usage stays inside dev/tools/tracer_spike/blender_run.py;
+    scaffold_core/ untouched (blender_io is the existing read boundary);
+  - no operator/addon UI, no bl_info: a plain runnable script;
+  - mesh editing stays Blender's: the script writes UVs and pins only.
+
+EXPECTATION MANAGEMENT (write into the report header)
+  v2 diagnoses reality gaps; it does not produce final-quality UVs.
+  Known limits: crude rail collapse math from spike v0, conservative
+  splits on asymmetric curved bevels, no scale/texel policy, naive
+  island offsets, interior quality depends on Blender's solver.
+
+USER VALIDATION CHECKLIST (manual, in Blender)
+  - select wall faces with seams marked, run script;
+  - UV editor: rails are straight lines, pins visible on rails;
+  - seams the gate stitched are interior straight stitches;
+  - cap-like patches are separate islands;
+  - report any crash/wrong island with the console dump.
+
+STOP CONDITIONS
+  - any urge to modify scaffold_core -> report instead;
+  - pinned unwrap API mismatch with target Blender version -> document
+    the version used and the call that works.
+```
 
 ---
 
