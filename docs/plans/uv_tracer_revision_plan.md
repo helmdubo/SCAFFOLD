@@ -415,20 +415,99 @@ EXIT
 
 ---
 
-## Slice F — Post-tracer revision (plan after Slice E report)
+## Slice F — Post-tracer revision (REPLANNED from the E1 consumption report)
 
-Expected content, to be confirmed by the tracer report:
+E1 verdict: PASS. Structural decisions correct on all five fixtures
+(angle-defect stitch gate accepted the two-seam tube fold with defect 0,
+blocked cap/side at ~pi/2, detected SEAM_SELF, assembled bevel corner into
+one island, kept detached walls apart). Raw UV numbers in the dumps are
+crude (mean-collapse, fallback projection) — irrelevant: the consumption
+report is the deliverable.
+
+Consumption verdict:
 
 ```text
-- prune or merge evidence kinds the frontier never consumed;
-- rewrite DD-41/DD-42 against fixture invariants (no blend-file pairs);
-- deduplicate DD texts to one canonical home per fact
-  (G0 = short normative text; design_decisions.md = full text;
-  agent_handoff.md = status);
-- split G0 changelog/status entries out of the constitution;
-- define confidence semantics from frontier needs, or downgrade to
-  ok/degraded.
+CONSUMER API (read by the frontier):
+  connected_direction_families, patch_chain_directional_evidence,
+  patch_adjacencies, scaffold_junctions, patch_axes
+  + Layer 2: vertex_facts.angle_defect, chain_facts
+  + Layer 1 topology.
+
+NEVER READ DIRECTLY (15 RelationSnapshot fields), but most are the
+SUBSTRATE direction_families/patch_axes are built from (endpoint
+samples, scaffold nodes/edges, incident relations, shared-chain
+relations, alignment classes). Substrate is internal, not dead.
+
+TRULY UNCONSUMED (no builder consumes them either):
+  chain_continuations (TERMINUS/SPLIT) — retire candidate;
+  scaffold_continuity_components — superseded by families for flow
+  purposes; only the debug overlay colors by it. Decide: debug-only
+  or retire after D3.
 ```
+
+### Task Card F1 — Typed family consumer API
+
+Direct response to spike improvisations 1, 2, 6, 7.
+
+```text
+GOAL
+  Promote ConnectedDirectionFamily to a typed consumer contract:
+  1. crossing_records become a frozen CrossingRecord dataclass (kind,
+     node/chain ids, evidence ids, signed dihedral, transported dots,
+     confidence) — no dict shadow API;
+  2. rail-order helper: family members in connected rail order
+     (crossing-graph walk; leaves chosen deterministically), exposed as
+     ordered member ids per family;
+  3. explicit member -> (patch_chain_id, scaffold_edge_id, topology
+     start/end vertex ids) map so consumers stop reverse-mapping
+     through source vertices.
+
+ACCEPTANCE
+  1. tracer spike rewritten to consume the typed API with zero dict key
+     access and zero source-vertex reverse lookup (spike edit allowed,
+     it is the validation consumer);
+  2. family outputs byte-identical on all canonical fixtures except the
+     new typed/ordered fields;
+  3. suite green; inspection serializes the typed records.
+
+ALLOWED FILES
+  scaffold_core/layer_3_relations/direction_families.py
+  scaffold_core/layer_3_relations/model.py
+  scaffold_core/pipeline/inspection.py
+  scaffold_core/tests/test_direction_families.py
+  dev/tools/tracer_spike/run_tracer_spike.py
+
+STOP CONDITIONS
+  - rail order wants to CHOOSE among branches at valence>2 -> preserve
+    ambiguity (emit branch records), do not pick a trace.
+```
+
+### Task Card F2 — Stitch-gate vertex set DD + fixture
+
+The spike approximated "vertices that become interior" as the two shared
+chain ENDPOINTS. Mid-chain vertices of a multi-edge seam also become
+interior and are currently unchecked. Needs: DD text defining the exact
+vertex set (all vertices of the shared chain, endpoints included only
+when their other incident boundary disappears), plus a fixture with a
+multi-edge seam whose midpoint vertex has nonzero defect (e.g. a ridge
+tent shape) proving the gate blocks it. DD draft by Architect, user
+approves; implementation lives in the spike until G5.
+
+### Task Card F3 — Consumer API split DD (G0 amendment, user approval)
+
+Declare in G0 which RelationSnapshot fields are consumer-facing contract
+vs builder-internal substrate; retire chain_continuations if no consumer
+is found; decide scaffold_continuity_components fate (debug-only vs
+retire). Includes the original doc hygiene: DD-41/42 rewritten against
+fixtures, DD text deduplication to one canonical home, G0
+constitution/status split (pending decision 3).
+
+### Recommended next vertical after F1: spike v2 in Blender
+
+Run the frontier on a real beveled-wall mesh inside Blender: write pins
+from the skeleton layout, call the built-in pinned conformal unwrap,
+screenshot the UV editor. First visible end-to-end UV result; validates
+the pinned-skeleton + conformal-fill split on real geometry.
 
 ---
 
