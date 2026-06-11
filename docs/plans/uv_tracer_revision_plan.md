@@ -28,6 +28,11 @@ producing pinned UVs) before any further evidence kinds are added.
 4. G0.md remains read-only for agents. Where a slice needs a G0 amendment,
    the Task Card says so and the Architect drafts the amendment for user
    approval first.
+5. **Paired acceptance.** Every negative acceptance criterion ("X must not
+   be emitted") must ship with a paired positive criterion ("Y must still
+   be emitted") backed by an end-to-end fixture test. Lesson from the B1
+   regression: the cap/side gate silently disabled legitimate rule A ring
+   flow because no in-repo fixture pinned the positive case.
 
 ---
 
@@ -98,7 +103,22 @@ Level B (Layer 4/5, soft, semantic):
 
 ## Slice A — Canonical fixture package (DONE)
 
-Landed on branch `claude/nifty-bohr-pv623i`. See "Current state" above.
+Landed via PR #2. See "Current state" above.
+
+## Status update (2026-06)
+
+- Slice B (B1, B2, B3) and Slice C (C1): DONE, merged to main.
+- B1 follow-up: the first cap/side fix gated all SurfaceFlowCompatibility
+  on compatible normals and silently regressed DD-39 rule A ring flow
+  (two-seam tube). Fixed by scoping the normal gate to same-chain pairs;
+  the two-seam tube maker and ring-flow baseline test now pin the
+  positive case. Origin of standing rule 5.
+- D1: DONE — DD-43 approved by user and committed (G0 v1.3).
+- User approvals received: DD-43 amendment (Slice D), tracer spike home
+  in dev/tools/tracer_spike/ (Slice E, no phase exception needed since
+  the spike lives outside scaffold_core as consumer tooling).
+- F3 endpoint part is resolved by C1; F1/F2/F3 family-grouping parts
+  await D2.
 
 ---
 
@@ -271,30 +291,54 @@ Design constraints (Architect-level, encode in the Task Card / DD draft):
   restrictions as ScaffoldContinuityComponent).
 ```
 
-### Task Card D1 — DD draft + contract doc (Architect output, user approves)
+### Task Card D1 — DD draft + contract doc (DONE)
 
-G0 amendment required (new derived relation + AlignmentClass demotion path).
-Architect drafts; user approves; agents do not edit G0.
+DD-43 approved by user and committed as G0 v1.3. Agents implement from
+DD-43; they do not edit G0.
 
-### Task Card D2 — Implementation + baseline flips
+### Task Card D2 — ConnectedDirectionFamily v0 implementation
+
+Note on baselines: AlignmentClass stays unchanged in v0 (DD-43), so the
+existing KNOWN LIMITATION alignment assertions remain true and are NOT
+flipped here. D2 adds family assertions alongside them. The alignment
+flips happen only when AlignmentClass is demoted (Slice F or later).
 
 ```text
-ACCEPTANCE
-  1. detached_parallel_walls: walls never share a family (flip F1 test).
-  2. l_corridor_tunnel_seamed_folds: one length family across 3 patches
-     (flip F3 length test), width family unchanged.
-  3. beveled_wall_corner: horizontal chains of wall A + chamfer + wall B
-     form one family (flip F2 test); vertical family unchanged.
+GOAL
+  ConnectedDirectionFamily v0 per G0 DD-43: direction families propagated
+  along ScaffoldGraph connectivity with signed-dihedral parallel
+  transport, as a new Layer 3 evidence view. AlignmentClass untouched.
+
+ACCEPTANCE (fixture expectations are DD-43 verbatim)
+  1. detached_parallel_walls: the two walls never share a family.
+  2. l_corridor_tunnel_seamed_folds: one length family across floor,
+     wall and ceiling; one width family.
+  3. beveled_wall_corner: one horizontal family across wall A, chamfer
+     and wall B; one vertical family.
   4. tube_with_cap: cap and side families stay separate.
-  5. cylinder/cube regression tests green.
+  5. cylinder_tube two-seam variant: top ring family and bottom ring
+     family across both side patches.
+  6. Same-chain vs different-chain transport gates follow DD-43 (mirror
+     the SurfaceFlowCompatibilityEvidence same-chain normal gate).
+  7. Families carry provenance: member directional-evidence ids,
+     crossing records (shared chain id / node id, signed dihedral),
+     confidence. No trace/rail/UV/solve semantics.
+  8. Inspection report exposes families behind detail="full".
+  9. Existing tests stay green; AlignmentClass outputs unchanged.
 
 ALLOWED FILES
-  scaffold_core/layer_3_relations/<new module per anti-overengineering
-  naming rules — one concept, no utils/helpers>
+  scaffold_core/layer_3_relations/direction_families.py (new)
   scaffold_core/layer_3_relations/model.py
   scaffold_core/layer_3_relations/build.py
   scaffold_core/pipeline/inspection.py
-  scaffold_core/tests/ (new test module + baseline flips)
+  scaffold_core/tests/test_direction_families.py (new)
+  scaffold_core/tests/test_canonical_fixture_baselines.py (add family
+  assertions only; do not flip alignment assertions)
+
+STOP CONDITIONS
+  - propagation wants to mutate ScaffoldContinuityComponent -> stop
+  - gate logic wants a new relation kind -> stop (moratorium)
+  - AlignmentClass consumers need migration -> stop, report
 ```
 
 ### Task Card D3 — Debug overlay channel
@@ -308,10 +352,13 @@ components (stable pseudo-random by id).
 ## Slice E — Vertical tracer: skeleton frontier to pinned UVs
 
 Purpose: validate which Layer 3 evidence a real consumer actually uses.
-This is a spike: branch-isolated, deletable, NOT a G5 phase start.
+This is a spike: deletable consumer tooling, NOT a G5 phase start.
 
-**Requires explicit user approval to relax the "no Layer 5 during G3" rule
-for a spike branch.** The phase rule stays in force for mainline.
+APPROVED home: `dev/tools/tracer_spike/` — outside scaffold_core, a
+pipeline consumer like the debug addon. No phase-rule exception is
+needed; the spike must not be imported by scaffold_core and must not
+move solve logic into the core. The "no Layer 5 during G3" rule stays
+fully in force for scaffold_core/.
 
 ```text
 SCOPE
@@ -357,8 +404,10 @@ Expected content, to be confirmed by the tracer report:
 ## Decisions the user must approve before the relevant slice
 
 ```text
-1. Slice D: G0 amendment for ConnectedDirectionFamily and the planned
-   demotion path of global AlignmentClass.
-2. Slice E: temporary spike exception to the "no Layer 5 during G3" rule.
-3. Slice F: G0 restructuring (constitution vs status split).
+1. Slice D: G0 amendment for ConnectedDirectionFamily — APPROVED
+   (DD-43, G0 v1.3). AlignmentClass demotion remains a separate future
+   approval.
+2. Slice E: spike home dev/tools/tracer_spike/ — APPROVED; no phase
+   exception required.
+3. Slice F: G0 restructuring (constitution vs status split) — PENDING.
 ```
