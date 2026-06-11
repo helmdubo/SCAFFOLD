@@ -24,6 +24,7 @@ from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_b
 from scaffold_core.tests.fixtures.cylinder_tube import (
     make_segmented_cylinder_tube_without_caps_with_one_seam_source,
 )
+from scaffold_core.tests.fixtures.l_corridor_tunnel import make_l_corridor_tunnel_seamed_folds_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,6 +63,7 @@ def test_patch_chain_endpoint_samples_are_built_for_each_directional_evidence_en
     assert {sample.directional_evidence_id for sample in samples} == {
         directional_evidence.id for directional_evidence in snapshot.patch_chain_directional_evidence
     }
+    assert {sample.evidence[0].data["sample_source"] for sample in samples} == {"RUN_DERIVED"}
 
 
 def test_patch_chain_endpoint_sample_tangent_points_away_from_endpoint() -> None:
@@ -119,6 +121,30 @@ def test_cylinder_patch_chain_endpoint_samples_use_nonzero_local_face_fan_normal
     } == {OwnerNormalSource.LOCAL_FACE_FAN_NORMAL}
     assert all(sample.owner_normal != (0.0, 0.0, 0.0) for sample in snapshot.patch_chain_endpoint_samples)
     assert all(sample.confidence > 0.0 for sample in snapshot.patch_chain_endpoint_samples)
+
+
+def test_patch_chain_endpoint_samples_fill_topology_ends_from_local_segments() -> None:
+    context = run_pass_1_relations(run_pass_0(make_l_corridor_tunnel_seamed_folds_source()))
+    samples = context.relation_snapshot.patch_chain_endpoint_samples
+    patch_chain_id = "patch_chain:patch:seed:f_wall:0:2"
+
+    start_sample = _sample_at_vertex(
+        samples,
+        patch_chain_id,
+        PatchChainEndpointRole.START,
+        VertexId("vertex:w1"),
+    )
+    end_sample = _sample_at_vertex(
+        samples,
+        patch_chain_id,
+        PatchChainEndpointRole.END,
+        VertexId("vertex:g2"),
+    )
+
+    assert start_sample.evidence[0].data["sample_source"] == "LOCAL_SEGMENT"
+    assert start_sample.tangent_away_from_vertex == (0.0, 0.0, -1.0)
+    assert end_sample.evidence[0].data["sample_source"] == "LOCAL_SEGMENT"
+    assert end_sample.tangent_away_from_vertex == (0.0, 0.0, 1.0)
 
 
 def test_patch_chain_endpoint_samples_do_not_change_layer_1_identity() -> None:
@@ -182,4 +208,19 @@ def _sample(samples, directional_evidence_id: str, role: PatchChainEndpointRole)
         sample
         for sample in samples
         if sample.directional_evidence_id == directional_evidence_id and sample.endpoint_role is role
+    )
+
+
+def _sample_at_vertex(
+    samples,
+    patch_chain_id: str,
+    role: PatchChainEndpointRole,
+    vertex_id: VertexId,
+):
+    return next(
+        sample
+        for sample in samples
+        if str(sample.patch_chain_id) == patch_chain_id
+        and sample.endpoint_role is role
+        and sample.vertex_id == vertex_id
     )

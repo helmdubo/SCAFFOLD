@@ -156,10 +156,9 @@ def test_l_corridor_tunnel_seamed_folds_length_flow_is_currently_lost() -> None:
     # KNOWN LIMITATION: the tunnel length rails span X, Z and X world
     # directions across floor, wall and ceiling. World-direction grouping
     # merges floor+ceiling by coincidental world parallelism while the wall
-    # stays separate, fold endpoint evidence is missing, and every continuity
-    # component stays a singleton. A length-preserving unwrap lays this strip
-    # straight, so the target is one connected length family across all
-    # three patches.
+    # stays separate, and every continuity component stays a singleton. A
+    # length-preserving unwrap lays this strip straight, so the target is one
+    # connected length family across all three patches.
     context = _run(make_l_corridor_tunnel_seamed_folds_source())
     relations = context.relation_snapshot
 
@@ -168,7 +167,7 @@ def test_l_corridor_tunnel_seamed_folds_length_flow_is_currently_lost() -> None:
     assert len(length_x_classes[0].patch_ids) == 2
 
     kind_counts = _relation_kind_counts(relations)
-    assert kind_counts.get("MISSING_ENDPOINT_EVIDENCE", 0) == 6
+    assert kind_counts.get("MISSING_ENDPOINT_EVIDENCE", 0) == 0
 
     for component in relations.scaffold_continuity_components:
         assert len(component.scaffold_edge_ids) == 1
