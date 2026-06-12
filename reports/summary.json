@@ -1,0 +1,16 @@
+{
+  "bevel_spine_count": 1,
+  "bevel_parallel_count": 1,
+  "bevel_rib_count": 4,
+  "tube_ring_rail_count": 2,
+  "tube_sewable_seam_count": 2,
+  "tunnel_spine_count": 1,
+  "tube_cap_cut_seam_count": 1,
+  "nonmanifold_branch_count": 2,
+  "debug_tests_pass": true,
+  "core_tests_pass": true,
+  "scaffold_core_untouched": true,
+  "pure_import_without_blender": true,
+  "rail_contract_inputs_count": 0,
+  "forbidden_core_semantics_added": false
+}

@@ -3,38 +3,29 @@
 from __future__ import annotations
 
 import bpy
-from bpy.props import BoolProperty, EnumProperty, PointerProperty, StringProperty
+from bpy.props import BoolProperty, PointerProperty, StringProperty
 
-from .session import clear_all, close, show_or_refresh
+from .session import clear_all, close, refresh_visibility, show_or_refresh
 
 
 class SCAFFOLDGRAPH_Settings(bpy.types.PropertyGroup):
     active: BoolProperty(name="Graph Debug Active", default=False)
     source_object: StringProperty(name="Source Object", default="")
     last_report: StringProperty(name="Last Report", default="")
-    show_edges: BoolProperty(name="Edges", default=True)
-    show_nodes: BoolProperty(name="Nodes", default=True)
+    show_family_colors: BoolProperty(name="Family Colors", default=True)
+    show_spines: BoolProperty(name="Spines", default=True)
+    show_ribs: BoolProperty(name="Ribs", default=True)
+    show_seam_verdicts: BoolProperty(name="Seam Verdicts", default=True)
     show_junctions: BoolProperty(name="Junctions", default=True)
-    show_incident_relations: BoolProperty(name="Incident", default=True)
-    show_shared_chain_relations: BoolProperty(name="Shared", default=True)
-    show_labels: BoolProperty(name="Labels", default=True)
-    display_mode: EnumProperty(
-        name="Mode",
-        items=(
-            ("IDENTITY", "Identity", "Use the existing edge debug color"),
-            ("CONTINUITY", "Continuity", "Color edges by continuity component"),
-            ("RELATIONS", "Relations", "Expand relation markers and labels"),
-        ),
-        default="CONTINUITY",
-    )
+    show_branch_points: BoolProperty(name="Branches", default=True)
     source_hide_viewport: BoolProperty(name="Stored Viewport Hidden", default=False)
     source_hide_set: BoolProperty(name="Stored Object Hidden", default=False)
 
 
 class SCAFFOLDGRAPH_OT_Show(bpy.types.Operator):
     bl_idname = "scaffold_graph_debug.show"
-    bl_label = "Show Graph"
-    bl_description = "Build or refresh the ScaffoldGraph Grease Pencil overlay"
+    bl_label = "Rebuild Overlay"
+    bl_description = "Rebuild the ScaffoldGraph v2 Grease Pencil overlay"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -54,8 +45,8 @@ class SCAFFOLDGRAPH_OT_Show(bpy.types.Operator):
 
 class SCAFFOLDGRAPH_OT_Refresh(bpy.types.Operator):
     bl_idname = "scaffold_graph_debug.refresh"
-    bl_label = "Refresh Graph"
-    bl_description = "Refresh the ScaffoldGraph Grease Pencil overlay"
+    bl_label = "Rebuild Overlay"
+    bl_description = "Rebuild the ScaffoldGraph v2 Grease Pencil overlay"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -100,7 +91,8 @@ class SCAFFOLDGRAPH_OT_UpdateVisibility(bpy.types.Operator):
 
     def execute(self, context):
         try:
-            _report, summary = show_or_refresh(context)
+            refresh_visibility(context)
+            summary = "visibility updated"
         except Exception as exc:
             self.report({"ERROR"}, f"ScaffoldGraph visibility update failed: {exc}")
             return {"CANCELLED"}
@@ -120,23 +112,19 @@ class SCAFFOLDGRAPH_PT_Panel(bpy.types.Panel):
         settings = context.scene.scaffold_graph_debug_settings
 
         col = layout.column(align=True)
+        col.operator("scaffold_graph_debug.refresh", text="Rebuild Overlay", icon="FILE_REFRESH")
         if settings.active:
-            col.operator("scaffold_graph_debug.refresh", text="Refresh Graph", icon="FILE_REFRESH")
             col.operator("scaffold_graph_debug.close", text="Close Graph", icon="X")
-        else:
-            col.operator("scaffold_graph_debug.show", text="Show Graph", icon="OUTLINER_OB_GREASEPENCIL")
 
         col.separator()
-        col.prop(settings, "display_mode", expand=True)
         row = col.row(align=True)
-        row.prop(settings, "show_edges", toggle=True)
-        row.prop(settings, "show_nodes", toggle=True)
+        row.prop(settings, "show_family_colors", toggle=True)
+        row.prop(settings, "show_spines", toggle=True)
+        row.prop(settings, "show_ribs", toggle=True)
+        row = col.row(align=True)
+        row.prop(settings, "show_seam_verdicts", toggle=True)
         row.prop(settings, "show_junctions", toggle=True)
-        row = col.row(align=True)
-        row.prop(settings, "show_incident_relations", toggle=True)
-        row.prop(settings, "show_shared_chain_relations", toggle=True)
-        row.prop(settings, "show_labels", toggle=True)
-        col.operator("scaffold_graph_debug.update_visibility", text="Apply Visibility", icon="HIDE_OFF")
+        row.prop(settings, "show_branch_points", toggle=True)
 
         if settings.source_object:
             col.label(text=f"Source: {settings.source_object}")
