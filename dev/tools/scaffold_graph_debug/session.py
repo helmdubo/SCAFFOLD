@@ -44,6 +44,14 @@ def _build_overlay_payloads(context: Any) -> tuple[dict[str, Any] | None, dict[s
     from .overlay_v2 import build_overlay_v2_payload
 
     source = read_source_mesh_from_blender(context)
+    try:
+        from .snapshot_io import dump_source_snapshot
+
+        _capture = Path(__file__).resolve().parent / "reports" / "last_mesh_snapshot.json"
+        dump_source_snapshot(source, _capture)
+        print(f"[scaffold overlay] mesh snapshot captured: {_capture}")
+    except Exception as exc:  # capture must never break the overlay
+        print(f"[scaffold overlay] snapshot capture failed: {exc}")
     pipeline_context = run_pass_1_relations(run_pass_0(source))
     report = inspect_pipeline_context(pipeline_context, detail="full")
     overlay = report.get("scaffold_graph_overlay")
