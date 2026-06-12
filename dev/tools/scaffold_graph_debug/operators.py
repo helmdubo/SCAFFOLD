@@ -5,6 +5,7 @@ from __future__ import annotations
 import bpy
 from bpy.props import BoolProperty, PointerProperty, StringProperty
 
+from .build_stamp import get_build_stamp, resolve_build_stamp, set_build_stamp
 from .session import clear_all, close, refresh_visibility, show_or_refresh
 
 
@@ -12,6 +13,7 @@ class SCAFFOLDGRAPH_Settings(bpy.types.PropertyGroup):
     active: BoolProperty(name="Graph Debug Active", default=False)
     source_object: StringProperty(name="Source Object", default="")
     last_report: StringProperty(name="Last Report", default="")
+    build_stamp: StringProperty(name="Build Stamp", default="")
     show_family_colors: BoolProperty(name="Family Colors", default=True)
     show_spines: BoolProperty(name="Spines", default=True)
     show_ribs: BoolProperty(name="Ribs", default=True)
@@ -40,6 +42,7 @@ class SCAFFOLDGRAPH_OT_Show(bpy.types.Operator):
             self.report({"ERROR"}, f"ScaffoldGraph debug failed: {exc}")
             return {"CANCELLED"}
         self.report({"INFO"}, summary)
+        print(summary)
         return {"FINISHED"}
 
 
@@ -64,6 +67,7 @@ class SCAFFOLDGRAPH_OT_Refresh(bpy.types.Operator):
             self.report({"ERROR"}, f"ScaffoldGraph refresh failed: {exc}")
             return {"CANCELLED"}
         self.report({"INFO"}, summary)
+        print(summary)
         return {"FINISHED"}
 
 
@@ -112,6 +116,8 @@ class SCAFFOLDGRAPH_PT_Panel(bpy.types.Panel):
         settings = context.scene.scaffold_graph_debug_settings
 
         col = layout.column(align=True)
+        stamp = settings.build_stamp or get_build_stamp()
+        col.label(text=f"Build: {stamp}")
         col.operator("scaffold_graph_debug.refresh", text="Rebuild Overlay", icon="FILE_REFRESH")
         if settings.active:
             col.operator("scaffold_graph_debug.close", text="Close Graph", icon="X")
@@ -143,11 +149,14 @@ classes = (
 
 
 def register():
+    set_build_stamp(resolve_build_stamp())
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Scene.scaffold_graph_debug_settings = PointerProperty(
         type=SCAFFOLDGRAPH_Settings
     )
+    for scene in bpy.data.scenes:
+        scene.scaffold_graph_debug_settings.build_stamp = get_build_stamp()
 
 
 def unregister():

@@ -55,7 +55,9 @@ def _format_summary(report: dict[str, Any]) -> str:
     return (
         f"runs:{report['family_run_segment_count']} "
         f"rails:{report['rail_count']} "
-        f"hidden:{report.get('hidden_patch_view_rail_count', 0)} "
+        "hidden-removed "
+        f"polylines:{report.get('rail_polyline_count', 0)} "
+        f"offset:{report.get('offset_polyline_count', 0)} "
         f"spines:{report['spine_count']} "
         f"parallel:{report['parallel_rail_count']} "
         f"ribs:{report['rib_count']} "

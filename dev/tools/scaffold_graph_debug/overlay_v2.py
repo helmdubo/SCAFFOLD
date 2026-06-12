@@ -78,10 +78,10 @@ def _rail_to_dict(rail: RailView) -> dict[str, Any]:
             [list(point) for point in polyline]
             for polyline in rail.segment_polylines
         ],
+        "segment_offset_records": list(rail.segment_offset_records),
         "length": rail.length,
         "branch_junction_ids": list(rail.branch_junction_ids),
         "is_ambiguous": rail.is_ambiguous,
-        "is_default_visible": rail.is_default_visible,
         "color": list(color),
         "color_key": f"{rail.role.lower()}:{rail.family_id}",
     }
@@ -137,15 +137,24 @@ def _junction_glyph_to_dict(glyph) -> dict[str, Any]:
 
 
 def _counts(assembly: RailAssembly, seam_verdicts: tuple[SeamVerdict, ...]) -> dict[str, int]:
-    visible_rails = tuple(rail for rail in assembly.rails if rail.is_default_visible)
     return {
         "family_run_segment_count": len(assembly.run_segments),
-        "rail_count": len(visible_rails),
-        "hidden_patch_view_rail_count": sum(not rail.is_default_visible for rail in assembly.rails),
-        "spine_count": sum(rail.role == "SPINE" for rail in visible_rails),
-        "parallel_rail_count": sum(rail.role == "PARALLEL" for rail in visible_rails),
-        "rib_count": sum(rail.role == "RIB" for rail in visible_rails),
-        "cut_rail_count": sum(rail.role == "CUT" for rail in visible_rails),
+        "rail_count": len(assembly.rails),
+        "rail_polyline_count": sum(len(rail.segment_polylines) for rail in assembly.rails),
+        "offset_polyline_count": sum(
+            not record.get("unoffset", False)
+            for rail in assembly.rails
+            for record in rail.segment_offset_records
+        ),
+        "unoffset_polyline_count": sum(
+            record.get("unoffset", False)
+            for rail in assembly.rails
+            for record in rail.segment_offset_records
+        ),
+        "spine_count": sum(rail.role == "SPINE" for rail in assembly.rails),
+        "parallel_rail_count": sum(rail.role == "PARALLEL" for rail in assembly.rails),
+        "rib_count": sum(rail.role == "RIB" for rail in assembly.rails),
+        "cut_rail_count": sum(rail.role == "CUT" for rail in assembly.rails),
         "sewable_seam_count": sum(verdict.status == "SEWABLE" for verdict in seam_verdicts),
         "cut_seam_count": sum(verdict.status == "CUT" for verdict in seam_verdicts),
         "junction_glyph_count": len(assembly.junction_glyphs),

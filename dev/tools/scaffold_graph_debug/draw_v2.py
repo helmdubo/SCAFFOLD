@@ -82,6 +82,9 @@ def render_overlay_v2(
         "branch_layer": BRANCH_LAYER_NAME,
         "family_run_segment_count": int(counts.get("family_run_segment_count", 0)),
         "rail_count": int(counts.get("rail_count", 0)),
+        "rail_polyline_count": int(counts.get("rail_polyline_count", 0)),
+        "offset_polyline_count": int(counts.get("offset_polyline_count", 0)),
+        "unoffset_polyline_count": int(counts.get("unoffset_polyline_count", 0)),
         "spine_count": int(counts.get("spine_count", 0)),
         "parallel_rail_count": int(counts.get("parallel_rail_count", 0)),
         "rib_count": int(counts.get("rib_count", 0)),
@@ -116,8 +119,6 @@ def _draw_rails(
     spine_count = 0
     rib_count = 0
     for rail in rails:
-        if not bool(rail.get("is_default_visible", True)):
-            continue
         role = str(rail.get("role") or "RIB")
         frame = spine_frame if role in {"SPINE", "PARALLEL"} else rib_frame
         width = (

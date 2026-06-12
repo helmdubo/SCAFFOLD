@@ -6,6 +6,7 @@ import importlib
 
 from dev.tools.scaffold_graph_debug.geodesic_continuation import GEODESIC_STRAIGHT_TOLERANCE
 from dev.tools.scaffold_graph_debug.overlay_v2 import build_overlay_v2_payload
+from dev.tools.scaffold_graph_debug.rail_offsets import RAIL_OFFSET_FACTOR
 from dev.tools.scaffold_graph_debug.seam_verdicts import ANGLE_DEFECT_TOLERANCE
 from scaffold_core.ids import SourceEdgeId, SourceFaceId, SourceMeshId, SourceVertexId
 from scaffold_core.layer_0_source.marks import SourceMark, SourceMarkKind
@@ -31,16 +32,22 @@ def _payload(source_factory):
 
 def test_pure_overlay_modules_import_without_blender() -> None:
     importlib.import_module("dev.tools.scaffold_graph_debug")
+    build_stamp = importlib.import_module("dev.tools.scaffold_graph_debug.build_stamp")
     importlib.import_module("dev.tools.scaffold_graph_debug.colors")
     importlib.import_module("dev.tools.scaffold_graph_debug.overlay_v2")
     importlib.import_module("dev.tools.scaffold_graph_debug.rail_assembly")
+    importlib.import_module("dev.tools.scaffold_graph_debug.rail_offsets")
     importlib.import_module("dev.tools.scaffold_graph_debug.seam_verdicts")
     assert ANGLE_DEFECT_TOLERANCE > 0.0
     assert GEODESIC_STRAIGHT_TOLERANCE == 0.1
+    assert RAIL_OFFSET_FACTOR > 0.0
+    assert build_stamp.OVERLAY_VERSION == "overlay-v3"
 
 
 def test_beveled_corner_has_horizontal_spine_and_vertical_ribs() -> None:
     payload = _payload(make_beveled_wall_corner_source)
+    assert _has_no_hidden_fields(payload)
+    assert payload["counts"]["unoffset_polyline_count"] == 0
 
     spines = _rails(payload, "SPINE")
     assert len(spines) == 1
@@ -64,6 +71,8 @@ def test_beveled_corner_has_horizontal_spine_and_vertical_ribs() -> None:
 
 def test_two_seam_tube_has_top_and_bottom_ring_rails() -> None:
     payload = _payload(make_cylinder_tube_without_caps_with_two_seams_source)
+    assert _has_no_hidden_fields(payload)
+    assert payload["counts"]["unoffset_polyline_count"] == 0
 
     ring_rails = [
         rail
@@ -78,50 +87,56 @@ def test_two_seam_tube_has_top_and_bottom_ring_rails() -> None:
 def test_tube_with_cap_side_rims_win_over_cap_perimeter_view() -> None:
     payload = _payload(make_tube_with_cap_source)
 
-    visible_side_rims = [
+    side_rims = [
         rail
         for rail in payload["rails"]
-        if rail["is_default_visible"]
-        and rail["role"] in {"SPINE", "PARALLEL"}
+        if rail["role"] in {"SPINE", "PARALLEL"}
         and _has_patch_fragments(rail, ("f0",))
         and len(rail["directional_evidence_ids"]) == 4
     ]
-    assert len(visible_side_rims) == 2
-    assert all(rail["length"] > 5.0 for rail in visible_side_rims)
+    assert len(side_rims) == 2
+    assert all(rail["length"] > 5.0 for rail in side_rims)
 
-    hidden_cap_perimeter = [
+    cap_perimeter = [
         rail
         for rail in payload["rails"]
-        if not rail["is_default_visible"] and _has_patch_fragments(rail, ("f_cap",))
+        if _has_patch_fragments(rail, ("f_cap",))
     ]
-    assert len(hidden_cap_perimeter) == 4
-    assert all(len(rail["directional_evidence_ids"]) == 1 for rail in hidden_cap_perimeter)
-    assert payload["counts"]["hidden_patch_view_rail_count"] == 4
+    assert len(cap_perimeter) == 4
+    assert all(len(rail["directional_evidence_ids"]) == 1 for rail in cap_perimeter)
+    assert _has_no_hidden_fields(payload)
     assert payload["counts"]["cut_rail_count"] == 2
+    assert payload["counts"]["rail_polyline_count"] == 14
+    assert payload["counts"]["unoffset_polyline_count"] == 0
+    _assert_cut_lines_are_oppositely_offset(payload)
 
 
 def test_extruded_cross_side_band_rims_are_geodesic_rails_and_seam_is_cut() -> None:
     payload = _payload(_make_extruded_cross_source)
 
-    visible_long_rails = [
+    long_rails = [
         rail
         for rail in payload["rails"]
-        if rail["is_default_visible"]
-        and rail["role"] in {"SPINE", "PARALLEL"}
+        if rail["role"] in {"SPINE", "PARALLEL"}
         and len(rail["directional_evidence_ids"]) == 12
         and rail["length"] > 20.0
     ]
-    assert len(visible_long_rails) == 2
-    assert {rail["role"] for rail in visible_long_rails} == {"SPINE", "PARALLEL"}
+    assert len(long_rails) == 2
+    assert {rail["role"] for rail in long_rails} == {"SPINE", "PARALLEL"}
 
-    hidden_cap_perimeters = [
+    cap_perimeters = [
         rail
         for rail in payload["rails"]
-        if not rail["is_default_visible"] and len(rail["directional_evidence_ids"]) == 1
+        if _has_patch_fragments(rail, ("f_cap_top",)) or _has_patch_fragments(rail, ("f_cap_bottom",))
     ]
-    assert len(hidden_cap_perimeters) == 24
+    assert len(cap_perimeters) == 24
+    assert all(len(rail["directional_evidence_ids"]) == 1 for rail in cap_perimeters)
+    assert _has_no_hidden_fields(payload)
+    assert payload["counts"]["rail_polyline_count"] == 50
+    assert payload["counts"]["unoffset_polyline_count"] == 0
     assert payload["counts"]["cut_rail_count"] >= 1
     assert any(verdict["status"] == "CUT" for verdict in payload["seam_verdicts"])
+    _assert_cut_lines_are_oppositely_offset(payload)
 
 
 def test_l_corridor_tunnel_has_length_spine_through_folds() -> None:
@@ -174,6 +189,32 @@ def _has_member_fragments(rail, fragments: tuple[str, ...]) -> bool:
         any(fragment in evidence_id for evidence_id in rail["directional_evidence_ids"])
         for fragment in fragments
     )
+
+
+def _has_no_hidden_fields(payload) -> bool:
+    if any("hidden" in key for key in payload["counts"]):
+        return False
+    return all("is_default_visible" not in rail for rail in payload["rails"])
+
+
+def _assert_cut_lines_are_oppositely_offset(payload) -> None:
+    cut_records = [
+        record
+        for rail in payload["rails"]
+        if rail["role"] == "CUT"
+        for record in rail["segment_offset_records"]
+    ]
+    assert len(cut_records) == 2
+    assert all(not record["unoffset"] for record in cut_records)
+    assert all(record["offset_magnitude"] > 0.0 for record in cut_records)
+    assert cut_records[0]["parent_chain_id"] == cut_records[1]["parent_chain_id"]
+    first = cut_records[0]["offset_direction"]
+    second = cut_records[1]["offset_direction"]
+    assert _dot(first, second) < -0.99
+
+
+def _dot(first, second) -> float:
+    return sum(float(first[index]) * float(second[index]) for index in range(3))
 
 
 def _make_extruded_cross_source() -> SourceMeshSnapshot:

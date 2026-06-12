@@ -13,6 +13,7 @@ from .geodesic_continuation import (
     GEODESIC_STRAIGHT_TOLERANCE,
     is_geodesic_straight_at_patch_vertex,
 )
+from .rail_offsets import offset_segment_polyline, self_seam_flip_keys
 
 
 PARALLEL_DOT = 0.99
@@ -33,6 +34,7 @@ class RunSegmentView:
     length: float
     direction: tuple[float, float, float]
     polyline: tuple[tuple[float, float, float], ...]
+    source_edge_ids: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -44,10 +46,10 @@ class RailView:
     patch_ids: tuple[str, ...]
     junction_ids: tuple[str, ...]
     segment_polylines: tuple[tuple[tuple[float, float, float], ...], ...]
+    segment_offset_records: tuple[dict[str, Any], ...]
     length: float
     branch_junction_ids: tuple[str, ...]
     is_ambiguous: bool
-    is_default_visible: bool = True
 
 
 @dataclass(frozen=True)
@@ -196,6 +198,7 @@ def _segment_view(
         length=float(evidence.length),
         direction=tuple(float(value) for value in evidence.direction),
         polyline=polyline,
+        source_edge_ids=tuple(str(source_edge_id) for source_edge_id in evidence.source_edge_ids),
     )
 
 
@@ -281,17 +284,19 @@ def _rails_from_segments(
                     for junction_id in (segment.start_junction_id, segment.end_junction_id)
                 })),
                 segment_polylines=tuple(segment.polyline for segment in sorted(component, key=lambda item: item.id)),
+                segment_offset_records=(),
                 length=_deduped_length(component),
                 branch_junction_ids=branch_junction_ids,
                 is_ambiguous=bool(branch_junction_ids),
             )
         )
-    return _assign_roles(
+    assigned = _assign_roles(
         topology,
         tuple(sorted(rails, key=lambda item: item.id)),
         segments,
         valence_by_junction_id,
     )
+    return _with_offset_polylines(topology, source, assigned, segments, self_seam_chain_ids, contract_inputs)
 
 
 def _segments_by_family(segments: tuple[RunSegmentView, ...]) -> dict[str, tuple[RunSegmentView, ...]]:
@@ -483,57 +488,62 @@ def _assign_roles(
             patch_ids=rail.patch_ids,
             junction_ids=rail.junction_ids,
             segment_polylines=rail.segment_polylines,
+            segment_offset_records=rail.segment_offset_records,
             length=rail.length,
             branch_junction_ids=rail.branch_junction_ids,
             is_ambiguous=rail.is_ambiguous or any(valence_by_junction_id.get(junction_id, 0) > 2 for junction_id in rail.junction_ids),
-            is_default_visible=rail.is_default_visible,
         )
         for rail in rails
     )
-    return _mark_default_visibility(assigned_rails, segment_by_evidence_id)
+    return assigned_rails
 
 
-def _mark_default_visibility(
+def _with_offset_polylines(
+    topology: Any,
+    source: Any,
     rails: tuple[RailView, ...],
-    segment_by_evidence_id: dict[str, RunSegmentView],
+    segments: tuple[RunSegmentView, ...],
+    self_seam_chain_ids: set[str],
+    contract_inputs: set[str],
 ) -> tuple[RailView, ...]:
-    rail_ids_by_physical_segment: dict[tuple[str, tuple[int, ...]], set[str]] = defaultdict(set)
+    segment_by_evidence_id = {segment.directional_evidence_id: segment for segment in segments}
+    flip_keys = self_seam_flip_keys(rails, segment_by_evidence_id, self_seam_chain_ids)
+    output = []
     for rail in rails:
+        polylines = []
+        records = []
         for evidence_id in rail.directional_evidence_ids:
             segment = segment_by_evidence_id.get(evidence_id)
             if segment is None:
                 continue
-            rail_ids_by_physical_segment[(segment.parent_chain_id, segment.segment_indices)].add(rail.id)
-
-    visible_by_id = {rail.id: True for rail in rails}
-    rail_by_id = {rail.id: rail for rail in rails}
-    for rail_ids in rail_ids_by_physical_segment.values():
-        if len(rail_ids) <= 1:
-            continue
-        max_length = max(rail_by_id[rail_id].length for rail_id in rail_ids)
-        for rail_id in rail_ids:
-            rail = rail_by_id[rail_id]
-            if rail.role == "CUT":
-                visible_by_id[rail_id] = True
-            elif rail.length < max_length:
-                visible_by_id[rail_id] = False
-
-    return tuple(
-        RailView(
-            id=rail.id,
-            family_id=rail.family_id,
-            role=rail.role,
-            directional_evidence_ids=rail.directional_evidence_ids,
-            patch_ids=rail.patch_ids,
-            junction_ids=rail.junction_ids,
-            segment_polylines=rail.segment_polylines,
-            length=rail.length,
-            branch_junction_ids=rail.branch_junction_ids,
-            is_ambiguous=rail.is_ambiguous,
-            is_default_visible=visible_by_id[rail.id],
+            flip = (segment.parent_chain_id, segment.patch_id, segment.patch_chain_id) in flip_keys
+            polyline, record = offset_segment_polyline(
+                topology,
+                source,
+                segment,
+                flip=flip,
+                self_seam_chain_ids=self_seam_chain_ids,
+            )
+            polylines.append(polyline)
+            records.append(record)
+            if record["unoffset"]:
+                contract_inputs.add(record["issue"])
+        output.append(
+            RailView(
+                id=rail.id,
+                family_id=rail.family_id,
+                role=rail.role,
+                directional_evidence_ids=rail.directional_evidence_ids,
+                patch_ids=rail.patch_ids,
+                junction_ids=rail.junction_ids,
+                segment_polylines=tuple(polylines),
+                segment_offset_records=tuple(records),
+                length=rail.length,
+                branch_junction_ids=rail.branch_junction_ids,
+                is_ambiguous=rail.is_ambiguous,
+            )
         )
-        for rail in rails
-    )
+    return tuple(output)
 
 
 def _patch_group_by_patch_id(topology: Any) -> dict[str, str]:

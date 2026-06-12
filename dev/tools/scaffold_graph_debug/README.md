@@ -62,11 +62,12 @@ the shared vertex is geodesically straight: the angle sum is within
 Across patches, the overlay still follows the existing
 ConnectedDirectionFamily transport evidence.
 
-Rail membership is per PatchChain use. The same source edge can be a straight
-rail in the side-band patch view and a cornered perimeter in a cap patch view.
-When both views overlap, the default overlay draws the straight side-band rail
-and keeps the cornered cap perimeter as a hidden alternate patch-view rail in
-the JSON payload/report.
+Rail membership is per PatchChain use. The same source edge can draw twice:
+one offset line for the side-band patch view and one offset line for the cap
+patch view. Shared chains are drawn as per-use double lines, each nudged inward
+toward its owning patch by `RAIL_OFFSET_FACTOR` times local edge length. Cap
+perimeters are no longer hidden; the cap-side cornered perimeter and the
+band-side continuous rail are both visible.
 
 Seam Verdicts shows Level A stitch/cut checks for shared seam chains. Green
 dashed means the seam is geometrically sewable under the current angle-defect
@@ -102,9 +103,37 @@ Expected overlay:
 2. The entire bottom rim is a second visible rail with the related rail hue.
 3. The vertical seam is rendered in the cut color.
 4. The cap patch views still see those same rim edges as cornered perimeter
-   pieces, not as one straight rail; those alternate cap-view pieces are kept
-   hidden by default so the side-band interpretation wins visually.
+   pieces, not as one straight rail; those cap-view pieces draw beside the
+   side-band rail as their own offset lines.
 ```
+
+## Avoiding Stale Add-ons
+
+The panel header shows:
+
+```text
+Build: <short git hash>[-dirty]
+```
+
+After `git pull`, update the Blender add-on with a clean reload:
+
+```text
+1. Close Graph.
+2. Unregister/remove the add-on module from Blender.
+3. Restart Blender.
+4. Register/install the add-on again from this checkout.
+5. Confirm the panel Build stamp matches the new git hash and has no `-dirty`
+   suffix unless you intentionally run local edits.
+```
+
+Python bytecode cache for this add-on lives under:
+
+```text
+dev/tools/scaffold_graph_debug/__pycache__/
+```
+
+If Blender appears to run stale code after an update, close Blender and delete
+that directory before registering the add-on again.
 
 ## Staged Validation Checklist
 
