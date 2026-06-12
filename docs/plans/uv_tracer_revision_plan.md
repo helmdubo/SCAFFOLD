@@ -629,6 +629,19 @@ island assembly, defect gate, T-junction interior set, unfolded frame,
 selection-wide grids are validated; the one remaining gap is named and
 proven. Next slice (H) builds it in core, not in the spike.
 
+## Status update (Slice I / H, 2026-06-12)
+
+- I1/I2/I3 overlay slices DONE (family colors, geodesic rail prototype,
+  per-use double lines, build stamp). Artist validation found and named
+  three prototype bugs (rim leak through seam endpoints, per-chain
+  instead of per-use coloring, missing SEAM_SELF cut) — folded into the
+  DD-45 contract and H2a acceptance; the prototype assembly is
+  superseded by core family v1.
+- H1 RunEndpointJunction v0: DONE, merged.
+- User approved DD-44/DD-45; G0 bumped to v1.4. H2a authorized: core
+  family v1 (occurrence-aware geodesic continuation), extruded_cross
+  core fixture, overlay recolored from core, stash resolution.
+
 ## Slice H — Run-endpoint junctions + Layer 5 contracts (next)
 
 H1: Layer 3 run-endpoint junction evidence (rail-atom nodes: corner
