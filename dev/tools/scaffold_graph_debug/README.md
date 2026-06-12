@@ -46,15 +46,15 @@ ScaffoldGraph_JunctionsV2
 ScaffoldGraph_Branches
 ```
 
-Family Runs shows every directional run segment. ConnectedDirectionFamily ids
-get stable deterministic colors. Runs without a family are neutral gray.
-
-Spines shows only the dominant multi-run core family rail and rails parallel
-to it. It does not show cap/perimeter ribs or cut rails.
-
-Ribs shows cap/perimeter rails and rails from the other axis families. These
-are guide rails, not solve output. CutRails shows SEAM_SELF/cut rails in the
-dedicated cut color.
+| Layer | Meaning |
+| --- | --- |
+| ScaffoldGraph_FamilyRuns | Raw core ConnectedDirectionFamily runs. Every directional run segment is drawn, including n-gon cap chains. |
+| ScaffoldGraph_Spines | Derived debug rails: the dominant rail in a patch group plus rails parallel to it. |
+| ScaffoldGraph_Ribs | Derived debug rails that are not spines/parallel rails. Ribs may carry multiple related rail ids. |
+| ScaffoldGraph_CutRails | SEAM_SELF and cut rails in the dedicated cut color. |
+| ScaffoldGraph_SeamVerdicts | Level A stitch verdicts for shared seam chains. |
+| ScaffoldGraph_JunctionsV2 | Node atoms: every ScaffoldNode and every RunEndpointJunction. |
+| ScaffoldGraph_Branches | Explicit branch markers where the debug rail graph has valence > 2. |
 
 Rails are debug-side views over core `ConnectedDirectionFamily v1`, rebuilt on
 each overlay refresh. In-patch geodesic continuation, occurrence-aware
@@ -65,9 +65,9 @@ Rail membership is per PatchChain use. The same source edge can draw twice:
 one offset line for the side-band patch view and one offset line for the cap
 patch view. Shared chains are drawn as per-use double lines, each lifted along
 the owning patch-use face normal and then nudged slightly inward toward that
-patch by `RAIL_OFFSET_FACTOR` times local edge length. The FamilyRuns and rail
-layers draw those rails as continuous Grease Pencil strokes with intermediate
-vertices instead of one stroke per source edge. Cap perimeters are no longer
+patch by `RAIL_OFFSET_FACTOR` times local edge length. Rail layers draw those
+rails as continuous Grease Pencil strokes with intermediate vertices instead
+of one stroke per source edge. Cap perimeters are no longer
 hidden; the cap-side cornered perimeter and the band-side continuous rail are
 both visible.
 
@@ -79,8 +79,9 @@ There are no labels on this layer.
 SELF_SEAM chains are always treated as cut rails/seams and use the dedicated
 cut color.
 
-JunctionsV2 shows ScaffoldNodes as circles and unanchored RunEndpointJunctions
-as diamonds. Larger glyphs mean higher run-end valence.
+JunctionsV2 shows ScaffoldNodes as circles and RunEndpointJunctions as
+diamonds. Anchored run endpoints share the same position as their ScaffoldNode
+but remain separate glyphs. Larger glyphs mean higher run-end valence.
 
 Branches shows explicit yellow branch markers at junctions where more than two
 run ends meet in the debug rail graph. The overlay marks the ambiguity and does

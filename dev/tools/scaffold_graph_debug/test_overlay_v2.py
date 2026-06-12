@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 
 from dev.tools.scaffold_graph_debug.overlay_v2 import build_overlay_v2_payload
 from dev.tools.scaffold_graph_debug.rail_offsets import (
@@ -11,6 +12,7 @@ from dev.tools.scaffold_graph_debug.rail_offsets import (
     coalesce_polylines,
 )
 from dev.tools.scaffold_graph_debug.seam_verdicts import ANGLE_DEFECT_TOLERANCE
+from dev.tools.scaffold_graph_debug.snapshot_io import dump_source_snapshot, load_source_snapshot
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.beveled_wall_corner import make_beveled_wall_corner_source
 from scaffold_core.tests.fixtures.cylinder_tube import (
@@ -24,6 +26,11 @@ from scaffold_core.tests.fixtures.tube_with_cap import make_tube_with_cap_source
 
 def _payload(source_factory):
     return build_overlay_v2_payload(run_pass_1_relations(run_pass_0(source_factory())))
+
+
+def _context_payload(source):
+    context = run_pass_1_relations(run_pass_0(source))
+    return context, build_overlay_v2_payload(context)
 
 
 def test_pure_overlay_modules_import_without_blender() -> None:
@@ -107,6 +114,45 @@ def test_two_seam_tube_has_top_and_bottom_ring_rails() -> None:
     assert all(len(rail["segment_polylines"]) == 1 for rail in ring_rails)
     assert all(len(rail["segment_polylines"][0]) > len(rail["directional_evidence_ids"]) for rail in ring_rails)
     _assert_records_have_normal_hover(ring_rails)
+
+
+def test_snapshot_capture_records_empty_selection_fallback(tmp_path) -> None:
+    source = load_source_snapshot("scaffold_core/tests/data/artist_cyl32.json")
+    path = dump_source_snapshot(source, tmp_path / "snapshot.json")
+    payload = json.loads(path.read_text())
+
+    assert payload["selected_face_ids"] == []
+    assert payload["selection_fallback_used"] is True
+    assert "empty selected_face_ids" in payload["selection_fallback_reason"]
+
+
+def test_artist_cyl32_overlay_semantics_v3() -> None:
+    context, payload = _context_payload(load_source_snapshot("scaffold_core/tests/data/artist_cyl32.json"))
+    relations = context.relation_snapshot
+    assert _has_no_hidden_fields(payload)
+    assert payload["counts"]["family_run_segment_count"] == len(relations.patch_chain_directional_evidence)
+    assert payload["counts"]["junction_glyph_count"] == (
+        len(relations.scaffold_nodes) + len(relations.run_endpoint_junctions)
+    )
+
+    ring_rails = [
+        rail
+        for rail in payload["rails"]
+        if rail["role"] in {"SPINE", "PARALLEL"}
+        and rail["length"] > 6.0
+        and _has_patch_fragments(rail, ("f0", "f6"))
+    ]
+    assert len(ring_rails) == 2
+    assert all(len(rail["directional_evidence_ids"]) == 25 for rail in ring_rails)
+    assert all(len(rail["segment_polylines"]) == 1 for rail in ring_rails)
+    assert any(segment["patch_id"] == "patch:seed:f30" for segment in payload["family_run_segments"])
+    assert any(segment["patch_id"] == "patch:seed:f33" for segment in payload["family_run_segments"])
+    assert all("related_rail_ids" in rail for rail in payload["rails"])
+    assert payload["counts"]["dual_membership_rib_count"] >= 1
+    assert any(
+        rail["role"] == "RIB" and len(rail["related_rail_ids"]) >= 2
+        for rail in payload["rails"]
+    )
 
 
 def test_tube_with_cap_side_rims_win_over_cap_perimeter_view() -> None:

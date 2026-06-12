@@ -10,7 +10,7 @@ Rules:
 
 from __future__ import annotations
 
-from scaffold_core.core.diagnostics import DiagnosticReport
+from scaffold_core.core.diagnostics import Diagnostic, DiagnosticReport, DiagnosticSeverity
 from scaffold_core.layer_0_source.snapshot import SourceMeshSnapshot
 from scaffold_core.layer_1_topology.build import build_topology_snapshot
 from scaffold_core.layer_1_topology.invariants import validate_topology
@@ -24,14 +24,33 @@ def run_pass_0(source_snapshot: SourceMeshSnapshot) -> PipelineContext:
 
     topology_snapshot = build_topology_snapshot(source_snapshot)
     geometry_facts = build_geometry_facts(source_snapshot, topology_snapshot)
+    fallback_diagnostics = _selection_fallback_diagnostics(source_snapshot)
     diagnostics = DiagnosticReport(
-        validate_topology(topology_snapshot) + geometry_facts.diagnostics
+        fallback_diagnostics + validate_topology(topology_snapshot) + geometry_facts.diagnostics
     )
     return PipelineContext(
         source_snapshot=source_snapshot,
         topology_snapshot=topology_snapshot,
         geometry_facts=geometry_facts,
         diagnostics=diagnostics,
+    )
+
+
+def _selection_fallback_diagnostics(source_snapshot: SourceMeshSnapshot) -> tuple[Diagnostic, ...]:
+    if source_snapshot.selected_face_ids:
+        return ()
+    return (
+        Diagnostic(
+            code="SELECTION_FALLBACK_ALL_FACES",
+            severity=DiagnosticSeverity.WARNING,
+            message="No selected faces; Pass 0 used all mesh faces as fallback.",
+            source="pipeline.run_pass_0",
+            entity_ids=(str(source_snapshot.id),),
+            evidence={
+                "selected_face_count": 0,
+                "fallback_face_count": len(source_snapshot.faces),
+            },
+        ),
     )
 
 

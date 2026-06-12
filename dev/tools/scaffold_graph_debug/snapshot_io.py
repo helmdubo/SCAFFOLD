@@ -32,6 +32,12 @@ def dump_source_snapshot(snapshot: Any, path: str | Path) -> Path:
             for face_id, ref in snapshot.faces.items()
         },
         "selected_face_ids": [str(f) for f in snapshot.selected_face_ids],
+        "selection_fallback_used": not bool(snapshot.selected_face_ids),
+        "selection_fallback_reason": (
+            "empty selected_face_ids; Pass 0 falls back to all faces"
+            if not snapshot.selected_face_ids
+            else ""
+        ),
         "marks": [
             {"kind": mark.kind.value, "target_id": str(mark.target_id)}
             for mark in snapshot.marks
@@ -83,9 +89,9 @@ def load_source_snapshot(path: str | Path) -> Any:
         vertices=vertices,
         edges=edges,
         faces=faces,
-        selected_face_ids=tuple(SourceFaceId(f) for f in data["selected_face_ids"]),
+        selected_face_ids=tuple(SourceFaceId(f) for f in data.get("selected_face_ids", ())),
         marks=tuple(
             SourceMark(kind=SourceMarkKind(m["kind"]), target_id=SourceEdgeId(m["target_id"]))
-            for m in data["marks"]
+            for m in data.get("marks", ())
         ),
     )

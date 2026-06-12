@@ -93,6 +93,7 @@ def _rail_to_dict(rail: RailView) -> dict[str, Any]:
         "segment_offset_records": list(rail.segment_offset_records),
         "length": rail.length,
         "branch_junction_ids": list(rail.branch_junction_ids),
+        "related_rail_ids": list(rail.related_rail_ids),
         "is_ambiguous": rail.is_ambiguous,
         "color": list(color),
         "color_key": f"{rail.role.lower()}:{rail.family_id}",
@@ -163,6 +164,10 @@ def _counts(assembly: RailAssembly, seam_verdicts: tuple[SeamVerdict, ...]) -> d
         "parallel_rail_count": sum(rail.role == "PARALLEL" for rail in assembly.rails),
         "rib_count": sum(rail.role == "RIB" for rail in assembly.rails),
         "cut_rail_count": sum(rail.role == "CUT" for rail in assembly.rails),
+        "dual_membership_rib_count": sum(
+            rail.role == "RIB" and len(rail.related_rail_ids) >= 2
+            for rail in assembly.rails
+        ),
         "sewable_seam_count": sum(verdict.status == "SEWABLE" for verdict in seam_verdicts),
         "cut_seam_count": sum(verdict.status == "CUT" for verdict in seam_verdicts),
         "junction_glyph_count": len(assembly.junction_glyphs),

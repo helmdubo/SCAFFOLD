@@ -45,6 +45,7 @@ class RailView:
     segment_offset_records: tuple[dict[str, Any], ...]
     length: float
     branch_junction_ids: tuple[str, ...]
+    related_rail_ids: tuple[str, ...]
     is_ambiguous: bool
 
 
@@ -142,8 +143,6 @@ def _junction_context_by_id(relations: Any) -> dict[str, JunctionContext]:
             topology_vertex_ids=tuple(sorted((str(vertex_id) for vertex_id in node.vertex_ids))),
         )
     for junction in relations.run_endpoint_junctions:
-        if junction.anchor_scaffold_node_id is not None:
-            continue
         contexts[junction.id] = JunctionContext(
             id=junction.id,
             source_vertex_id=str(junction.source_vertex_id) if junction.source_vertex_id is not None else None,
@@ -283,6 +282,7 @@ def _rails_from_segments(
                 segment_offset_records=(),
                 length=_deduped_length(component),
                 branch_junction_ids=branch_junction_ids,
+                related_rail_ids=(),
                 is_ambiguous=bool(branch_junction_ids),
             )
         )
@@ -395,11 +395,44 @@ def _assign_roles(
             segment_offset_records=rail.segment_offset_records,
             length=rail.length,
             branch_junction_ids=rail.branch_junction_ids,
+            related_rail_ids=(),
             is_ambiguous=rail.is_ambiguous or any(valence_by_junction_id.get(junction_id, 0) > 2 for junction_id in rail.junction_ids),
         )
         for rail in rails
     )
-    return assigned_rails
+    return _with_related_rib_ids(assigned_rails)
+
+
+def _with_related_rib_ids(rails: tuple[RailView, ...]) -> tuple[RailView, ...]:
+    axial_rails = tuple(rail for rail in rails if rail.role in {"SPINE", "PARALLEL"})
+    output: list[RailView] = []
+    for rail in rails:
+        related_rail_ids = ()
+        if rail.role == "RIB":
+            related_rail_ids = tuple(
+                sorted(
+                    axial.id
+                    for axial in axial_rails
+                    if set(rail.junction_ids) & set(axial.junction_ids)
+                )
+            )
+        output.append(
+            RailView(
+                id=rail.id,
+                family_id=rail.family_id,
+                role=rail.role,
+                directional_evidence_ids=rail.directional_evidence_ids,
+                patch_ids=rail.patch_ids,
+                junction_ids=rail.junction_ids,
+                segment_polylines=rail.segment_polylines,
+                segment_offset_records=rail.segment_offset_records,
+                length=rail.length,
+                branch_junction_ids=rail.branch_junction_ids,
+                related_rail_ids=related_rail_ids,
+                is_ambiguous=rail.is_ambiguous,
+            )
+        )
+    return tuple(output)
 
 
 def _rail_can_be_spine(
@@ -461,6 +494,7 @@ def _with_offset_polylines(
                 segment_offset_records=tuple(records),
                 length=rail.length,
                 branch_junction_ids=rail.branch_junction_ids,
+                related_rail_ids=rail.related_rail_ids,
                 is_ambiguous=rail.is_ambiguous,
             )
         )
@@ -513,8 +547,6 @@ def _junction_positions(geometry: Any, relations: Any) -> dict[str, tuple[float,
         if position is not None:
             positions[node.id] = position
     for junction in relations.run_endpoint_junctions:
-        if junction.anchor_scaffold_node_id is not None:
-            continue
         position = _average_vertex_position(geometry, tuple(str(vertex_id) for vertex_id in junction.topology_vertex_ids))
         if position is not None:
             positions[junction.id] = position
@@ -547,7 +579,7 @@ def _junction_glyphs(
             valence = valence_by_junction_id.get(node.id, 0)
             glyphs.append(_glyph(node.id, "SCAFFOLD_NODE", position_by_junction_id[node.id], valence))
     for junction in sorted(relations.run_endpoint_junctions, key=lambda item: item.id):
-        if junction.anchor_scaffold_node_id is not None or junction.id not in position_by_junction_id:
+        if junction.id not in position_by_junction_id:
             continue
         valence = valence_by_junction_id.get(junction.id, 0)
         glyphs.append(_glyph(junction.id, "RUN_ENDPOINT_JUNCTION", position_by_junction_id[junction.id], valence))

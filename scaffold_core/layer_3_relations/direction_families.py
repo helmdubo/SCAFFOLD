@@ -11,7 +11,7 @@ Rules:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import cos, pi, sin
+from math import atan2, cos, pi, sin
 from typing import Mapping
 
 from scaffold_core.core.evidence import Evidence
@@ -39,6 +39,7 @@ from scaffold_core.layer_3_relations.scaffold_graph_relations import COMPATIBLE_
 POLICY_NAME = "connected_direction_family_v1"
 DIRECTION_COMPATIBILITY_MIN_DOT = 0.996
 GEODESIC_STRAIGHT_TOLERANCE = 0.1
+SHARED_CHAIN_NORMAL_MIN_DOT = 0.9
 
 
 @dataclass(frozen=True)
@@ -333,7 +334,7 @@ def _shared_chain_crossings(
                     axis,
                     signed_dihedral,
                 )
-                normal_gate = normal_dot is not None and normal_dot >= COMPATIBLE_NORMAL_MIN_DOT
+                normal_gate = normal_dot is not None and normal_dot >= SHARED_CHAIN_NORMAL_MIN_DOT
                 if not normal_gate:
                     continue
                 confidence = min(first.confidence, second.confidence, relation.confidence)
@@ -473,12 +474,20 @@ def _node_crossings(
                     if adjacency is None:
                         continue
                     axis = _transport_axis(geometry, adjacency.chain_id, ())
-                    signed_dihedral = _signed_dihedral_for_patch_order(
-                        adjacency,
-                        first.patch_id,
-                        second.patch_id,
+                    signed_dihedral = _local_signed_dihedral_for_samples(
+                        first_sample,
+                        second_sample,
+                        axis,
                     )
-                transport_dot = _transport_direction_dot(first.direction, second.direction, axis, signed_dihedral)
+                    if signed_dihedral is None:
+                        signed_dihedral = _signed_dihedral_for_patch_order(
+                            adjacency,
+                            first.patch_id,
+                            second.patch_id,
+                        )
+                first_direction = _endpoint_local_direction(geometry, first, first_sample.endpoint_role)
+                second_direction = _endpoint_local_direction(geometry, second, second_sample.endpoint_role)
+                transport_dot = _transport_direction_dot(first_direction, second_direction, axis, signed_dihedral)
                 if transport_dot < DIRECTION_COMPATIBILITY_MIN_DOT:
                     continue
                 confidence = min(first.confidence, second.confidence, first_sample.confidence, second_sample.confidence)
@@ -619,6 +628,54 @@ def _signed_dihedral_for_patch_order(
     ):
         return -adjacency.signed_angle_radians
     return adjacency.signed_angle_radians
+
+
+def _local_signed_dihedral_for_samples(
+    first_sample: PatchChainEndpointSample,
+    second_sample: PatchChainEndpointSample,
+    axis: Vector3,
+) -> float | None:
+    if (
+        length(axis) <= EPSILON
+        or length(first_sample.owner_normal) <= EPSILON
+        or length(second_sample.owner_normal) <= EPSILON
+    ):
+        return None
+    normalized_axis = normalize(axis)
+    first_normal = normalize(first_sample.owner_normal)
+    second_normal = normalize(second_sample.owner_normal)
+    return atan2(
+        dot(normalized_axis, cross(first_normal, second_normal)),
+        dot(first_normal, second_normal),
+    )
+
+
+def _endpoint_local_direction(
+    geometry: GeometryFactSnapshot,
+    evidence: PatchChainDirectionalEvidence,
+    role: PatchChainEndpointRole,
+) -> Vector3:
+    chain_facts = geometry.chain_facts.get(evidence.parent_chain_id)
+    if chain_facts is None:
+        return evidence.direction
+    segments_by_index = {
+        segment.segment_index: segment
+        for segment in chain_facts.segments
+    }
+    source_vertex_id = (
+        evidence.start_source_vertex_id
+        if role is PatchChainEndpointRole.START
+        else evidence.end_source_vertex_id
+    )
+    for segment_index in evidence.segment_indices:
+        segment = segments_by_index.get(segment_index)
+        if segment is None:
+            continue
+        if segment.start_source_vertex_id == source_vertex_id and length(segment.direction) > EPSILON:
+            return segment.direction
+        if segment.end_source_vertex_id == source_vertex_id and length(segment.direction) > EPSILON:
+            return scale(segment.direction, -1.0)
+    return evidence.direction
 
 
 def _transport_direction_dot(
@@ -843,6 +900,7 @@ def _family_evidence(
             "direction_compatibility_min_dot": DIRECTION_COMPATIBILITY_MIN_DOT,
             "geodesic_straight_tolerance": GEODESIC_STRAIGHT_TOLERANCE,
             "compatible_normal_min_dot": COMPATIBLE_NORMAL_MIN_DOT,
+            "shared_chain_normal_min_dot": SHARED_CHAIN_NORMAL_MIN_DOT,
             "confidence": confidence,
         },
     )

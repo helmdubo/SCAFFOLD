@@ -52,6 +52,8 @@ def _build_overlay_payloads(context: Any) -> tuple[dict[str, Any] | None, dict[s
         print(f"[scaffold overlay] mesh snapshot captured: {_capture}")
     except Exception as exc:  # capture must never break the overlay
         print(f"[scaffold overlay] snapshot capture failed: {exc}")
+    if not source.selected_face_ids:
+        raise RuntimeError("select faces before rebuilding ScaffoldGraph overlay")
     pipeline_context = run_pass_1_relations(run_pass_0(source))
     report = inspect_pipeline_context(pipeline_context, detail="full")
     overlay = report.get("scaffold_graph_overlay")
@@ -69,6 +71,7 @@ def _format_summary(report: dict[str, Any]) -> str:
         f"spines:{report['spine_count']} "
         f"parallel:{report['parallel_rail_count']} "
         f"ribs:{report['rib_count']} "
+        f"dual_ribs:{report.get('dual_membership_rib_count', 0)} "
         f"cut_rails:{report.get('cut_rail_count', 0)} "
         f"sew:{report['sewable_seam_count']} "
         f"cut:{report['cut_seam_count']} "

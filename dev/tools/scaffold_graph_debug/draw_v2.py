@@ -67,7 +67,6 @@ def render_overlay_v2(
         gp_data,
         family_frame,
         payload.get("family_run_segments", ()),
-        payload.get("rails", ()),
     )
     spine_strokes, rib_strokes, cut_rail_strokes = _draw_rails(
         gp_data,
@@ -97,6 +96,7 @@ def render_overlay_v2(
         "spine_count": int(counts.get("spine_count", 0)),
         "parallel_rail_count": int(counts.get("parallel_rail_count", 0)),
         "rib_count": int(counts.get("rib_count", 0)),
+        "dual_membership_rib_count": int(counts.get("dual_membership_rib_count", 0)),
         "sewable_seam_count": int(counts.get("sewable_seam_count", 0)),
         "cut_seam_count": int(counts.get("cut_seam_count", 0)),
         "junction_glyph_count": int(counts.get("junction_glyph_count", 0)),
@@ -115,21 +115,8 @@ def _draw_family_runs(
     gp_data: Any,
     frame: Any,
     segments: Sequence[dict[str, Any]],
-    rails: Sequence[dict[str, Any]] = (),
 ) -> int:
     count = 0
-    if rails:
-        for rail in rails:
-            material_index = _material(
-                gp_data,
-                FAMILY_MATERIAL_PREFIX,
-                rail.get("family_id") or rail.get("color_key", ""),
-                rail.get("color"),
-            )
-            for polyline in rail.get("segment_polylines", ()):
-                if _add_polyline(frame, polyline, material_index, FAMILY_WIDTH):
-                    count += 1
-        return count
     for segment in segments:
         material_index = _material(gp_data, FAMILY_MATERIAL_PREFIX, segment.get("color_key", ""), segment.get("color"))
         if _add_polyline(frame, segment.get("polyline", ()), material_index, FAMILY_WIDTH):

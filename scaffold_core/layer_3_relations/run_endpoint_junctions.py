@@ -142,7 +142,11 @@ def _endpoint_from_chain_walk(
         end_position = last_segment_index + 1
 
     endpoint_position = start_position if role is PatchChainEndpointRole.START else end_position
-    source_vertex_id = oriented_path[endpoint_position]
+    source_vertex_id = (
+        directional_evidence.start_source_vertex_id
+        if role is PatchChainEndpointRole.START
+        else directional_evidence.end_source_vertex_id
+    )
     vertex_ids = _vertices_for_oriented_position(
         topology,
         patch_chain,

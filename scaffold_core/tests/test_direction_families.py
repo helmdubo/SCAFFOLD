@@ -157,6 +157,32 @@ def test_artist_cross_band_keeps_seam_duplicates_out_of_run_endpoint_junctions()
     assert len(_single_family_with_member_fragment(relations, "patch:seed:f1:0:3").member_directional_evidence_ids) == 1
 
 
+def test_artist_cyl32_side_rings_bridge_across_seam_bounded_patches() -> None:
+    context = run_pass_1_relations(run_pass_0(_load_artist_cyl32_source()))
+    relations = context.relation_snapshot
+
+    assert any(diagnostic.code == "SELECTION_FALLBACK_ALL_FACES" for diagnostic in context.diagnostics.diagnostics)
+    _assert_junction_occurrences_share_source_vertex(context)
+
+    top_ring = _single_family_with_member_fragment(relations, "patch:seed:f0:0:0")
+    bottom_ring = _single_family_with_member_fragment(relations, "patch:seed:f0:0:2")
+    assert top_ring.id != bottom_ring.id
+    assert set(str(patch_id) for patch_id in top_ring.patch_ids) == {"patch:seed:f0", "patch:seed:f6"}
+    assert set(str(patch_id) for patch_id in bottom_ring.patch_ids) == {"patch:seed:f0", "patch:seed:f6"}
+    assert len(top_ring.member_directional_evidence_ids) == 25
+    assert len(bottom_ring.member_directional_evidence_ids) == 25
+    assert _single_family_with_member_fragment(relations, "patch:seed:f6:0:0").id == top_ring.id
+    assert _single_family_with_member_fragment(relations, "patch:seed:f6:0:2").id == bottom_ring.id
+
+    cap_side_families = tuple(
+        family
+        for family in relations.connected_direction_families
+        if any("f30" in str(patch_id) or "f33" in str(patch_id) for patch_id in family.patch_ids)
+        and any("f0" in str(patch_id) or "f6" in str(patch_id) for patch_id in family.patch_ids)
+    )
+    assert cap_side_families == ()
+
+
 def test_in_patch_geodesic_merges_folded_single_patch_but_not_quad_corners() -> None:
     tunnel = run_pass_1_relations(run_pass_0(make_l_corridor_tunnel_single_patch_source()))
     tunnel_families = tuple(
@@ -251,7 +277,15 @@ def _single_family_with_member_fragment(relations, member_fragment: str):
 
 
 def _load_artist_cross_band_source() -> SourceMeshSnapshot:
-    data = json.loads((Path(__file__).with_name("data") / "artist_cross_band.json").read_text())
+    return _load_source_snapshot("artist_cross_band.json")
+
+
+def _load_artist_cyl32_source() -> SourceMeshSnapshot:
+    return _load_source_snapshot("artist_cyl32.json")
+
+
+def _load_source_snapshot(filename: str) -> SourceMeshSnapshot:
+    data = json.loads((Path(__file__).with_name("data") / filename).read_text())
     return SourceMeshSnapshot(
         id=SourceMeshId(data["id"]),
         vertices={
