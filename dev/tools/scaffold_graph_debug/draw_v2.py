@@ -23,6 +23,7 @@ import bpy
 FAMILY_LAYER_NAME = "ScaffoldGraph_FamilyRuns"
 SPINE_LAYER_NAME = "ScaffoldGraph_Spines"
 RIB_LAYER_NAME = "ScaffoldGraph_Ribs"
+CUT_RAIL_LAYER_NAME = "ScaffoldGraph_CutRails"
 SEAM_VERDICT_LAYER_NAME = "ScaffoldGraph_SeamVerdicts"
 JUNCTION_V2_LAYER_NAME = "ScaffoldGraph_JunctionsV2"
 BRANCH_LAYER_NAME = "ScaffoldGraph_Branches"
@@ -56,6 +57,7 @@ def render_overlay_v2(
     family_frame = _ensure_frame(_ensure_layer(gp_data, FAMILY_LAYER_NAME, show_family_colors))
     spine_frame = _ensure_frame(_ensure_layer(gp_data, SPINE_LAYER_NAME, show_spines))
     rib_frame = _ensure_frame(_ensure_layer(gp_data, RIB_LAYER_NAME, show_ribs))
+    cut_rail_frame = _ensure_frame(_ensure_layer(gp_data, CUT_RAIL_LAYER_NAME, show_seam_verdicts))
     seam_frame = _ensure_frame(_ensure_layer(gp_data, SEAM_VERDICT_LAYER_NAME, show_seam_verdicts))
     junction_frame = _ensure_frame(_ensure_layer(gp_data, JUNCTION_V2_LAYER_NAME, show_junctions))
     branch_frame = _ensure_frame(_ensure_layer(gp_data, BRANCH_LAYER_NAME, show_branch_points))
@@ -67,10 +69,11 @@ def render_overlay_v2(
         payload.get("family_run_segments", ()),
         payload.get("rails", ()),
     )
-    spine_strokes, rib_strokes = _draw_rails(
+    spine_strokes, rib_strokes, cut_rail_strokes = _draw_rails(
         gp_data,
         spine_frame,
         rib_frame,
+        cut_rail_frame,
         payload.get("rails", ()),
     )
     seam_strokes = _draw_seam_verdicts(gp_data, seam_frame, payload.get("seam_verdicts", ()))
@@ -82,6 +85,7 @@ def render_overlay_v2(
         "family_layer": FAMILY_LAYER_NAME,
         "spine_layer": SPINE_LAYER_NAME,
         "rib_layer": RIB_LAYER_NAME,
+        "cut_rail_layer": CUT_RAIL_LAYER_NAME,
         "seam_verdict_layer": SEAM_VERDICT_LAYER_NAME,
         "junction_layer": JUNCTION_V2_LAYER_NAME,
         "branch_layer": BRANCH_LAYER_NAME,
@@ -100,6 +104,7 @@ def render_overlay_v2(
         "family_stroke_count": family_strokes,
         "spine_stroke_count": spine_strokes,
         "rib_stroke_count": rib_strokes,
+        "cut_rail_stroke_count": cut_rail_strokes,
         "seam_stroke_count": seam_strokes,
         "junction_marker_count": junction_markers,
         "branch_marker_count": branch_markers,
@@ -136,15 +141,21 @@ def _draw_rails(
     gp_data: Any,
     spine_frame: Any,
     rib_frame: Any,
+    cut_rail_frame: Any,
     rails: Sequence[dict[str, Any]],
-) -> tuple[int, int]:
+) -> tuple[int, int, int]:
     spine_count = 0
     rib_count = 0
+    cut_count = 0
     for rail in rails:
         role = str(rail.get("role") or "RIB")
-        # CUT (SEAM_SELF) belongs with the spine view: the artist reads the
-        # band as "top rail / bottom rail / the cut between them".
-        frame = spine_frame if role in {"SPINE", "PARALLEL", "CUT"} else rib_frame
+        frame = (
+            spine_frame
+            if role in {"SPINE", "PARALLEL"}
+            else cut_rail_frame
+            if role == "CUT"
+            else rib_frame
+        )
         width = (
             SPINE_WIDTH
             if role == "SPINE"
@@ -159,9 +170,11 @@ def _draw_rails(
             if _add_polyline(frame, polyline, material_index, width):
                 if role in {"SPINE", "PARALLEL"}:
                     spine_count += 1
+                elif role == "CUT":
+                    cut_count += 1
                 else:
                     rib_count += 1
-    return spine_count, rib_count
+    return spine_count, rib_count, cut_count
 
 
 def _draw_seam_verdicts(gp_data: Any, frame: Any, verdicts: Sequence[dict[str, Any]]) -> int:
@@ -252,13 +265,7 @@ def _add_polyline(
 ) -> bool:
     if len(points) < 2:
         return False
-    if len(points) == 2:
-        return _add_stroke(frame, points, material_index, line_width)
-    added = False
-    for first, second in zip(points, points[1:]):
-        if _add_stroke(frame, (first, second), material_index, line_width):
-            added = True
-    return added
+    return _add_stroke(frame, points, material_index, line_width)
 
 
 def _dashed_polyline(polyline: Sequence[Sequence[float]]) -> tuple[tuple[Sequence[float], Sequence[float]], ...]:

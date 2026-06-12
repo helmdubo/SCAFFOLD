@@ -132,6 +132,7 @@ def test_tube_with_cap_side_rims_win_over_cap_perimeter_view() -> None:
     ]
     assert len(cap_perimeter) == 4
     assert all(len(rail["directional_evidence_ids"]) == 1 for rail in cap_perimeter)
+    assert {rail["role"] for rail in cap_perimeter} == {"RIB"}
     assert _has_no_hidden_fields(payload)
     assert payload["counts"]["cut_rail_count"] == 2
     assert payload["counts"]["rail_polyline_count"] == 8
@@ -163,6 +164,7 @@ def test_extruded_cross_side_band_rims_are_geodesic_rails_and_seam_is_cut() -> N
     ]
     assert len(cap_perimeters) == 24
     assert all(len(rail["directional_evidence_ids"]) == 1 for rail in cap_perimeters)
+    assert {rail["role"] for rail in cap_perimeters} == {"RIB"}
     assert len({tuple(rail["color"]) for rail in cap_perimeters}) == 24
     assert _has_no_hidden_fields(payload)
     assert payload["counts"]["rail_polyline_count"] == 28

@@ -365,7 +365,14 @@ def _assign_roles(
         )
         if not group_rails:
             continue
-        spine = sorted(group_rails, key=lambda rail: (-rail.length, rail.id))[0]
+        spine_candidates = tuple(
+            rail
+            for rail in group_rails
+            if _rail_can_be_spine(rail, group_rails, segment_by_evidence_id)
+        )
+        if not spine_candidates:
+            continue
+        spine = sorted(spine_candidates, key=lambda rail: (-rail.length, rail.id))[0]
         assigned[spine.id] = "SPINE"
         for rail in group_rails:
             if rail.id == spine.id:
@@ -393,6 +400,20 @@ def _assign_roles(
         for rail in rails
     )
     return assigned_rails
+
+
+def _rail_can_be_spine(
+    rail: RailView,
+    group_rails: tuple[RailView, ...],
+    segment_by_evidence_id: dict[str, RunSegmentView],
+) -> bool:
+    if len(rail.directional_evidence_ids) <= 1:
+        return False
+    return any(
+        other.id != rail.id
+        and _rails_are_parallel(rail, other, segment_by_evidence_id)
+        for other in group_rails
+    )
 
 
 def _with_offset_polylines(

@@ -28,7 +28,7 @@ Controls:
 ```text
 Rebuild Overlay
 Close Graph
-Family Colors / Spines / Ribs / Seam Verdicts / Junctions / Branches visibility
+Family Colors / Spines / Ribs / Seam Verdicts (also CutRails) / Junctions / Branches visibility
 ```
 
 `Rebuild Overlay` hides the source mesh while the overlay is active. `Close Graph`
@@ -40,6 +40,7 @@ removes the overlay and restores the mesh visibility.
 ScaffoldGraph_FamilyRuns
 ScaffoldGraph_Spines
 ScaffoldGraph_Ribs
+ScaffoldGraph_CutRails
 ScaffoldGraph_SeamVerdicts
 ScaffoldGraph_JunctionsV2
 ScaffoldGraph_Branches
@@ -48,12 +49,12 @@ ScaffoldGraph_Branches
 Family Runs shows every directional run segment. ConnectedDirectionFamily ids
 get stable deterministic colors. Runs without a family are neutral gray.
 
-Spines shows the longest core family rail in the dominant rail axis for the
-selected shell. Other rails parallel to that axis use their own family colors
-but are thinner.
+Spines shows only the dominant multi-run core family rail and rails parallel
+to it. It does not show cap/perimeter ribs or cut rails.
 
-Ribs shows rails from the other axis families. These are guide rails, not solve
-output.
+Ribs shows cap/perimeter rails and rails from the other axis families. These
+are guide rails, not solve output. CutRails shows SEAM_SELF/cut rails in the
+dedicated cut color.
 
 Rails are debug-side views over core `ConnectedDirectionFamily v1`, rebuilt on
 each overlay refresh. In-patch geodesic continuation, occurrence-aware
