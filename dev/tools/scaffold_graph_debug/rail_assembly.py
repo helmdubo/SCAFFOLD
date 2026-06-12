@@ -9,10 +9,6 @@ from typing import Any
 from scaffold_core.layer_2_geometry.measures import dot, normalize
 from scaffold_core.layer_3_relations.model import PatchChainEndpointRole
 
-from .geodesic_continuation import (
-    GEODESIC_STRAIGHT_TOLERANCE,
-    is_geodesic_straight_at_patch_vertex,
-)
 from .rail_offsets import offset_segment_polyline, self_seam_flip_keys
 
 
@@ -299,24 +295,12 @@ def _rails_from_segments(
     return _with_offset_polylines(topology, source, assigned, segments, self_seam_chain_ids, contract_inputs)
 
 
-def _segments_by_family(segments: tuple[RunSegmentView, ...]) -> dict[str, tuple[RunSegmentView, ...]]:
-    rows: dict[str, list[RunSegmentView]] = defaultdict(list)
-    for segment in segments:
-        if segment.family_id is None:
-            continue
-        rows[segment.family_id].append(segment)
-    return {
-        family_id: tuple(sorted(values, key=lambda item: item.id))
-        for family_id, values in rows.items()
-    }
-
-
 def _component_family_id(component: tuple[RunSegmentView, ...], index: int) -> str:
     family_ids = tuple(sorted({segment.family_id for segment in component if segment.family_id is not None}))
     if len(family_ids) == 1:
         return family_ids[0]
     patches = ".".join(sorted({segment.patch_id for segment in component}))
-    return f"geodesic_patch_rail:{patches}:{index}"
+    return f"core_family_patch_rail:{patches}:{index}"
 
 
 def _segment_components(
@@ -327,107 +311,19 @@ def _segment_components(
     self_seam_chain_ids: set[str],
     contract_inputs: set[str],
 ) -> tuple[tuple[RunSegmentView, ...], ...]:
-    neighbors: dict[str, set[str]] = {segment.id: set() for segment in segments}
-    segment_ids_by_junction: dict[str, list[str]] = defaultdict(list)
-    by_id = {segment.id: segment for segment in segments}
+    _ = geometry, source, junction_context_by_id, contract_inputs
+    components: dict[str, list[RunSegmentView]] = defaultdict(list)
     for segment in segments:
-        segment_ids_by_junction[segment.start_junction_id].append(segment.id)
-        segment_ids_by_junction[segment.end_junction_id].append(segment.id)
-    for junction_id, segment_ids in segment_ids_by_junction.items():
-        for first_id in segment_ids:
-            for second_id in segment_ids:
-                if second_id == first_id:
-                    continue
-                if _segments_continue_at_junction(
-                    geometry,
-                    source,
-                    by_id[first_id],
-                    by_id[second_id],
-                    junction_id,
-                    segment_ids_by_junction[junction_id],
-                    by_id,
-                    junction_context_by_id,
-                    self_seam_chain_ids,
-                    contract_inputs,
-                ):
-                    neighbors[first_id].add(second_id)
-
-    components: list[tuple[RunSegmentView, ...]] = []
-    visited: set[str] = set()
-    for segment in segments:
-        if segment.id in visited:
-            continue
-        stack = [segment.id]
-        component_ids: list[str] = []
-        while stack:
-            segment_id = stack.pop()
-            if segment_id in visited:
-                continue
-            visited.add(segment_id)
-            component_ids.append(segment_id)
-            stack.extend(sorted(neighbors[segment_id] - visited, reverse=True))
-        components.append(tuple(by_id[segment_id] for segment_id in sorted(component_ids)))
-    return tuple(components)
-
-
-def _segments_continue_at_junction(
-    geometry: Any,
-    source: Any,
-    first: RunSegmentView,
-    second: RunSegmentView,
-    junction_id: str,
-    incident_segment_ids: list[str],
-    segment_by_id: dict[str, RunSegmentView],
-    junction_context_by_id: dict[str, JunctionContext],
-    self_seam_chain_ids: set[str],
-    contract_inputs: set[str],
-) -> bool:
-    if first.parent_chain_id in self_seam_chain_ids or second.parent_chain_id in self_seam_chain_ids:
-        return False
-    if first.patch_id != second.patch_id:
-        if first.family_id is None or first.family_id != second.family_id:
-            return False
-        return _family_incidence_count(first.family_id, incident_segment_ids, segment_by_id) <= 2
-    if _patch_incidence_count(first.patch_id, incident_segment_ids, segment_by_id) > 2:
-        return False
-    context = junction_context_by_id.get(junction_id)
-    if context is None:
-        contract_inputs.add(f"missing junction context for geodesic rail continuation at {junction_id}")
-        return False
-    is_straight, issue = is_geodesic_straight_at_patch_vertex(
-        source,
-        geometry,
-        patch_id=first.patch_id,
-        source_vertex_id=context.source_vertex_id,
-        topology_vertex_ids=context.topology_vertex_ids,
-        tolerance=GEODESIC_STRAIGHT_TOLERANCE,
-    )
-    if issue is not None:
-        contract_inputs.add(issue)
-    return is_straight
-
-
-def _patch_incidence_count(
-    patch_id: str,
-    incident_segment_ids: list[str],
-    segment_by_id: dict[str, RunSegmentView],
-) -> int:
-    return sum(
-        1
-        for segment_id in incident_segment_ids
-        if segment_by_id[segment_id].patch_id == patch_id
-    )
-
-
-def _family_incidence_count(
-    family_id: str,
-    incident_segment_ids: list[str],
-    segment_by_id: dict[str, RunSegmentView],
-) -> int:
-    return sum(
-        1
-        for segment_id in incident_segment_ids
-        if segment_by_id[segment_id].family_id == family_id
+        if segment.parent_chain_id in self_seam_chain_ids:
+            key = f"cut:{segment.id}"
+        elif segment.family_id is not None:
+            key = f"family:{segment.family_id}"
+        else:
+            key = f"unfamilied:{segment.id}"
+        components[key].append(segment)
+    return tuple(
+        tuple(sorted(values, key=lambda item: item.id))
+        for _key, values in sorted(components.items())
     )
 
 
@@ -650,8 +546,8 @@ def _glyph(
 
 def _base_contract_inputs() -> tuple[str, str]:
     return (
-        "future ScaffoldRail needs a geodesic continuation criterion: same-patch consecutive runs continue when patch-local face-fan angle is within GEODESIC_STRAIGHT_TOLERANCE of pi",
-        "future ScaffoldRail needs per PatchChain-use rail membership: the same Chain can be straight in one owning patch view and cornered in an adjacent patch view",
+        "core ConnectedDirectionFamily v1 supplies geodesic in-patch continuation from occurrence face-fan angles",
+        "core ConnectedDirectionFamily v1 supplies per PatchChain-use rail membership for debug rendering",
     )
 
 

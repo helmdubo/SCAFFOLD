@@ -83,6 +83,8 @@ class LocalFaceFanGeometryFacts:
     source_face_ids: tuple[SourceFaceId, ...]
     area: float
     normal: Vector3
+    interior_angle_sum: float
+
 
 @dataclass(frozen=True)
 class GeometryFactSnapshot:

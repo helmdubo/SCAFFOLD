@@ -8,15 +8,12 @@ from .colors import (
     BRANCH_COLOR,
     CUT_SEAM_COLOR,
     NEUTRAL_GRAY,
-    PARALLEL_RAIL_COLOR,
-    RIB_COLOR,
     RUN_ENDPOINT_JUNCTION_COLOR,
     SCAFFOLD_NODE_COLOR,
     SEWABLE_SEAM_COLOR,
-    SPINE_COLOR,
     stable_color,
 )
-from .geodesic_continuation import GEODESIC_STRAIGHT_TOLERANCE
+from scaffold_core.layer_3_relations.direction_families import GEODESIC_STRAIGHT_TOLERANCE
 from .rail_assembly import RailAssembly, RailView, RunSegmentView, build_rail_assembly
 from .seam_verdicts import ANGLE_DEFECT_TOLERANCE, SeamVerdict, build_seam_verdicts
 
@@ -90,11 +87,7 @@ def _rail_to_dict(rail: RailView) -> dict[str, Any]:
 def _rail_color(rail: RailView) -> tuple[float, float, float, float]:
     if rail.role == "CUT":
         return CUT_SEAM_COLOR
-    if rail.role == "SPINE":
-        return SPINE_COLOR
-    if rail.role == "PARALLEL":
-        return PARALLEL_RAIL_COLOR
-    return RIB_COLOR
+    return stable_color(rail.family_id)
 
 
 def _seam_verdict_to_dict(verdict: SeamVerdict) -> dict[str, Any]:

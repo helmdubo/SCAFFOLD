@@ -431,6 +431,8 @@ class CrossingRecord:
     transported_direction_dot: float
     transported_normal_dot: float | None
     confidence: float
+    measured_angle_radians: float | None = None
+    run_endpoint_junction_id: str | None = None
 
     def get(self, field_name: str, default: object = None) -> object:
         """Compatibility shim for pre-F1 tests that treated crossings as mappings."""

@@ -48,19 +48,17 @@ ScaffoldGraph_Branches
 Family Runs shows every directional run segment. ConnectedDirectionFamily ids
 get stable deterministic colors. Runs without a family are neutral gray.
 
-Spines shows the longest rail in the dominant rail axis for the selected shell
-as a thick cyan stroke. Other rails parallel to that axis use the same hue but
-are thinner.
+Spines shows the longest core family rail in the dominant rail axis for the
+selected shell. Other rails parallel to that axis use their own family colors
+but are thinner.
 
-Ribs shows rails from the other axis families in orange. These are guide rails,
-not solve output.
+Ribs shows rails from the other axis families. These are guide rails, not solve
+output.
 
-Rails are debug-side views, rebuilt on each overlay refresh. Inside one owning
-PatchChain use, consecutive runs continue only when the patch-local face fan at
-the shared vertex is geodesically straight: the angle sum is within
-`GEODESIC_STRAIGHT_TOLERANCE` of pi. The default tolerance is `0.1` radians.
-Across patches, the overlay still follows the existing
-ConnectedDirectionFamily transport evidence.
+Rails are debug-side views over core `ConnectedDirectionFamily v1`, rebuilt on
+each overlay refresh. In-patch geodesic continuation, occurrence-aware
+face-fan angles, and cross-patch transport are supplied by core evidence; the
+overlay does not run a separate geodesic grouping rule.
 
 Rail membership is per PatchChain use. The same source edge can draw twice:
 one offset line for the side-band patch view and one offset line for the cap
@@ -100,7 +98,7 @@ Expected overlay:
 
 ```text
 1. The entire top rim is one visible rail.
-2. The entire bottom rim is a second visible rail with the related rail hue.
+2. The entire bottom rim is a second visible rail with a different family color.
 3. The vertical seam is rendered in the cut color.
 4. The cap patch views still see those same rim edges as cornered perimeter
    pieces, not as one straight rail; those cap-view pieces draw beside the

@@ -19,7 +19,10 @@ from scaffold_core.tests.fixtures.cylinder_tube import (
     make_cylinder_tube_without_caps_with_two_seams_source,
 )
 from scaffold_core.tests.fixtures.detached_parallel_walls import make_detached_parallel_walls_source
+from scaffold_core.tests.fixtures.extruded_cross import make_extruded_cross_source
 from scaffold_core.tests.fixtures.l_corridor_tunnel import make_l_corridor_tunnel_seamed_folds_source
+from scaffold_core.tests.fixtures.l_corridor_tunnel import make_l_corridor_tunnel_single_patch_source
+from scaffold_core.tests.fixtures.single_patch import make_single_quad_source
 from scaffold_core.tests.fixtures.tube_with_cap import make_tube_with_cap_source
 
 
@@ -76,6 +79,9 @@ def test_tube_with_cap_connected_families_keep_cap_and_side_separate() -> None:
         and any("f0" in str(patch_id) for patch_id in family.patch_ids)
     )
     assert cap_side_families == ()
+    assert len(_families_with_member_fragment(relations, "patch:seed:f0:0:1")) == 1
+    assert len(_families_with_member_fragment(relations, "patch:seed:f0:0:3")) == 1
+    assert len(_families_with_member_fragment(relations, "patch:seed:f_cap:0:0")) == 4
 
 
 def test_two_seam_cylinder_connected_families_keep_top_and_bottom_rings() -> None:
@@ -91,6 +97,48 @@ def test_two_seam_cylinder_connected_families_keep_top_and_bottom_rings() -> Non
     )
     assert len(ring_families) == 2
     assert all(len(family.crossing_records) == 2 for family in ring_families)
+
+
+def test_extruded_cross_connected_families_are_per_patch_use_geodesic() -> None:
+    context = run_pass_1_relations(run_pass_0(make_extruded_cross_source()))
+    relations = context.relation_snapshot
+
+    bottom_rim = _single_family_with_member_fragment(relations, "patch:seed:f_side_0:0:1")
+    top_rim = _single_family_with_member_fragment(relations, "patch:seed:f_side_0:0:3")
+    assert bottom_rim.id != top_rim.id
+    assert len(bottom_rim.member_directional_evidence_ids) == 12
+    assert len(top_rim.member_directional_evidence_ids) == 12
+    assert all(record.kind == "IN_PATCH_GEODESIC" for record in bottom_rim.crossing_records)
+    assert all(record.kind == "IN_PATCH_GEODESIC" for record in top_rim.crossing_records)
+    assert all(record.measured_angle_radians is not None for record in top_rim.crossing_records)
+
+    seam_families = (
+        *_families_with_member_fragment(relations, "patch:seed:f_side_0:0:0"),
+        *_families_with_member_fragment(relations, "patch:seed:f_side_0:0:2"),
+    )
+    assert len(seam_families) == 2
+    assert all(len(family.member_directional_evidence_ids) == 1 for family in seam_families)
+    assert all(not family.crossing_records for family in seam_families)
+
+    assert len(_families_with_member_fragment(relations, "patch:seed:f_cap_top:0:0")) == 12
+    assert len(_families_with_member_fragment(relations, "patch:seed:f_cap_bottom:0:0")) == 12
+
+
+def test_in_patch_geodesic_merges_folded_single_patch_but_not_quad_corners() -> None:
+    tunnel = run_pass_1_relations(run_pass_0(make_l_corridor_tunnel_single_patch_source()))
+    tunnel_families = tuple(
+        family
+        for family in tunnel.relation_snapshot.connected_direction_families
+        if len(family.member_directional_evidence_ids) == 3
+        and all(record.kind == "IN_PATCH_GEODESIC" for record in family.crossing_records)
+    )
+    assert len(tunnel_families) == 2
+
+    wall = run_pass_1_relations(run_pass_0(make_single_quad_source()))
+    assert all(
+        len(family.member_directional_evidence_ids) == 1
+        for family in wall.relation_snapshot.connected_direction_families
+    )
 
 
 def test_connected_direction_families_carry_provenance_and_inspect_full() -> None:
@@ -129,6 +177,8 @@ def test_connected_direction_families_carry_provenance_and_inspect_full() -> Non
     serialized_crossing = serialized_family["crossing_records"][0]
     assert "first_directional_evidence_id" in serialized_crossing
     assert "transported_direction_dot" in serialized_crossing
+    assert "measured_angle_radians" in serialized_crossing
+    assert "run_endpoint_junction_id" in serialized_crossing
     assert "ordered_member_directional_evidence_ids" in serialized_family
     assert "member_map" in serialized_family
 
@@ -151,6 +201,20 @@ def _has_family_with_patches(relations, patch_fragments, directions) -> bool:
         ):
             return True
     return False
+
+
+def _families_with_member_fragment(relations, member_fragment: str):
+    return tuple(
+        family
+        for family in relations.connected_direction_families
+        if any(member_fragment in member_id for member_id in family.member_directional_evidence_ids)
+    )
+
+
+def _single_family_with_member_fragment(relations, member_fragment: str):
+    families = _families_with_member_fragment(relations, member_fragment)
+    assert len(families) == 1
+    return families[0]
 
 
 def _direction_matches(actual, expected) -> bool:

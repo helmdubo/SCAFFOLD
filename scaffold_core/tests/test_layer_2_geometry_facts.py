@@ -113,6 +113,7 @@ def test_local_face_fan_geometry_splits_materialized_seam_occurrences() -> None:
     }
     assert all(fan.normal != (0.0, 0.0, 0.0) for fan in seam_top_fans)
     assert {len(fan.source_face_ids) for fan in seam_top_fans} == {1}
+    assert all(isclose(fan.interior_angle_sum, pi / 2.0) for fan in seam_top_fans)
 
 
 def test_degenerate_geometry_emits_degraded_diagnostics() -> None:

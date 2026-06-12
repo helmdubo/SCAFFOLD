@@ -118,12 +118,14 @@ def build_relation_snapshot(
         scaffold_node_incident_edge_relations,
     )
     connected_direction_families = build_connected_direction_families(
+        topology,
         geometry,
         patch_adjacencies,
         patch_chain_directional_evidence,
         patch_chain_endpoint_samples,
         scaffold_nodes,
         scaffold_edges,
+        run_endpoint_junctions,
         scaffold_node_incident_edge_relations,
         shared_chain_patch_chain_relations,
     )

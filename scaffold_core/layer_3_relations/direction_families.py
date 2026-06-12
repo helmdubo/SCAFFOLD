@@ -11,11 +11,13 @@ Rules:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import cos, sin
+from math import cos, pi, sin
 from typing import Mapping
 
 from scaffold_core.core.evidence import Evidence
-from scaffold_core.ids import PatchChainId, PatchId, VertexId
+from scaffold_core.ids import ChainId, PatchChainId, PatchId, VertexId
+from scaffold_core.layer_1_topology.model import SurfaceModel
+from scaffold_core.layer_1_topology.queries import patch_chains_for_chain
 from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot, Vector3
 from scaffold_core.layer_2_geometry.measures import EPSILON, add, cross, dot, length, normalize, scale
 from scaffold_core.layer_3_relations.model import (
@@ -25,6 +27,7 @@ from scaffold_core.layer_3_relations.model import (
     PatchChainDirectionalEvidence,
     PatchChainEndpointRole,
     PatchChainEndpointSample,
+    RunEndpointJunction,
     ScaffoldEdge,
     ScaffoldNode,
     ScaffoldNodeIncidentEdgeRelationKind,
@@ -33,8 +36,9 @@ from scaffold_core.layer_3_relations.model import (
 from scaffold_core.layer_3_relations.scaffold_graph_relations import COMPATIBLE_NORMAL_MIN_DOT
 
 
-POLICY_NAME = "connected_direction_family_v0"
+POLICY_NAME = "connected_direction_family_v1"
 DIRECTION_COMPATIBILITY_MIN_DOT = 0.996
+GEODESIC_STRAIGHT_TOLERANCE = 0.1
 
 
 @dataclass(frozen=True)
@@ -46,16 +50,18 @@ class _CrossingCandidate:
 
 
 def build_connected_direction_families(
+    topology: SurfaceModel,
     geometry: GeometryFactSnapshot,
     patch_adjacencies: Mapping[str, PatchAdjacency],
     directional_evidence_items: tuple[PatchChainDirectionalEvidence, ...],
     endpoint_samples: tuple[PatchChainEndpointSample, ...],
     scaffold_nodes: tuple[ScaffoldNode, ...],
     scaffold_edges: tuple[ScaffoldEdge, ...],
+    run_endpoint_junctions: tuple[RunEndpointJunction, ...],
     scaffold_node_incident_edge_relations,
     shared_chain_relations: tuple[SharedChainPatchChainRelation, ...],
 ) -> tuple[ConnectedDirectionFamily, ...]:
-    """Build DD-43 connectivity-propagated direction-family evidence."""
+    """Build DD-43/DD-45 connectivity-propagated direction-family evidence."""
 
     seeds = tuple(
         sorted(
@@ -81,6 +87,7 @@ def build_connected_direction_families(
     samples_by_evidence_id = _samples_by_evidence_id(endpoint_samples, sample_evidence_ids_by_sample_id)
     edge_by_patch_chain_id = {edge.patch_chain_id: edge for edge in scaffold_edges}
     adjacency_by_patch_pair = _adjacency_by_patch_pair(patch_adjacencies)
+    self_seam_chain_ids = _self_seam_chain_ids(topology)
 
     shared_chain_candidates = _shared_chain_crossings(
         geometry,
@@ -101,6 +108,13 @@ def build_connected_direction_families(
             evidence_by_id,
             edge_by_patch_chain_id,
             adjacency_by_patch_pair,
+            self_seam_chain_ids,
+        ),
+        *_in_patch_geodesic_crossings(
+            geometry,
+            run_endpoint_junctions,
+            evidence_by_id,
+            self_seam_chain_ids,
         ),
     )
     components = _connected_components(evidence_by_id, crossing_candidates)
@@ -114,6 +128,7 @@ def build_connected_direction_families(
             key=lambda item: (
                 item.kind,
                 item.scaffold_node_id or "",
+                item.run_endpoint_junction_id or "",
                 str(item.shared_chain_id or ""),
                 item.first_directional_evidence_id,
                 item.second_directional_evidence_id,
@@ -143,6 +158,121 @@ def build_connected_direction_families(
             )
         )
     return tuple(families)
+
+
+def _in_patch_geodesic_crossings(
+    geometry: GeometryFactSnapshot,
+    run_endpoint_junctions: tuple[RunEndpointJunction, ...],
+    evidence_by_id: Mapping[str, PatchChainDirectionalEvidence],
+    self_seam_chain_ids: set[ChainId],
+) -> tuple[_CrossingCandidate, ...]:
+    local_face_fans = _local_face_fans_by_patch_vertex(geometry)
+    candidates: list[_CrossingCandidate] = []
+    for junction in sorted(run_endpoint_junctions, key=lambda item: item.id):
+        occurrences = tuple(junction.incident_run_endpoint_occurrences)
+        for first_index, first_occurrence in enumerate(occurrences):
+            first_id, first_role = first_occurrence
+            first = evidence_by_id.get(first_id)
+            if first is None:
+                continue
+            for second_id, second_role in occurrences[first_index + 1:]:
+                second = evidence_by_id.get(second_id)
+                if second is None:
+                    continue
+                if not _can_attempt_in_patch_geodesic(
+                    first,
+                    first_role,
+                    second,
+                    second_role,
+                    self_seam_chain_ids,
+                ):
+                    continue
+                angle = _patch_occurrence_angle(
+                    local_face_fans,
+                    first.patch_id,
+                    junction.topology_vertex_ids,
+                )
+                if angle is None or abs(angle - pi) > GEODESIC_STRAIGHT_TOLERANCE:
+                    continue
+                confidence = min(first.confidence, second.confidence, junction.confidence)
+                candidates.append(_CrossingCandidate(
+                    first_directional_evidence_id=first.id,
+                    second_directional_evidence_id=second.id,
+                    record=CrossingRecord(
+                        kind="IN_PATCH_GEODESIC",
+                        scaffold_node_id=junction.anchor_scaffold_node_id,
+                        shared_chain_id=None,
+                        patch_adjacency_id=None,
+                        first_directional_evidence_id=first.id,
+                        second_directional_evidence_id=second.id,
+                        first_patch_chain_id=first.patch_chain_id,
+                        second_patch_chain_id=second.patch_chain_id,
+                        first_patch_id=first.patch_id,
+                        second_patch_id=second.patch_id,
+                        signed_dihedral_radians=0.0,
+                        transported_direction_dot=1.0,
+                        transported_normal_dot=None,
+                        confidence=confidence,
+                        measured_angle_radians=angle,
+                        run_endpoint_junction_id=junction.id,
+                    ),
+                    confidence=confidence,
+                ))
+    return tuple(_deduplicate_crossings(candidates))
+
+
+def _can_attempt_in_patch_geodesic(
+    first: PatchChainDirectionalEvidence,
+    first_role: PatchChainEndpointRole,
+    second: PatchChainDirectionalEvidence,
+    second_role: PatchChainEndpointRole,
+    self_seam_chain_ids: set[ChainId],
+) -> bool:
+    if first.id == second.id:
+        return False
+    if first.patch_id != second.patch_id or first.loop_id != second.loop_id:
+        return False
+    if first_role is second_role:
+        return False
+    return first.parent_chain_id not in self_seam_chain_ids and second.parent_chain_id not in self_seam_chain_ids
+
+
+def _local_face_fans_by_patch_vertex(geometry: GeometryFactSnapshot):
+    fans: dict[tuple[PatchId, VertexId], list] = {}
+    for fan in geometry.local_face_fan_facts.values():
+        fans.setdefault((fan.patch_id, fan.vertex_id), []).append(fan)
+    return {
+        key: tuple(sorted(values, key=lambda item: item.id))
+        for key, values in fans.items()
+    }
+
+
+def _patch_occurrence_angle(
+    local_face_fans_by_patch_vertex,
+    patch_id: PatchId,
+    topology_vertex_ids: tuple[VertexId, ...],
+) -> float | None:
+    fans = tuple(
+        fan
+        for vertex_id in topology_vertex_ids
+        for fan in local_face_fans_by_patch_vertex.get((patch_id, vertex_id), ())
+    )
+    if not fans:
+        return None
+    angles = tuple(sorted(fan.interior_angle_sum for fan in fans))
+    first_angle = angles[0]
+    if all(abs(angle - first_angle) <= EPSILON for angle in angles[1:]):
+        return first_angle
+    return None
+
+
+def _self_seam_chain_ids(topology: SurfaceModel) -> set[ChainId]:
+    self_seam_chain_ids: set[ChainId] = set()
+    for chain_id in topology.chains:
+        patch_ids = tuple(use.patch_id for use in patch_chains_for_chain(topology, chain_id))
+        if len(patch_ids) != len(set(patch_ids)):
+            self_seam_chain_ids.add(chain_id)
+    return self_seam_chain_ids
 
 
 def _shared_chain_crossings(
@@ -275,6 +405,7 @@ def _node_crossings(
     evidence_by_id: Mapping[str, PatchChainDirectionalEvidence],
     edge_by_patch_chain_id: Mapping[PatchChainId, ScaffoldEdge],
     adjacency_by_patch_pair: Mapping[frozenset[PatchId], PatchAdjacency],
+    self_seam_chain_ids: set[ChainId],
 ) -> tuple[_CrossingCandidate, ...]:
     node_ids = {node.id for node in scaffold_nodes}
     candidates: list[_CrossingCandidate] = []
@@ -303,6 +434,8 @@ def _node_crossings(
                 first_edge = edge_by_patch_chain_id.get(first.patch_chain_id)
                 second_edge = edge_by_patch_chain_id.get(second.patch_chain_id)
                 if first_edge is None or second_edge is None:
+                    continue
+                if first_edge.chain_id in self_seam_chain_ids or second_edge.chain_id in self_seam_chain_ids:
                     continue
                 if first_edge.chain_id == second_edge.chain_id:
                     continue
@@ -514,7 +647,7 @@ def _is_degraded_sample(sample: PatchChainEndpointSample) -> bool:
 def _deduplicate_crossings(
     candidates: list[_CrossingCandidate],
 ) -> tuple[_CrossingCandidate, ...]:
-    seen: set[tuple[str, str, str, str, str]] = set()
+    seen: set[tuple[str, str, str, str, str, str]] = set()
     unique: list[_CrossingCandidate] = []
     for candidate in sorted(
         candidates,
@@ -523,6 +656,7 @@ def _deduplicate_crossings(
             max(item.first_directional_evidence_id, item.second_directional_evidence_id),
             item.record.kind,
             item.record.scaffold_node_id or "",
+            item.record.run_endpoint_junction_id or "",
             str(item.record.shared_chain_id or ""),
         ),
     ):
@@ -531,6 +665,7 @@ def _deduplicate_crossings(
             max(candidate.first_directional_evidence_id, candidate.second_directional_evidence_id),
             candidate.record.kind,
             candidate.record.scaffold_node_id or "",
+            candidate.record.run_endpoint_junction_id or "",
             str(candidate.record.shared_chain_id or ""),
         )
         if key in seen:
@@ -674,12 +809,13 @@ def _family_evidence(
 ) -> Evidence:
     return Evidence(
         source="layer_3_relations.direction_families",
-        summary="ConnectedDirectionFamily v0 propagated over ScaffoldGraph connectivity",
+        summary="ConnectedDirectionFamily v1 propagated over graph and geodesic in-patch crossings",
         data={
             "policy": POLICY_NAME,
             "member_count": len(member_ids),
             "crossing_count": len(crossings),
             "direction_compatibility_min_dot": DIRECTION_COMPATIBILITY_MIN_DOT,
+            "geodesic_straight_tolerance": GEODESIC_STRAIGHT_TOLERANCE,
             "compatible_normal_min_dot": COMPATIBLE_NORMAL_MIN_DOT,
             "confidence": confidence,
         },

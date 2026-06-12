@@ -902,6 +902,7 @@ def _local_face_fan_to_dict(facts) -> dict[str, object]:
         "source_face_ids": [str(source_face_id) for source_face_id in facts.source_face_ids],
         "area": facts.area,
         "normal": list(facts.normal),
+        "interior_angle_sum": facts.interior_angle_sum,
     }
 
 
@@ -1267,6 +1268,7 @@ def _connected_direction_family_crossing_record_to_dict(record) -> dict[str, obj
     return {
         "kind": record.kind,
         "scaffold_node_id": record.scaffold_node_id,
+        "run_endpoint_junction_id": record.run_endpoint_junction_id,
         "shared_chain_id": str(record.shared_chain_id) if record.shared_chain_id is not None else None,
         "patch_adjacency_id": record.patch_adjacency_id,
         "first_directional_evidence_id": record.first_directional_evidence_id,
@@ -1278,6 +1280,7 @@ def _connected_direction_family_crossing_record_to_dict(record) -> dict[str, obj
         "signed_dihedral_radians": record.signed_dihedral_radians,
         "transported_direction_dot": record.transported_direction_dot,
         "transported_normal_dot": record.transported_normal_dot,
+        "measured_angle_radians": record.measured_angle_radians,
         "confidence": record.confidence,
     }
 

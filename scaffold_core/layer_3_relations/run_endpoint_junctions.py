@@ -42,15 +42,15 @@ def build_run_endpoint_junctions(
 
     for directional_evidence in sorted(directional_evidence_items, key=lambda item: item.id):
         for role in (PatchChainEndpointRole.START, PatchChainEndpointRole.END):
-            vertex_id, source_vertex_id = _endpoint_vertex(
+            vertex_ids, source_vertex_id = _endpoint_vertices(
                 topology,
                 geometry,
                 directional_evidence,
                 role,
                 source_vertex_to_vertices,
             )
-            key = _group_key(source_vertex_id, vertex_id)
-            topology_vertex_ids_by_key.setdefault(key, set()).add(vertex_id)
+            key = _group_key(source_vertex_id, vertex_ids[0])
+            topology_vertex_ids_by_key.setdefault(key, set()).update(vertex_ids)
             source_vertex_id_by_key[key] = source_vertex_id
             occurrences_by_key.setdefault(key, []).append((directional_evidence.id, role))
             patch_ids_by_key.setdefault(key, set()).add(directional_evidence.patch_id)
@@ -71,13 +71,13 @@ def build_run_endpoint_junctions(
     return tuple(sorted(junctions, key=lambda item: item.id))
 
 
-def _endpoint_vertex(
+def _endpoint_vertices(
     topology: SurfaceModel,
     geometry: GeometryFactSnapshot,
     directional_evidence: PatchChainDirectionalEvidence,
     role: PatchChainEndpointRole,
     source_vertex_to_vertices: dict[SourceVertexId, tuple[VertexId, ...]],
-) -> tuple[VertexId, SourceVertexId | None]:
+) -> tuple[tuple[VertexId, ...], SourceVertexId | None]:
     patch_chain = topology.patch_chains[directional_evidence.patch_chain_id]
     chain_facts = geometry.chain_facts.get(directional_evidence.parent_chain_id)
     if chain_facts is not None:
@@ -98,7 +98,7 @@ def _endpoint_vertex(
         else directional_evidence.end_source_vertex_id
     )
     return (
-        _vertex_for_source(
+        _vertices_for_source(
             topology,
             patch_chain,
             role,
@@ -116,7 +116,7 @@ def _endpoint_from_chain_walk(
     directional_evidence: PatchChainDirectionalEvidence,
     role: PatchChainEndpointRole,
     source_vertex_to_vertices: dict[SourceVertexId, tuple[VertexId, ...]],
-) -> tuple[VertexId, SourceVertexId | None] | None:
+) -> tuple[tuple[VertexId, ...], SourceVertexId | None] | None:
     source_path = _source_path(chain_facts)
     segment_indices = directional_evidence.segment_indices
     if not source_path or not segment_indices:
@@ -143,7 +143,7 @@ def _endpoint_from_chain_walk(
 
     endpoint_position = start_position if role is PatchChainEndpointRole.START else end_position
     source_vertex_id = oriented_path[endpoint_position]
-    vertex_id = _vertex_for_oriented_position(
+    vertex_ids = _vertices_for_oriented_position(
         topology,
         patch_chain,
         endpoint_position,
@@ -151,7 +151,7 @@ def _endpoint_from_chain_walk(
         source_vertex_id,
         source_vertex_to_vertices,
     )
-    return vertex_id, source_vertex_id
+    return vertex_ids, source_vertex_id
 
 
 def _source_path(chain_facts: ChainGeometryFacts) -> tuple[SourceVertexId, ...]:
@@ -191,20 +191,20 @@ def _patch_chain_reverses_source_path(
     return patch_chain.orientation_sign == -1
 
 
-def _vertex_for_oriented_position(
+def _vertices_for_oriented_position(
     topology: SurfaceModel,
     patch_chain: PatchChain,
     endpoint_position: int,
     segment_count: int,
     source_vertex_id: SourceVertexId,
     source_vertex_to_vertices: dict[SourceVertexId, tuple[VertexId, ...]],
-) -> VertexId:
+) -> tuple[VertexId, ...]:
     start_vertex_id, end_vertex_id = patch_chain_vertices(topology, patch_chain.id)
     if endpoint_position == 0:
-        return start_vertex_id
+        return (start_vertex_id,)
     if endpoint_position == segment_count:
-        return end_vertex_id
-    return _vertex_for_source(
+        return (end_vertex_id,)
+    return _vertices_for_source(
         topology,
         patch_chain,
         None,
@@ -213,31 +213,34 @@ def _vertex_for_oriented_position(
     )
 
 
-def _vertex_for_source(
+def _vertices_for_source(
     topology: SurfaceModel,
     patch_chain: PatchChain,
     role: PatchChainEndpointRole | None,
     source_vertex_id: SourceVertexId,
     source_vertex_to_vertices: dict[SourceVertexId, tuple[VertexId, ...]],
-) -> VertexId:
+) -> tuple[VertexId, ...]:
     start_vertex_id, end_vertex_id = patch_chain_vertices(topology, patch_chain.id)
     start_sources = topology.vertices[start_vertex_id].source_vertex_ids
     end_sources = topology.vertices[end_vertex_id].source_vertex_ids
     if role is PatchChainEndpointRole.START and source_vertex_id in start_sources:
-        return start_vertex_id
+        return (start_vertex_id,)
     if role is PatchChainEndpointRole.END and source_vertex_id in end_sources:
-        return end_vertex_id
+        return (end_vertex_id,)
 
     candidates = source_vertex_to_vertices.get(source_vertex_id, ())
     if len(candidates) == 1:
-        return candidates[0]
+        return (candidates[0],)
     patch_candidates = tuple(
         vertex_id
         for vertex_id in candidates
         if f":patch_chain:{patch_chain.patch_id}:" in str(vertex_id)
     )
-    if len(patch_candidates) == 1:
-        return patch_candidates[0]
+    if patch_candidates:
+        return patch_candidates
+    canonical_vertex_id = VertexId(f"vertex:{source_vertex_id}")
+    if canonical_vertex_id in candidates:
+        return (canonical_vertex_id,)
     if not candidates:
         raise ValueError(
             "RunEndpointJunction endpoint has no topology Vertex occurrence for "

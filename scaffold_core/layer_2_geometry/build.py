@@ -441,6 +441,11 @@ def _build_local_face_fan_geometry_facts(
                     source_face_ids=component_face_ids,
                     area=area,
                     normal=normal,
+                    interior_angle_sum=_source_vertex_angle_sum(
+                        source,
+                        source_vertex_id,
+                        component_face_ids,
+                    ),
                 )
 
     return facts
@@ -542,6 +547,29 @@ def _face_fan_area_normal(
             total_area += area
             normal_accumulator = add(normal_accumulator, area_vector)
     return total_area, normalize(normal_accumulator)
+
+
+def _source_vertex_angle_sum(
+    source: SourceMeshSnapshot,
+    source_vertex_id: SourceVertexId,
+    source_face_ids: tuple[SourceFaceId, ...],
+) -> float:
+    total = 0.0
+    for source_face_id in source_face_ids:
+        vertex_ids = source.faces[source_face_id].vertex_ids
+        if len(vertex_ids) < 3:
+            continue
+        for index, face_source_vertex_id in enumerate(vertex_ids):
+            if face_source_vertex_id != source_vertex_id:
+                continue
+            point = _source_vertex_point(source, face_source_vertex_id)
+            previous_point = _source_vertex_point(source, vertex_ids[index - 1])
+            next_point = _source_vertex_point(source, vertex_ids[(index + 1) % len(vertex_ids)])
+            total += angle_between(
+                subtract(previous_point, point),
+                subtract(next_point, point),
+            )
+    return total
 
 
 def _selected_edge_incidence(
