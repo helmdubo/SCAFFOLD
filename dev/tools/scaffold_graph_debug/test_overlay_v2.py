@@ -5,7 +5,11 @@ from __future__ import annotations
 import importlib
 
 from dev.tools.scaffold_graph_debug.overlay_v2 import build_overlay_v2_payload
-from dev.tools.scaffold_graph_debug.rail_offsets import RAIL_NORMAL_HOVER_FACTOR, RAIL_OFFSET_FACTOR
+from dev.tools.scaffold_graph_debug.rail_offsets import (
+    RAIL_NORMAL_HOVER_FACTOR,
+    RAIL_OFFSET_FACTOR,
+    coalesce_polylines,
+)
 from dev.tools.scaffold_graph_debug.seam_verdicts import ANGLE_DEFECT_TOLERANCE
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.beveled_wall_corner import make_beveled_wall_corner_source
@@ -35,6 +39,23 @@ def test_pure_overlay_modules_import_without_blender() -> None:
     assert RAIL_OFFSET_FACTOR > 0.0
     assert RAIL_NORMAL_HOVER_FACTOR > 0.0
     assert build_stamp.OVERLAY_VERSION == "overlay-v3"
+
+
+def test_coalesced_visual_polylines_do_not_add_vertex_connector_segments() -> None:
+    base_polylines = (
+        ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0)),
+        ((1.0, 0.0, 0.0), (1.0, 1.0, 0.0)),
+    )
+    visual_polylines = (
+        ((0.0, 0.0, 0.1), (1.0, 0.0, 0.1)),
+        ((1.0, 0.1, 0.0), (1.0, 1.1, 0.0)),
+    )
+
+    coalesced = coalesce_polylines(visual_polylines, base_polylines=base_polylines)
+
+    assert len(coalesced) == 1
+    assert len(coalesced[0]) == 3
+    assert coalesced[0][1] == (1.0, 0.05, 0.05)
 
 
 def test_beveled_corner_has_horizontal_spine_and_vertical_ribs() -> None:

@@ -258,9 +258,8 @@ def _try_merge_polylines(first, second, endpoint_counts):
 
 
 def _join_visual_polylines(first, second):
-    if _point_key(first[-1]) == _point_key(second[0]):
-        return first + second[1:]
-    return first + second
+    shared = _midpoint(first[-1], second[0])
+    return first[:-1] + (shared,) + second[1:]
 
 
 def _polyline_sort_key(polyline):
