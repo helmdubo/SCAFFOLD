@@ -46,6 +46,7 @@ class RailView:
     length: float
     branch_junction_ids: tuple[str, ...]
     related_rail_ids: tuple[str, ...]
+    is_closed: bool
     is_ambiguous: bool
 
 
@@ -283,6 +284,7 @@ def _rails_from_segments(
                 length=_deduped_length(component),
                 branch_junction_ids=branch_junction_ids,
                 related_rail_ids=(),
+                is_closed=False,
                 is_ambiguous=bool(branch_junction_ids),
             )
         )
@@ -396,31 +398,45 @@ def _assign_roles(
             length=rail.length,
             branch_junction_ids=rail.branch_junction_ids,
             related_rail_ids=(),
+            is_closed=False,
             is_ambiguous=rail.is_ambiguous or any(valence_by_junction_id.get(junction_id, 0) > 2 for junction_id in rail.junction_ids),
         )
         for rail in rails
     )
-    return _with_related_rib_ids(assigned_rails)
+    return _with_related_rib_ids(assigned_rails, segment_by_evidence_id)
 
 
-def _with_related_rib_ids(rails: tuple[RailView, ...]) -> tuple[RailView, ...]:
+RIB_ORTHOGONAL_MAX_DOT = 0.5
+
+
+def _with_related_rib_ids(
+    rails: tuple[RailView, ...],
+    segment_by_evidence_id: dict[str, RunSegmentView] | None = None,
+) -> tuple[RailView, ...]:
     axial_rails = tuple(rail for rail in rails if rail.role in {"SPINE", "PARALLEL"})
     output: list[RailView] = []
     for rail in rails:
         related_rail_ids = ()
+        role = rail.role
         if rail.role == "RIB":
+            # Artist definition: a rib is orthogonal to a spine, attached to
+            # it through a shared junction, and not itself part of a spine.
+            # Rails failing this are OTHER (neutral), never forced ribs.
             related_rail_ids = tuple(
                 sorted(
                     axial.id
                     for axial in axial_rails
                     if set(rail.junction_ids) & set(axial.junction_ids)
+                    and _orthogonal_at_attachment(rail, axial, segment_by_evidence_id)
                 )
             )
+            if not related_rail_ids:
+                role = "OTHER"
         output.append(
             RailView(
                 id=rail.id,
                 family_id=rail.family_id,
-                role=rail.role,
+                role=role,
                 directional_evidence_ids=rail.directional_evidence_ids,
                 patch_ids=rail.patch_ids,
                 junction_ids=rail.junction_ids,
@@ -429,10 +445,66 @@ def _with_related_rib_ids(rails: tuple[RailView, ...]) -> tuple[RailView, ...]:
                 length=rail.length,
                 branch_junction_ids=rail.branch_junction_ids,
                 related_rail_ids=related_rail_ids,
+                is_closed=_rail_is_closed(rail, segment_by_evidence_id),
                 is_ambiguous=rail.is_ambiguous,
             )
         )
     return tuple(output)
+
+
+def _orthogonal_at_attachment(
+    rail: RailView,
+    axial: RailView,
+    segment_by_evidence_id: dict[str, RunSegmentView] | None,
+) -> bool:
+    if segment_by_evidence_id is None:
+        return True
+    shared = set(rail.junction_ids) & set(axial.junction_ids)
+    rail_dirs = _directions_at_junctions(rail, shared, segment_by_evidence_id)
+    axial_dirs = _directions_at_junctions(axial, shared, segment_by_evidence_id)
+    if not rail_dirs or not axial_dirs:
+        return False
+    return any(
+        abs(dot(normalize(rd), normalize(ad))) <= RIB_ORTHOGONAL_MAX_DOT
+        for rd in rail_dirs
+        for ad in axial_dirs
+    )
+
+
+def _directions_at_junctions(
+    rail: RailView,
+    junction_ids: set[str],
+    segment_by_evidence_id: dict[str, RunSegmentView],
+) -> tuple[tuple[float, float, float], ...]:
+    directions = []
+    for evidence_id in rail.directional_evidence_ids:
+        segment = segment_by_evidence_id.get(evidence_id)
+        if segment is None:
+            continue
+        if segment.start_junction_id in junction_ids or segment.end_junction_id in junction_ids:
+            directions.append(segment.direction)
+    return tuple(directions)
+
+
+def _rail_is_closed(
+    rail: RailView,
+    segment_by_evidence_id: dict[str, RunSegmentView] | None,
+) -> bool:
+    """Closed rail = every touched junction has even degree (a circuit).
+
+    RAIL CONTRACT INPUT: closed rails are the future ScaffoldCircuit.
+    """
+
+    if segment_by_evidence_id is None or len(rail.directional_evidence_ids) < 2:
+        return False
+    degree: dict[str, int] = {}
+    for evidence_id in rail.directional_evidence_ids:
+        segment = segment_by_evidence_id.get(evidence_id)
+        if segment is None:
+            return False
+        for junction_id in (segment.start_junction_id, segment.end_junction_id):
+            degree[junction_id] = degree.get(junction_id, 0) + 1
+    return all(count == 2 for count in degree.values())
 
 
 def _rail_can_be_spine(
@@ -495,6 +567,7 @@ def _with_offset_polylines(
                 length=rail.length,
                 branch_junction_ids=rail.branch_junction_ids,
                 related_rail_ids=rail.related_rail_ids,
+                is_closed=rail.is_closed,
                 is_ambiguous=rail.is_ambiguous,
             )
         )

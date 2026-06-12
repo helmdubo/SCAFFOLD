@@ -143,7 +143,12 @@ def test_artist_cyl32_overlay_semantics_v3() -> None:
         and _has_patch_fragments(rail, ("f0", "f6"))
     ]
     assert len(ring_rails) == 2
-    assert all(len(rail["directional_evidence_ids"]) == 25 for rail in ring_rails)
+    # I5 deterministic curved-run policy: f0 rim arcs split per segment
+    # like f6 (8 + 24 run atoms per ring, was 1 + 24); each atom is a
+    # polyline of the closed inter-patch ring rail; contiguous atoms
+    # coalesce into one closed polyline for drawing.
+    assert all(len(rail["directional_evidence_ids"]) == 32 for rail in ring_rails)
+    assert all(rail.get("is_closed") for rail in ring_rails)
     assert all(len(rail["segment_polylines"]) == 1 for rail in ring_rails)
     assert any(segment["patch_id"] == "patch:seed:f30" for segment in payload["family_run_segments"])
     assert any(segment["patch_id"] == "patch:seed:f33" for segment in payload["family_run_segments"])

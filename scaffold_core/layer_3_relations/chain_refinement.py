@@ -24,6 +24,9 @@ from scaffold_core.layer_3_relations.model import ChainDirectionalRun, PatchChai
 
 
 DIRECTION_RUN_COS_TOLERANCE = 0.996
+# Per-vertex turn gate for run splitting; identical local curvature must
+# yield identical segmentation regardless of total arc span (OQ-11).
+RUN_TURN_TOLERANCE = DIRECTION_RUN_COS_TOLERANCE
 POLICY_NAME = "g3c0_directional_runs"
 
 
@@ -71,9 +74,39 @@ def _runs_for_chain(
         return ()
     if len(segments) == 1:
         return (_run_from_segments(chain_id, chain_facts, 0, segments, segments[0].direction),)
-    if chain_facts.shape_hint in (ChainShapeHint.STRAIGHT, ChainShapeHint.SAWTOOTH_STRAIGHT):
+    if chain_facts.shape_hint in (ChainShapeHint.STRAIGHT, ChainShapeHint.SAWTOOTH_STRAIGHT) and not _is_monotone_turning(segments):
+        # Genuine straight/zigzag polylines keep one chord-directed run
+        # (the CFTUV sawtooth lesson). Monotone-turning arcs must not take
+        # this shortcut: a 90-degree arc with a long chord is not straight.
         return (_run_from_segments(chain_id, chain_facts, 0, segments, chain_facts.chord_direction),)
     return _split_directional_runs(chain_id, chain_facts, segments)
+
+
+def _is_monotone_turning(segments: tuple[ChainSegmentGeometryFacts, ...]) -> bool:
+    """Return whether all significant turns bend the same way (an arc)."""
+
+    reference_axis: Vector3 | None = None
+    significant_turns = 0
+    for previous, current in zip(segments, segments[1:]):
+        if dot(previous.direction, current.direction) >= RUN_TURN_TOLERANCE:
+            continue
+        axis = normalize(_cross(previous.direction, current.direction))
+        if axis == (0.0, 0.0, 0.0):
+            continue
+        significant_turns += 1
+        if reference_axis is None:
+            reference_axis = axis
+        elif dot(reference_axis, axis) < 0.0:
+            return False
+    return significant_turns >= 1
+
+
+def _cross(left: Vector3, right: Vector3) -> Vector3:
+    return (
+        left[1] * right[2] - left[2] * right[1],
+        left[2] * right[0] - left[0] * right[2],
+        left[0] * right[1] - left[1] * right[0],
+    )
 
 
 def _split_directional_runs(

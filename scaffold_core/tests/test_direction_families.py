@@ -102,11 +102,14 @@ def test_two_seam_cylinder_connected_families_keep_top_and_bottom_rings() -> Non
         family
         for family in relations.connected_direction_families
         if set(str(patch_id) for patch_id in family.patch_ids) == {"patch:seed:f0", "patch:seed:f2"}
-        and len(family.member_directional_evidence_ids) == 2
-        and all(record.kind == "SCAFFOLD_NODE" for record in family.crossing_records)
+        # I5 deterministic curved-run policy: each 90-degree ring half is
+        # now two run atoms (was one chord run), rejoined in-patch by
+        # geodesic continuation and bridged cross-patch at seam nodes.
+        and len(family.member_directional_evidence_ids) == 4
+        and {record.kind for record in family.crossing_records} == {"IN_PATCH_GEODESIC", "SCAFFOLD_NODE"}
     )
     assert len(ring_families) == 2
-    assert all(len(family.crossing_records) == 2 for family in ring_families)
+    assert all(len(family.crossing_records) == 4 for family in ring_families)
 
 
 def test_extruded_cross_connected_families_are_per_patch_use_geodesic() -> None:
@@ -169,8 +172,10 @@ def test_artist_cyl32_side_rings_bridge_across_seam_bounded_patches() -> None:
     assert top_ring.id != bottom_ring.id
     assert set(str(patch_id) for patch_id in top_ring.patch_ids) == {"patch:seed:f0", "patch:seed:f6"}
     assert set(str(patch_id) for patch_id in bottom_ring.patch_ids) == {"patch:seed:f0", "patch:seed:f6"}
-    assert len(top_ring.member_directional_evidence_ids) == 25
-    assert len(bottom_ring.member_directional_evidence_ids) == 25
+    # I5 deterministic curved-run policy: f0's 8-edge rim arcs now split
+    # per segment like f6's (8 + 24 run atoms per ring, was 1 + 24).
+    assert len(top_ring.member_directional_evidence_ids) == 32
+    assert len(bottom_ring.member_directional_evidence_ids) == 32
     assert _single_family_with_member_fragment(relations, "patch:seed:f6:0:0").id == top_ring.id
     assert _single_family_with_member_fragment(relations, "patch:seed:f6:0:2").id == bottom_ring.id
 

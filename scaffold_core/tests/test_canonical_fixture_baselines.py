@@ -142,7 +142,9 @@ def test_rounded_wall_corner_matches_single_chamfer_baseline() -> None:
 
     assert len(topology.patches) == 3
     assert len(relations.patch_adjacencies) == 2
-    _assert_run_endpoint_junction_count(relations, 8)
+    # I5 curved-run policy: the rounded strip's turning border chains now
+    # split per segment, adding the two mid-strip run corners (8 -> 10).
+    _assert_run_endpoint_junction_count(relations, 10)
     vertical_classes = _classes_along(relations, (0.0, 0.0, 1.0))
     assert len(vertical_classes) == 1
     assert len(vertical_classes[0].patch_ids) == 3
@@ -257,30 +259,26 @@ def test_tube_with_two_seams_keeps_cross_patch_side_ring_flow() -> None:
     relations = context.relation_snapshot
 
     assert len(topology.patches) == 2
-    _assert_run_endpoint_junction_count(relations, 4)
+    # I5 curved-run policy: each 90-degree ring half splits at its mid
+    # vertex, adding four run-corner junctions (4 -> 8).
+    _assert_run_endpoint_junction_count(relations, 8)
 
     kind_counts = _relation_kind_counts(relations)
-    assert kind_counts.get("SURFACE_SLIDING_CONTINUATION_CANDIDATE", 0) == 4
     assert kind_counts.get("MISSING_ENDPOINT_EVIDENCE", 0) == 0
-    assert len(relations.surface_flow_compatibility_evidence) == 4
 
-    edges_by_id = {edge.id: edge for edge in relations.scaffold_edges}
-    ring_components = tuple(
-        component
-        for component in relations.scaffold_continuity_components
-        if len(component.scaffold_edge_ids) == 2
-    )
-    assert len(ring_components) == 2
-    for component in ring_components:
-        first, second = (edges_by_id[edge_id] for edge_id in component.scaffold_edge_ids)
-        assert first.patch_id != second.patch_id
-        assert first.chain_id != second.chain_id
-
+    # I5 curved-run policy: per-segment run tangents at seam nodes no longer
+    # present SAME_RAY bases, so the legacy sliding/continuity substrate
+    # (retirement candidate per the Slice F consumption verdict; no runtime
+    # consumer) stops detecting ring flow there. The ring-flow invariant is
+    # asserted on its modern carrier: ConnectedDirectionFamily inter-patch
+    # ring families (4 run atoms each, in-patch geodesic + seam-node
+    # bridges). The cap/side negative pair stays in
+    # test_tube_with_cap_keeps_cap_and_side_continuity_separate.
     ring_families = tuple(
         family
         for family in relations.connected_direction_families
-        if len(family.member_directional_evidence_ids) == 2
+        if len(family.member_directional_evidence_ids) == 4
         and set(str(patch_id) for patch_id in family.patch_ids) == {"patch:seed:f0", "patch:seed:f2"}
-        and all(record.get("kind") == "SCAFFOLD_NODE" for record in family.crossing_records)
+        and {record.kind for record in family.crossing_records} == {"IN_PATCH_GEODESIC", "SCAFFOLD_NODE"}
     )
     assert len(ring_families) == 2

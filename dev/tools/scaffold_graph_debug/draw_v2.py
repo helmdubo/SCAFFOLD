@@ -153,6 +153,11 @@ def _draw_rails(
             else RIB_WIDTH
         )
         material_index = _material(gp_data, RAIL_MATERIAL_PREFIX, rail.get("color_key", ""), rail.get("color"))
+        if rail.get("is_closed") and role in {"SPINE", "PARALLEL"}:
+            first_polyline = next(iter(rail.get("segment_polylines", ())), None)
+            if first_polyline:
+                for marker in _circle_marker(first_polyline[0], 0.09):
+                    _add_polyline(frame, marker, material_index, width)
         for polyline in rail.get("segment_polylines", ()):
             if _add_polyline(frame, polyline, material_index, width):
                 if role in {"SPINE", "PARALLEL"}:

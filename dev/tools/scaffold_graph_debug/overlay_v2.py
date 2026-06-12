@@ -83,6 +83,7 @@ def _rail_to_dict(rail: RailView) -> dict[str, Any]:
         "id": rail.id,
         "family_id": rail.family_id,
         "role": rail.role,
+        "is_closed": rail.is_closed,
         "directional_evidence_ids": list(rail.directional_evidence_ids),
         "patch_ids": list(rail.patch_ids),
         "junction_ids": list(rail.junction_ids),
@@ -101,6 +102,8 @@ def _rail_to_dict(rail: RailView) -> dict[str, Any]:
 
 
 def _rail_color(rail: RailView) -> tuple[float, float, float, float]:
+    if rail.role == "OTHER":
+        return NEUTRAL_GRAY
     if rail.role == "CUT":
         return CUT_SEAM_COLOR
     return stable_color(rail.family_id)
@@ -163,6 +166,8 @@ def _counts(assembly: RailAssembly, seam_verdicts: tuple[SeamVerdict, ...]) -> d
         "spine_count": sum(rail.role == "SPINE" for rail in assembly.rails),
         "parallel_rail_count": sum(rail.role == "PARALLEL" for rail in assembly.rails),
         "rib_count": sum(rail.role == "RIB" for rail in assembly.rails),
+        "other_rail_count": sum(rail.role == "OTHER" for rail in assembly.rails),
+        "closed_rail_count": sum(rail.is_closed for rail in assembly.rails),
         "cut_rail_count": sum(rail.role == "CUT" for rail in assembly.rails),
         "dual_membership_rib_count": sum(
             rail.role == "RIB" and len(rail.related_rail_ids) >= 2
