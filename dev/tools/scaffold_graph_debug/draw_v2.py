@@ -120,7 +120,9 @@ def _draw_rails(
     rib_count = 0
     for rail in rails:
         role = str(rail.get("role") or "RIB")
-        frame = spine_frame if role in {"SPINE", "PARALLEL"} else rib_frame
+        # CUT (SEAM_SELF) belongs with the spine view: the artist reads the
+        # band as "top rail / bottom rail / the cut between them".
+        frame = spine_frame if role in {"SPINE", "PARALLEL", "CUT"} else rib_frame
         width = (
             SPINE_WIDTH
             if role == "SPINE"
