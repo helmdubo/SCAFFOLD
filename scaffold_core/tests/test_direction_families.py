@@ -10,8 +10,18 @@ Rules:
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
+from scaffold_core.ids import SourceEdgeId, SourceFaceId, SourceMeshId, SourceVertexId
+from scaffold_core.layer_0_source.marks import SourceMark, SourceMarkKind
+from scaffold_core.layer_0_source.snapshot import (
+    MeshEdgeRef,
+    MeshFaceRef,
+    MeshVertexRef,
+    SourceMeshSnapshot,
+)
 from scaffold_core.layer_2_geometry.measures import dot, normalize
+from scaffold_core.layer_3_relations.model import PatchChainEndpointRole
 from scaffold_core.pipeline.inspection import inspect_pipeline_context
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.beveled_wall_corner import make_beveled_wall_corner_source
@@ -124,6 +134,29 @@ def test_extruded_cross_connected_families_are_per_patch_use_geodesic() -> None:
     assert len(_families_with_member_fragment(relations, "patch:seed:f_cap_bottom:0:0")) == 12
 
 
+def test_artist_cross_band_keeps_seam_duplicates_out_of_run_endpoint_junctions() -> None:
+    context = run_pass_1_relations(run_pass_0(_load_artist_cross_band_source()))
+    relations = context.relation_snapshot
+
+    _assert_junction_occurrences_share_source_vertex(context)
+    top_rim = _single_family_with_member_fragment(relations, "patch:seed:f1:0:0")
+    bottom_rim = _single_family_with_member_fragment(relations, "patch:seed:f1:0:2")
+    assert top_rim.id != bottom_rim.id
+    assert len(top_rim.member_directional_evidence_ids) == 10
+    assert len(bottom_rim.member_directional_evidence_ids) == 10
+
+    assert all(
+        len(family.member_directional_evidence_ids) == 1
+        for family in _families_with_member_fragment(relations, "patch:seed:f0:0:0")
+    )
+    assert all(
+        len(family.member_directional_evidence_ids) == 1
+        for family in _families_with_member_fragment(relations, "patch:seed:f4:0:0")
+    )
+    assert len(_single_family_with_member_fragment(relations, "patch:seed:f1:0:1").member_directional_evidence_ids) == 1
+    assert len(_single_family_with_member_fragment(relations, "patch:seed:f1:0:3").member_directional_evidence_ids) == 1
+
+
 def test_in_patch_geodesic_merges_folded_single_patch_but_not_quad_corners() -> None:
     tunnel = run_pass_1_relations(run_pass_0(make_l_corridor_tunnel_single_patch_source()))
     tunnel_families = tuple(
@@ -215,6 +248,60 @@ def _single_family_with_member_fragment(relations, member_fragment: str):
     families = _families_with_member_fragment(relations, member_fragment)
     assert len(families) == 1
     return families[0]
+
+
+def _load_artist_cross_band_source() -> SourceMeshSnapshot:
+    data = json.loads((Path(__file__).with_name("data") / "artist_cross_band.json").read_text())
+    return SourceMeshSnapshot(
+        id=SourceMeshId(data["id"]),
+        vertices={
+            SourceVertexId(vertex_id): MeshVertexRef(SourceVertexId(vertex_id), tuple(position))
+            for vertex_id, position in data["vertices"].items()
+        },
+        edges={
+            SourceEdgeId(edge_id): MeshEdgeRef(
+                SourceEdgeId(edge_id),
+                tuple(SourceVertexId(vertex_id) for vertex_id in vertex_ids),
+            )
+            for edge_id, vertex_ids in data["edges"].items()
+        },
+        faces={
+            SourceFaceId(face_id): MeshFaceRef(
+                SourceFaceId(face_id),
+                tuple(SourceVertexId(vertex_id) for vertex_id in face["vertex_ids"]),
+                tuple(SourceEdgeId(edge_id) for edge_id in face["edge_ids"]),
+            )
+            for face_id, face in data["faces"].items()
+        },
+        selected_face_ids=tuple(SourceFaceId(face_id) for face_id in data["selected_face_ids"]),
+        marks=tuple(
+            SourceMark(SourceMarkKind(mark["kind"]), SourceEdgeId(mark["target_id"]))
+            for mark in data["marks"]
+        ),
+    )
+
+
+def _assert_junction_occurrences_share_source_vertex(context) -> None:
+    relations = context.relation_snapshot
+    topology = context.topology_snapshot
+    evidence_by_id = {
+        evidence.id: evidence
+        for evidence in relations.patch_chain_directional_evidence
+    }
+    for junction in relations.run_endpoint_junctions:
+        assert junction.source_vertex_id is not None
+        assert all(
+            junction.source_vertex_id in topology.vertices[vertex_id].source_vertex_ids
+            for vertex_id in junction.topology_vertex_ids
+        )
+        for evidence_id, role in junction.incident_run_endpoint_occurrences:
+            evidence = evidence_by_id[evidence_id]
+            source_vertex_id = (
+                evidence.start_source_vertex_id
+                if role is PatchChainEndpointRole.START
+                else evidence.end_source_vertex_id
+            )
+            assert source_vertex_id == junction.source_vertex_id
 
 
 def _direction_matches(actual, expected) -> bool:

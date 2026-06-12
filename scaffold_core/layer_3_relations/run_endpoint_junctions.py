@@ -200,9 +200,15 @@ def _vertices_for_oriented_position(
     source_vertex_to_vertices: dict[SourceVertexId, tuple[VertexId, ...]],
 ) -> tuple[VertexId, ...]:
     start_vertex_id, end_vertex_id = patch_chain_vertices(topology, patch_chain.id)
-    if endpoint_position == 0:
+    if (
+        endpoint_position == 0
+        and source_vertex_id in topology.vertices[start_vertex_id].source_vertex_ids
+    ):
         return (start_vertex_id,)
-    if endpoint_position == segment_count:
+    if (
+        endpoint_position == segment_count
+        and source_vertex_id in topology.vertices[end_vertex_id].source_vertex_ids
+    ):
         return (end_vertex_id,)
     return _vertices_for_source(
         topology,

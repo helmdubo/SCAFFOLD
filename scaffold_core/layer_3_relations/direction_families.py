@@ -114,6 +114,7 @@ def build_connected_direction_families(
             geometry,
             run_endpoint_junctions,
             evidence_by_id,
+            samples_by_evidence_id,
             self_seam_chain_ids,
         ),
     )
@@ -164,6 +165,7 @@ def _in_patch_geodesic_crossings(
     geometry: GeometryFactSnapshot,
     run_endpoint_junctions: tuple[RunEndpointJunction, ...],
     evidence_by_id: Mapping[str, PatchChainDirectionalEvidence],
+    samples_by_evidence_id: Mapping[str, tuple[PatchChainEndpointSample, ...]],
     self_seam_chain_ids: set[ChainId],
 ) -> tuple[_CrossingCandidate, ...]:
     local_face_fans = _local_face_fans_by_patch_vertex(geometry)
@@ -190,7 +192,14 @@ def _in_patch_geodesic_crossings(
                 angle = _patch_occurrence_angle(
                     local_face_fans,
                     first.patch_id,
-                    junction.topology_vertex_ids,
+                    _pair_endpoint_vertex_ids(
+                        samples_by_evidence_id,
+                        first.id,
+                        first_role,
+                        second.id,
+                        second_role,
+                        junction.topology_vertex_ids,
+                    ),
                 )
                 if angle is None or abs(angle - pi) > GEODESIC_STRAIGHT_TOLERANCE:
                     continue
@@ -235,6 +244,23 @@ def _can_attempt_in_patch_geodesic(
     if first_role is second_role:
         return False
     return first.parent_chain_id not in self_seam_chain_ids and second.parent_chain_id not in self_seam_chain_ids
+
+
+def _pair_endpoint_vertex_ids(
+    samples_by_evidence_id: Mapping[str, tuple[PatchChainEndpointSample, ...]],
+    first_id: str,
+    first_role: PatchChainEndpointRole,
+    second_id: str,
+    second_role: PatchChainEndpointRole,
+    fallback_vertex_ids: tuple[VertexId, ...],
+) -> tuple[VertexId, ...]:
+    vertex_ids = tuple(
+        sample.vertex_id
+        for evidence_id, role in ((first_id, first_role), (second_id, second_role))
+        for sample in samples_by_evidence_id.get(evidence_id, ())
+        if sample.endpoint_role is role
+    )
+    return tuple(sorted(set(vertex_ids), key=str)) or fallback_vertex_ids
 
 
 def _local_face_fans_by_patch_vertex(geometry: GeometryFactSnapshot):
