@@ -23,10 +23,12 @@ docs/context_map.yaml
 ## Current phase
 
 ```text
-G3 - Derived Relations
+G5a - Skeleton Runtime (docs/phases/G5a_skeleton_runtime.md)
+G3 relation contracts remain frozen per G0; relation changes still
+follow G3 rules below.
 ```
 
-Allowed during G3:
+Allowed during G5a:
 
 ```text
 scaffold_core/core/
@@ -34,18 +36,21 @@ scaffold_core/layer_0_source/
 scaffold_core/layer_1_topology/
 scaffold_core/layer_2_geometry/
 scaffold_core/layer_3_relations/
+scaffold_core/layer_5_runtime/
 scaffold_core/pipeline/
 scaffold_core/tests/
 ```
 
-Forbidden during G3:
+Forbidden during G5a:
 
 ```text
 scaffold_core/layer_4_features/
-scaffold_core/layer_5_runtime/
 scaffold_core/api/
 scaffold_core/ui/
 ```
+
+Layer 5 may consume Layers 0-3 read-only. bpy is allowed ONLY in
+scaffold_core/layer_5_runtime/uv_transfer.py (the G5 write boundary).
 
 Do not create future-phase directories.
 
