@@ -62,10 +62,13 @@ overlay does not run a separate geodesic grouping rule.
 
 Rail membership is per PatchChain use. The same source edge can draw twice:
 one offset line for the side-band patch view and one offset line for the cap
-patch view. Shared chains are drawn as per-use double lines, each nudged inward
-toward its owning patch by `RAIL_OFFSET_FACTOR` times local edge length. Cap
-perimeters are no longer hidden; the cap-side cornered perimeter and the
-band-side continuous rail are both visible.
+patch view. Shared chains are drawn as per-use double lines, each lifted along
+the owning patch-use face normal and then nudged slightly inward toward that
+patch by `RAIL_OFFSET_FACTOR` times local edge length. The FamilyRuns and rail
+layers draw those rails as continuous Grease Pencil strokes with intermediate
+vertices instead of one stroke per source edge. Cap perimeters are no longer
+hidden; the cap-side cornered perimeter and the band-side continuous rail are
+both visible.
 
 Seam Verdicts shows Level A stitch/cut checks for shared seam chains. Green
 dashed means the seam is geometrically sewable under the current angle-defect

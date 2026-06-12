@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib
 
 from dev.tools.scaffold_graph_debug.overlay_v2 import build_overlay_v2_payload
-from dev.tools.scaffold_graph_debug.rail_offsets import RAIL_OFFSET_FACTOR
+from dev.tools.scaffold_graph_debug.rail_offsets import RAIL_NORMAL_HOVER_FACTOR, RAIL_OFFSET_FACTOR
 from dev.tools.scaffold_graph_debug.seam_verdicts import ANGLE_DEFECT_TOLERANCE
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.beveled_wall_corner import make_beveled_wall_corner_source
@@ -33,6 +33,7 @@ def test_pure_overlay_modules_import_without_blender() -> None:
     assert ANGLE_DEFECT_TOLERANCE > 0.0
     assert _payload(make_tube_with_cap_source)["geodesic_straight_tolerance"] == 0.1
     assert RAIL_OFFSET_FACTOR > 0.0
+    assert RAIL_NORMAL_HOVER_FACTOR > 0.0
     assert build_stamp.OVERLAY_VERSION == "overlay-v3"
 
 
@@ -82,6 +83,9 @@ def test_two_seam_tube_has_top_and_bottom_ring_rails() -> None:
     assert len(ring_rails) == 2
     assert {rail["role"] for rail in ring_rails} == {"SPINE", "PARALLEL"}
     assert all(_has_patch_fragments(rail, ("f0", "f2")) for rail in ring_rails)
+    assert all(len(rail["segment_polylines"]) == 1 for rail in ring_rails)
+    assert all(len(rail["segment_polylines"][0]) > len(rail["directional_evidence_ids"]) for rail in ring_rails)
+    _assert_records_have_normal_hover(ring_rails)
 
 
 def test_tube_with_cap_side_rims_win_over_cap_perimeter_view() -> None:
@@ -96,6 +100,9 @@ def test_tube_with_cap_side_rims_win_over_cap_perimeter_view() -> None:
     ]
     assert len(side_rims) == 2
     assert all(rail["length"] > 5.0 for rail in side_rims)
+    assert all(len(rail["segment_polylines"]) == 1 for rail in side_rims)
+    assert all(len(rail["segment_polylines"][0]) > len(rail["directional_evidence_ids"]) for rail in side_rims)
+    _assert_records_have_normal_hover(side_rims)
 
     cap_perimeter = [
         rail
@@ -106,7 +113,7 @@ def test_tube_with_cap_side_rims_win_over_cap_perimeter_view() -> None:
     assert all(len(rail["directional_evidence_ids"]) == 1 for rail in cap_perimeter)
     assert _has_no_hidden_fields(payload)
     assert payload["counts"]["cut_rail_count"] == 2
-    assert payload["counts"]["rail_polyline_count"] == 14
+    assert payload["counts"]["rail_polyline_count"] == 8
     assert payload["counts"]["unoffset_polyline_count"] == 0
     _assert_cut_lines_are_oppositely_offset(payload)
 
@@ -124,6 +131,9 @@ def test_extruded_cross_side_band_rims_are_geodesic_rails_and_seam_is_cut() -> N
     assert len(long_rails) == 2
     assert {rail["role"] for rail in long_rails} == {"SPINE", "PARALLEL"}
     assert len({tuple(rail["color"]) for rail in long_rails}) == 2
+    assert all(len(rail["segment_polylines"]) == 1 for rail in long_rails)
+    assert all(len(rail["segment_polylines"][0]) > len(rail["directional_evidence_ids"]) for rail in long_rails)
+    _assert_records_have_normal_hover(long_rails)
 
     cap_perimeters = [
         rail
@@ -134,7 +144,7 @@ def test_extruded_cross_side_band_rims_are_geodesic_rails_and_seam_is_cut() -> N
     assert all(len(rail["directional_evidence_ids"]) == 1 for rail in cap_perimeters)
     assert len({tuple(rail["color"]) for rail in cap_perimeters}) == 24
     assert _has_no_hidden_fields(payload)
-    assert payload["counts"]["rail_polyline_count"] == 50
+    assert payload["counts"]["rail_polyline_count"] == 28
     assert payload["counts"]["unoffset_polyline_count"] == 0
     assert payload["counts"]["cut_rail_count"] >= 1
     assert any(verdict["status"] == "CUT" for verdict in payload["seam_verdicts"])
@@ -213,6 +223,16 @@ def _assert_cut_lines_are_oppositely_offset(payload) -> None:
     first = cut_records[0]["offset_direction"]
     second = cut_records[1]["offset_direction"]
     assert _dot(first, second) < -0.99
+
+
+def _assert_records_have_normal_hover(rails) -> None:
+    records = [
+        record
+        for rail in rails
+        for record in rail["segment_offset_records"]
+    ]
+    assert records
+    assert all(record["normal_hover_magnitude"] > 0.0 for record in records)
 
 
 def _dot(first, second) -> float:

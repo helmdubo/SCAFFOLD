@@ -9,7 +9,7 @@ from typing import Any
 from scaffold_core.layer_2_geometry.measures import dot, normalize
 from scaffold_core.layer_3_relations.model import PatchChainEndpointRole
 
-from .rail_offsets import offset_segment_polyline, self_seam_flip_keys
+from .rail_offsets import coalesce_polylines, offset_segment_polyline, self_seam_flip_keys
 
 
 PARALLEL_DOT = 0.99
@@ -408,6 +408,7 @@ def _with_offset_polylines(
     output = []
     for rail in rails:
         polylines = []
+        base_polylines = []
         records = []
         for evidence_id in rail.directional_evidence_ids:
             segment = segment_by_evidence_id.get(evidence_id)
@@ -422,9 +423,11 @@ def _with_offset_polylines(
                 self_seam_chain_ids=self_seam_chain_ids,
             )
             polylines.append(polyline)
+            base_polylines.append(segment.polyline)
             records.append(record)
             if record["unoffset"]:
                 contract_inputs.add(record["issue"])
+        coalesced_polylines = coalesce_polylines(polylines, base_polylines=base_polylines)
         output.append(
             RailView(
                 id=rail.id,
@@ -433,7 +436,7 @@ def _with_offset_polylines(
                 directional_evidence_ids=rail.directional_evidence_ids,
                 patch_ids=rail.patch_ids,
                 junction_ids=rail.junction_ids,
-                segment_polylines=tuple(polylines),
+                segment_polylines=coalesced_polylines,
                 segment_offset_records=tuple(records),
                 length=rail.length,
                 branch_junction_ids=rail.branch_junction_ids,

@@ -61,7 +61,12 @@ def render_overlay_v2(
     branch_frame = _ensure_frame(_ensure_layer(gp_data, BRANCH_LAYER_NAME, show_branch_points))
     _clear_v2_material_slots(gp_data)
 
-    family_strokes = _draw_family_runs(gp_data, family_frame, payload.get("family_run_segments", ()))
+    family_strokes = _draw_family_runs(
+        gp_data,
+        family_frame,
+        payload.get("family_run_segments", ()),
+        payload.get("rails", ()),
+    )
     spine_strokes, rib_strokes = _draw_rails(
         gp_data,
         spine_frame,
@@ -101,8 +106,25 @@ def render_overlay_v2(
     }
 
 
-def _draw_family_runs(gp_data: Any, frame: Any, segments: Sequence[dict[str, Any]]) -> int:
+def _draw_family_runs(
+    gp_data: Any,
+    frame: Any,
+    segments: Sequence[dict[str, Any]],
+    rails: Sequence[dict[str, Any]] = (),
+) -> int:
     count = 0
+    if rails:
+        for rail in rails:
+            material_index = _material(
+                gp_data,
+                FAMILY_MATERIAL_PREFIX,
+                rail.get("family_id") or rail.get("color_key", ""),
+                rail.get("color"),
+            )
+            for polyline in rail.get("segment_polylines", ()):
+                if _add_polyline(frame, polyline, material_index, FAMILY_WIDTH):
+                    count += 1
+        return count
     for segment in segments:
         material_index = _material(gp_data, FAMILY_MATERIAL_PREFIX, segment.get("color_key", ""), segment.get("color"))
         if _add_polyline(frame, segment.get("polyline", ()), material_index, FAMILY_WIDTH):
