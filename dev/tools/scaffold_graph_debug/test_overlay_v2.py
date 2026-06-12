@@ -7,7 +7,6 @@ import importlib
 from dev.tools.scaffold_graph_debug.overlay_v2 import build_overlay_v2_payload
 from dev.tools.scaffold_graph_debug.rail_offsets import RAIL_OFFSET_FACTOR
 from dev.tools.scaffold_graph_debug.seam_verdicts import ANGLE_DEFECT_TOLERANCE
-from scaffold_core.layer_3_relations.direction_families import GEODESIC_STRAIGHT_TOLERANCE
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.beveled_wall_corner import make_beveled_wall_corner_source
 from scaffold_core.tests.fixtures.cylinder_tube import (
@@ -32,7 +31,7 @@ def test_pure_overlay_modules_import_without_blender() -> None:
     importlib.import_module("dev.tools.scaffold_graph_debug.rail_offsets")
     importlib.import_module("dev.tools.scaffold_graph_debug.seam_verdicts")
     assert ANGLE_DEFECT_TOLERANCE > 0.0
-    assert GEODESIC_STRAIGHT_TOLERANCE == 0.1
+    assert _payload(make_tube_with_cap_source)["geodesic_straight_tolerance"] == 0.1
     assert RAIL_OFFSET_FACTOR > 0.0
     assert build_stamp.OVERLAY_VERSION == "overlay-v3"
 

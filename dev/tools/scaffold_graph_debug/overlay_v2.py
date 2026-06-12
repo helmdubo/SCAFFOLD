@@ -13,9 +13,10 @@ from .colors import (
     SEWABLE_SEAM_COLOR,
     stable_color,
 )
-from scaffold_core.layer_3_relations.direction_families import GEODESIC_STRAIGHT_TOLERANCE
 from .rail_assembly import RailAssembly, RailView, RunSegmentView, build_rail_assembly
 from .seam_verdicts import ANGLE_DEFECT_TOLERANCE, SeamVerdict, build_seam_verdicts
+
+GEODESIC_STRAIGHT_TOLERANCE_FALLBACK = 0.1
 
 
 def build_overlay_v2_payload(context: Any) -> dict[str, Any]:
@@ -38,8 +39,22 @@ def build_overlay_v2_payload(context: Any) -> dict[str, Any]:
         "counts": _counts(assembly, seam_verdicts),
         "rail_contract_inputs": list(assembly.rail_contract_inputs),
         "angle_defect_tolerance": ANGLE_DEFECT_TOLERANCE,
-        "geodesic_straight_tolerance": GEODESIC_STRAIGHT_TOLERANCE,
+        "geodesic_straight_tolerance": _geodesic_straight_tolerance(),
     }
+
+
+def _geodesic_straight_tolerance() -> float:
+    try:
+        from scaffold_core.layer_3_relations import direction_families
+    except ImportError:
+        return GEODESIC_STRAIGHT_TOLERANCE_FALLBACK
+    return float(
+        getattr(
+            direction_families,
+            "GEODESIC_STRAIGHT_TOLERANCE",
+            GEODESIC_STRAIGHT_TOLERANCE_FALLBACK,
+        )
+    )
 
 
 def _run_segment_to_dict(segment: RunSegmentView) -> dict[str, Any]:
