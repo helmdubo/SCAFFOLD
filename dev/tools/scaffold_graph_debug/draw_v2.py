@@ -31,7 +31,7 @@ RAIL_MATERIAL_PREFIX = "ScaffoldGraphV2_Rail_"
 SEAM_MATERIAL_PREFIX = "ScaffoldGraphV2_Seam_"
 JUNCTION_MATERIAL_PREFIX = "ScaffoldGraphV2_Junction_"
 BRANCH_MATERIAL_NAME = "ScaffoldGraphV2_Branch_Material"
-FAMILY_WIDTH = 3
+FAMILY_WIDTH = 9
 SPINE_WIDTH = 9
 PARALLEL_WIDTH = 5
 RIB_WIDTH = 4
@@ -59,6 +59,7 @@ def render_overlay_v2(
     seam_frame = _ensure_frame(_ensure_layer(gp_data, SEAM_VERDICT_LAYER_NAME, show_seam_verdicts))
     junction_frame = _ensure_frame(_ensure_layer(gp_data, JUNCTION_V2_LAYER_NAME, show_junctions))
     branch_frame = _ensure_frame(_ensure_layer(gp_data, BRANCH_LAYER_NAME, show_branch_points))
+    _clear_v2_material_slots(gp_data)
 
     family_strokes = _draw_family_runs(gp_data, family_frame, payload.get("family_run_segments", ()))
     spine_strokes, rib_strokes = _draw_rails(
@@ -101,7 +102,7 @@ def _draw_family_runs(gp_data: Any, frame: Any, segments: Sequence[dict[str, Any
     count = 0
     for segment in segments:
         material_index = _material(gp_data, FAMILY_MATERIAL_PREFIX, segment.get("color_key", ""), segment.get("color"))
-        if _add_stroke(frame, segment.get("polyline", ()), material_index, FAMILY_WIDTH):
+        if _add_polyline(frame, segment.get("polyline", ()), material_index, FAMILY_WIDTH):
             count += 1
     return count
 
@@ -115,12 +116,22 @@ def _draw_rails(
     spine_count = 0
     rib_count = 0
     for rail in rails:
+        if not bool(rail.get("is_default_visible", True)):
+            continue
         role = str(rail.get("role") or "RIB")
         frame = spine_frame if role in {"SPINE", "PARALLEL"} else rib_frame
-        width = SPINE_WIDTH if role == "SPINE" else PARALLEL_WIDTH if role == "PARALLEL" else RIB_WIDTH
+        width = (
+            SPINE_WIDTH
+            if role == "SPINE"
+            else PARALLEL_WIDTH
+            if role == "PARALLEL"
+            else SEAM_WIDTH
+            if role == "CUT"
+            else RIB_WIDTH
+        )
         material_index = _material(gp_data, RAIL_MATERIAL_PREFIX, rail.get("color_key", ""), rail.get("color"))
         for polyline in rail.get("segment_polylines", ()):
-            if _add_stroke(frame, polyline, material_index, width):
+            if _add_polyline(frame, polyline, material_index, width):
                 if role in {"SPINE", "PARALLEL"}:
                     spine_count += 1
                 else:
@@ -134,11 +145,11 @@ def _draw_seam_verdicts(gp_data: Any, frame: Any, verdicts: Sequence[dict[str, A
         material_index = _material(gp_data, SEAM_MATERIAL_PREFIX, verdict.get("status", ""), verdict.get("color"))
         polylines = _dashed_polyline(verdict.get("polyline", ())) if verdict.get("line_style") == "DASHED" else (verdict.get("polyline", ()),)
         for polyline in polylines:
-            if _add_stroke(frame, polyline, material_index, SEAM_WIDTH):
+            if _add_polyline(frame, polyline, material_index, SEAM_WIDTH):
                 count += 1
         for position in verdict.get("failing_positions", ()):
             for marker in _x_marker(position, 0.075):
-                _add_stroke(frame, marker, material_index, SEAM_WIDTH)
+                _add_polyline(frame, marker, material_index, SEAM_WIDTH)
     return count
 
 
@@ -153,7 +164,7 @@ def _draw_junctions(gp_data: Any, frame: Any, glyphs: Sequence[dict[str, Any]]) 
             else _circle_marker(glyph.get("position", ()), size)
         )
         for marker in strokes:
-            _add_stroke(frame, marker, material_index, JUNCTION_WIDTH)
+            _add_polyline(frame, marker, material_index, JUNCTION_WIDTH)
         count += 1
     return count
 
@@ -163,7 +174,7 @@ def _draw_branches(gp_data: Any, frame: Any, glyphs: Sequence[dict[str, Any]]) -
     count = 0
     for glyph in glyphs:
         for marker in _branch_marker(glyph.get("position", ()), 0.11):
-            _add_stroke(frame, marker, material_index, BRANCH_WIDTH)
+            _add_polyline(frame, marker, material_index, BRANCH_WIDTH)
         count += 1
     return count
 
@@ -175,6 +186,54 @@ def _material(gp_data: Any, prefix: str, key: object, color: object) -> int:
         f"{prefix}{material_key(str(key))}_Material",
         tuple(float(value) for value in rgba),
     )
+
+
+def _clear_v2_material_slots(gp_data: Any) -> None:
+    materials = getattr(gp_data, "materials", None)
+    if materials is None:
+        return
+    pop = getattr(materials, "pop", None)
+    if not callable(pop):
+        return
+    for index in reversed(range(len(materials))):
+        material = materials[index]
+        if material is None or not _is_v2_material_name(material.name):
+            continue
+        try:
+            pop(index=index)
+        except TypeError:
+            pop(index)
+    for material in list(bpy.data.materials):
+        if material.users == 0 and _is_v2_material_name(material.name):
+            bpy.data.materials.remove(material)
+
+
+def _is_v2_material_name(material_name: str) -> bool:
+    return material_name == BRANCH_MATERIAL_NAME or material_name.startswith(
+        (
+            FAMILY_MATERIAL_PREFIX,
+            RAIL_MATERIAL_PREFIX,
+            SEAM_MATERIAL_PREFIX,
+            JUNCTION_MATERIAL_PREFIX,
+        )
+    )
+
+
+def _add_polyline(
+    frame: Any,
+    points: Sequence[Sequence[float]],
+    material_index: int,
+    line_width: int,
+) -> bool:
+    if len(points) < 2:
+        return False
+    if len(points) == 2:
+        return _add_stroke(frame, points, material_index, line_width)
+    added = False
+    for first, second in zip(points, points[1:]):
+        if _add_stroke(frame, (first, second), material_index, line_width):
+            added = True
+    return added
 
 
 def _dashed_polyline(polyline: Sequence[Sequence[float]]) -> tuple[tuple[Sequence[float], Sequence[float]], ...]:

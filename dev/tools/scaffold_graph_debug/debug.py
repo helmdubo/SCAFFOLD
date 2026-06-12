@@ -206,18 +206,43 @@ def _new_stroke(frame: Any, point_count: int) -> Any:
     strokes = getattr(frame, "strokes", None)
     if strokes is not None and hasattr(strokes, "new"):
         stroke = strokes.new()
-        stroke.points.add(point_count - 1)
+        _ensure_stroke_point_count(stroke, point_count)
         return stroke
 
     drawing = getattr(frame, "drawing", None)
     if drawing is None:
         raise RuntimeError("Grease Pencil frame has neither strokes nor drawing API.")
     drawing.add_strokes(sizes=[point_count])
-    return drawing.strokes[-1]
+    stroke = drawing.strokes[-1]
+    _ensure_stroke_point_count(stroke, point_count)
+    return stroke
+
+
+def _ensure_stroke_point_count(stroke: Any, point_count: int) -> None:
+    points = getattr(stroke, "points", None)
+    if points is None:
+        raise RuntimeError("Grease Pencil stroke has no points API.")
+    if len(points) >= point_count:
+        return
+    add_points = getattr(points, "add", None)
+    if not callable(add_points):
+        raise RuntimeError(
+            f"Grease Pencil stroke has {len(points)} points; expected {point_count}."
+        )
+    while len(points) < point_count:
+        before = len(points)
+        add_points(point_count - before)
+        if len(points) == before:
+            raise RuntimeError(
+                f"Grease Pencil stroke has {len(points)} points; expected {point_count}."
+            )
 
 
 def _set_stroke_style(stroke: Any, material_index: int, line_width: int) -> None:
-    stroke.material_index = material_index
+    try:
+        stroke.material_index = material_index
+    except (IndexError, RuntimeError):
+        stroke.material_index = 0
     if hasattr(stroke, "line_width"):
         stroke.line_width = line_width
     if hasattr(stroke, "radius"):
@@ -875,7 +900,7 @@ def clear_overlay(source_name: str | None = None) -> None:
             LABEL_MATERIAL_NAME,
         } or material.name.startswith("ScaffoldGraph_IncidentRelation_") or material.name.startswith(
             CONTINUITY_EDGE_MATERIAL_PREFIX
-        ):
+        ) or material.name.startswith("ScaffoldGraphV2_"):
             bpy.data.materials.remove(material)
 
 

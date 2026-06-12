@@ -9,6 +9,11 @@ from typing import Any
 from scaffold_core.layer_2_geometry.measures import dot, normalize
 from scaffold_core.layer_3_relations.model import PatchChainEndpointRole
 
+from .geodesic_continuation import (
+    GEODESIC_STRAIGHT_TOLERANCE,
+    is_geodesic_straight_at_patch_vertex,
+)
+
 
 PARALLEL_DOT = 0.99
 
@@ -21,6 +26,7 @@ class RunSegmentView:
     patch_id: str
     patch_chain_id: str
     parent_chain_id: str
+    loop_id: str
     segment_indices: tuple[int, ...]
     start_junction_id: str
     end_junction_id: str
@@ -41,6 +47,7 @@ class RailView:
     length: float
     branch_junction_ids: tuple[str, ...]
     is_ambiguous: bool
+    is_default_visible: bool = True
 
 
 @dataclass(frozen=True)
@@ -53,6 +60,13 @@ class JunctionGlyph:
 
 
 @dataclass(frozen=True)
+class JunctionContext:
+    id: str
+    source_vertex_id: str | None
+    topology_vertex_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class RailAssembly:
     run_segments: tuple[RunSegmentView, ...]
     rails: tuple[RailView, ...]
@@ -61,12 +75,20 @@ class RailAssembly:
     rail_contract_inputs: tuple[str, ...]
 
 
-def build_rail_assembly(topology: Any, geometry: Any, relations: Any) -> RailAssembly:
+def build_rail_assembly(
+    topology: Any,
+    geometry: Any,
+    relations: Any,
+    source: Any = None,
+) -> RailAssembly:
     """Assemble debug-side rails over ScaffoldNode union RunEndpointJunction."""
 
+    contract_inputs = set(_base_contract_inputs())
     family_by_evidence_id = _family_by_evidence_id(relations)
     endpoint_junction_by_occurrence = _endpoint_junction_by_occurrence(relations)
+    junction_context_by_id = _junction_context_by_id(relations)
     position_by_junction_id = _junction_positions(geometry, relations)
+    self_seam_chain_ids = _self_seam_chain_ids(relations)
     segments = tuple(
         segment
         for evidence in sorted(relations.patch_chain_directional_evidence, key=lambda item: item.id)
@@ -76,14 +98,23 @@ def build_rail_assembly(topology: Any, geometry: Any, relations: Any) -> RailAss
         if segment is not None
     )
     valence_by_junction_id = _valence_by_junction_id(segments)
-    rails = _rails_from_segments(topology, segments, relations, valence_by_junction_id)
+    rails = _rails_from_segments(
+        topology,
+        geometry,
+        segments,
+        source,
+        valence_by_junction_id,
+        junction_context_by_id,
+        self_seam_chain_ids,
+        contract_inputs,
+    )
     glyphs = _junction_glyphs(relations, position_by_junction_id, valence_by_junction_id)
     return RailAssembly(
         run_segments=segments,
         rails=rails,
         junction_glyphs=glyphs,
         branch_glyphs=tuple(glyph for glyph in glyphs if glyph.valence > 2),
-        rail_contract_inputs=_contract_inputs(relations, segments),
+        rail_contract_inputs=_contract_inputs(relations, segments, contract_inputs),
     )
 
 
@@ -102,6 +133,40 @@ def _endpoint_junction_by_occurrence(relations: Any) -> dict[tuple[str, PatchCha
         for occurrence in junction.incident_run_endpoint_occurrences:
             junction_by_occurrence[occurrence] = junction_id
     return junction_by_occurrence
+
+
+def _junction_context_by_id(relations: Any) -> dict[str, JunctionContext]:
+    contexts: dict[str, JunctionContext] = {}
+    for node in relations.scaffold_nodes:
+        contexts[node.id] = JunctionContext(
+            id=node.id,
+            source_vertex_id=_single_source_vertex_id(node.source_vertex_ids),
+            topology_vertex_ids=tuple(sorted((str(vertex_id) for vertex_id in node.vertex_ids))),
+        )
+    for junction in relations.run_endpoint_junctions:
+        if junction.anchor_scaffold_node_id is not None:
+            continue
+        contexts[junction.id] = JunctionContext(
+            id=junction.id,
+            source_vertex_id=str(junction.source_vertex_id) if junction.source_vertex_id is not None else None,
+            topology_vertex_ids=tuple(sorted((str(vertex_id) for vertex_id in junction.topology_vertex_ids))),
+        )
+    return contexts
+
+
+def _single_source_vertex_id(source_vertex_ids: tuple[Any, ...]) -> str | None:
+    if not source_vertex_ids:
+        return None
+    sorted_ids = tuple(sorted(str(source_vertex_id) for source_vertex_id in source_vertex_ids))
+    return sorted_ids[0]
+
+
+def _self_seam_chain_ids(relations: Any) -> set[str]:
+    return {
+        str(junction.matched_chain_id)
+        for junction in relations.scaffold_junctions
+        if junction.kind.value == "SELF_SEAM" and junction.matched_chain_id is not None
+    }
 
 
 def _segment_view(
@@ -124,6 +189,7 @@ def _segment_view(
         patch_id=str(evidence.patch_id),
         patch_chain_id=str(evidence.patch_chain_id),
         parent_chain_id=str(evidence.parent_chain_id),
+        loop_id=str(evidence.loop_id),
         segment_indices=tuple(evidence.segment_indices),
         start_junction_id=start_junction_id,
         end_junction_id=end_junction_id,
@@ -171,41 +237,55 @@ def _valence_by_junction_id(segments: tuple[RunSegmentView, ...]) -> dict[str, i
 
 def _rails_from_segments(
     topology: Any,
+    geometry: Any,
     segments: tuple[RunSegmentView, ...],
-    relations: Any,
+    source: Any,
     valence_by_junction_id: dict[str, int],
+    junction_context_by_id: dict[str, JunctionContext],
+    self_seam_chain_ids: set[str],
+    contract_inputs: set[str],
 ) -> tuple[RailView, ...]:
     rails: list[RailView] = []
-    for family_id, family_segments in _segments_by_family(segments).items():
-        for index, component in enumerate(_segment_components(family_segments)):
-            branch_junction_ids = tuple(
-                sorted(
-                    {
-                        junction_id
-                        for segment in component
-                        for junction_id in (segment.start_junction_id, segment.end_junction_id)
-                        if _family_valence(junction_id, component) > 2
-                    }
-                )
+    for index, component in enumerate(
+        _segment_components(
+            geometry,
+            source,
+            segments,
+            junction_context_by_id,
+            self_seam_chain_ids,
+            contract_inputs,
+        )
+    ):
+        role = "CUT" if any(segment.parent_chain_id in self_seam_chain_ids for segment in component) else "UNASSIGNED"
+        family_id = _component_family_id(component, index)
+        branch_junction_ids = tuple(
+            sorted(
+                {
+                    junction_id
+                    for segment in component
+                    for junction_id in (segment.start_junction_id, segment.end_junction_id)
+                    if _family_valence(junction_id, component) > 2
+                }
             )
-            rails.append(
-                RailView(
-                    id=f"rail:{family_id}:{index}",
-                    family_id=family_id,
-                    role="UNASSIGNED",
-                    directional_evidence_ids=tuple(sorted(segment.directional_evidence_id for segment in component)),
-                    patch_ids=tuple(sorted({segment.patch_id for segment in component})),
-                    junction_ids=tuple(sorted({
-                        junction_id
-                        for segment in component
-                        for junction_id in (segment.start_junction_id, segment.end_junction_id)
-                    })),
-                    segment_polylines=tuple(segment.polyline for segment in sorted(component, key=lambda item: item.id)),
-                    length=_deduped_length(component),
-                    branch_junction_ids=branch_junction_ids,
-                    is_ambiguous=bool(branch_junction_ids),
-                )
+        )
+        rails.append(
+            RailView(
+                id=f"rail:{family_id}:{index}",
+                family_id=family_id,
+                role=role,
+                directional_evidence_ids=tuple(sorted(segment.directional_evidence_id for segment in component)),
+                patch_ids=tuple(sorted({segment.patch_id for segment in component})),
+                junction_ids=tuple(sorted({
+                    junction_id
+                    for segment in component
+                    for junction_id in (segment.start_junction_id, segment.end_junction_id)
+                })),
+                segment_polylines=tuple(segment.polyline for segment in sorted(component, key=lambda item: item.id)),
+                length=_deduped_length(component),
+                branch_junction_ids=branch_junction_ids,
+                is_ambiguous=bool(branch_junction_ids),
             )
+        )
     return _assign_roles(
         topology,
         tuple(sorted(rails, key=lambda item: item.id)),
@@ -226,16 +306,46 @@ def _segments_by_family(segments: tuple[RunSegmentView, ...]) -> dict[str, tuple
     }
 
 
-def _segment_components(segments: tuple[RunSegmentView, ...]) -> tuple[tuple[RunSegmentView, ...], ...]:
+def _component_family_id(component: tuple[RunSegmentView, ...], index: int) -> str:
+    family_ids = tuple(sorted({segment.family_id for segment in component if segment.family_id is not None}))
+    if len(family_ids) == 1:
+        return family_ids[0]
+    patches = ".".join(sorted({segment.patch_id for segment in component}))
+    return f"geodesic_patch_rail:{patches}:{index}"
+
+
+def _segment_components(
+    geometry: Any,
+    source: Any,
+    segments: tuple[RunSegmentView, ...],
+    junction_context_by_id: dict[str, JunctionContext],
+    self_seam_chain_ids: set[str],
+    contract_inputs: set[str],
+) -> tuple[tuple[RunSegmentView, ...], ...]:
     neighbors: dict[str, set[str]] = {segment.id: set() for segment in segments}
     segment_ids_by_junction: dict[str, list[str]] = defaultdict(list)
     by_id = {segment.id: segment for segment in segments}
     for segment in segments:
         segment_ids_by_junction[segment.start_junction_id].append(segment.id)
         segment_ids_by_junction[segment.end_junction_id].append(segment.id)
-    for segment_ids in segment_ids_by_junction.values():
+    for junction_id, segment_ids in segment_ids_by_junction.items():
         for first_id in segment_ids:
-            neighbors[first_id].update(second_id for second_id in segment_ids if second_id != first_id)
+            for second_id in segment_ids:
+                if second_id == first_id:
+                    continue
+                if _segments_continue_at_junction(
+                    geometry,
+                    source,
+                    by_id[first_id],
+                    by_id[second_id],
+                    junction_id,
+                    segment_ids_by_junction[junction_id],
+                    by_id,
+                    junction_context_by_id,
+                    self_seam_chain_ids,
+                    contract_inputs,
+                ):
+                    neighbors[first_id].add(second_id)
 
     components: list[tuple[RunSegmentView, ...]] = []
     visited: set[str] = set()
@@ -253,6 +363,67 @@ def _segment_components(segments: tuple[RunSegmentView, ...]) -> tuple[tuple[Run
             stack.extend(sorted(neighbors[segment_id] - visited, reverse=True))
         components.append(tuple(by_id[segment_id] for segment_id in sorted(component_ids)))
     return tuple(components)
+
+
+def _segments_continue_at_junction(
+    geometry: Any,
+    source: Any,
+    first: RunSegmentView,
+    second: RunSegmentView,
+    junction_id: str,
+    incident_segment_ids: list[str],
+    segment_by_id: dict[str, RunSegmentView],
+    junction_context_by_id: dict[str, JunctionContext],
+    self_seam_chain_ids: set[str],
+    contract_inputs: set[str],
+) -> bool:
+    if first.parent_chain_id in self_seam_chain_ids or second.parent_chain_id in self_seam_chain_ids:
+        return False
+    if first.patch_id != second.patch_id:
+        if first.family_id is None or first.family_id != second.family_id:
+            return False
+        return _family_incidence_count(first.family_id, incident_segment_ids, segment_by_id) <= 2
+    if _patch_incidence_count(first.patch_id, incident_segment_ids, segment_by_id) > 2:
+        return False
+    context = junction_context_by_id.get(junction_id)
+    if context is None:
+        contract_inputs.add(f"missing junction context for geodesic rail continuation at {junction_id}")
+        return False
+    is_straight, issue = is_geodesic_straight_at_patch_vertex(
+        source,
+        geometry,
+        patch_id=first.patch_id,
+        source_vertex_id=context.source_vertex_id,
+        topology_vertex_ids=context.topology_vertex_ids,
+        tolerance=GEODESIC_STRAIGHT_TOLERANCE,
+    )
+    if issue is not None:
+        contract_inputs.add(issue)
+    return is_straight
+
+
+def _patch_incidence_count(
+    patch_id: str,
+    incident_segment_ids: list[str],
+    segment_by_id: dict[str, RunSegmentView],
+) -> int:
+    return sum(
+        1
+        for segment_id in incident_segment_ids
+        if segment_by_id[segment_id].patch_id == patch_id
+    )
+
+
+def _family_incidence_count(
+    family_id: str,
+    incident_segment_ids: list[str],
+    segment_by_id: dict[str, RunSegmentView],
+) -> int:
+    return sum(
+        1
+        for segment_id in incident_segment_ids
+        if segment_by_id[segment_id].family_id == family_id
+    )
 
 
 def _family_valence(junction_id: str, segments: tuple[RunSegmentView, ...]) -> int:
@@ -289,6 +460,7 @@ def _assign_roles(
             rail
             for rail in rails
             if group_id in _rail_group_ids(rail, patch_group_by_patch_id)
+            and rail.role != "CUT"
         )
         if not group_rails:
             continue
@@ -302,11 +474,11 @@ def _assign_roles(
                 if _rails_are_parallel(rail, spine, segment_by_evidence_id)
                 else "RIB"
             )
-    return tuple(
+    assigned_rails = tuple(
         RailView(
             id=rail.id,
             family_id=rail.family_id,
-            role=assigned.get(rail.id, "RIB"),
+            role=rail.role if rail.role == "CUT" else assigned.get(rail.id, "RIB"),
             directional_evidence_ids=rail.directional_evidence_ids,
             patch_ids=rail.patch_ids,
             junction_ids=rail.junction_ids,
@@ -314,6 +486,51 @@ def _assign_roles(
             length=rail.length,
             branch_junction_ids=rail.branch_junction_ids,
             is_ambiguous=rail.is_ambiguous or any(valence_by_junction_id.get(junction_id, 0) > 2 for junction_id in rail.junction_ids),
+            is_default_visible=rail.is_default_visible,
+        )
+        for rail in rails
+    )
+    return _mark_default_visibility(assigned_rails, segment_by_evidence_id)
+
+
+def _mark_default_visibility(
+    rails: tuple[RailView, ...],
+    segment_by_evidence_id: dict[str, RunSegmentView],
+) -> tuple[RailView, ...]:
+    rail_ids_by_physical_segment: dict[tuple[str, tuple[int, ...]], set[str]] = defaultdict(set)
+    for rail in rails:
+        for evidence_id in rail.directional_evidence_ids:
+            segment = segment_by_evidence_id.get(evidence_id)
+            if segment is None:
+                continue
+            rail_ids_by_physical_segment[(segment.parent_chain_id, segment.segment_indices)].add(rail.id)
+
+    visible_by_id = {rail.id: True for rail in rails}
+    rail_by_id = {rail.id: rail for rail in rails}
+    for rail_ids in rail_ids_by_physical_segment.values():
+        if len(rail_ids) <= 1:
+            continue
+        max_length = max(rail_by_id[rail_id].length for rail_id in rail_ids)
+        for rail_id in rail_ids:
+            rail = rail_by_id[rail_id]
+            if rail.role == "CUT":
+                visible_by_id[rail_id] = True
+            elif rail.length < max_length:
+                visible_by_id[rail_id] = False
+
+    return tuple(
+        RailView(
+            id=rail.id,
+            family_id=rail.family_id,
+            role=rail.role,
+            directional_evidence_ids=rail.directional_evidence_ids,
+            patch_ids=rail.patch_ids,
+            junction_ids=rail.junction_ids,
+            segment_polylines=rail.segment_polylines,
+            length=rail.length,
+            branch_junction_ids=rail.branch_junction_ids,
+            is_ambiguous=rail.is_ambiguous,
+            is_default_visible=visible_by_id[rail.id],
         )
         for rail in rails
     )
@@ -421,8 +638,21 @@ def _glyph(
     )
 
 
-def _contract_inputs(relations: Any, segments: tuple[RunSegmentView, ...]) -> tuple[str, ...]:
+def _base_contract_inputs() -> tuple[str, str]:
+    return (
+        "future ScaffoldRail needs a geodesic continuation criterion: same-patch consecutive runs continue when patch-local face-fan angle is within GEODESIC_STRAIGHT_TOLERANCE of pi",
+        "future ScaffoldRail needs per PatchChain-use rail membership: the same Chain can be straight in one owning patch view and cornered in an adjacent patch view",
+    )
+
+
+def _contract_inputs(
+    relations: Any,
+    segments: tuple[RunSegmentView, ...],
+    contract_inputs: set[str],
+) -> tuple[str, ...]:
     missing = len(relations.patch_chain_directional_evidence) - len(segments)
-    if missing <= 0:
-        return ()
-    return (f"{missing} directional evidence endpoints could not be converted to debug run segments",)
+    if missing > 0:
+        contract_inputs.add(f"{missing} directional evidence endpoints could not be converted to debug run segments")
+    ordered = list(_base_contract_inputs())
+    ordered.extend(sorted(contract_inputs - set(ordered)))
+    return tuple(ordered)

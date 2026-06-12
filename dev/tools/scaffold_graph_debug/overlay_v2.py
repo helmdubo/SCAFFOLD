@@ -16,6 +16,7 @@ from .colors import (
     SPINE_COLOR,
     stable_color,
 )
+from .geodesic_continuation import GEODESIC_STRAIGHT_TOLERANCE
 from .rail_assembly import RailAssembly, RailView, RunSegmentView, build_rail_assembly
 from .seam_verdicts import ANGLE_DEFECT_TOLERANCE, SeamVerdict, build_seam_verdicts
 
@@ -28,7 +29,7 @@ def build_overlay_v2_payload(context: Any) -> dict[str, Any]:
     relations = context.relation_snapshot
     if topology is None or geometry is None or relations is None:
         raise RuntimeError("Overlay v2 requires topology, geometry and relation snapshots.")
-    assembly = build_rail_assembly(topology, geometry, relations)
+    assembly = build_rail_assembly(topology, geometry, relations, context.source_snapshot)
     seam_verdicts = build_seam_verdicts(topology, geometry, relations)
     return {
         "version": 2,
@@ -40,6 +41,7 @@ def build_overlay_v2_payload(context: Any) -> dict[str, Any]:
         "counts": _counts(assembly, seam_verdicts),
         "rail_contract_inputs": list(assembly.rail_contract_inputs),
         "angle_defect_tolerance": ANGLE_DEFECT_TOLERANCE,
+        "geodesic_straight_tolerance": GEODESIC_STRAIGHT_TOLERANCE,
     }
 
 
@@ -52,6 +54,7 @@ def _run_segment_to_dict(segment: RunSegmentView) -> dict[str, Any]:
         "family_id": family_id,
         "patch_id": segment.patch_id,
         "patch_chain_id": segment.patch_chain_id,
+        "loop_id": segment.loop_id,
         "start_junction_id": segment.start_junction_id,
         "end_junction_id": segment.end_junction_id,
         "length": segment.length,
@@ -78,12 +81,15 @@ def _rail_to_dict(rail: RailView) -> dict[str, Any]:
         "length": rail.length,
         "branch_junction_ids": list(rail.branch_junction_ids),
         "is_ambiguous": rail.is_ambiguous,
+        "is_default_visible": rail.is_default_visible,
         "color": list(color),
         "color_key": f"{rail.role.lower()}:{rail.family_id}",
     }
 
 
 def _rail_color(rail: RailView) -> tuple[float, float, float, float]:
+    if rail.role == "CUT":
+        return CUT_SEAM_COLOR
     if rail.role == "SPINE":
         return SPINE_COLOR
     if rail.role == "PARALLEL":
@@ -131,12 +137,15 @@ def _junction_glyph_to_dict(glyph) -> dict[str, Any]:
 
 
 def _counts(assembly: RailAssembly, seam_verdicts: tuple[SeamVerdict, ...]) -> dict[str, int]:
+    visible_rails = tuple(rail for rail in assembly.rails if rail.is_default_visible)
     return {
         "family_run_segment_count": len(assembly.run_segments),
-        "rail_count": len(assembly.rails),
-        "spine_count": sum(rail.role == "SPINE" for rail in assembly.rails),
-        "parallel_rail_count": sum(rail.role == "PARALLEL" for rail in assembly.rails),
-        "rib_count": sum(rail.role == "RIB" for rail in assembly.rails),
+        "rail_count": len(visible_rails),
+        "hidden_patch_view_rail_count": sum(not rail.is_default_visible for rail in assembly.rails),
+        "spine_count": sum(rail.role == "SPINE" for rail in visible_rails),
+        "parallel_rail_count": sum(rail.role == "PARALLEL" for rail in visible_rails),
+        "rib_count": sum(rail.role == "RIB" for rail in visible_rails),
+        "cut_rail_count": sum(rail.role == "CUT" for rail in visible_rails),
         "sewable_seam_count": sum(verdict.status == "SEWABLE" for verdict in seam_verdicts),
         "cut_seam_count": sum(verdict.status == "CUT" for verdict in seam_verdicts),
         "junction_glyph_count": len(assembly.junction_glyphs),

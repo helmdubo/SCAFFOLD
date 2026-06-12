@@ -55,10 +55,26 @@ are thinner.
 Ribs shows rails from the other axis families in orange. These are guide rails,
 not solve output.
 
+Rails are debug-side views, rebuilt on each overlay refresh. Inside one owning
+PatchChain use, consecutive runs continue only when the patch-local face fan at
+the shared vertex is geodesically straight: the angle sum is within
+`GEODESIC_STRAIGHT_TOLERANCE` of pi. The default tolerance is `0.1` radians.
+Across patches, the overlay still follows the existing
+ConnectedDirectionFamily transport evidence.
+
+Rail membership is per PatchChain use. The same source edge can be a straight
+rail in the side-band patch view and a cornered perimeter in a cap patch view.
+When both views overlap, the default overlay draws the straight side-band rail
+and keeps the cornered cap perimeter as a hidden alternate patch-view rail in
+the JSON payload/report.
+
 Seam Verdicts shows Level A stitch/cut checks for shared seam chains. Green
 dashed means the seam is geometrically sewable under the current angle-defect
 test. Red solid means it must stay cut; red X markers show failing vertices.
 There are no labels on this layer.
+
+SELF_SEAM chains are always treated as cut rails/seams and use the dedicated
+cut color.
 
 JunctionsV2 shows ScaffoldNodes as circles and unanchored RunEndpointJunctions
 as diamonds. Larger glyphs mean higher run-end valence.
@@ -69,6 +85,26 @@ not choose a path through it.
 
 Colors are stable across rebuilds. They are derived from ids, never from true
 random numbers.
+
+## Canonical Artist Example
+
+For an extruded-cross building:
+
+```text
+side band = one patch with one vertical seam
+top and bottom caps = separate patches
+```
+
+Expected overlay:
+
+```text
+1. The entire top rim is one visible rail.
+2. The entire bottom rim is a second visible rail with the related rail hue.
+3. The vertical seam is rendered in the cut color.
+4. The cap patch views still see those same rim edges as cornered perimeter
+   pieces, not as one straight rail; those alternate cap-view pieces are kept
+   hidden by default so the side-band interpretation wins visually.
+```
 
 ## Staged Validation Checklist
 
