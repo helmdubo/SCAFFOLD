@@ -372,7 +372,8 @@ def _assign_roles(
                 continue
             assigned[rail.id] = (
                 "PARALLEL"
-                if _rails_are_parallel(rail, spine, segment_by_evidence_id)
+                if set(rail.patch_ids) & set(spine.patch_ids)
+                and _rails_are_parallel(rail, spine, segment_by_evidence_id)
                 else "RIB"
             )
     assigned_rails = tuple(
