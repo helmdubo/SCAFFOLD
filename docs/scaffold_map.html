@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SCAFFOLD — карта архитектуры</title>
+<style>
+  :root{
+    --bg:#1b1b1f; --panel:#242429; --panel2:#2b2b31; --line:#3a3a42;
+    --text:#d8d8de; --dim:#8e8e98; --accent:#e8a33d;
+    --ok:#5fb878; --contract:#5b9bd5; --spike:#e8a33d; --defer:#6b6b75; --warn:#d56b6b;
+    --substrate:#7d6ba0;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font:14px/1.45 "Segoe UI",system-ui,sans-serif;margin:0;padding:24px;max-width:1180px;margin-inline:auto}
+  h1{font-size:22px;margin:0 0 2px;color:#fff}
+  h2{font-size:16px;margin:34px 0 12px;color:var(--accent);border-bottom:1px solid var(--line);padding-bottom:6px}
+  .sub{color:var(--dim);font-size:12.5px;margin-bottom:18px}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--dim);margin:10px 0 0}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  /* layer stack */
+  .layer{display:grid;grid-template-columns:170px 1fr;gap:0;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;overflow:hidden}
+  .layer .name{background:var(--panel2);padding:12px 14px;border-right:1px solid var(--line)}
+  .layer .name b{display:block;color:#fff;font-size:13.5px}
+  .layer .name span{font-size:11.5px;color:var(--dim)}
+  .layer .body{background:var(--panel);padding:10px 12px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{font-size:11.5px;padding:3px 9px;border-radius:20px;border:1px solid var(--line);background:#1f1f24;white-space:nowrap}
+  .chip.ok{border-color:var(--ok);color:var(--ok)}
+  .chip.contract{border-color:var(--contract);color:var(--contract)}
+  .chip.spike{border-color:var(--spike);color:var(--spike)}
+  .chip.defer{border-color:var(--defer);color:var(--defer)}
+  .chip.substrate{border-color:var(--substrate);color:var(--substrate)}
+  .chip.api{box-shadow:0 0 0 1px var(--ok) inset;font-weight:600}
+  .note{font-size:11.5px;color:var(--dim);margin-top:7px}
+  .rulebar{font-size:12px;color:var(--dim);background:var(--panel2);border:1px dashed var(--line);border-radius:8px;padding:8px 14px;margin:10px 0 0}
+  .rulebar b{color:var(--text)}
+  /* flow svg */
+  .flowwrap{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;overflow-x:auto}
+  svg text{font:11.5px "Segoe UI",sans-serif;fill:var(--text)}
+  svg .small{font-size:10px;fill:var(--dim)}
+  svg .box{fill:#1f1f24;stroke:var(--line);rx:7}
+  svg .ok{stroke:var(--ok)} svg .spike{stroke:var(--spike)} svg .defer{stroke:var(--defer)} svg .blender{stroke:var(--contract)}
+  svg .arrow{stroke:#6c6c78;stroke-width:1.4;fill:none;marker-end:url(#arr)}
+  svg .title{font-weight:600;fill:#fff}
+  /* decision frame */
+  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
+  .card h3{margin:0 0 8px;font-size:13.5px;color:#fff}
+  .card ul{margin:0;padding-left:18px;font-size:12.5px}
+  .card li{margin-bottom:5px}
+  .card .tag{font-size:10.5px;padding:1px 7px;border-radius:10px;margin-left:6px}
+  .tagA{background:#23402c;color:var(--ok)} .tagB{background:#3d3147;color:#b58ee0}
+  /* timeline */
+  .timeline{display:flex;flex-direction:column;gap:6px}
+  .trow{display:grid;grid-template-columns:120px 1fr 130px;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:8px 12px;font-size:12.5px;align-items:center}
+  .trow .slice{font-weight:600;color:#fff}
+  .st{font-size:11px;text-align:center;padding:3px 8px;border-radius:12px;font-weight:600}
+  .st.done{background:#21392a;color:var(--ok)} .st.wip{background:#403318;color:var(--spike)}
+  .st.queue{background:#2c2c33;color:var(--dim)} .st.gate{background:#16303f;color:var(--contract)}
+  .guards{font-size:12.5px}
+  .guards li{margin-bottom:6px}
+  footer{margin-top:30px;color:var(--dim);font-size:11px;border-top:1px solid var(--line);padding-top:10px}
+</style>
+</head>
+<body>
+
+<h1>SCAFFOLD — карта архитектуры</h1>
+<div class="sub">Structural UV для архитектурных мешей · контракт G0 v1.3 · фаза G3 (+спайк-валидация G5-поведения) · обновлено 2026-06</div>
+<div class="legend">
+  <span><span class="dot" style="background:var(--ok)"></span>реализовано</span>
+  <span><span class="dot" style="background:var(--contract)"></span>контракт утверждён / Blender</span>
+  <span><span class="dot" style="background:var(--spike)"></span>спайк (приговорён, вне ядра)</span>
+  <span><span class="dot" style="background:var(--substrate)"></span>субстрат (внутреннее, фронтир не читает)</span>
+  <span><span class="dot" style="background:var(--defer)"></span>отложено</span>
+  <span style="font-weight:600;color:var(--ok)">жирная рамка = Consumer API (читает фронтир)</span>
+</div>
+
+<h2>1 · Слои ядра (scaffold_core) — иммутабельный конвейер интерпретации</h2>
+<div class="sub" style="margin-bottom:10px">Зависимости только вниз: слой N не знает о слое N+1. Семантика (роли, решения) — только поздняя. Полный rebuild, без инкрементальных кэшей (DD-16).</div>
+
+<div class="layer">
+  <div class="name"><b>Layer 0 · Source</b><span>снимок меша</span></div>
+  <div class="body"><div class="chips">
+    <span class="chip ok">SourceMeshSnapshot</span><span class="chip ok">MeshVertex/Edge/FaceRef</span>
+    <span class="chip ok">Marks: SEAM · SHARP · USER</span><span class="chip ok">blender_io (граница чтения bpy)</span>
+  </div><div class="note">Единственная точка контакта ядра с Blender на чтение. Sharp читается, но не сегментирует.</div></div>
+</div>
+
+<div class="layer">
+  <div class="name"><b>Layer 1 · Topology</b><span>иммутабельный снапшот</span></div>
+  <div class="body"><div class="chips">
+    <span class="chip ok">Shell</span><span class="chip ok">Patch</span><span class="chip ok">BoundaryLoop (outer/inner)</span>
+    <span class="chip ok">Chain</span><span class="chip ok">PatchChain ← источник истины границ</span><span class="chip ok">Vertex (DD-37: дубли на швах)</span>
+  </div><div class="note">Patch = flood fill по выделению, граница: border / non-manifold / USER-марка / <b>MarkSeam</b>. Шов = структурная линия каркаса, не обязательно край острова. Shell не рвётся швами.</div></div>
+</div>
+
+<div class="layer">
+  <div class="name"><b>Layer 2 · Geometry</b><span>сырые измерения</span></div>
+  <div class="body"><div class="chips">
+    <span class="chip ok">area · normal · centroid</span><span class="chip ok">length · chord · positions</span>
+    <span class="chip ok api">angle defect (гаусс. кривизна)</span><span class="chip ok">LocalFaceFanGeometryFacts</span><span class="chip ok">degenerate diagnostics</span>
+  </div><div class="note">Только числа. Никаких ролей/меток (DEVELOPABLE и т.п. запрещены). Angle defect — фундамент stitch-гейта уровня A.</div></div>
+</div>
+
+<div class="layer">
+  <div class="name"><b>Layer 3 · Relations</b><span>derived evidence с провенансом</span></div>
+  <div class="body">
+    <div class="chips">
+      <span class="chip ok api">ConnectedDirectionFamily (DD-43: транспорт через dihedral)</span>
+      <span class="chip ok api">PatchAdjacency + Dihedral</span>
+      <span class="chip ok api">PatchChainDirectionalEvidence</span>
+      <span class="chip ok api">PatchAxes</span>
+      <span class="chip ok api">ScaffoldJunction (SELF_SEAM/CROSS_PATCH)</span>
+    </div>
+    <div class="chips" style="margin-top:6px">
+      <span class="chip substrate">EndpointSamples/Relations</span><span class="chip substrate">LoopCorner</span>
+      <span class="chip substrate">ScaffoldNode/Edge/Graph</span><span class="chip substrate">IncidentEdgeRelation (9 kinds)</span>
+      <span class="chip substrate">SideSurface/SurfaceFlow evidence</span><span class="chip substrate">ContinuityComponent</span>
+      <span class="chip substrate">AlignmentClass (демоция: вход PatchAxes)</span>
+    </div>
+    <div class="note">Разделение по consumption report трассера: жирное читает фронтир напрямую; фиолетовое — субстрат, из которого собираются families/axes. Evidence никогда не выбирает трассы/рельсы/UV (DD-38…43). Мораторий на новые типы.</div>
+  </div>
+</div>
+
+<div class="layer">
+  <div class="name"><b>Layer 4 · Features</b><span>грамматика</span></div>
+  <div class="body"><div class="chips">
+    <span class="chip defer">Grammar rules</span><span class="chip defer">FeatureCandidate → FeatureInstance</span>
+    <span class="chip defer">FeatureConstraint — единственный канал в solve (DD-26)</span><span class="chip defer">Band/Trim кандидаты</span>
+  </div><div class="note">Сюда вернутся «уровень B»-решения (трим-политика, ориентация текселя) и поздние роли WALL/FLOOR как runtime-метки (DD-04/05). LEVEL_B_PLACEHOLDER-ы спайка = список требований.</div></div>
+</div>
+
+<div class="layer">
+  <div class="name"><b>Layer 5 · Runtime/Solve</b><span>фронтир · скелет · UV</span></div>
+  <div class="body"><div class="chips">
+    <span class="chip spike">Сборка островов (angle-defect гейт)</span><span class="chip spike">Skeleton solve (P7-стиль, LSQ)</span>
+    <span class="chip spike">Anchor-фронтир (FrontierRank)</span><span class="chip spike">Пины + конформная заливка</span>
+    <span class="chip defer">uv_transfer (граница записи, G5)</span><span class="chip defer">PinPolicy · texel scale · packing</span>
+  </div><div class="note">Поведение валидируется в спайке (dev/tools/tracer_spike, приговорён guard'ом №1). После G4-гейта — контракты и чистая реализация здесь.</div></div>
+</div>
+
+<div class="rulebar"><b>Запрещённые циклы:</b> solve не определяет оси · WorldOrientation не определяет alignment · evidence не выбирает продолжения. <b>Анти-CFTUV:</b> никаких хранимых H/V и WALL/FLOOR в L1–L3 — оси всегда вычисляемые проекции families.</div>
+
+<h2>2 · Конвейер данных: от выделения до UV</h2>
+<div class="flowwrap">
+<svg viewBox="0 0 1110 330" width="1110" height="330">
+  <defs><marker id="arr" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#6c6c78"/></marker></defs>
+
+  <!-- row 1: passes -->
+  <rect class="box blender" x="8"   y="18" width="128" height="58"/>
+  <text x="72"  y="40" text-anchor="middle" class="title">Blender</text>
+  <text x="72"  y="56" text-anchor="middle" class="small">выделение + MarkSeam</text>
+
+  <rect class="box ok" x="176" y="18" width="128" height="58"/>
+  <text x="240" y="40" text-anchor="middle" class="title">L0 Snapshot</text>
+  <text x="240" y="56" text-anchor="middle" class="small">blender_io.read()</text>
+
+  <rect class="box ok" x="344" y="18" width="150" height="58"/>
+  <text x="419" y="36" text-anchor="middle" class="title">Pass 0</text>
+  <text x="419" y="52" text-anchor="middle" class="small">L1 топология + L2 факты</text>
+  <text x="419" y="66" text-anchor="middle" class="small">(patches · chains · defect)</text>
+
+  <rect class="box ok" x="534" y="18" width="150" height="58"/>
+  <text x="609" y="36" text-anchor="middle" class="title">Pass 1</text>
+  <text x="609" y="52" text-anchor="middle" class="small">L3 relations + families</text>
+  <text x="609" y="66" text-anchor="middle" class="small">(заморожен после Pass 1)</text>
+
+  <rect class="box defer" x="724" y="18" width="150" height="58"/>
+  <text x="799" y="36" text-anchor="middle" class="title">Pass 2 · L4</text>
+  <text x="799" y="52" text-anchor="middle" class="small">features → constraints</text>
+  <text x="799" y="66" text-anchor="middle" class="small">(отложено)</text>
+
+  <path class="arrow" d="M136 47 H172"/><path class="arrow" d="M304 47 H340"/>
+  <path class="arrow" d="M494 47 H530"/><path class="arrow" d="M684 47 H720"/>
+
+  <!-- down arrow to solve row -->
+  <path class="arrow" d="M609 76 V120"/>
+  <path class="arrow" d="M799 76 V120" stroke-dasharray="4 4"/>
+  <text x="690" y="105" class="small">consumer API: families · adjacency · axes · junctions · defect</text>
+
+  <!-- row 2: solve chain -->
+  <rect class="box spike" x="80"  y="124" width="170" height="64"/>
+  <text x="165" y="144" text-anchor="middle" class="title">Сборка островов</text>
+  <text x="165" y="160" text-anchor="middle" class="small">stitch/split по дереву швов</text>
+  <text x="165" y="174" text-anchor="middle" class="small">гейт: angle defect ≈ 0</text>
+
+  <rect class="box spike" x="300" y="124" width="180" height="64"/>
+  <text x="390" y="144" text-anchor="middle" class="title">Skeleton solve</text>
+  <text x="390" y="160" text-anchor="middle" class="small">row/col union-find → LSQ</text>
+  <text x="390" y="174" text-anchor="middle" class="small">в развёрнутом фрейме острова</text>
+
+  <rect class="box spike" x="530" y="124" width="170" height="64"/>
+  <text x="615" y="144" text-anchor="middle" class="title">Anchor-фронтир</text>
+  <text x="615" y="160" text-anchor="middle" class="small">rank → якоря → каскад</text>
+  <text x="615" y="174" text-anchor="middle" class="small">рельсы прямые, по длине дуги</text>
+
+  <rect class="box blender" x="750" y="124" width="170" height="64"/>
+  <text x="835" y="144" text-anchor="middle" class="title">Пины + Conformal</text>
+  <text x="835" y="160" text-anchor="middle" class="small">каркас запинен,</text>
+  <text x="835" y="174" text-anchor="middle" class="small">ткань — bpy.ops.uv.unwrap</text>
+
+  <rect class="box ok" x="970" y="124" width="130" height="64"/>
+  <text x="1035" y="150" text-anchor="middle" class="title">UV острова</text>
+  <text x="1035" y="166" text-anchor="middle" class="small">сетка · трим-готовые</text>
+
+  <path class="arrow" d="M609 188 V210 H165 V192" fill="none" transform="translate(0,0)"/>
+  <path class="arrow" d="M250 156 H296"/><path class="arrow" d="M480 156 H526"/>
+  <path class="arrow" d="M700 156 H746"/><path class="arrow" d="M920 156 H966"/>
+
+  <!-- invariants strip -->
+  <rect x="80" y="236" width="1020" height="74" rx="7" fill="#1f1f24" stroke="#3a3a42" stroke-dasharray="4 4"/>
+  <text x="96" y="258" class="title" style="fill:#e8a33d">Инварианты solve-слоя (из спайка → в G5-контракты)</text>
+  <text x="96" y="278" class="small">· осевая цепь меняет UV только вдоль своей оси (ловит знаковые баги) · residual LSQ ≈ 0 на плоских сетках · SEAM_SELF всегда split + равенство длин сторон</text>
+  <text x="96" y="294" class="small">· would-be-interior: только вершины, теряющие ВСЕ разрезы (T-стык остаётся границей) · UNCONSTRAINED-компоненты исключаются из решения, их вершины → unpinned · деградация всегда с диагностикой</text>
+</svg>
+</div>
+
+<h2>3 · Решение stitch vs split — двухуровневая рамка</h2>
+<div class="twocol">
+  <div class="card">
+    <h3>Уровень A — жёсткий, геометрический <span class="tag tagA">Layer 2/3 + solve</span></h3>
+    <ul>
+      <li><b>Развёртываемость:</b> |2π − Σуглов| у вершин, становящихся внутренними. Сгиб стен = 0 → шить можно; обод капа = π/2 → запрет.</li>
+      <li><b>T-стык:</b> конец шва с оставшимся разрезом не становится внутренним → исключён из гейта.</li>
+      <li><b>SEAM_SELF</b> (труба): шить = отменить разрез → всегда split.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Уровень B — мягкий, семантический <span class="tag tagB">Layer 4/5, отложено</span></h3>
+    <ul>
+      <li>Когда дисторсия ≈ 0 (стены куба) — геометрия не может решить.</li>
+      <li>Решают: трим-политика, ориентация текселя, упаковка, грамматика.</li>
+      <li>Поздние роли (WALL/FLOOR) могут вернуться <i>только здесь</i> как runtime-метки.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>4 · Лента срезов</h2>
+<div class="timeline">
+  <div class="trow"><span class="slice">A · Фикстуры</span><span>Канонический пакет производственных форм + baseline-тесты (нашёл нарушение DD-39 в первый день)</span><span class="st done">DONE</span></div>
+  <div class="trow"><span class="slice">B · Ремонт</span><span>B1 кап/бок гейт (+регрессия ring flow, исправлена) · B2 индекс инцидентности · B3 angle defect в L2</span><span class="st done">DONE</span></div>
+  <div class="trow"><span class="slice">C · Endpoints</span><span>Топологические endpoint-сэмплы: класс MISSING_ENDPOINT уничтожен (6→0)</span><span class="st done">DONE</span></div>
+  <div class="trow"><span class="slice">D · Families</span><span>DD-43 (G0 v1.3): ConnectedDirectionFamily с parallel transport — связность вместо мировых направлений</span><span class="st done">DONE</span></div>
+  <div class="trow"><span class="slice">E · Tracer</span><span>Вертикальный срез до UV + consumption report (5 полей API / 15 субстрат) · E2 Blender-ран</span><span class="st done">DONE</span></div>
+  <div class="trow"><span class="slice">F · Ревизия</span><span>F1 typed family API · F2 stitch-гейт DD · F3 consumer-API split в G0 + дедуп доков</span><span class="st queue">В ОЧЕРЕДИ</span></div>
+  <div class="trow"><span class="slice">G · Порт CFTUV</span><span>G1 оси+лупы ✓ · G2 skeleton ✓ · G3 фронтир ✓ · G3.1 T-стыки ✓ (7→1 остров) · G3.2 авторитет ✓ · <b>G3.3 развёрнутый фрейм — финальная спайк-карточка</b></span><span class="st wip">В РАБОТЕ</span></div>
+  <div class="trow"><span class="slice">G4 · Гейт</span><span>Твоя визуальная приёмка walls.013: сетка прямоугольна, инвариант = 0 нарушений</span><span class="st gate">ТВОЙ ГЕЙТ</span></div>
+  <div class="trow"><span class="slice">G5 · Контракты</span><span>Layer 5 по-настоящему: контракты из consumption-отчётов, спайк в архив (guard №1)</span><span class="st queue">СЛЕДУЮЩИЙ</span></div>
+</div>
+
+<h2>5 · Anti-CFTUV guards (действуют на каждый срез)</h2>
+<div class="card"><ul class="guards">
+  <li><b>1 · Спайк приговорён:</b> после G4 — контракты и чистая реализация, спайк в архив; импорт из него запрещён всем.</li>
+  <li><b>2 · Нет хранимых ролей:</b> оси — вычисляемые проекции families, пересчёт каждый прогон.</li>
+  <li><b>3 · Solve не пишет назад:</b> «слой L3 должен был сказать X» → consumption report → отдельный L3-срез.</li>
+  <li><b>4 · Скелет = всё выделение,</b> не патч: row/col-графы поверх всех островов (mesh/shell-уровень).</li>
+  <li><b>5 · Семантические правила → L4:</b> в спайке только LEVEL_B_PLACEHOLDER.</li>
+  <li><b>6 · Размер:</b> файл ≤ ~600 строк, спайк ≤ ~3000; монолит = смерть CFTUV, не повторяем.</li>
+</ul></div>
+
+<footer>SCAFFOLD · docs/scaffold_map.html · источники: G0.md (v1.3) · docs/plans/uv_tracer_revision_plan.md · docs/migration/cftuv_frontier_algorithm_cards.md. Обновлять при смене фазы или после G4-гейта.</footer>
+</body>
+</html>
