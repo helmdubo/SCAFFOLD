@@ -32,6 +32,7 @@ from scaffold_core.layer_3_relations.patch_chain_endpoint_relations import (
     build_patch_chain_endpoint_relations,
 )
 from scaffold_core.layer_3_relations.patch_chain_endpoint_samples import build_patch_chain_endpoint_samples
+from scaffold_core.layer_3_relations.run_endpoint_junctions import build_run_endpoint_junctions
 from scaffold_core.layer_3_relations.scaffold_continuity import build_scaffold_continuity_components
 from scaffold_core.layer_3_relations.scaffold_graph import build_scaffold_graph
 from scaffold_core.layer_3_relations.scaffold_graph_relations import build_scaffold_graph_relations
@@ -85,6 +86,12 @@ def build_relation_snapshot(
     )
     scaffold_edges, scaffold_graph = build_scaffold_graph(topology, scaffold_nodes)
     scaffold_junctions = build_scaffold_junctions(scaffold_nodes, scaffold_edges)
+    run_endpoint_junctions = build_run_endpoint_junctions(
+        topology,
+        geometry,
+        patch_chain_directional_evidence,
+        scaffold_nodes,
+    )
     alignment_classes = build_alignment_classes(patch_chain_directional_evidence)
     patch_axes = build_patch_axes(
         topology,
@@ -132,6 +139,7 @@ def build_relation_snapshot(
         scaffold_edges=scaffold_edges,
         scaffold_graph=scaffold_graph,
         scaffold_junctions=scaffold_junctions,
+        run_endpoint_junctions=run_endpoint_junctions,
         side_surface_continuity_evidence=side_surface_continuity_evidence,
         surface_flow_compatibility_evidence=surface_flow_compatibility_evidence,
         scaffold_node_incident_edge_relations=scaffold_node_incident_edge_relations,

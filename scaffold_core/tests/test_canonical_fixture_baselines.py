@@ -60,6 +60,10 @@ def _connected_family_spans(relation_snapshot, patch_fragments) -> bool:
     )
 
 
+def _assert_run_endpoint_junction_count(relation_snapshot, expected: int) -> None:
+    assert len(relation_snapshot.run_endpoint_junctions) == expected
+
+
 def test_detached_parallel_walls_share_no_topology() -> None:
     context = _run(make_detached_parallel_walls_source())
     topology = context.topology_snapshot
@@ -68,6 +72,7 @@ def test_detached_parallel_walls_share_no_topology() -> None:
     assert len(topology.shells) == 2
     assert len(topology.patches) == 2
     assert len(relations.patch_adjacencies) == 0
+    _assert_run_endpoint_junction_count(relations, 8)
 
 
 def test_detached_parallel_walls_merge_into_world_alignment_families() -> None:
@@ -92,6 +97,7 @@ def test_beveled_wall_corner_baseline_topology() -> None:
     assert len(topology.shells) == 1
     assert len(topology.patches) == 3
     assert len(relations.patch_adjacencies) == 2
+    _assert_run_endpoint_junction_count(relations, 8)
 
 
 def test_beveled_wall_corner_vertical_family_spans_all_patches() -> None:
@@ -136,6 +142,7 @@ def test_rounded_wall_corner_matches_single_chamfer_baseline() -> None:
 
     assert len(topology.patches) == 3
     assert len(relations.patch_adjacencies) == 2
+    _assert_run_endpoint_junction_count(relations, 8)
     vertical_classes = _classes_along(relations, (0.0, 0.0, 1.0))
     assert len(vertical_classes) == 1
     assert len(vertical_classes[0].patch_ids) == 3
@@ -151,6 +158,7 @@ def test_l_corridor_tunnel_single_patch_coalesces_one_border_chain() -> None:
     assert len(topology.patches) == 1
     assert len(topology.chains) == 1
     assert len(topology.patch_chains) == 1
+    _assert_run_endpoint_junction_count(relations, 8)
     # The turning border polyline still yields per-direction evidence.
     assert len(relations.alignment_classes) == 3
 
@@ -162,6 +170,7 @@ def test_l_corridor_tunnel_seamed_folds_baseline_topology() -> None:
 
     assert len(topology.patches) == 3
     assert len(relations.patch_adjacencies) == 2
+    _assert_run_endpoint_junction_count(relations, 8)
 
     width_classes = _classes_along(relations, (0.0, 1.0, 0.0))
     assert len(width_classes) == 1
@@ -200,6 +209,7 @@ def test_tube_with_cap_baseline_topology() -> None:
     assert len(topology.patches) == 2
     assert len(relations.patch_adjacencies) == 1
     assert len(relations.scaffold_edges) == 5
+    _assert_run_endpoint_junction_count(relations, 8)
 
     seam_self_codes = tuple(
         diagnostic
@@ -247,6 +257,7 @@ def test_tube_with_two_seams_keeps_cross_patch_side_ring_flow() -> None:
     relations = context.relation_snapshot
 
     assert len(topology.patches) == 2
+    _assert_run_endpoint_junction_count(relations, 4)
 
     kind_counts = _relation_kind_counts(relations)
     assert kind_counts.get("SURFACE_SLIDING_CONTINUATION_CANDIDATE", 0) == 4

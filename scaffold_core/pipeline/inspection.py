@@ -298,6 +298,11 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
             _scaffold_junction_to_dict(junction)
             for junction in sorted(relations.scaffold_junctions, key=lambda item: item.id)
         ],
+        "run_endpoint_junction_count": len(relations.run_endpoint_junctions),
+        "run_endpoint_junctions": [
+            _run_endpoint_junction_to_dict(junction)
+            for junction in sorted(relations.run_endpoint_junctions, key=lambda item: item.id)
+        ],
         "side_surface_continuity_evidence": [
             _side_surface_continuity_evidence_to_dict(evidence)
             for evidence in sorted(relations.side_surface_continuity_evidence, key=lambda item: item.id)
@@ -1022,6 +1027,43 @@ def _scaffold_junction_to_dict(junction) -> dict[str, object]:
             str(patch_chain_id)
             for patch_chain_id in junction.patch_chain_ids
         ],
+        "confidence": junction.confidence,
+        "evidence": [
+            {
+                "source": evidence.source,
+                "summary": evidence.summary,
+                "data": dict(evidence.data),
+            }
+            for evidence in junction.evidence
+        ],
+    }
+
+
+def _run_endpoint_junction_to_dict(junction) -> dict[str, object]:
+    return {
+        "id": junction.id,
+        "topology_vertex_ids": [
+            str(vertex_id)
+            for vertex_id in junction.topology_vertex_ids
+        ],
+        "source_vertex_id": (
+            str(junction.source_vertex_id)
+            if junction.source_vertex_id is not None
+            else None
+        ),
+        "incident_run_endpoint_occurrences": [
+            {
+                "directional_evidence_id": directional_evidence_id,
+                "endpoint_role": str(endpoint_role.value),
+            }
+            for directional_evidence_id, endpoint_role
+            in junction.incident_run_endpoint_occurrences
+        ],
+        "incident_patch_ids": [
+            str(patch_id)
+            for patch_id in junction.incident_patch_ids
+        ],
+        "anchor_scaffold_node_id": junction.anchor_scaffold_node_id,
         "confidence": junction.confidence,
         "evidence": [
             {

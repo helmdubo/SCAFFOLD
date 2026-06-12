@@ -318,6 +318,20 @@ class ScaffoldJunction:
 
 
 @dataclass(frozen=True)
+class RunEndpointJunction:
+    """Evidence node for directional-run endpoints inside final PatchChains."""
+
+    id: str
+    topology_vertex_ids: tuple[VertexId, ...]
+    source_vertex_id: SourceVertexId | None
+    incident_run_endpoint_occurrences: tuple[tuple[str, PatchChainEndpointRole], ...]
+    incident_patch_ids: tuple[PatchId, ...]
+    anchor_scaffold_node_id: str | None
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class ScaffoldNodeIncidentEdgeRelation:
     """Node-local relation between two existing incident ScaffoldEdges."""
 
@@ -487,6 +501,7 @@ class RelationSnapshot:
     scaffold_edges: tuple[ScaffoldEdge, ...] = ()
     scaffold_graph: ScaffoldGraph | None = None
     scaffold_junctions: tuple[ScaffoldJunction, ...] = ()
+    run_endpoint_junctions: tuple[RunEndpointJunction, ...] = ()
     side_surface_continuity_evidence: tuple[SideSurfaceContinuityEvidence, ...] = ()
     surface_flow_compatibility_evidence: tuple[SurfaceFlowCompatibilityEvidence, ...] = ()
     scaffold_node_incident_edge_relations: tuple[ScaffoldNodeIncidentEdgeRelation, ...] = ()
