@@ -17,6 +17,8 @@ import numpy as np
 
 
 GAUGE_WEIGHT = 1.0e6
+COMPONENT_SPREAD_TOLERANCE = 1.0e3
+AXIS_PARALLEL_TOLERANCE = 1.0e-6
 LEVEL_B_PLACEHOLDER_NOTE = (
     "LEVEL_B_PLACEHOLDER: sibling equivalence for repeated openings is deferred "
     "until walls.004/G4 validates which grammar constraint should own it."
@@ -67,7 +69,6 @@ def apply_skeleton_solve(context: Any, islands: list[dict[str, Any]], rails: lis
     relations = context.relation_snapshot
     evidence_by_id = {item.id: item for item in relations.patch_chain_directional_evidence}
     edge_by_patch_chain_id = {edge.patch_chain_id: edge for edge in relations.scaffold_edges}
-    node_position_by_id = _node_position_by_id(relations.scaffold_nodes, context.geometry_facts)
     node_ids = tuple(node.id for node in relations.scaffold_nodes)
     island_by_patch_id = {
         patch_id: island["id"]
@@ -82,7 +83,6 @@ def apply_skeleton_solve(context: Any, islands: list[dict[str, Any]], rails: lis
         evidence_by_id,
         edge_by_patch_chain_id,
         island_by_patch_id,
-        node_position_by_id,
     )
     for row in chain_rows:
         if row["axis_role"] == "AXIS_A":
@@ -95,6 +95,10 @@ def apply_skeleton_solve(context: Any, islands: list[dict[str, Any]], rails: lis
     component_a_by_node = _component_by_node(components_a)
     component_b_by_node = _component_by_node(components_b)
     seed_nodes_by_island = _seed_nodes_by_island(islands, relations)
+    spread_checks = {
+        "A": _spread_report(components_a, relations.scaffold_nodes, context.source_snapshot),
+        "B": _spread_report(components_b, relations.scaffold_nodes, context.source_snapshot),
+    }
     systems = {
         "A": _solve_axis(
             coordinate_name="A",
@@ -104,6 +108,7 @@ def apply_skeleton_solve(context: Any, islands: list[dict[str, Any]], rails: lis
             component_by_node=component_b_by_node,
             chain_rows=chain_rows,
             seed_nodes_by_island=seed_nodes_by_island,
+            excluded_components=_spread_unconstrained_components(spread_checks["B"]),
         ),
         "B": _solve_axis(
             coordinate_name="B",
@@ -113,15 +118,13 @@ def apply_skeleton_solve(context: Any, islands: list[dict[str, Any]], rails: lis
             component_by_node=component_a_by_node,
             chain_rows=chain_rows,
             seed_nodes_by_island=seed_nodes_by_island,
+            excluded_components=_spread_unconstrained_components(spread_checks["A"]),
         ),
-    }
-    spread_checks = {
-        "A": _spread_report(components_a, relations.scaffold_nodes, context.source_snapshot),
-        "B": _spread_report(components_b, relations.scaffold_nodes, context.source_snapshot),
     }
 
     canonical_vertices = _canonical_vertices(relations.scaffold_nodes, systems, chain_rows)
     write_stats = _write_back(assignments, canonical_vertices)
+    invariant = _axis_parallel_invariant(chain_rows, systems)
     return {
         "policy": "tracer_spike_skeleton_solve_v0",
         "level_b_placeholder": LEVEL_B_PLACEHOLDER_NOTE,
@@ -141,19 +144,14 @@ def apply_skeleton_solve(context: Any, islands: list[dict[str, Any]], rails: lis
             "B": spread_checks["B"],
         },
         "write_back": write_stats,
+        "axis_parallel_invariant": invariant,
     }
 
 
-def _axis_chain_rows(rails, evidence_by_id, edge_by_patch_chain_id, island_by_patch_id, node_position_by_id):
+def _axis_chain_rows(rails, evidence_by_id, edge_by_patch_chain_id, island_by_patch_id):
     rows_by_key = {}
     for rail in rails:
-        role = rail.get("axis_role")
-        if role not in ("AXIS_A", "AXIS_B"):
-            continue
-        rail_direction = rail.get("axis_direction") or _rail_direction(
-            evidence_by_id.get(member_id)
-            for member_id in rail.get("member_directional_evidence_ids", ())
-        )
+        member_axis_rows = rail.get("member_axis_rows", {})
         for member_id in rail.get("member_directional_evidence_ids", ()):
             evidence = evidence_by_id.get(member_id)
             if evidence is None:
@@ -164,6 +162,10 @@ def _axis_chain_rows(rails, evidence_by_id, edge_by_patch_chain_id, island_by_pa
             island_id = rail["island_id"]
             if island_by_patch_id.get(str(evidence.patch_id)) != island_id:
                 continue
+            member_axis = member_axis_rows.get(member_id, {})
+            role = member_axis.get("axis_role") or rail.get("axis_role")
+            if role not in ("AXIS_A", "AXIS_B"):
+                continue
             key = (island_id, role, str(edge.chain_id))
             row = {
                 "island_id": island_id,
@@ -173,85 +175,13 @@ def _axis_chain_rows(rails, evidence_by_id, edge_by_patch_chain_id, island_by_pa
                 "chain_id": str(edge.chain_id),
                 "start_node_id": edge.start_scaffold_node_id,
                 "end_node_id": edge.end_scaffold_node_id,
-                "orientation_sign": _edge_axis_sign(
-                    edge.start_scaffold_node_id,
-                    edge.end_scaffold_node_id,
-                    node_position_by_id,
-                    rail_direction,
-                    evidence,
-                ),
+                "orientation_sign": int(member_axis.get("orientation_sign", evidence.orientation_sign)),
+                "direction_2d": member_axis.get("direction_2d"),
                 "length": float(evidence.length),
             }
             if key not in rows_by_key or row["patch_chain_id"] < rows_by_key[key]["patch_chain_id"]:
                 rows_by_key[key] = row
-    return [
-        rows_by_key[key]
-        for key in sorted(rows_by_key)
-    ]
-
-
-def _rail_direction(evidence_items):
-    items = [item for item in evidence_items if item is not None]
-    if not items:
-        return (0.0, 0.0, 0.0)
-    seed = max(items, key=lambda item: (item.length, item.id)).direction
-    if _vector_length(seed) == 0.0:
-        return (0.0, 0.0, 0.0)
-    seed = _normalize(seed)
-    total = [0.0, 0.0, 0.0]
-    for evidence in items:
-        direction = evidence.direction
-        if _vector_length(direction) == 0.0:
-            continue
-        direction = _normalize(direction)
-        if _dot(direction, seed) < 0.0:
-            direction = tuple(-value for value in direction)
-        for index in range(3):
-            total[index] += direction[index] * evidence.length
-    vector = tuple(total)
-    return _normalize(vector) if _vector_length(vector) > 0.0 else seed
-
-
-def _node_position_by_id(scaffold_nodes, geometry):
-    rows = {}
-    for node in scaffold_nodes:
-        positions = [
-            geometry.vertex_facts[vertex_id].position
-            for vertex_id in node.vertex_ids
-            if vertex_id in geometry.vertex_facts
-        ]
-        if positions:
-            rows[node.id] = tuple(
-                sum(position[index] for position in positions) / len(positions)
-                for index in range(3)
-            )
-    return rows
-
-
-def _edge_axis_sign(start_node_id, end_node_id, node_position_by_id, rail_direction, evidence):
-    start = node_position_by_id.get(start_node_id)
-    end = node_position_by_id.get(end_node_id)
-    if start is None or end is None or _vector_length(rail_direction) == 0.0:
-        return int(evidence.orientation_sign)
-    edge_direction = tuple(end[index] - start[index] for index in range(3))
-    if _vector_length(edge_direction) == 0.0:
-        return int(evidence.orientation_sign)
-    return 1 if _dot(_normalize(edge_direction), rail_direction) >= 0.0 else -1
-
-
-def _dot(first, second):
-    return sum(first[index] * second[index] for index in range(3))
-
-
-def _vector_length(vector):
-    return sqrt(sum(value * value for value in vector))
-
-
-def _normalize(vector):
-    size = _vector_length(vector)
-    if size == 0.0:
-        return (0.0, 0.0, 0.0)
-    return tuple(value / size for value in vector)
+    return [rows_by_key[key] for key in sorted(rows_by_key)]
 
 
 def _component_by_node(components):
@@ -288,6 +218,7 @@ def _solve_axis(
     component_by_node,
     chain_rows,
     seed_nodes_by_island,
+    excluded_components,
 ):
     component_ids = sorted(components)
     variable_index = {component_id: index for index, component_id in enumerate(component_ids)}
@@ -300,6 +231,8 @@ def _solve_axis(
         first_component = component_by_node.get(row["start_node_id"])
         second_component = component_by_node.get(row["end_node_id"])
         if first_component is None or second_component is None or first_component == second_component:
+            continue
+        if first_component in excluded_components or second_component in excluded_components:
             continue
         rhs_value = row["orientation_sign"] * row["length"]
         matrix_row = [0.0] * len(component_ids)
@@ -322,7 +255,7 @@ def _solve_axis(
         if seed_node_id is None:
             continue
         component_id = component_by_node.get(seed_node_id)
-        if component_id is None or component_id in gauged:
+        if component_id is None or component_id in excluded_components or component_id in gauged:
             continue
         matrix_row = [0.0] * len(component_ids)
         matrix_row[variable_index[component_id]] = GAUGE_WEIGHT
@@ -353,7 +286,7 @@ def _solve_axis(
     constrained = _constrained_components(chain_rows, equation_role, component_by_node) | gauged
     unconstrained = tuple(
         component_id for component_id in component_ids
-        if component_id not in constrained
+        if component_id not in constrained or component_id in excluded_components
     )
     return AxisSystem(
         coordinate_name=coordinate_name,
@@ -484,6 +417,40 @@ def _write_back(assignments, canonical_vertices):
     }
 
 
+def _axis_parallel_invariant(chain_rows, systems):
+    violations = []
+    skipped = 0
+    for row in chain_rows:
+        if row["axis_role"] == "AXIS_A":
+            start_coord, _ = _coord_for_node(systems["B"], row["start_node_id"])
+            end_coord, _ = _coord_for_node(systems["B"], row["end_node_id"])
+        elif row["axis_role"] == "AXIS_B":
+            start_coord, _ = _coord_for_node(systems["A"], row["start_node_id"])
+            end_coord, _ = _coord_for_node(systems["A"], row["end_node_id"])
+        else:
+            continue
+        if start_coord is None or end_coord is None:
+            skipped += 1
+            continue
+        cross_axis_delta = float(end_coord) - float(start_coord)
+        if abs(cross_axis_delta) <= AXIS_PARALLEL_TOLERANCE:
+            continue
+        violations.append({
+            "island_id": row["island_id"],
+            "axis_role": row["axis_role"],
+            "chain_id": row["chain_id"],
+            "patch_chain_id": row["patch_chain_id"],
+            "cross_axis_delta": round(cross_axis_delta, 12),
+        })
+    return {
+        "tolerance": AXIS_PARALLEL_TOLERANCE,
+        "checked_count": len(chain_rows) - skipped,
+        "skipped_count": skipped,
+        "violation_count": len(violations),
+        "violations": violations[:10],
+    }
+
+
 def _canonical_coverage(canonical_vertices):
     counts = {0: 0, 1: 0, 2: 0}
     for row in canonical_vertices.values():
@@ -513,9 +480,18 @@ def _spread_report(components, scaffold_nodes, source_snapshot):
                     positions.append(source_vertex.position)
         report[component_id] = {
             "source_position_spread": round(_max_position_spread(positions), 6),
-            "unconstrained_by_spread": False,
+            "spread_tolerance": COMPONENT_SPREAD_TOLERANCE,
+            "unconstrained_by_spread": _max_position_spread(positions) > COMPONENT_SPREAD_TOLERANCE,
         }
     return report
+
+
+def _spread_unconstrained_components(spread_checks):
+    return frozenset(
+        component_id
+        for component_id, row in spread_checks.items()
+        if row.get("unconstrained_by_spread")
+    )
 
 
 def _max_position_spread(positions):

@@ -37,6 +37,7 @@ def build_console_diagnostics(layout):
     histogram = diagnostics["rejected_stitch_defect_histogram"]
     axis = diagnostics["axis_components"]
     coverage = diagnostics["axis_coord_coverage_percent"]
+    invariant = layout["skeleton_solve"]["axis_parallel_invariant"]
     lines = [
         "ARCHITECT SUMMARY",
         f"fixture={layout['fixture']} islands={summary['island_count']} rails={summary['rail_count']}",
@@ -49,6 +50,8 @@ def build_console_diagnostics(layout):
         f"components A={axis['A_component_count']} B={axis['B_component_count']}",
         "lstsq residuals "
         f"A={summary['skeleton_solve_residual_A']} B={summary['skeleton_solve_residual_B']}",
+        f"invariant_violations={invariant['violation_count']} oblique_count={summary['unfolded_frame_oblique_count']} "
+        f"unconstrained_components={summary['skeleton_solve_unconstrained_component_count']}",
         "degenerate islands="
         f"{','.join(diagnostics['degenerate_island_ids']) if diagnostics['degenerate_island_ids'] else 'none'}",
     ]

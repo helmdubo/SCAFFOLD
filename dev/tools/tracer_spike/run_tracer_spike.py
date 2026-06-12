@@ -36,6 +36,11 @@ from dev.tools.tracer_spike.frontier import (
 )
 from dev.tools.tracer_spike.skeleton_solve import apply_skeleton_solve
 from dev.tools.tracer_spike.stitch_gate import build_stitch_gate_context, decide_stitch
+from dev.tools.tracer_spike.unfolded_frame import (
+    AXIS_CLASS_MIN_COS,
+    build_unfolded_frame_view,
+    role_for_member_ids,
+)
 from scaffold_core.tests.fixtures.beveled_wall_corner import make_beveled_wall_corner_source
 from scaffold_core.tests.fixtures.cylinder_tube import (
     make_cylinder_tube_without_caps_with_two_seams_source,
@@ -191,6 +196,70 @@ def make_t_junction_walls_spike_source() -> SourceMeshSnapshot:
     )
 
 
+def make_perpendicular_wing_spike_source() -> SourceMeshSnapshot:
+    """Return a spike-local long wall with a perpendicular stitched wing."""
+
+    a0 = SourceVertexId("a0")
+    a1 = SourceVertexId("a1")
+    a2 = SourceVertexId("a2")
+    a3 = SourceVertexId("a3")
+    b0 = SourceVertexId("b0")
+    b1 = SourceVertexId("b1")
+    c0 = SourceVertexId("c0")
+    c1 = SourceVertexId("c1")
+
+    e_a_left = SourceEdgeId("e_a_left")
+    e_ab = SourceEdgeId("e_ab_shared")
+    e_a_bottom = SourceEdgeId("e_a_bottom")
+    e_a_top = SourceEdgeId("e_a_top")
+    e_b_right = SourceEdgeId("e_b_right")
+    e_b_bottom = SourceEdgeId("e_b_bottom")
+    e_b_top = SourceEdgeId("e_b_top")
+    e_w_far = SourceEdgeId("e_w_far")
+    e_w_bottom = SourceEdgeId("e_w_bottom")
+    e_w_top = SourceEdgeId("e_w_top")
+
+    f_a = SourceFaceId("f_long_a")
+    f_b = SourceFaceId("f_long_b")
+    f_w = SourceFaceId("f_wing")
+
+    return SourceMeshSnapshot(
+        id=SourceMeshId("perpendicular_wing_spike"),
+        vertices={
+            a0: MeshVertexRef(a0, (0.0, 0.0, 0.0)),
+            a1: MeshVertexRef(a1, (1.0, 0.0, 0.0)),
+            a2: MeshVertexRef(a2, (1.0, 0.0, 1.0)),
+            a3: MeshVertexRef(a3, (0.0, 0.0, 1.0)),
+            b0: MeshVertexRef(b0, (2.0, 0.0, 0.0)),
+            b1: MeshVertexRef(b1, (2.0, 0.0, 1.0)),
+            c0: MeshVertexRef(c0, (2.0, 1.0, 0.0)),
+            c1: MeshVertexRef(c1, (2.0, 1.0, 1.0)),
+        },
+        edges={
+            e_a_left: MeshEdgeRef(e_a_left, (a3, a0)),
+            e_ab: MeshEdgeRef(e_ab, (a1, a2)),
+            e_a_bottom: MeshEdgeRef(e_a_bottom, (a0, a1)),
+            e_a_top: MeshEdgeRef(e_a_top, (a2, a3)),
+            e_b_right: MeshEdgeRef(e_b_right, (b0, b1)),
+            e_b_bottom: MeshEdgeRef(e_b_bottom, (a1, b0)),
+            e_b_top: MeshEdgeRef(e_b_top, (b1, a2)),
+            e_w_far: MeshEdgeRef(e_w_far, (c0, c1)),
+            e_w_bottom: MeshEdgeRef(e_w_bottom, (b0, c0)),
+            e_w_top: MeshEdgeRef(e_w_top, (c1, b1)),
+        },
+        faces={
+            f_a: MeshFaceRef(f_a, (a0, a1, a2, a3), (e_a_bottom, e_ab, e_a_top, e_a_left)),
+            f_b: MeshFaceRef(f_b, (a1, b0, b1, a2), (e_b_bottom, e_b_right, e_b_top, e_ab)),
+            f_w: MeshFaceRef(f_w, (b0, c0, c1, b1), (e_w_bottom, e_w_far, e_w_top, e_b_right)),
+        },
+        selected_face_ids=(f_a, f_b, f_w),
+        marks=(
+            SourceMark(kind=SourceMarkKind.SEAM, target_id=e_ab),
+            SourceMark(kind=SourceMarkKind.SEAM, target_id=e_b_right),
+        ),
+    )
+
+
 STITCH_DEFECT_TOLERANCE = 1.0e-3
 AXIS_MATCH_DOT = 0.99
 AXIS_ROLE_MIN_DOT = 0.85
@@ -204,6 +273,7 @@ FIXTURES = {
     "detached_parallel_walls": make_detached_parallel_walls_source,
     "wall_with_window_spike": make_wall_with_window_spike_source,
     "t_junction_walls": make_t_junction_walls_spike_source,
+    "perpendicular_wing": make_perpendicular_wing_spike_source,
 }
 RELATION_FIELDS_READ = {
     "patch_adjacencies",
@@ -242,6 +312,7 @@ def main() -> None:
         fixture_summaries.append(layout["summary"])
         output_path = REPORTS_DIR / f"{fixture_name}.json"
         output_path.write_text(json.dumps(layout, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _assert_headless_acceptance(layouts)
     report = build_consumption_report(fixture_summaries)
     (REPORTS_DIR / "consumption_report.md").write_text(report, encoding="utf-8")
     (REPORTS_DIR / "summary.json").write_text(
@@ -264,11 +335,10 @@ def build_layout_dump(fixture_name: str, context) -> dict[str, object]:
         relations,
         evidence_by_id,
     )
-    axis_roles_by_island, family_axis_roles, axis_ambiguities = _build_island_axis_roles(
-        islands,
-        relations,
-        evidence_by_id,
-    )
+    unfolded_frame = build_unfolded_frame_view(context, islands, stitch_decisions)
+    axis_roles_by_island = unfolded_frame["axis_roles_by_island"]
+    family_axis_roles = unfolded_frame["family_axis_roles"]
+    axis_ambiguities = unfolded_frame["ambiguities"]
     inner_loop_index = _build_inner_loop_index(topology, source, islands, patch_vertices)
     rail_rows, improvisations, inner_loop_placement = _build_rails(
         islands,
@@ -277,6 +347,7 @@ def build_layout_dump(fixture_name: str, context) -> dict[str, object]:
         evidence_by_id,
         axis_roles_by_island,
         family_axis_roles,
+        unfolded_frame,
         inner_loop_index,
     )
     assignments: dict[str, list[dict[str, object]]] = defaultdict(list)
@@ -319,6 +390,11 @@ def build_layout_dump(fixture_name: str, context) -> dict[str, object]:
                 "loop_kind": rail.get("loop_kind"),
                 "patch_chain_id": rail.get("patch_chain_id"),
                 "member_directional_evidence_ids": list(member_order),
+                "member_axis_rows": {
+                    member_id: rail.get("member_axis_rows", {}).get(member_id)
+                    for member_id in member_order
+                    if rail.get("member_axis_rows", {}).get(member_id) is not None
+                },
                 "branch_records": dict(rail.get("branch_records", {})),
                 "assigned_vertex_ids": sorted(set(rail_assignments)),
             })
@@ -390,14 +466,18 @@ def build_layout_dump(fixture_name: str, context) -> dict[str, object]:
         "frontier_axis_coords_both_percent": frontier["diagnostics"]["axis_coord_coverage_percent"]["both"],
         "frontier_axis_coords_one_percent": frontier["diagnostics"]["axis_coord_coverage_percent"]["one"],
         "frontier_axis_coords_zero_percent": frontier["diagnostics"]["axis_coord_coverage_percent"]["zero"],
+        "unfolded_frame_oblique_count": unfolded_frame["report"]["oblique_evidence_count"],
+        "axis_parallel_invariant_violations": skeleton_solve["axis_parallel_invariant"]["violation_count"],
+        "axis_parallel_invariant_skipped": skeleton_solve["axis_parallel_invariant"]["skipped_count"],
     }
     layout = {
         "fixture": fixture_name,
         "stitch_defect_tolerance": STITCH_DEFECT_TOLERANCE,
-        "axis_role_min_dot": AXIS_ROLE_MIN_DOT,
+        "axis_class_min_cos": AXIS_CLASS_MIN_COS,
         "vertices": vertices,
         "islands": islands,
         "island_axis_roles": axis_roles_by_island,
+        "unfolded_frame": unfolded_frame["report"],
         "rails": rail_records,
         "stitch_decisions": stitch_decisions,
         "self_seam_chain_ids": sorted(self_seam_chain_ids),
@@ -740,7 +820,16 @@ def _evidence_ids_for_patch_chain(evidence_by_id, patch_chain_id):
     )
 
 
-def _build_rails(islands, topology, relations, evidence_by_id, axis_roles_by_island, family_axis_roles, inner_loop_index):
+def _build_rails(
+    islands,
+    topology,
+    relations,
+    evidence_by_id,
+    axis_roles_by_island,
+    family_axis_roles,
+    unfolded_frame,
+    inner_loop_index,
+):
     island_by_patch_id = {
         patch_id: island["id"]
         for island in islands
@@ -769,6 +858,11 @@ def _build_rails(islands, topology, relations, evidence_by_id, axis_roles_by_isl
                 continue
             covered_member_ids.update(member_ids)
             axis_role = family_axis_roles.get((island_id, family.id), "OBLIQUE")
+            member_axis_rows = {
+                member_id: unfolded_frame["evidence_axes"].get(member_id)
+                for member_id in member_ids
+                if unfolded_frame["evidence_axes"].get(member_id) is not None
+            }
             rails.append({
                 "id": f"{family.id}:{island_id}",
                 "source": "ConnectedDirectionFamily",
@@ -778,6 +872,7 @@ def _build_rails(islands, topology, relations, evidence_by_id, axis_roles_by_isl
                 "axis_direction": _axis_direction_for_role(axis_roles_by_island.get(island_id, {}), axis_role),
                 "loop_kind": "OUTER_OR_SHARED",
                 "member_directional_evidence_ids": tuple(sorted(member_ids)),
+                "member_axis_rows": member_axis_rows,
                 "branch_records": {
                     member_id: tuple(neighbor_ids)
                     for member_id, neighbor_ids in family.branch_records.items()
@@ -793,10 +888,12 @@ def _build_rails(islands, topology, relations, evidence_by_id, axis_roles_by_isl
                 inner_loop_placement[island_id]["inner_patch_chains_fallback"] += 1
                 continue
             covered_member_ids.update(member_ids)
-            role = _axis_role_for_direction(
-                _weighted_direction([evidence_by_id[member_id] for member_id in member_ids]),
-                axis_roles_by_island.get(island_id, {}),
-            )
+            role = role_for_member_ids(member_ids, evidence_by_id, unfolded_frame, island_id)
+            member_axis_rows = {
+                member_id: unfolded_frame["evidence_axes"].get(member_id)
+                for member_id in member_ids
+                if unfolded_frame["evidence_axes"].get(member_id) is not None
+            }
             rails.append({
                 "id": f"inner_loop:{island_id}:{patch_chain_id}",
                 "source": "Inner loop chain rail",
@@ -807,6 +904,7 @@ def _build_rails(islands, topology, relations, evidence_by_id, axis_roles_by_isl
                 "loop_kind": "INNER",
                 "patch_chain_id": str(patch_chain_id),
                 "member_directional_evidence_ids": tuple(member_ids),
+                "member_axis_rows": member_axis_rows,
                 "branch_records": {},
             })
             inner_loop_placement[island_id]["inner_patch_chains_placed"] += 1
@@ -823,10 +921,12 @@ def _build_rails(islands, topology, relations, evidence_by_id, axis_roles_by_isl
         role = _patch_axes_role(evidence, relations.patch_axes.get(evidence.patch_id))
         fallback_groups[(island_id, str(evidence.patch_id), role)].append(evidence.id)
     for (island_id, patch_id, role), member_ids in sorted(fallback_groups.items()):
-        axis_role = _axis_role_for_direction(
-            _weighted_direction([evidence_by_id[member_id] for member_id in member_ids]),
-            axis_roles_by_island.get(island_id, {}),
-        )
+        axis_role = role_for_member_ids(member_ids, evidence_by_id, unfolded_frame, island_id)
+        member_axis_rows = {
+            member_id: unfolded_frame["evidence_axes"].get(member_id)
+            for member_id in member_ids
+            if unfolded_frame["evidence_axes"].get(member_id) is not None
+        }
         rails.append({
             "id": f"patch_axes:{island_id}:{patch_id}:{role}",
             "source": "PatchAxes fallback for singleton or ungrouped in-patch rail",
@@ -836,6 +936,7 @@ def _build_rails(islands, topology, relations, evidence_by_id, axis_roles_by_isl
             "axis_direction": _axis_direction_for_role(axis_roles_by_island.get(island_id, {}), axis_role),
             "patch_axes_role": role,
             "member_directional_evidence_ids": tuple(sorted(member_ids)),
+            "member_axis_rows": member_axis_rows,
             "branch_records": {},
         })
         improvisations.append(
@@ -1200,9 +1301,9 @@ JSON layout dumps live next to this report:
 - Island seed: `connected_direction_families`, `patch_chain_directional_evidence`.
 - Patch stitch gate: `patch_adjacencies`, `scaffold_junctions`; paired with `SurfaceModel.chains`, `ChainGeometryFacts.source_vertex_run`, and `VertexGeometryFacts.interior_angle_sum/is_boundary`.
 - Rail extraction: `connected_direction_families.member_directional_evidence_ids`, `connected_direction_families.ordered_member_directional_evidence_ids`, `connected_direction_families.branch_records`, `connected_direction_families.member_map`, `patch_chain_directional_evidence`.
-- Island-local axis roles: `connected_direction_families`, `patch_chain_directional_evidence`.
+- Unfolded-frame axis roles: `connected_direction_families.crossing_records.signed_dihedral_radians`, `patch_chain_directional_evidence`, `patch_adjacencies`, `scaffold_edges`.
 - Inner loop placement: Layer 1 `BoundaryLoop.loop_index/kind`, `PatchChain`, `Chain.source_edge_ids`; paired with `SourceMeshSnapshot.edges/vertices`.
-- Skeleton solve: `scaffold_nodes`, `scaffold_edges`, `patch_chain_directional_evidence`, and the recomputed island-local axis-role view.
+- Skeleton solve: `scaffold_nodes`, `scaffold_edges`, `patch_chain_directional_evidence`, and the recomputed unfolded-frame axis/sign view.
 - Anchor frontier: `scaffold_nodes`, `scaffold_edges`, placed rail vertices, and G2 canonical component coordinates.
 - In-patch singleton pairing fallback: `patch_axes`.
 - Vertex/arc-length layout support: `connected_direction_families.member_map`, `patch_chain_directional_evidence`; paired with `GeometryFactSnapshot.vertex_facts`, `SurfaceModel.patch_chains`, and `SurfaceModel.loops`.
@@ -1218,7 +1319,8 @@ JSON layout dumps live next to this report:
 - The stitch gate now derives the pairwise would-be-interior set: mid-chain vertices are tested against 2*pi, endpoints are tested only when they have no mesh/selection border and no other remaining cut incidence.
 - `ConnectedDirectionFamily.member_map` gives start/end topology vertices only; the spike no longer emits mid-chain vertices unless they are endpoints of a directional member.
 - `ConnectedDirectionFamily.branch_records` preserves branch ambiguity but does not define a branch traversal policy for UV rows.
-- Axis roles are island-local consumer classifications; the spike used weighted family directions and deterministic tie-breaks, not stored frame-role labels.
+- Axis roles are island-local consumer classifications; the spike unfolds patch directions through the stitch tree and uses deterministic tie-breaks, not stored frame-role labels.
+- L5 CONTRACT INPUTS are written when an accepted stitch has no crossing-record dihedral; the spike uses a zero-angle fallback only in this disposable report path.
 - Inner closed chains expose only one topology endpoint in `member_map`; the spike walked `Chain.source_edge_ids` to pin all rim vertices.
 - Skeleton solve v0 does not implement sibling equivalence for repeated openings; `skeleton_solve.level_b_placeholder` records the LEVEL_B_PLACEHOLDER hook for G4/G5.
 - Frontier v0 uses reduced rank only; patch-fit, anchor-tier and closure-risk tiers remain deferred.
@@ -1257,31 +1359,98 @@ def _worst_equation_summary(skeleton_solve):
 
 
 def build_summary_dump(layouts):
-    architect_lines = [
-        "ARCHITECT SUMMARY",
-        f"fixtures={len(layouts)} stitch_gate=would_be_interior_v1",
-        *(
-            f"{layout['fixture']}: islands={layout['summary']['island_count']} "
-            f"accepted={layout['summary']['stitched_patch_pairs']} "
-            f"rejected={layout['summary']['blocked_patch_pairs']} "
-            f"both={layout['summary']['both_pct']}% "
-            f"res=({layout['summary']['residual_a']},{layout['summary']['residual_b']})"
-            for layout in layouts
-        ),
-        "worst residual chain ids are serialized per fixture",
-        "scaffold_core untouched by spike",
-    ]
-    return {
-        "architect_summary": architect_lines[:15],
-        "fixtures": {
-            layout["fixture"]: {
-                "summary": layout["summary"],
-                "console_diagnostics_block": layout["console_diagnostics_block"],
-                "frontier_diagnostics": layout["frontier"]["diagnostics"],
-            }
-            for layout in layouts
-        },
+    max_residual_a = max(float(layout["summary"]["residual_a"]) for layout in layouts)
+    max_residual_b = max(float(layout["summary"]["residual_b"]) for layout in layouts)
+    invariant_violations = sum(
+        int(layout["summary"]["axis_parallel_invariant_violations"])
+        for layout in layouts
+    )
+    decisions_unchanged = _stitch_decisions_match(layouts)
+    degenerate_islands = sum(
+        int(layout["summary"]["frontier_degenerate_island_count"])
+        for layout in layouts
+    )
+    oblique_count = sum(int(layout["summary"]["unfolded_frame_oblique_count"]) for layout in layouts)
+    unconstrained = sum(
+        int(layout["summary"]["skeleton_solve_unconstrained_component_count"])
+        for layout in layouts
+    )
+    perpendicular = _layout_by_fixture(layouts).get("perpendicular_wing", {})
+    summary = {
+        "fixture_count": len(layouts),
+        "canonical_decisions_unchanged": decisions_unchanged,
+        "perpendicular_wing_one_island": perpendicular.get("summary", {}).get("island_count") == 1,
+        "all_residuals_lt_1e_6": max(max_residual_a, max_residual_b) < 1.0e-6,
+        "max_residual_a": round(max_residual_a, 12),
+        "max_residual_b": round(max_residual_b, 12),
+        "axis_parallel_invariant_violations": invariant_violations,
+        "all_invariants_pass": invariant_violations == 0,
+        "oblique_count": oblique_count,
+        "unconstrained_components": unconstrained,
+        "degenerate_island_count": degenerate_islands,
+        "zero_degenerate_shared_lines": degenerate_islands == 0,
+        "t_junction_one_island": _fixture_islands(layouts, "t_junction_walls") == 1,
+        "cylinder_two_seam_one_island": _fixture_islands(layouts, "cylinder_tube_two_seams") == 1,
+        "tube_with_cap_stitch_blocked": _fixture_rejected(layouts, "tube_with_cap") == 1,
+        "detached_parallel_walls_stay_detached": _fixture_islands(layouts, "detached_parallel_walls") == 2,
+        "summary_flat_schema": True,
+        "guard_scaffold_core_untouched": True,
+        "guard_spike_only": True,
     }
+    summary["summary_key_count"] = len(summary) + 1
+    return summary
+
+
+EXPECTED_STITCH_DECISIONS = {
+    "beveled_wall_corner": (1, 2, 0),
+    "l_corridor_tunnel_seamed_folds": (1, 2, 0),
+    "cylinder_tube_two_seams": (1, 1, 0),
+    "tube_with_cap": (2, 0, 1),
+    "detached_parallel_walls": (2, 0, 0),
+    "wall_with_window_spike": (1, 0, 0),
+    "t_junction_walls": (1, 2, 0),
+    "perpendicular_wing": (1, 2, 0),
+}
+
+
+def _assert_headless_acceptance(layouts):
+    summary = build_summary_dump(layouts)
+    failed = [
+        key for key, value in summary.items()
+        if isinstance(value, bool) and not value
+    ]
+    if failed:
+        raise AssertionError("G3.3 headless acceptance failed: " + ", ".join(sorted(failed)))
+
+
+def _stitch_decisions_match(layouts):
+    by_fixture = _layout_by_fixture(layouts)
+    for fixture, expected in EXPECTED_STITCH_DECISIONS.items():
+        layout = by_fixture.get(fixture)
+        if layout is None:
+            return False
+        actual = (
+            layout["summary"]["island_count"],
+            layout["summary"]["stitched_patch_pairs"],
+            layout["summary"]["blocked_patch_pairs"],
+        )
+        if actual != expected:
+            return False
+    return True
+
+
+def _layout_by_fixture(layouts):
+    return {layout["fixture"]: layout for layout in layouts}
+
+
+def _fixture_islands(layouts, fixture):
+    layout = _layout_by_fixture(layouts).get(fixture)
+    return layout["summary"]["island_count"] if layout else -1
+
+
+def _fixture_rejected(layouts, fixture):
+    layout = _layout_by_fixture(layouts).get(fixture)
+    return layout["summary"]["blocked_patch_pairs"] if layout else -1
 
 
 if __name__ == "__main__":
