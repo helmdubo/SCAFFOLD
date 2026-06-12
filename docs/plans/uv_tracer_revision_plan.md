@@ -610,6 +610,37 @@ bug catcher, keeps the P7 spread/UNCONSTRAINED safety, and remains the
 last spike iteration: after it, G4 verdict and Layer 5 contract drafting
 regardless of outcome.
 
+### G4 VERDICT (issued from headless proof, spike frozen)
+
+Root cause of the persistent diagonal drift on walls.013 — PROVEN on the
+bevel fixture without further Blender runs: granularity mismatch. The
+rail atom is the directional RUN, but skeleton equations connect the
+endpoint ScaffoldNodes of whole coalesced Chains (skeleton_solve.py
+_axis_chain_rows): a three-side border chain (runs 0.9/1.0/0.9 across
+two axes) contributes contradictory equations about ONE node pair, and
+mid-chain corner vertices are not graph nodes at all. Symmetric
+fixtures cancel the contradiction; real multi-face patches (f0/f3 with
+windows) do not -> lstsq smears -> diagonals. This is the DD-30 deferred
+refinement debt coming due: L1 coalescing stays correct (DD-29), the
+missing piece is a Layer 3 entity exposing run-endpoint junction nodes.
+
+Spike disposition: FROZEN per guard 1. Structural mission complete:
+island assembly, defect gate, T-junction interior set, unfolded frame,
+selection-wide grids are validated; the one remaining gap is named and
+proven. Next slice (H) builds it in core, not in the spike.
+
+## Slice H — Run-endpoint junctions + Layer 5 contracts (next)
+
+H1: Layer 3 run-endpoint junction evidence (rail-atom nodes: corner
+    vertices interior to coalesced chains, derived from
+    ChainDirectionalRun segments; closes the remaining OQ-11 chain-vs-
+    run tension). Canonical fixture: the bevel wall multi-run border.
+H2: G5 contract drafts from accumulated consumption reports and spike
+    invariants (skeleton node := ScaffoldNode UNION run endpoints;
+    axis-parallel invariant; UNCONSTRAINED exclusion; T-junction
+    interior set; SEAM_SELF split; degradation with diagnostics).
+    Architect drafts, user approves phase start.
+
 ### Task Card G4 — walls.004 validation gate
 
 User reruns Blender spike v3 on walls.004 after G1-G3. Pass criteria:
