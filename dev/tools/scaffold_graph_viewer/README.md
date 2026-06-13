@@ -72,6 +72,16 @@ Selection behavior matches Scaffold read semantics:
 
 ## Visual Model
 
+The default **Topology compact** view is the QA view for shape reading. It
+groups looped PatchChain uses by `chain_id`, expands each loop into one visible
+ring from its ordered trace members when available, and draws non-loop
+PatchChains as bridges between loop groups. For example, a capped cylinder with
+one tube seam should read as two loop groups joined by one seam bridge.
+
+Use **Raw evidence** when you need to inspect every exported relation edge
+directly. It is intentionally noisier because it overlays ScaffoldEdges,
+RunEndpointJunctions, DirectionFamilies, Traces and Rails.
+
 The viewer distinguishes canonical graph facts from display-only aliases:
 
 ```text
@@ -80,6 +90,8 @@ visual_id: canvas-only id used when a loop or coincident endpoint needs an alias
 ```
 
 Alias nodes are presentation only. They never mean new Scaffold Core identity.
+Topology compact loop groups are presentation only too; click a loop or bridge
+to inspect its backing `chain_id`, `patch_chain_ids` and `scaffold_edge_ids`.
 
 Layer meaning:
 

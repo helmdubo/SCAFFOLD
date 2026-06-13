@@ -4,6 +4,7 @@ const state = {
   layoutSeed: 1,
   selectedId: null,
   selectedKind: null,
+  viewMode: "topology",
   layers: {
     scaffoldEdges: true,
     runEndpoints: true,
@@ -21,6 +22,7 @@ const relayoutButton = document.getElementById("relayoutButton");
 const unrollToggle = document.getElementById("unrollToggle");
 const labelsToggle = document.getElementById("labelsToggle");
 const zoomRange = document.getElementById("zoomRange");
+const viewModeInputs = document.querySelectorAll('input[name="viewMode"]');
 const searchBox = document.getElementById("searchBox");
 const searchResults = document.getElementById("searchResults");
 const payloadMeta = document.getElementById("payloadMeta");
@@ -82,6 +84,10 @@ function normalizePayload(raw) {
 }
 
 function buildGraph(payload) {
+  return state.viewMode === "topology" ? buildTopologyGraph(payload) : buildEvidenceGraph(payload);
+}
+
+function buildEvidenceGraph(payload) {
   const inspection = payload.inspection || {};
   const relations = inspection.relations || {};
   const nodes = new Map();
@@ -282,6 +288,236 @@ function buildGraph(payload) {
   };
 }
 
+function buildTopologyGraph(payload) {
+  const inspection = payload.inspection || {};
+  const relations = inspection.relations || {};
+  const nodes = new Map();
+  const edges = [];
+  const rawItems = new Map();
+  const scaffoldEdges = relations.scaffold_edges || [];
+  const traces = relations.scaffold_traces || [];
+  const loopGroupsByChain = new Map();
+  const canonicalToLoopNode = new Map();
+
+  function addNode(node) {
+    if (!node.id || nodes.has(node.id)) return;
+    nodes.set(node.id, {
+      label: compactId(node.id),
+      subtype: "",
+      x: 0,
+      y: 0,
+      alias: false,
+      ambiguous: false,
+      ...node,
+    });
+    rawItems.set(node.id, { kind: node.kind, raw: node.raw || {} });
+  }
+
+  function addEdge(edge) {
+    if (!edge.source || !edge.target) return;
+    edges.push(edge);
+    rawItems.set(edge.id, { kind: edge.kind, raw: edge.raw || edge });
+  }
+
+  for (const edge of scaffoldEdges) {
+    if (edge.start_scaffold_node_id !== edge.end_scaffold_node_id) continue;
+    const chainId = edge.chain_id || edge.patch_chain_id || edge.id;
+    if (!loopGroupsByChain.has(chainId)) {
+      loopGroupsByChain.set(chainId, {
+        id: `loop-group:${chainId}`,
+        chainId,
+        selfEdges: [],
+        patchChainIds: new Set(),
+        patchIds: new Set(),
+        anchorNodeIds: new Set(),
+      });
+    }
+    const group = loopGroupsByChain.get(chainId);
+    group.selfEdges.push(edge);
+    if (edge.patch_chain_id) group.patchChainIds.add(edge.patch_chain_id);
+    if (edge.patch_id) group.patchIds.add(edge.patch_id);
+    if (edge.start_scaffold_node_id) group.anchorNodeIds.add(edge.start_scaffold_node_id);
+    if (edge.end_scaffold_node_id) group.anchorNodeIds.add(edge.end_scaffold_node_id);
+  }
+
+  const loopGroups = Array.from(loopGroupsByChain.values()).sort((a, b) => a.chainId.localeCompare(b.chainId));
+
+  function bestTraceForGroup(group) {
+    const patchChainIds = group.patchChainIds;
+    const candidates = [];
+    for (const trace of traces) {
+      const members = (trace.members || []).filter((member) => patchChainIds.has(member.patch_chain_id));
+      if (members.length < 2) continue;
+      candidates.push({ trace, members });
+    }
+    candidates.sort((a, b) => {
+      if (b.members.length !== a.members.length) return b.members.length - a.members.length;
+      return String(a.trace.id).localeCompare(String(b.trace.id));
+    });
+    return candidates[0] || null;
+  }
+
+  function recordLoopNode(canonicalId, visualId, loopId) {
+    if (!canonicalId) return;
+    if (!canonicalToLoopNode.has(canonicalId)) canonicalToLoopNode.set(canonicalId, []);
+    canonicalToLoopNode.get(canonicalId).push({ visualId, loopId });
+  }
+
+  for (const [loopIndex, group] of loopGroups.entries()) {
+    const best = bestTraceForGroup(group);
+    const sequence = [];
+    if (best) {
+      for (const member of best.members) {
+        if (!sequence.length && member.start_trace_node_id) sequence.push(member.start_trace_node_id);
+        if (member.end_trace_node_id) sequence.push(member.end_trace_node_id);
+      }
+      if (sequence.length > 1 && sequence[0] === sequence[sequence.length - 1]) {
+        sequence.pop();
+      }
+    }
+    if (sequence.length < 2) {
+      sequence.push(...Array.from(group.anchorNodeIds).sort());
+    }
+    if (sequence.length < 2) {
+      sequence.push(`${group.id}:a`, `${group.id}:b`);
+    }
+
+    group.nodeIds = [];
+    group.memberCount = best?.members.length || 0;
+    group.patchUseCount = group.patchChainIds.size;
+    group.patchIdsList = Array.from(group.patchIds).sort();
+    group.patchChainIdsList = Array.from(group.patchChainIds).sort();
+    group.traceId = best?.trace.id || null;
+
+    sequence.forEach((canonicalId, index) => {
+      const visualId = `${group.id}:node:${index}`;
+      group.nodeIds.push(visualId);
+      recordLoopNode(canonicalId, visualId, group.id);
+      addNode({
+        id: visualId,
+        canonicalId,
+        label: compactId(canonicalId),
+        kind: canonicalId.startsWith("run_endpoint_junction:") ? "RunEndpointJunction" : "ScaffoldNode",
+        subtype: "topology-loop",
+        topologyLoopId: group.id,
+        topologyLoopIndex: loopIndex,
+        topologyOrder: index,
+        topologyCount: sequence.length,
+        raw: {
+          display_identity: "topology_loop_vertex",
+          canonical_id: canonicalId,
+          chain_id: group.chainId,
+          patch_ids: group.patchIdsList,
+          patch_chain_ids: group.patchChainIdsList,
+          trace_id: group.traceId,
+        },
+      });
+    });
+
+    for (let index = 0; index < group.nodeIds.length; index += 1) {
+      const source = group.nodeIds[index];
+      const target = group.nodeIds[(index + 1) % group.nodeIds.length];
+      addEdge({
+        id: `${group.id}:segment:${index}`,
+        source,
+        target,
+        kind: "TopologyLoopSegment",
+        layer: "scaffoldEdges",
+        label: `${group.patchUseCount} uses`,
+        color: colorForId(group.chainId),
+        raw: {
+          display_identity: "topology_loop_segment",
+          chain_id: group.chainId,
+          segment_index: index,
+          patch_ids: group.patchIdsList,
+          patch_chain_ids: group.patchChainIdsList,
+          source_scaffold_edges: group.selfEdges.map((item) => item.id),
+        },
+      });
+    }
+  }
+
+  const bridgeGroups = new Map();
+  for (const edge of scaffoldEdges) {
+    if (edge.start_scaffold_node_id === edge.end_scaffold_node_id) continue;
+    const sourceHits = canonicalToLoopNode.get(edge.start_scaffold_node_id) || [];
+    const targetHits = canonicalToLoopNode.get(edge.end_scaffold_node_id) || [];
+    if (!sourceHits.length || !targetHits.length) {
+      const source = `loose:${edge.start_scaffold_node_id}`;
+      const target = `loose:${edge.end_scaffold_node_id}`;
+      addNode({
+        id: source,
+        canonicalId: edge.start_scaffold_node_id,
+        label: compactId(edge.start_scaffold_node_id),
+        kind: "ScaffoldNode",
+        subtype: "loose",
+        raw: { display_identity: "loose_scaffold_node", canonical_id: edge.start_scaffold_node_id },
+      });
+      addNode({
+        id: target,
+        canonicalId: edge.end_scaffold_node_id,
+        label: compactId(edge.end_scaffold_node_id),
+        kind: "ScaffoldNode",
+        subtype: "loose",
+        raw: { display_identity: "loose_scaffold_node", canonical_id: edge.end_scaffold_node_id },
+      });
+      addEdge({
+        id: `topology-edge:${edge.id}`,
+        source,
+        target,
+        kind: "TopologyPatchChain",
+        layer: "scaffoldEdges",
+        label: compactId(edge.patch_chain_id),
+        color: "#ffc85a",
+        raw: edge,
+      });
+      continue;
+    }
+    const sourceHit = sourceHits[0];
+    const targetHit = targetHits[0];
+    const loopPair = [sourceHit.loopId, targetHit.loopId].sort().join("|");
+    const key = `${loopPair}|${edge.chain_id || edge.patch_chain_id || edge.id}`;
+    if (!bridgeGroups.has(key)) {
+      bridgeGroups.set(key, { source: sourceHit.visualId, target: targetHit.visualId, edges: [] });
+    }
+    bridgeGroups.get(key).edges.push(edge);
+  }
+
+  for (const [key, group] of bridgeGroups.entries()) {
+    const first = group.edges[0];
+    addEdge({
+      id: `topology-bridge:${key}`,
+      source: group.source,
+      target: group.target,
+      kind: "TopologyBridge",
+      layer: "scaffoldEdges",
+      label: group.edges.length > 1 ? `bridge x${group.edges.length}` : "bridge",
+      color: "#ffc85a",
+      raw: {
+        display_identity: "topology_bridge",
+        chain_id: first.chain_id || null,
+        patch_chain_ids: group.edges.map((item) => item.patch_chain_id),
+        scaffold_edge_ids: group.edges.map((item) => item.id),
+        source_scaffold_node_id: first.start_scaffold_node_id,
+        target_scaffold_node_id: first.end_scaffold_node_id,
+      },
+    });
+  }
+
+  return {
+    layout: "topology",
+    nodes: Array.from(nodes.values()),
+    edges,
+    aliases: [],
+    loopGroups,
+    bridgeCount: bridgeGroups.size,
+    relations,
+    inspection,
+    source: payload.source,
+    title: payload.title,
+  };
+}
+
 function visibleGraph(graph) {
   if (!graph) return { nodes: [], edges: [] };
   const visibleEdges = graph.edges.filter((edge) => {
@@ -296,6 +532,7 @@ function visibleGraph(graph) {
   const visibleNodes = graph.nodes.filter((node) => {
     if (node.kind === "RunEndpointJunction" && !state.layers.runEndpoints) return false;
     if (node.alias && !state.layers.ambiguities) return false;
+    if (node.kind === "TopologyLabel") return graph.layout === "topology";
     return usedNodeIds.has(node.id) || node.kind === "ScaffoldNode" || (state.layers.runEndpoints && node.kind === "RunEndpointJunction");
   });
   return { nodes: visibleNodes, edges: visibleEdges };
@@ -304,6 +541,10 @@ function visibleGraph(graph) {
 function layoutGraph(graph) {
   if (!graph) return;
   const { nodes, edges } = visibleGraph(graph);
+  if (graph.layout === "topology") {
+    layoutTopologyGraph(graph, nodes);
+    return;
+  }
   const width = svg.clientWidth || 900;
   const height = svg.clientHeight || 700;
   const cx = width / 2;
@@ -367,6 +608,60 @@ function layoutGraph(graph) {
   }
 }
 
+function layoutTopologyGraph(graph, visibleNodes) {
+  const width = svg.clientWidth || 900;
+  const height = svg.clientHeight || 700;
+  const loopGroups = graph.loopGroups || [];
+  const visibleById = new Map(visibleNodes.map((node) => [node.id, node]));
+  const count = Math.max(1, loopGroups.length);
+  const radius = Math.max(86, Math.min(145, width / Math.max(5.8, count * 3.1), height * 0.24));
+  const centerY = height / 2 + 18;
+  const usable = Math.max(radius * 2.4, width - 260);
+  const startX = width / 2 - usable / 2;
+  const stepX = count === 1 ? 0 : usable / (count - 1);
+
+  loopGroups.forEach((group, index) => {
+    const centerX = count === 1 ? width / 2 : startX + stepX * index;
+    const nodeIds = group.nodeIds || [];
+    const phase = index % 2 === 0 ? 0 : Math.PI;
+    nodeIds.forEach((nodeId, order) => {
+      const node = visibleById.get(nodeId);
+      if (!node) return;
+      const angle = phase + (order / Math.max(1, nodeIds.length)) * Math.PI * 2;
+      node.x = centerX + Math.cos(angle) * radius;
+      node.y = centerY + Math.sin(angle) * radius;
+    });
+
+    const labelId = `${group.id}:label`;
+    if (!visibleById.has(labelId) && !graph.nodes.some((node) => node.id === labelId)) {
+      graph.nodes.push({
+        id: labelId,
+        canonicalId: group.chainId,
+        label: `loop ${index + 1}`,
+        kind: "TopologyLabel",
+        subtype: "topology-label",
+        alias: false,
+        ambiguous: false,
+        x: centerX,
+        y: centerY,
+        raw: {
+          display_identity: "topology_loop_label",
+          chain_id: group.chainId,
+          patch_ids: group.patchIdsList,
+          patch_chain_ids: group.patchChainIdsList,
+          trace_id: group.traceId,
+          member_count: group.memberCount,
+        },
+      });
+    }
+    const label = graph.nodes.find((node) => node.id === labelId);
+    if (label) {
+      label.x = centerX;
+      label.y = centerY;
+    }
+  });
+}
+
 function render() {
   if (!state.graph) {
     svg.innerHTML = "";
@@ -379,6 +674,7 @@ function render() {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const zoom = Number(zoomRange.value || 100) / 100;
   const labels = labelsToggle.checked;
+  const nodeLabels = labels && state.graph.layout !== "topology";
   const width = svg.clientWidth || 900;
   const height = svg.clientHeight || 700;
   svg.setAttribute("viewBox", `${(width - width / zoom) / 2} ${(height - height / zoom) / 2} ${width / zoom} ${height / zoom}`);
@@ -389,7 +685,16 @@ function render() {
     if (!a || !b) return "";
     const mx = (a.x + b.x) / 2;
     const my = (a.y + b.y) / 2;
-    const classes = ["edge", edge.layer === "rails" ? "rail" : "", edge.layer === "traces" ? "trace" : "", edge.kind === "VisualAlias" ? "alias-link" : "", edge.kind.includes("Ambigu") ? "ambiguity" : ""].filter(Boolean).join(" ");
+    const classes = [
+      "edge",
+      edge.layer === "families" ? "family" : "",
+      edge.layer === "rails" ? "rail" : "",
+      edge.layer === "traces" ? "trace" : "",
+      edge.kind === "TopologyLoopSegment" ? "topology-loop" : "",
+      edge.kind === "TopologyBridge" ? "topology-bridge" : "",
+      edge.kind === "VisualAlias" ? "alias-link" : "",
+      edge.kind.includes("Ambigu") ? "ambiguity" : "",
+    ].filter(Boolean).join(" ");
     const isSelected = state.selectedKind === "edge" && state.selectedId === edge.id;
     const selected = isSelected ? " selected" : "";
     return `
@@ -401,16 +706,25 @@ function render() {
   }).join("");
 
   const nodeMarkup = nodes.map((node) => {
+    if (node.kind === "TopologyLabel") {
+      const raw = node.raw || {};
+      return `
+        <g class="topology-label" data-kind="node" data-id="${escapeAttr(node.id)}">
+          <rect class="topology-label-hit" x="${(node.x - 76).toFixed(1)}" y="${(node.y - 30).toFixed(1)}" width="152" height="50"></rect>
+          <text class="loop-title" x="${node.x.toFixed(1)}" y="${(node.y - 8).toFixed(1)}">${escapeText(node.label)}</text>
+          <text class="loop-subtitle" x="${node.x.toFixed(1)}" y="${(node.y + 10).toFixed(1)}">${escapeText(`${(raw.patch_chain_ids || []).length} patch uses, ${raw.member_count || 0} members`)}</text>
+        </g>`;
+    }
     const isRun = node.kind === "RunEndpointJunction";
     const selected = state.selectedKind === "node" && state.selectedId === node.id ? " selected" : "";
-    const cls = ["node", isRun ? "run" : "scaffold", node.alias ? "alias" : "", node.ambiguous ? "ambiguous" : "", selected.trim()].filter(Boolean).join(" ");
+    const cls = ["node", isRun ? "run" : "scaffold", node.subtype === "topology-loop" ? "topology" : "", node.alias ? "alias" : "", node.ambiguous ? "ambiguous" : "", selected.trim()].filter(Boolean).join(" ");
     const shape = isRun && !node.alias
       ? `<rect class="node-shape" x="${(node.x - 8).toFixed(1)}" y="${(node.y - 8).toFixed(1)}" width="16" height="16" transform="rotate(45 ${node.x.toFixed(1)} ${node.y.toFixed(1)})"></rect>`
       : `<circle class="node-shape" cx="${node.x.toFixed(1)}" cy="${node.y.toFixed(1)}" r="${node.alias ? 11 : 12}"></circle>`;
     return `
       <g class="${cls}" data-kind="node" data-id="${escapeAttr(node.id)}">
         ${shape}
-        ${labels ? `<text class="label" x="${(node.x + 15).toFixed(1)}" y="${(node.y + 4).toFixed(1)}">${escapeText(node.label)}</text>` : ""}
+        ${nodeLabels ? `<text class="label" x="${(node.x + 15).toFixed(1)}" y="${(node.y + 4).toFixed(1)}">${escapeText(node.label)}</text>` : ""}
       </g>`;
   }).join("");
 
@@ -421,11 +735,18 @@ function render() {
 function updateSummary() {
   if (!state.graph) return;
   const rel = state.graph.relations;
-  summary.textContent = `${state.graph.title}: ${state.graph.nodes.length} visual nodes, ${state.graph.edges.length} relations. Canonical graph: ${rel.scaffold_node_count || (rel.scaffold_nodes || []).length} ScaffoldNodes, ${rel.scaffold_edge_count || (rel.scaffold_edges || []).length} ScaffoldEdges.`;
+  if (state.graph.layout === "topology") {
+    summary.textContent = `${state.graph.title}: topology view, ${state.graph.loopGroups.length} loop groups, ${state.graph.bridgeCount || 0} bridges. Canonical graph: ${rel.scaffold_node_count || (rel.scaffold_nodes || []).length} ScaffoldNodes, ${rel.scaffold_edge_count || (rel.scaffold_edges || []).length} ScaffoldEdges.`;
+  } else {
+    summary.textContent = `${state.graph.title}: ${state.graph.nodes.length} visual nodes, ${state.graph.edges.length} relations. Canonical graph: ${rel.scaffold_node_count || (rel.scaffold_nodes || []).length} ScaffoldNodes, ${rel.scaffold_edge_count || (rel.scaffold_edges || []).length} ScaffoldEdges.`;
+  }
   const railCount = (rel.scaffold_rails || []).length;
   const loopCount = (rel.scaffold_rails || []).filter((rail) => rail.is_closed_loop).length;
   const consumable = (rel.scaffold_rails || []).filter((rail) => rail.is_consumable_by_g5a).length;
   badges.innerHTML = [
+    badge(state.graph.layout === "topology" ? "topology" : "evidence"),
+    state.graph.layout === "topology" ? badge(`${state.graph.loopGroups.length} loop groups`) : "",
+    state.graph.layout === "topology" ? badge(`${state.graph.bridgeCount || 0} bridges`) : "",
     badge(`${(rel.connected_direction_families || []).length} families`),
     badge(`${(rel.scaffold_traces || []).length} traces`),
     badge(`${railCount} rails`),
@@ -603,6 +924,19 @@ clearSelectionButton.addEventListener("click", () => {
   state.selectedKind = null;
   updateInspector();
   render();
+});
+
+viewModeInputs.forEach((input) => {
+  input.addEventListener("change", () => {
+    if (!input.checked) return;
+    state.viewMode = input.value;
+    if (state.payload) state.graph = buildGraph(state.payload);
+    state.selectedId = null;
+    state.selectedKind = null;
+    updateInspector();
+    updateSearch();
+    render();
+  });
 });
 
 document.querySelectorAll("[data-layer]").forEach((checkbox) => {
