@@ -78,6 +78,11 @@ ring from its ordered trace members when available, and draws non-loop
 PatchChains as bridges between loop groups. For example, a capped cylinder with
 one tube seam should read as two loop groups joined by one seam bridge.
 
+`Physics relax loop groups` is an optional layout aid for larger topologies. It
+keeps each loop group rigid as a ring, then applies a small force layout to the
+group centers: bridge relations act like springs and unrelated groups repel.
+It is display-only and does not change Scaffold identities or relations.
+
 Use **Raw evidence** when you need to inspect every exported relation edge
 directly. It is intentionally noisier because it overlays ScaffoldEdges,
 RunEndpointJunctions, DirectionFamilies, Traces and Rails.

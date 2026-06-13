@@ -5,6 +5,7 @@ const state = {
   selectedId: null,
   selectedKind: null,
   viewMode: "topology",
+  topologyPhysics: false,
   layers: {
     scaffoldEdges: true,
     runEndpoints: true,
@@ -21,6 +22,7 @@ const demoButton = document.getElementById("demoButton");
 const relayoutButton = document.getElementById("relayoutButton");
 const unrollToggle = document.getElementById("unrollToggle");
 const labelsToggle = document.getElementById("labelsToggle");
+const topologyPhysicsToggle = document.getElementById("topologyPhysicsToggle");
 const zoomRange = document.getElementById("zoomRange");
 const viewModeInputs = document.querySelectorAll('input[name="viewMode"]');
 const searchBox = document.getElementById("searchBox");
@@ -613,15 +615,14 @@ function layoutTopologyGraph(graph, visibleNodes) {
   const height = svg.clientHeight || 700;
   const loopGroups = graph.loopGroups || [];
   const visibleById = new Map(visibleNodes.map((node) => [node.id, node]));
+  const centers = topologyGroupCenters(graph, width, height);
   const count = Math.max(1, loopGroups.length);
   const radius = Math.max(86, Math.min(145, width / Math.max(5.8, count * 3.1), height * 0.24));
-  const centerY = height / 2 + 18;
-  const usable = Math.max(radius * 2.4, width - 260);
-  const startX = width / 2 - usable / 2;
-  const stepX = count === 1 ? 0 : usable / (count - 1);
 
   loopGroups.forEach((group, index) => {
-    const centerX = count === 1 ? width / 2 : startX + stepX * index;
+    const center = centers.get(group.id) || { x: width / 2, y: height / 2 };
+    const centerX = center.x;
+    const centerY = center.y;
     const nodeIds = group.nodeIds || [];
     const phase = index % 2 === 0 ? 0 : Math.PI;
     nodeIds.forEach((nodeId, order) => {
@@ -660,6 +661,94 @@ function layoutTopologyGraph(graph, visibleNodes) {
       label.y = centerY;
     }
   });
+}
+
+function topologyGroupCenters(graph, width, height) {
+  const loopGroups = graph.loopGroups || [];
+  const count = Math.max(1, loopGroups.length);
+  const centers = new Map();
+  const radius = Math.max(86, Math.min(145, width / Math.max(5.8, count * 3.1), height * 0.24));
+  const centerY = height / 2 + 18;
+  const usable = Math.max(radius * 2.4, width - 260);
+  const startX = width / 2 - usable / 2;
+  const stepX = count === 1 ? 0 : usable / (count - 1);
+
+  loopGroups.forEach((group, index) => {
+    centers.set(group.id, {
+      x: count === 1 ? width / 2 : startX + stepX * index,
+      y: centerY,
+    });
+  });
+
+  if (!state.topologyPhysics || count < 2) return centers;
+
+  const nodeToGroup = new Map();
+  for (const node of graph.nodes) {
+    if (node.topologyLoopId) nodeToGroup.set(node.id, node.topologyLoopId);
+  }
+  const springs = [];
+  for (const edge of graph.edges) {
+    if (edge.kind !== "TopologyBridge") continue;
+    const sourceGroup = nodeToGroup.get(edge.source);
+    const targetGroup = nodeToGroup.get(edge.target);
+    if (sourceGroup && targetGroup && sourceGroup !== targetGroup) {
+      springs.push({ sourceGroup, targetGroup });
+    }
+  }
+
+  const minX = radius + 56;
+  const maxX = width - radius - 56;
+  const minY = radius + 96;
+  const maxY = height - radius - 56;
+  const bridgeRest = Math.max(radius * 3.05, Math.min(520, width * 0.55));
+  const repelStrength = Math.max(22000, radius * radius * 2.15);
+  const groupIds = loopGroups.map((group) => group.id);
+
+  for (let step = 0; step < 180; step += 1) {
+    for (let i = 0; i < groupIds.length; i += 1) {
+      for (let j = i + 1; j < groupIds.length; j += 1) {
+        const a = centers.get(groupIds[i]);
+        const b = centers.get(groupIds[j]);
+        const dx = b.x - a.x || 0.01;
+        const dy = b.y - a.y || 0.01;
+        const dist2 = Math.max(80, dx * dx + dy * dy);
+        const dist = Math.sqrt(dist2);
+        const force = repelStrength / dist2;
+        const nx = (dx / dist) * force;
+        const ny = (dy / dist) * force;
+        a.x -= nx;
+        a.y -= ny;
+        b.x += nx;
+        b.y += ny;
+      }
+    }
+
+    for (const spring of springs) {
+      const a = centers.get(spring.sourceGroup);
+      const b = centers.get(spring.targetGroup);
+      if (!a || !b) continue;
+      const dx = b.x - a.x || 0.01;
+      const dy = b.y - a.y || 0.01;
+      const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+      const force = (dist - bridgeRest) * 0.045;
+      const nx = (dx / dist) * force;
+      const ny = (dy / dist) * force;
+      a.x += nx;
+      a.y += ny;
+      b.x -= nx;
+      b.y -= ny;
+    }
+
+    for (const id of groupIds) {
+      const center = centers.get(id);
+      center.x += (width / 2 - center.x) * 0.0015;
+      center.y += (height / 2 + 18 - center.y) * 0.0015;
+      center.x = Math.max(minX, Math.min(maxX, center.x));
+      center.y = Math.max(minY, Math.min(maxY, center.y));
+    }
+  }
+
+  return centers;
 }
 
 function render() {
@@ -745,6 +834,7 @@ function updateSummary() {
   const consumable = (rel.scaffold_rails || []).filter((rail) => rail.is_consumable_by_g5a).length;
   badges.innerHTML = [
     badge(state.graph.layout === "topology" ? "topology" : "evidence"),
+    state.graph.layout === "topology" && state.topologyPhysics ? badge("physics") : "",
     state.graph.layout === "topology" ? badge(`${state.graph.loopGroups.length} loop groups`) : "",
     state.graph.layout === "topology" ? badge(`${state.graph.bridgeCount || 0} bridges`) : "",
     badge(`${(rel.connected_direction_families || []).length} families`),
@@ -917,6 +1007,10 @@ unrollToggle.addEventListener("change", () => {
   render();
 });
 labelsToggle.addEventListener("change", render);
+topologyPhysicsToggle.addEventListener("change", () => {
+  state.topologyPhysics = topologyPhysicsToggle.checked;
+  render();
+});
 zoomRange.addEventListener("input", render);
 searchBox.addEventListener("input", updateSearch);
 clearSelectionButton.addEventListener("click", () => {
