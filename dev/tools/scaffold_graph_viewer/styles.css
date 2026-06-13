@@ -313,6 +313,13 @@ input[type="search"]:focus {
   opacity: 0.96;
 }
 
+.edge.topology-shared {
+  stroke: var(--blue);
+  stroke-width: 2.2;
+  stroke-dasharray: 8 5;
+  opacity: 0.82;
+}
+
 .edge.cut,
 .edge.ambiguity {
   stroke: var(--red);

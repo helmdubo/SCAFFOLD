@@ -298,8 +298,13 @@ function buildTopologyGraph(payload) {
   const rawItems = new Map();
   const scaffoldEdges = relations.scaffold_edges || [];
   const traces = relations.scaffold_traces || [];
-  const loopGroupsByChain = new Map();
+  const sharedRelations = relations.shared_chain_patch_chain_relations || [];
+  const directionalEvidence = relations.patch_chain_directional_evidence || [];
+  const loopGroups = [];
+  const loopGroupByPatchChainId = new Map();
   const canonicalToLoopNode = new Map();
+  const sourceVertexToNodeId = new Map();
+  const evidenceByPatchChainId = new Map();
 
   function addNode(node) {
     if (!node.id || nodes.has(node.id)) return;
@@ -321,28 +326,42 @@ function buildTopologyGraph(payload) {
     rawItems.set(edge.id, { kind: edge.kind, raw: edge.raw || edge });
   }
 
-  for (const edge of scaffoldEdges) {
-    if (edge.start_scaffold_node_id !== edge.end_scaffold_node_id) continue;
-    const chainId = edge.chain_id || edge.patch_chain_id || edge.id;
-    if (!loopGroupsByChain.has(chainId)) {
-      loopGroupsByChain.set(chainId, {
-        id: `loop-group:${chainId}`,
-        chainId,
-        selfEdges: [],
-        patchChainIds: new Set(),
-        patchIds: new Set(),
-        anchorNodeIds: new Set(),
-      });
+  for (const node of relations.scaffold_nodes || []) {
+    for (const sourceVertexId of node.source_vertex_ids || []) {
+      sourceVertexToNodeId.set(sourceVertexId, node.id);
     }
-    const group = loopGroupsByChain.get(chainId);
-    group.selfEdges.push(edge);
-    if (edge.patch_chain_id) group.patchChainIds.add(edge.patch_chain_id);
-    if (edge.patch_id) group.patchIds.add(edge.patch_id);
-    if (edge.start_scaffold_node_id) group.anchorNodeIds.add(edge.start_scaffold_node_id);
-    if (edge.end_scaffold_node_id) group.anchorNodeIds.add(edge.end_scaffold_node_id);
+  }
+  for (const junction of relations.run_endpoint_junctions || []) {
+    if (junction.source_vertex_id) sourceVertexToNodeId.set(junction.source_vertex_id, junction.id);
+  }
+  for (const evidence of directionalEvidence) {
+    if (!evidence.patch_chain_id) continue;
+    if (!evidenceByPatchChainId.has(evidence.patch_chain_id)) evidenceByPatchChainId.set(evidence.patch_chain_id, []);
+    evidenceByPatchChainId.get(evidence.patch_chain_id).push(evidence);
   }
 
-  const loopGroups = Array.from(loopGroupsByChain.values()).sort((a, b) => a.chainId.localeCompare(b.chainId));
+  for (const edge of scaffoldEdges) {
+    if (edge.start_scaffold_node_id !== edge.end_scaffold_node_id) continue;
+    const group = {
+      id: `loop-use:${edge.id}`,
+      chainId: edge.chain_id || edge.patch_chain_id || edge.id,
+      scaffoldEdgeId: edge.id,
+      patchChainId: edge.patch_chain_id,
+      patchId: edge.patch_id || "",
+      selfEdges: [edge],
+      patchChainIds: new Set(edge.patch_chain_id ? [edge.patch_chain_id] : []),
+      patchIds: new Set(edge.patch_id ? [edge.patch_id] : []),
+      anchorNodeIds: new Set([edge.start_scaffold_node_id, edge.end_scaffold_node_id].filter(Boolean)),
+    };
+    loopGroups.push(group);
+    if (edge.patch_chain_id) loopGroupByPatchChainId.set(edge.patch_chain_id, group);
+  }
+
+  loopGroups.sort((a, b) => {
+    const patch = String(a.patchId).localeCompare(String(b.patchId));
+    if (patch) return patch;
+    return String(a.patchChainId || a.id).localeCompare(String(b.patchChainId || b.id));
+  });
 
   function bestTraceForGroup(group) {
     const patchChainIds = group.patchChainIds;
@@ -359,10 +378,32 @@ function buildTopologyGraph(payload) {
     return candidates[0] || null;
   }
 
-  function recordLoopNode(canonicalId, visualId, loopId) {
+  function sequenceFromDirectionalEvidence(group) {
+    const evidenceItems = [...(evidenceByPatchChainId.get(group.patchChainId) || [])];
+    if (evidenceItems.length < 2) return [];
+    evidenceItems.sort((a, b) => {
+      const aSegment = Array.isArray(a.segment_indices) && a.segment_indices.length ? Number(a.segment_indices[0]) : Number.MAX_SAFE_INTEGER;
+      const bSegment = Array.isArray(b.segment_indices) && b.segment_indices.length ? Number(b.segment_indices[0]) : Number.MAX_SAFE_INTEGER;
+      if (aSegment !== bSegment) return aSegment - bSegment;
+      return String(a.id).localeCompare(String(b.id));
+    });
+    const sequence = [];
+    for (const evidence of evidenceItems) {
+      const start = sourceVertexToNodeId.get(evidence.start_source_vertex_id) || `source:${evidence.start_source_vertex_id}`;
+      const end = sourceVertexToNodeId.get(evidence.end_source_vertex_id) || `source:${evidence.end_source_vertex_id}`;
+      if (!sequence.length) sequence.push(start);
+      sequence.push(end);
+    }
+    if (sequence.length > 1 && sequence[0] === sequence[sequence.length - 1]) {
+      sequence.pop();
+    }
+    return sequence;
+  }
+
+  function recordLoopNode(canonicalId, visualId, loopId, patchId) {
     if (!canonicalId) return;
     if (!canonicalToLoopNode.has(canonicalId)) canonicalToLoopNode.set(canonicalId, []);
-    canonicalToLoopNode.get(canonicalId).push({ visualId, loopId });
+    canonicalToLoopNode.get(canonicalId).push({ visualId, loopId, patchId });
   }
 
   for (const [loopIndex, group] of loopGroups.entries()) {
@@ -378,6 +419,9 @@ function buildTopologyGraph(payload) {
       }
     }
     if (sequence.length < 2) {
+      sequence.push(...sequenceFromDirectionalEvidence(group));
+    }
+    if (sequence.length < 2) {
       sequence.push(...Array.from(group.anchorNodeIds).sort());
     }
     if (sequence.length < 2) {
@@ -385,7 +429,7 @@ function buildTopologyGraph(payload) {
     }
 
     group.nodeIds = [];
-    group.memberCount = best?.members.length || 0;
+    group.memberCount = best?.members.length || (evidenceByPatchChainId.get(group.patchChainId) || []).length;
     group.patchUseCount = group.patchChainIds.size;
     group.patchIdsList = Array.from(group.patchIds).sort();
     group.patchChainIdsList = Array.from(group.patchChainIds).sort();
@@ -394,7 +438,7 @@ function buildTopologyGraph(payload) {
     sequence.forEach((canonicalId, index) => {
       const visualId = `${group.id}:node:${index}`;
       group.nodeIds.push(visualId);
-      recordLoopNode(canonicalId, visualId, group.id);
+      recordLoopNode(canonicalId, visualId, group.id, group.patchId);
       addNode({
         id: visualId,
         canonicalId,
@@ -409,8 +453,10 @@ function buildTopologyGraph(payload) {
           display_identity: "topology_loop_vertex",
           canonical_id: canonicalId,
           chain_id: group.chainId,
+          patch_id: group.patchId,
           patch_ids: group.patchIdsList,
           patch_chain_ids: group.patchChainIdsList,
+          scaffold_edge_id: group.scaffoldEdgeId,
           trace_id: group.traceId,
         },
       });
@@ -425,12 +471,14 @@ function buildTopologyGraph(payload) {
         target,
         kind: "TopologyLoopSegment",
         layer: "scaffoldEdges",
-        label: `${group.patchUseCount} uses`,
+        label: "patch use",
         color: colorForId(group.chainId),
         raw: {
           display_identity: "topology_loop_segment",
           chain_id: group.chainId,
           segment_index: index,
+          patch_id: group.patchId,
+          patch_chain_id: group.patchChainId,
           patch_ids: group.patchIdsList,
           patch_chain_ids: group.patchChainIdsList,
           source_scaffold_edges: group.selfEdges.map((item) => item.id),
@@ -439,11 +487,11 @@ function buildTopologyGraph(payload) {
     }
   }
 
-  const bridgeGroups = new Map();
+  const bridgeEdges = [];
   for (const edge of scaffoldEdges) {
     if (edge.start_scaffold_node_id === edge.end_scaffold_node_id) continue;
-    const sourceHits = canonicalToLoopNode.get(edge.start_scaffold_node_id) || [];
-    const targetHits = canonicalToLoopNode.get(edge.end_scaffold_node_id) || [];
+    const sourceHits = (canonicalToLoopNode.get(edge.start_scaffold_node_id) || []).filter((hit) => hit.patchId === edge.patch_id);
+    const targetHits = (canonicalToLoopNode.get(edge.end_scaffold_node_id) || []).filter((hit) => hit.patchId === edge.patch_id);
     if (!sourceHits.length || !targetHits.length) {
       const source = `loose:${edge.start_scaffold_node_id}`;
       const target = `loose:${edge.end_scaffold_node_id}`;
@@ -477,34 +525,62 @@ function buildTopologyGraph(payload) {
     }
     const sourceHit = sourceHits[0];
     const targetHit = targetHits[0];
-    const loopPair = [sourceHit.loopId, targetHit.loopId].sort().join("|");
-    const key = `${loopPair}|${edge.chain_id || edge.patch_chain_id || edge.id}`;
-    if (!bridgeGroups.has(key)) {
-      bridgeGroups.set(key, { source: sourceHit.visualId, target: targetHit.visualId, edges: [] });
-    }
-    bridgeGroups.get(key).edges.push(edge);
-  }
-
-  for (const [key, group] of bridgeGroups.entries()) {
-    const first = group.edges[0];
+    bridgeEdges.push(edge);
     addEdge({
-      id: `topology-bridge:${key}`,
-      source: group.source,
-      target: group.target,
+      id: `topology-bridge:${edge.id}`,
+      source: sourceHit.visualId,
+      target: targetHit.visualId,
       kind: "TopologyBridge",
       layer: "scaffoldEdges",
-      label: group.edges.length > 1 ? `bridge x${group.edges.length}` : "bridge",
+      label: "patch bridge",
       color: "#ffc85a",
       raw: {
         display_identity: "topology_bridge",
-        chain_id: first.chain_id || null,
-        patch_chain_ids: group.edges.map((item) => item.patch_chain_id),
-        scaffold_edge_ids: group.edges.map((item) => item.id),
-        source_scaffold_node_id: first.start_scaffold_node_id,
-        target_scaffold_node_id: first.end_scaffold_node_id,
+        chain_id: edge.chain_id || null,
+        patch_id: edge.patch_id || null,
+        patch_chain_id: edge.patch_chain_id || null,
+        scaffold_edge_id: edge.id,
+        source_loop_group_id: sourceHit.loopId,
+        target_loop_group_id: targetHit.loopId,
+        source_scaffold_node_id: edge.start_scaffold_node_id,
+        target_scaffold_node_id: edge.end_scaffold_node_id,
       },
     });
   }
+
+  let sharedCount = 0;
+  for (const relation of sharedRelations) {
+    const firstGroup = loopGroupByPatchChainId.get(relation.first_patch_chain_id);
+    const secondGroup = loopGroupByPatchChainId.get(relation.second_patch_chain_id);
+    if (!firstGroup || !secondGroup) continue;
+    const source = firstGroup.nodeIds?.[0];
+    const target = secondGroup.nodeIds?.[0];
+    if (!source || !target) continue;
+    sharedCount += 1;
+    addEdge({
+      id: `topology-shared:${relation.id}`,
+      source,
+      target,
+      kind: "TopologySharedChain",
+      layer: "scaffoldEdges",
+      label: "shared chain",
+      color: "#8ab4ff",
+      raw: {
+        display_identity: "topology_shared_chain",
+        chain_id: relation.chain_id,
+        first_patch_id: relation.first_patch_id,
+        second_patch_id: relation.second_patch_id,
+        first_patch_chain_id: relation.first_patch_chain_id,
+        second_patch_chain_id: relation.second_patch_chain_id,
+        first_scaffold_edge_id: relation.first_scaffold_edge_id,
+        second_scaffold_edge_id: relation.second_scaffold_edge_id,
+        patch_adjacency_id: relation.patch_adjacency_id,
+        relation_id: relation.id,
+      },
+    });
+  }
+
+  assignParallelOffsets(edges);
 
   return {
     layout: "topology",
@@ -512,12 +588,33 @@ function buildTopologyGraph(payload) {
     edges,
     aliases: [],
     loopGroups,
-    bridgeCount: bridgeGroups.size,
+    bridgeCount: bridgeEdges.length,
+    sharedCount,
     relations,
     inspection,
     source: payload.source,
     title: payload.title,
   };
+}
+
+function assignParallelOffsets(edges) {
+  const groups = new Map();
+  for (const edge of edges) {
+    if (edge.kind !== "TopologyBridge" && edge.kind !== "TopologySharedChain") continue;
+    const sorted = [edge.source, edge.target].sort();
+    const endpoints = sorted.join("|");
+    const key = `${edge.kind}|${endpoints}`;
+    edge.parallelFlip = edge.source === sorted[0] ? 1 : -1;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(edge);
+  }
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    const midpoint = (group.length - 1) / 2;
+    group.forEach((edge, index) => {
+      edge.parallelOffset = (index - midpoint) * 14 * (edge.parallelFlip || 1);
+    });
+  }
 }
 
 function visibleGraph(graph) {
@@ -648,6 +745,9 @@ function layoutTopologyGraph(graph, visibleNodes) {
         raw: {
           display_identity: "topology_loop_label",
           chain_id: group.chainId,
+          patch_id: group.patchId,
+          patch_chain_id: group.patchChainId,
+          scaffold_edge_id: group.scaffoldEdgeId,
           patch_ids: group.patchIdsList,
           patch_chain_ids: group.patchChainIdsList,
           trace_id: group.traceId,
@@ -668,17 +768,74 @@ function topologyGroupCenters(graph, width, height) {
   const count = Math.max(1, loopGroups.length);
   const centers = new Map();
   const radius = Math.max(86, Math.min(145, width / Math.max(5.8, count * 3.1), height * 0.24));
-  const centerY = height / 2 + 18;
-  const usable = Math.max(radius * 2.4, width - 260);
-  const startX = width / 2 - usable / 2;
-  const stepX = count === 1 ? 0 : usable / (count - 1);
+  const patchToGroups = new Map();
+  const patchDegree = new Map();
+  for (const group of loopGroups) {
+    const patchId = group.patchId || "patch:unknown";
+    if (!patchToGroups.has(patchId)) patchToGroups.set(patchId, []);
+    patchToGroups.get(patchId).push(group);
+    patchDegree.set(patchId, patchDegree.get(patchId) || 0);
+  }
 
-  loopGroups.forEach((group, index) => {
-    centers.set(group.id, {
-      x: count === 1 ? width / 2 : startX + stepX * index,
-      y: centerY,
+  for (const edge of graph.edges) {
+    if (edge.kind !== "TopologySharedChain") continue;
+    const first = edge.raw?.first_patch_id;
+    const second = edge.raw?.second_patch_id;
+    if (!first || !second || first === second) continue;
+    patchDegree.set(first, (patchDegree.get(first) || 0) + 1);
+    patchDegree.set(second, (patchDegree.get(second) || 0) + 1);
+  }
+
+  const patchIds = Array.from(patchToGroups.keys()).sort();
+  const patchCenters = new Map();
+  if (patchIds.length === 1) {
+    patchCenters.set(patchIds[0], { x: width / 2, y: height / 2 + 18 });
+  } else {
+    const centralPatch = [...patchIds].sort((a, b) => {
+      const degree = (patchDegree.get(b) || 0) - (patchDegree.get(a) || 0);
+      if (degree) return degree;
+      return a.localeCompare(b);
+    })[0];
+    if ((patchDegree.get(centralPatch) || 0) > 1) {
+      patchCenters.set(centralPatch, { x: width / 2, y: height / 2 + 18 });
+      const leaves = patchIds.filter((id) => id !== centralPatch);
+      const outer = Math.max(radius * 3.1, Math.min(width, height) * 0.31);
+      leaves.forEach((patchId, index) => {
+        const angle = leaves.length === 1 ? 0 : (index / leaves.length) * Math.PI * 2;
+        patchCenters.set(patchId, {
+          x: width / 2 + Math.cos(angle) * outer,
+          y: height / 2 + 18 + Math.sin(angle) * outer,
+        });
+      });
+    } else {
+      const outer = Math.max(radius * 3.1, Math.min(width, height) * 0.31);
+      patchIds.forEach((patchId, index) => {
+        const angle = -Math.PI / 2 + (index / patchIds.length) * Math.PI * 2;
+        patchCenters.set(patchId, {
+          x: width / 2 + Math.cos(angle) * outer,
+          y: height / 2 + 18 + Math.sin(angle) * outer,
+        });
+      });
+    }
+  }
+
+  for (const [patchId, groups] of patchToGroups.entries()) {
+    const patchCenter = patchCenters.get(patchId) || { x: width / 2, y: height / 2 + 18 };
+    const local = groups.length <= 1 ? 0 : Math.max(radius * 1.7, Math.min(220, radius * 2.2));
+    groups.sort((a, b) => String(a.patchChainId || a.id).localeCompare(String(b.patchChainId || b.id)));
+    groups.forEach((group, index) => {
+      const angle = groups.length === 1 ? 0 : -Math.PI / 2 + (index / groups.length) * Math.PI * 2;
+      centers.set(group.id, {
+        x: patchCenter.x + Math.cos(angle) * local,
+        y: patchCenter.y + Math.sin(angle) * local,
+      });
     });
-  });
+  }
+
+  for (const center of centers.values()) {
+    center.x = Math.max(radius + 56, Math.min(width - radius - 56, center.x));
+    center.y = Math.max(radius + 96, Math.min(height - radius - 56, center.y));
+  }
 
   if (!state.topologyPhysics || count < 2) return centers;
 
@@ -688,11 +845,11 @@ function topologyGroupCenters(graph, width, height) {
   }
   const springs = [];
   for (const edge of graph.edges) {
-    if (edge.kind !== "TopologyBridge") continue;
+    if (edge.kind !== "TopologyBridge" && edge.kind !== "TopologySharedChain") continue;
     const sourceGroup = nodeToGroup.get(edge.source);
     const targetGroup = nodeToGroup.get(edge.target);
     if (sourceGroup && targetGroup && sourceGroup !== targetGroup) {
-      springs.push({ sourceGroup, targetGroup });
+      springs.push({ sourceGroup, targetGroup, kind: edge.kind });
     }
   }
 
@@ -700,11 +857,12 @@ function topologyGroupCenters(graph, width, height) {
   const maxX = width - radius - 56;
   const minY = radius + 96;
   const maxY = height - radius - 56;
-  const bridgeRest = Math.max(radius * 3.05, Math.min(520, width * 0.55));
-  const repelStrength = Math.max(22000, radius * radius * 2.15);
+  const bridgeRest = Math.max(radius * 2.55, Math.min(420, width * 0.34));
+  const sharedRest = Math.max(radius * 3.0, Math.min(520, width * 0.42));
+  const repelStrength = Math.max(22000, radius * radius * 2.45);
   const groupIds = loopGroups.map((group) => group.id);
 
-  for (let step = 0; step < 180; step += 1) {
+  for (let step = 0; step < 160; step += 1) {
     for (let i = 0; i < groupIds.length; i += 1) {
       for (let j = i + 1; j < groupIds.length; j += 1) {
         const a = centers.get(groupIds[i]);
@@ -730,7 +888,8 @@ function topologyGroupCenters(graph, width, height) {
       const dx = b.x - a.x || 0.01;
       const dy = b.y - a.y || 0.01;
       const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
-      const force = (dist - bridgeRest) * 0.045;
+      const rest = spring.kind === "TopologySharedChain" ? sharedRest : bridgeRest;
+      const force = (dist - rest) * 0.035;
       const nx = (dx / dist) * force;
       const ny = (dy / dist) * force;
       a.x += nx;
@@ -741,8 +900,8 @@ function topologyGroupCenters(graph, width, height) {
 
     for (const id of groupIds) {
       const center = centers.get(id);
-      center.x += (width / 2 - center.x) * 0.0015;
-      center.y += (height / 2 + 18 - center.y) * 0.0015;
+      center.x += (width / 2 - center.x) * 0.001;
+      center.y += (height / 2 + 18 - center.y) * 0.001;
       center.x = Math.max(minX, Math.min(maxX, center.x));
       center.y = Math.max(minY, Math.min(maxY, center.y));
     }
@@ -772,8 +931,18 @@ function render() {
     const a = byId.get(edge.source);
     const b = byId.get(edge.target);
     if (!a || !b) return "";
-    const mx = (a.x + b.x) / 2;
-    const my = (a.y + b.y) / 2;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+    const offset = edge.parallelOffset || 0;
+    const ox = (-dy / dist) * offset;
+    const oy = (dx / dist) * offset;
+    const x1 = a.x + ox;
+    const y1 = a.y + oy;
+    const x2 = b.x + ox;
+    const y2 = b.y + oy;
+    const mx = (x1 + x2) / 2;
+    const my = (y1 + y2) / 2;
     const classes = [
       "edge",
       edge.layer === "families" ? "family" : "",
@@ -781,6 +950,7 @@ function render() {
       edge.layer === "traces" ? "trace" : "",
       edge.kind === "TopologyLoopSegment" ? "topology-loop" : "",
       edge.kind === "TopologyBridge" ? "topology-bridge" : "",
+      edge.kind === "TopologySharedChain" ? "topology-shared" : "",
       edge.kind === "VisualAlias" ? "alias-link" : "",
       edge.kind.includes("Ambigu") ? "ambiguity" : "",
     ].filter(Boolean).join(" ");
@@ -788,8 +958,8 @@ function render() {
     const selected = isSelected ? " selected" : "";
     return `
       <g>
-        <line class="edge-hit${selected}" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" data-kind="edge" data-id="${escapeAttr(edge.id)}"></line>
-        <line class="${classes}${selected}" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" style="stroke:${edge.color || "#42545b"}"></line>
+        <line class="edge-hit${selected}" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" data-kind="edge" data-id="${escapeAttr(edge.id)}"></line>
+        <line class="${classes}${selected}" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" style="stroke:${edge.color || "#42545b"}"></line>
         ${labels && isSelected ? `<text class="edge-label" x="${mx.toFixed(1)}" y="${(my - 5).toFixed(1)}">${escapeText(edge.label || "")}</text>` : ""}
       </g>`;
   }).join("");
@@ -801,7 +971,7 @@ function render() {
         <g class="topology-label" data-kind="node" data-id="${escapeAttr(node.id)}">
           <rect class="topology-label-hit" x="${(node.x - 76).toFixed(1)}" y="${(node.y - 30).toFixed(1)}" width="152" height="50"></rect>
           <text class="loop-title" x="${node.x.toFixed(1)}" y="${(node.y - 8).toFixed(1)}">${escapeText(node.label)}</text>
-          <text class="loop-subtitle" x="${node.x.toFixed(1)}" y="${(node.y + 10).toFixed(1)}">${escapeText(`${(raw.patch_chain_ids || []).length} patch uses, ${raw.member_count || 0} members`)}</text>
+          <text class="loop-subtitle" x="${node.x.toFixed(1)}" y="${(node.y + 10).toFixed(1)}">${escapeText(`${compactId(raw.patch_ids?.[0] || raw.patch_id || "")} · ${raw.member_count || 0} members`)}</text>
         </g>`;
     }
     const isRun = node.kind === "RunEndpointJunction";
@@ -825,7 +995,7 @@ function updateSummary() {
   if (!state.graph) return;
   const rel = state.graph.relations;
   if (state.graph.layout === "topology") {
-    summary.textContent = `${state.graph.title}: topology view, ${state.graph.loopGroups.length} loop groups, ${state.graph.bridgeCount || 0} bridges. Canonical graph: ${rel.scaffold_node_count || (rel.scaffold_nodes || []).length} ScaffoldNodes, ${rel.scaffold_edge_count || (rel.scaffold_edges || []).length} ScaffoldEdges.`;
+    summary.textContent = `${state.graph.title}: patch-use topology, ${state.graph.loopGroups.length} loop uses, ${state.graph.bridgeCount || 0} patch bridges, ${state.graph.sharedCount || 0} shared-chain links. Canonical graph: ${rel.scaffold_node_count || (rel.scaffold_nodes || []).length} ScaffoldNodes, ${rel.scaffold_edge_count || (rel.scaffold_edges || []).length} ScaffoldEdges.`;
   } else {
     summary.textContent = `${state.graph.title}: ${state.graph.nodes.length} visual nodes, ${state.graph.edges.length} relations. Canonical graph: ${rel.scaffold_node_count || (rel.scaffold_nodes || []).length} ScaffoldNodes, ${rel.scaffold_edge_count || (rel.scaffold_edges || []).length} ScaffoldEdges.`;
   }
@@ -835,8 +1005,9 @@ function updateSummary() {
   badges.innerHTML = [
     badge(state.graph.layout === "topology" ? "topology" : "evidence"),
     state.graph.layout === "topology" && state.topologyPhysics ? badge("physics") : "",
-    state.graph.layout === "topology" ? badge(`${state.graph.loopGroups.length} loop groups`) : "",
+    state.graph.layout === "topology" ? badge(`${state.graph.loopGroups.length} loop uses`) : "",
     state.graph.layout === "topology" ? badge(`${state.graph.bridgeCount || 0} bridges`) : "",
+    state.graph.layout === "topology" ? badge(`${state.graph.sharedCount || 0} shared`) : "",
     badge(`${(rel.connected_direction_families || []).length} families`),
     badge(`${(rel.scaffold_traces || []).length} traces`),
     badge(`${railCount} rails`),
