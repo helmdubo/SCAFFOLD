@@ -62,6 +62,7 @@ def read_source_mesh_from_blender(context: object) -> SourceMeshSnapshot:
 
     faces: dict[SourceFaceId, MeshFaceRef] = {}
     selected_face_ids: list[SourceFaceId] = []
+    object_mode_selects_all_faces = getattr(active_object, "mode", None) == "OBJECT"
     for polygon in mesh.polygons:
         face_id = SourceFaceId(f"f{polygon.index}")
         vertex_ids = tuple(SourceVertexId(f"v{vertex_index}") for vertex_index in polygon.vertices)
@@ -74,7 +75,7 @@ def read_source_mesh_from_blender(context: object) -> SourceMeshSnapshot:
             vertex_ids=vertex_ids,
             edge_ids=edge_ids,
         )
-        if getattr(polygon, "select", False):
+        if object_mode_selects_all_faces or getattr(polygon, "select", False):
             selected_face_ids.append(face_id)
 
     marks: list[SourceMark] = []

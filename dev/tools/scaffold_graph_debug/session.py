@@ -102,15 +102,22 @@ def show_or_refresh(context: Any) -> tuple[dict[str, Any], str]:
         hide_get = getattr(source_object, "hide_get", None)
         settings.source_hide_set = bool(hide_get()) if callable(hide_get) else False
 
-    if context.active_object and context.active_object.mode != "OBJECT":
-        bpy.ops.object.mode_set(mode="OBJECT")
     source_object.hide_viewport = False
     source_object.hide_set(False)
+    source_was_edit = getattr(source_object, "mode", None) == "EDIT"
+    if not source_was_edit:
+        if context.active_object and context.active_object.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.select_all(action="DESELECT")
+        source_object.select_set(True)
+        context.view_layer.objects.active = source_object
+
+    legacy_overlay, overlay = _build_overlay_payloads(context)
+    if context.active_object and context.active_object.mode != "OBJECT":
+        bpy.ops.object.mode_set(mode="OBJECT")
     bpy.ops.object.select_all(action="DESELECT")
     source_object.select_set(True)
     context.view_layer.objects.active = source_object
-
-    legacy_overlay, overlay = _build_overlay_payloads(context)
     render_report = render_overlay_v2(
         source_object,
         overlay,

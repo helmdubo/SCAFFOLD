@@ -16,7 +16,7 @@ from scaffold_core.layer_0_source.blender_io import read_source_mesh_from_blende
 from scaffold_core.layer_0_source.marks import SourceMarkKind
 
 
-def _fake_context() -> SimpleNamespace:
+def _fake_context(*, mode: str = "EDIT", face_selected: bool = True) -> SimpleNamespace:
     vertices = [
         SimpleNamespace(index=0, co=SimpleNamespace(x=0.0, y=0.0, z=0.0)),
         SimpleNamespace(index=1, co=SimpleNamespace(x=1.0, y=0.0, z=0.0)),
@@ -34,7 +34,7 @@ def _fake_context() -> SimpleNamespace:
             index=0,
             vertices=(0, 1, 2, 3),
             edge_keys=((0, 1), (1, 2), (2, 3), (0, 3)),
-            select=True,
+            select=face_selected,
         )
     ]
     mesh = SimpleNamespace(
@@ -46,6 +46,7 @@ def _fake_context() -> SimpleNamespace:
     active_object = SimpleNamespace(
         name="object",
         type="MESH",
+        mode=mode,
         data=mesh,
         update_from_editmode=lambda: True,
     )
@@ -63,6 +64,12 @@ def test_read_source_mesh_from_blender_reads_selected_faces_and_edge_marks() -> 
         SourceMarkKind.SEAM,
         SourceMarkKind.SHARP,
     }
+
+
+def test_read_source_mesh_from_blender_object_mode_selects_all_faces() -> None:
+    source = read_source_mesh_from_blender(_fake_context(mode="OBJECT", face_selected=False))
+
+    assert tuple(str(face_id) for face_id in source.selected_face_ids) == ("f0",)
 
 
 def test_read_source_mesh_from_blender_requires_active_mesh_object() -> None:
