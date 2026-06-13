@@ -56,17 +56,25 @@ def write_pinned_uvs(blender_context: Any, result: SolveResult) -> dict[str, Any
                 written += 1
         bmesh.update_edit_mesh(mesh)
     else:
-        uv_layer = mesh.uv_layers.active or mesh.uv_layers.new(name="UVMap")
-        for polygon in mesh.polygons:
-            face_patch = result.patch_by_source_face.get(f"f{polygon.index}")
-            for loop_index in polygon.loop_indices:
-                pinned = _pinned_for(mesh.loops[loop_index].vertex_index, face_patch)
-                if pinned is None:
-                    uv_layer.data[loop_index].pin_uv = False
-                    continue
-                uv_layer.data[loop_index].uv = pinned.uv
-                uv_layer.data[loop_index].pin_uv = bool(pinned.pinned)
-                written += 1
+        bm = bmesh.new()
+        try:
+            bm.from_mesh(mesh)
+            bm.faces.ensure_lookup_table()
+            uv_layer = bm.loops.layers.uv.verify()
+            for face in bm.faces:
+                face_patch = result.patch_by_source_face.get(f"f{face.index}")
+                for loop in face.loops:
+                    pinned = _pinned_for(loop.vert.index, face_patch)
+                    if pinned is None:
+                        loop[uv_layer].pin_uv = False
+                        continue
+                    loop[uv_layer].uv = pinned.uv
+                    loop[uv_layer].pin_uv = bool(pinned.pinned)
+                    written += 1
+            bm.to_mesh(mesh)
+            mesh.update()
+        finally:
+            bm.free()
 
     return {
         "written_loops": written,

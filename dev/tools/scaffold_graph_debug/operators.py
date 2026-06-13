@@ -107,7 +107,7 @@ class SCAFFOLDGRAPH_OT_UpdateVisibility(bpy.types.Operator):
 class SCAFFOLDGRAPH_OT_WriteUV(bpy.types.Operator):
     bl_idname = "scaffold_graph_debug.write_uv_g5a"
     bl_label = "Write UV (G5a)"
-    bl_description = "Run the G5a skeleton solve and write pinned UVs + conformal fill"
+    bl_description = "Run the G5a skeleton solve and write pinned UVs"
 
     def execute(self, context):
         try:

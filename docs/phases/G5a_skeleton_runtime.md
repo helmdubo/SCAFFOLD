@@ -83,7 +83,7 @@ pins.py:
 
 uv_transfer.py:
   writes UV coordinates and pin flags only;
-  uses bmesh in Edit Mode and mesh UV data in Object Mode;
+  uses bmesh in Edit Mode and Object Mode (from_edit_mesh / from_mesh);
   calls no bpy operators and performs no automatic unwrap.
 ```
 

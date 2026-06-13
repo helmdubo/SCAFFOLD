@@ -57,7 +57,8 @@ UV Editor -> U -> Unwrap
 
 Blender's unwrap respects the pins written by G5a. This split is intentional:
 the `uv_transfer.py` boundary is crash-proof in Blender 4.3 because it writes
-pin flags through bmesh in Edit Mode and avoids operator-context unwrap calls.
+pin flags through bmesh in Edit Mode and Object Mode, and avoids
+operator-context unwrap calls.
 
 Current expected validation on the artist Cylinder capture:
 
