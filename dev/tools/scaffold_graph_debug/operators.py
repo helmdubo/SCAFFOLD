@@ -2,11 +2,26 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import bpy
 from bpy.props import BoolProperty, PointerProperty, StringProperty
+from bpy_extras.io_utils import ExportHelper
 
 from .build_stamp import get_build_stamp, resolve_build_stamp, set_build_stamp
-from .session import clear_all, close, refresh_visibility, show_or_refresh
+from .session import active_mesh_object, clear_all, close, refresh_visibility, show_or_refresh
+
+
+def _add_dev_tools_to_path() -> None:
+    tools_root = Path(__file__).resolve().parents[1]
+    tools_root_text = str(tools_root)
+    if tools_root_text not in sys.path:
+        sys.path.insert(0, tools_root_text)
+
+
+def _safe_filename(name: str) -> str:
+    return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in name)
 
 
 class SCAFFOLDGRAPH_Settings(bpy.types.PropertyGroup):
@@ -104,6 +119,66 @@ class SCAFFOLDGRAPH_OT_UpdateVisibility(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class SCAFFOLDGRAPH_OT_ExportJson(bpy.types.Operator, ExportHelper):
+    bl_idname = "scaffold_graph_debug.export_json"
+    bl_label = "SCAFFOLD JSON"
+    bl_description = "Export the active Scaffold Pass 0/1 graph payload for the external viewer"
+    filename_ext = ".json"
+    filter_glob: StringProperty(default="*.json", options={"HIDDEN"})
+
+    @classmethod
+    def poll(cls, context):
+        settings = getattr(context.scene, "scaffold_graph_debug_settings", None)
+        if settings is not None and settings.active and settings.source_object:
+            return settings.source_object in bpy.data.objects
+        obj = context.active_object
+        return obj is not None and obj.type == "MESH" and obj.mode in {"OBJECT", "EDIT"}
+
+    def invoke(self, context, event):
+        settings = getattr(context.scene, "scaffold_graph_debug_settings", None)
+        source_object = active_mesh_object(
+            context,
+            fallback_source_name=settings.source_object if settings and settings.active else "",
+        )
+        default_dir = Path(__file__).resolve().parents[1] / "scaffold_graph_viewer" / "reports"
+        self.filepath = str(default_dir / f"{_safe_filename(source_object.name)}.graph.json")
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def execute(self, context):
+        settings = getattr(context.scene, "scaffold_graph_debug_settings", None)
+        source_object = active_mesh_object(
+            context,
+            fallback_source_name=settings.source_object if settings and settings.active else "",
+        )
+        previous_active = context.view_layer.objects.active
+        previous_hide_viewport = bool(getattr(source_object, "hide_viewport", False))
+        hide_get = getattr(source_object, "hide_get", None)
+        previous_hide_set = bool(hide_get()) if callable(hide_get) else False
+        try:
+            _add_dev_tools_to_path()
+            from scaffold_graph_viewer.export_selected_graph import write_payload
+
+            source_object.hide_viewport = False
+            source_object.hide_set(False)
+            context.view_layer.objects.active = source_object
+            source_object.select_set(True)
+            out = write_payload(context, self.filepath)
+        except Exception as exc:  # noqa: BLE001 - report Blender operator failures
+            self.report({"ERROR"}, f"SCAFFOLD JSON export failed: {exc}")
+            return {"CANCELLED"}
+        finally:
+            source_object.hide_viewport = previous_hide_viewport
+            source_object.hide_set(previous_hide_set)
+            if previous_active is not None and previous_active.name in bpy.data.objects:
+                context.view_layer.objects.active = previous_active
+
+        summary = f"SCAFFOLD JSON wrote {out}"
+        print(f"[scaffold graph viewer] {summary}")
+        self.report({"INFO"}, summary)
+        return {"FINISHED"}
+
+
 class SCAFFOLDGRAPH_OT_WriteUV(bpy.types.Operator):
     bl_idname = "scaffold_graph_debug.write_uv_g5a"
     bl_label = "Write UV (G5a)"
@@ -158,6 +233,7 @@ class SCAFFOLDGRAPH_PT_Panel(bpy.types.Panel):
         stamp = settings.build_stamp or get_build_stamp()
         col.label(text=f"Build: {stamp}")
         col.operator("scaffold_graph_debug.refresh", text="Rebuild Overlay", icon="FILE_REFRESH")
+        col.operator("scaffold_graph_debug.export_json", text="SCAFFOLD JSON", icon="EXPORT")
         if settings.active:
             col.operator("scaffold_graph_debug.close", text="Close Graph", icon="X")
 
@@ -179,6 +255,7 @@ class SCAFFOLDGRAPH_PT_Panel(bpy.types.Panel):
 
 
 classes = (
+    SCAFFOLDGRAPH_OT_ExportJson,
     SCAFFOLDGRAPH_OT_WriteUV,
     SCAFFOLDGRAPH_Settings,
     SCAFFOLDGRAPH_OT_Show,

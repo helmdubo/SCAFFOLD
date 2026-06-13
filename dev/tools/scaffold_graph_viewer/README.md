@@ -41,7 +41,16 @@ dev/tools/scaffold_graph_viewer/reports/
 
 ## Export From Blender
 
-In Blender Text Editor or with `blender --python`, run:
+Preferred path:
+
+```text
+View3D > Sidebar > Scaffold > Scaffold Graph > SCAFFOLD JSON
+```
+
+The button opens a save dialog and writes the active mesh / selected faces as
+`scaffold_graph_viewer_payload_v1`.
+
+Fallback from Blender Text Editor or with `blender --python`:
 
 ```python
 exec(open(r"E:\GITHUB\SCAFFOLD\dev\tools\scaffold_graph_viewer\export_selected_graph.py").read())

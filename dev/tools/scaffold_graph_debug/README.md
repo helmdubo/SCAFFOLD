@@ -29,6 +29,7 @@ Controls:
 
 ```text
 Rebuild Overlay
+SCAFFOLD JSON
 Write UV (G5a)
 Close Graph
 Family Colors / Spines / Ribs / Seam Verdicts (also CutRails) / Junctions / Branches visibility
@@ -36,6 +37,33 @@ Family Colors / Spines / Ribs / Seam Verdicts (also CutRails) / Junctions / Bran
 
 `Rebuild Overlay` hides the source mesh while the overlay is active. `Close Graph`
 removes the overlay and restores the mesh visibility.
+
+## SCAFFOLD JSON
+
+`SCAFFOLD JSON` exports the active mesh / selected faces as a graph-viewer
+payload:
+
+```text
+Pass 0 / Pass 1 -> inspect_pipeline_context(detail="full")
+-> scaffold_graph_viewer_payload_v1 JSON
+```
+
+The button opens a file-save dialog and defaults to:
+
+```text
+dev/tools/scaffold_graph_viewer/reports/<object>.graph.json
+```
+
+Use this for the external flat topological viewer:
+
+```text
+dev/tools/scaffold_graph_viewer/index.html
+```
+
+If the overlay is already active and the Grease Pencil object is selected, the
+button still exports the original source mesh recorded by the overlay session.
+In Edit Mode, selected faces define the export. In Object Mode, selecting one
+mesh object means all faces of that object are exported.
 
 ## Write UV (G5a)
 
