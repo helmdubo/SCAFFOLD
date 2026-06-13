@@ -58,6 +58,8 @@
   .st{font-size:11px;text-align:center;padding:3px 8px;border-radius:12px;font-weight:600}
   .st.done{background:#21392a;color:var(--ok)} .st.wip{background:#403318;color:var(--spike)}
   .st.queue{background:#2c2c33;color:var(--dim)} .st.gate{background:#16303f;color:var(--contract)}
+  .st.active{background:#16303f;color:var(--contract)} .st.draft{background:#3d3147;color:#b58ee0}
+  .st.blocked{background:#402020;color:var(--warn)}
   .guards{font-size:12.5px}
   .guards li{margin-bottom:6px}
   footer{margin-top:30px;color:var(--dim);font-size:11px;border-top:1px solid var(--line);padding-top:10px}
@@ -66,7 +68,7 @@
 <body>
 
 <h1>SCAFFOLD — карта архитектуры</h1>
-<div class="sub">Structural UV для архитектурных мешей · контракт G0 v1.3 · фаза G3 (+спайк-валидация G5-поведения) · обновлено 2026-06</div>
+<div class="sub">Structural UV для архитектурных мешей · контракт G0 v1.4 · текущая фаза G5a Skeleton Runtime · активный фронт: Slice J (ScaffoldTrace / ScaffoldRail draft) · обновлено 2026-06-13</div>
 <div class="legend">
   <span><span class="dot" style="background:var(--ok)"></span>реализовано</span>
   <span><span class="dot" style="background:var(--contract)"></span>контракт утверждён / Blender</span>
@@ -74,6 +76,26 @@
   <span><span class="dot" style="background:var(--substrate)"></span>субстрат (внутреннее, фронтир не читает)</span>
   <span><span class="dot" style="background:var(--defer)"></span>отложено</span>
   <span style="font-weight:600;color:var(--ok)">жирная рамка = Consumer API (читает фронтир)</span>
+</div>
+
+<h2>0 · Где мы сейчас</h2>
+<div class="twocol">
+  <div class="card">
+    <h3>Текущий рубеж</h3>
+    <ul>
+      <li><b>G5a реализован:</b> island assembly, skeleton solve, pinned UV write, debug-button <b>Write UV (G5a)</b>.</li>
+      <li><b>ScaffoldGraph уже реализован:</b> это Layer 3 connectivity substrate, не следующий срез.</li>
+      <li><b>Slice J активен:</b> нужен контракт <b>ScaffoldTrace / ScaffoldRail</b>, чтобы G5a перестал угадывать порядок/знаки рельсов.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Не путать</h3>
+    <ul>
+      <li><b>ScaffoldMap</b> — это этот HTML-документ, визуальная карта, не core-сущность.</li>
+      <li><b>Multiseam cylinder</b> сейчас xfail: это missing ScaffoldRail/Trace substrate, не повод патчить G5a traversal-костылём.</li>
+      <li><b>Следующий implementation-срез</b> возможен только после approval draft-контракта J1.</li>
+    </ul>
+  </div>
 </div>
 
 <h2>1 · Слои ядра (scaffold_core) — иммутабельный конвейер интерпретации</h2>
@@ -107,19 +129,21 @@
   <div class="name"><b>Layer 3 · Relations</b><span>derived evidence с провенансом</span></div>
   <div class="body">
     <div class="chips">
-      <span class="chip ok api">ConnectedDirectionFamily (DD-43: транспорт через dihedral)</span>
+      <span class="chip ok api">ConnectedDirectionFamily v1 (DD-43/45: transport + geodesic per-use)</span>
       <span class="chip ok api">PatchAdjacency + Dihedral</span>
       <span class="chip ok api">PatchChainDirectionalEvidence</span>
       <span class="chip ok api">PatchAxes</span>
       <span class="chip ok api">ScaffoldJunction (SELF_SEAM/CROSS_PATCH)</span>
+      <span class="chip ok api">RunEndpointJunction (DD-44)</span>
     </div>
     <div class="chips" style="margin-top:6px">
       <span class="chip substrate">EndpointSamples/Relations</span><span class="chip substrate">LoopCorner</span>
       <span class="chip substrate">ScaffoldNode/Edge/Graph</span><span class="chip substrate">IncidentEdgeRelation (9 kinds)</span>
       <span class="chip substrate">SideSurface/SurfaceFlow evidence</span><span class="chip substrate">ContinuityComponent</span>
       <span class="chip substrate">AlignmentClass (демоция: вход PatchAxes)</span>
+      <span class="chip defer">ScaffoldTrace / ScaffoldRail (Slice J draft)</span>
     </div>
-    <div class="note">Разделение по consumption report трассера: жирное читает фронтир напрямую; фиолетовое — субстрат, из которого собираются families/axes. Evidence никогда не выбирает трассы/рельсы/UV (DD-38…43). Мораторий на новые типы.</div>
+    <div class="note">ScaffoldGraph уже реализован как connectivity substrate. Следующая недостающая сущность — не новый Graph, а ordered/direction-stable Trace/Rail поверх него. Evidence не выбирает UV; Trace/Rail draft тоже остаётся Layer 3 evidence.</div>
   </div>
 </div>
 
@@ -134,13 +158,13 @@
 <div class="layer">
   <div class="name"><b>Layer 5 · Runtime/Solve</b><span>фронтир · скелет · UV</span></div>
   <div class="body"><div class="chips">
-    <span class="chip spike">Сборка островов (angle-defect гейт)</span><span class="chip spike">Skeleton solve (P7-стиль, LSQ)</span>
-    <span class="chip spike">Anchor-фронтир (FrontierRank)</span><span class="chip spike">Пины + конформная заливка</span>
-    <span class="chip defer">uv_transfer (граница записи, G5)</span><span class="chip defer">PinPolicy · texel scale · packing</span>
-  </div><div class="note">Поведение валидируется в спайке (dev/tools/tracer_spike, приговорён guard'ом №1). После G4-гейта — контракты и чистая реализация здесь.</div></div>
+    <span class="chip ok api">G5a island assembly</span><span class="chip ok api">G5a skeleton solve</span>
+    <span class="chip ok api">PinnedVertex output</span><span class="chip ok api">uv_transfer write boundary</span>
+    <span class="chip ok">Write UV (G5a) debug button</span><span class="chip defer">PinPolicy · texel scale · packing</span>
+  </div><div class="note">G5a реализован и валидирован на простых developable случаях. Он не должен расширяться новыми rail-order/sign эвристиками для multiseam loop cases; это blocked on ScaffoldTrace/ScaffoldRail.</div></div>
 </div>
 
-<div class="rulebar"><b>Запрещённые циклы:</b> solve не определяет оси · WorldOrientation не определяет alignment · evidence не выбирает продолжения. <b>Анти-CFTUV:</b> никаких хранимых H/V и WALL/FLOOR в L1–L3 — оси всегда вычисляемые проекции families.</div>
+<div class="rulebar"><b>Запрещённые циклы:</b> solve не определяет недостающие рельсы · WorldOrientation не определяет alignment · evidence не выбирает UV. <b>Анти-CFTUV:</b> никаких хранимых H/V и WALL/FLOOR в L1–L3 — оси остаются вычисляемыми, а ordered rails должны прийти из Layer 3 контракта.</div>
 
 <h2>2 · Конвейер данных: от выделения до UV</h2>
 <div class="flowwrap">
@@ -167,9 +191,9 @@
   <text x="609" y="66" text-anchor="middle" class="small">(заморожен после Pass 1)</text>
 
   <rect class="box defer" x="724" y="18" width="150" height="58"/>
-  <text x="799" y="36" text-anchor="middle" class="title">Pass 2 · L4</text>
-  <text x="799" y="52" text-anchor="middle" class="small">features → constraints</text>
-  <text x="799" y="66" text-anchor="middle" class="small">(отложено)</text>
+  <text x="799" y="36" text-anchor="middle" class="title">Slice J · L3</text>
+  <text x="799" y="52" text-anchor="middle" class="small">Trace/Rail contract</text>
+  <text x="799" y="66" text-anchor="middle" class="small">(draft, not implemented)</text>
 
   <path class="arrow" d="M136 47 H172"/><path class="arrow" d="M304 47 H340"/>
   <path class="arrow" d="M494 47 H530"/><path class="arrow" d="M684 47 H720"/>
@@ -177,28 +201,28 @@
   <!-- down arrow to solve row -->
   <path class="arrow" d="M609 76 V120"/>
   <path class="arrow" d="M799 76 V120" stroke-dasharray="4 4"/>
-  <text x="690" y="105" class="small">consumer API: families · adjacency · axes · junctions · defect</text>
+  <text x="690" y="105" class="small">consumer API: families · adjacency · axes · junctions · defect · future rails</text>
 
   <!-- row 2: solve chain -->
-  <rect class="box spike" x="80"  y="124" width="170" height="64"/>
+  <rect class="box ok" x="80"  y="124" width="170" height="64"/>
   <text x="165" y="144" text-anchor="middle" class="title">Сборка островов</text>
   <text x="165" y="160" text-anchor="middle" class="small">stitch/split по дереву швов</text>
   <text x="165" y="174" text-anchor="middle" class="small">гейт: angle defect ≈ 0</text>
 
-  <rect class="box spike" x="300" y="124" width="180" height="64"/>
+  <rect class="box ok" x="300" y="124" width="180" height="64"/>
   <text x="390" y="144" text-anchor="middle" class="title">Skeleton solve</text>
   <text x="390" y="160" text-anchor="middle" class="small">row/col union-find → LSQ</text>
   <text x="390" y="174" text-anchor="middle" class="small">в развёрнутом фрейме острова</text>
 
-  <rect class="box spike" x="530" y="124" width="170" height="64"/>
-  <text x="615" y="144" text-anchor="middle" class="title">Anchor-фронтир</text>
-  <text x="615" y="160" text-anchor="middle" class="small">rank → якоря → каскад</text>
-  <text x="615" y="174" text-anchor="middle" class="small">рельсы прямые, по длине дуги</text>
+  <rect class="box defer" x="530" y="124" width="170" height="64"/>
+  <text x="615" y="144" text-anchor="middle" class="title">Trace/Rail gap</text>
+  <text x="615" y="160" text-anchor="middle" class="small">ordered rails for loops</text>
+  <text x="615" y="174" text-anchor="middle" class="small">Slice J draft → approval</text>
 
   <rect class="box blender" x="750" y="124" width="170" height="64"/>
-  <text x="835" y="144" text-anchor="middle" class="title">Пины + Conformal</text>
-  <text x="835" y="160" text-anchor="middle" class="small">каркас запинен,</text>
-  <text x="835" y="174" text-anchor="middle" class="small">ткань — bpy.ops.uv.unwrap</text>
+  <text x="835" y="144" text-anchor="middle" class="title">Write UV (G5a)</text>
+  <text x="835" y="160" text-anchor="middle" class="small">пины через bmesh,</text>
+  <text x="835" y="174" text-anchor="middle" class="small">затем ручной U > Unwrap</text>
 
   <rect class="box ok" x="970" y="124" width="130" height="64"/>
   <text x="1035" y="150" text-anchor="middle" class="title">UV острова</text>
@@ -210,9 +234,9 @@
 
   <!-- invariants strip -->
   <rect x="80" y="236" width="1020" height="74" rx="7" fill="#1f1f24" stroke="#3a3a42" stroke-dasharray="4 4"/>
-  <text x="96" y="258" class="title" style="fill:#e8a33d">Инварианты solve-слоя (из спайка → в G5-контракты)</text>
+  <text x="96" y="258" class="title" style="fill:#e8a33d">Инварианты G5a и текущий guard</text>
   <text x="96" y="278" class="small">· осевая цепь меняет UV только вдоль своей оси (ловит знаковые баги) · residual LSQ ≈ 0 на плоских сетках · SEAM_SELF всегда split + равенство длин сторон</text>
-  <text x="96" y="294" class="small">· would-be-interior: только вершины, теряющие ВСЕ разрезы (T-стык остаётся границей) · UNCONSTRAINED-компоненты исключаются из решения, их вершины → unpinned · деградация всегда с диагностикой</text>
+  <text x="96" y="294" class="small">· would-be-interior: только вершины, теряющие ВСЕ разрезы · UNCONSTRAINED → unpinned + диагностика · multiseam loops ждут ScaffoldRail/Trace, не Layer 5 traversal-костыль</text>
 </svg>
 </div>
 
@@ -241,24 +265,27 @@
   <div class="trow"><span class="slice">A · Фикстуры</span><span>Канонический пакет производственных форм + baseline-тесты (нашёл нарушение DD-39 в первый день)</span><span class="st done">DONE</span></div>
   <div class="trow"><span class="slice">B · Ремонт</span><span>B1 кап/бок гейт (+регрессия ring flow, исправлена) · B2 индекс инцидентности · B3 angle defect в L2</span><span class="st done">DONE</span></div>
   <div class="trow"><span class="slice">C · Endpoints</span><span>Топологические endpoint-сэмплы: класс MISSING_ENDPOINT уничтожен (6→0)</span><span class="st done">DONE</span></div>
-  <div class="trow"><span class="slice">D · Families</span><span>DD-43 (G0 v1.3): ConnectedDirectionFamily с parallel transport — связность вместо мировых направлений</span><span class="st done">DONE</span></div>
+  <div class="trow"><span class="slice">D · Families</span><span>DD-43 + DD-45: ConnectedDirectionFamily v1 с parallel transport и occurrence-aware geodesic continuation</span><span class="st done">DONE</span></div>
   <div class="trow"><span class="slice">E · Tracer</span><span>Вертикальный срез до UV + consumption report (5 полей API / 15 субстрат) · E2 Blender-ран</span><span class="st done">DONE</span></div>
-  <div class="trow"><span class="slice">F · Ревизия</span><span>F1 typed family API · F2 stitch-гейт DD · F3 consumer-API split в G0 + дедуп доков</span><span class="st queue">В ОЧЕРЕДИ</span></div>
-  <div class="trow"><span class="slice">G · Порт CFTUV</span><span>G1 оси+лупы ✓ · G2 skeleton ✓ · G3 фронтир ✓ · G3.1 T-стыки ✓ (7→1 остров) · G3.2 авторитет ✓ · <b>G3.3 развёрнутый фрейм — финальная спайк-карточка</b></span><span class="st wip">В РАБОТЕ</span></div>
-  <div class="trow"><span class="slice">G4 · Гейт</span><span>Твоя визуальная приёмка walls.013: сетка прямоугольна, инвариант = 0 нарушений</span><span class="st gate">ТВОЙ ГЕЙТ</span></div>
-  <div class="trow"><span class="slice">G5 · Контракты</span><span>Layer 5 по-настоящему: контракты из consumption-отчётов, спайк в архив (guard №1)</span><span class="st queue">СЛЕДУЮЩИЙ</span></div>
+  <div class="trow"><span class="slice">F · API ревизия</span><span>Typed family API / stitch-gate learnings folded into runtime docs; G0 constitution split остаётся отдельным pending docs decision</span><span class="st done">ABSORBED</span></div>
+  <div class="trow"><span class="slice">G · CFTUV spike</span><span>G1–G3.3 validated skeleton/frontier lessons; spike frozen, production behavior moved into G5a</span><span class="st done">FROZEN</span></div>
+  <div class="trow"><span class="slice">I/H · Core rails prep</span><span>Overlay v3, RunEndpointJunction, ConnectedDirectionFamily v1, G5a Layer 5 runtime</span><span class="st done">DONE</span></div>
+  <div class="trow"><span class="slice">G5a · Runtime</span><span>Island assembly + skeleton solve + pinned UV write. Validated: two-seam tube, artist_cyl32, extruded_cross, L-corridor. Known limits: artist_cross_band partial, artist_cyl_multiseam xfail.</span><span class="st done">DONE</span></div>
+  <div class="trow"><span class="slice">J1 · Trace/Rail DD</span><span>Draft contract: ScaffoldTrace orders graph evidence; ScaffoldRail gives direction-stable rail frame for G5a consumers.</span><span class="st draft">DRAFT</span></div>
+  <div class="trow"><span class="slice">J2 · Implementation</span><span>После approval: реализовать ScaffoldTrace/ScaffoldRail поверх существующего ScaffoldGraph. Не патчить G5a traversal до этого.</span><span class="st active">NEXT</span></div>
 </div>
 
 <h2>5 · Anti-CFTUV guards (действуют на каждый срез)</h2>
 <div class="card"><ul class="guards">
-  <li><b>1 · Спайк приговорён:</b> после G4 — контракты и чистая реализация, спайк в архив; импорт из него запрещён всем.</li>
+  <li><b>1 · Спайк приговорён:</b> spike lessons уже перенесены в G5a/J; импорт из dev/tools/tracer_spike запрещён всем.</li>
   <li><b>2 · Нет хранимых ролей:</b> оси — вычисляемые проекции families, пересчёт каждый прогон.</li>
-  <li><b>3 · Solve не пишет назад:</b> «слой L3 должен был сказать X» → consumption report → отдельный L3-срез.</li>
+  <li><b>3 · Solve не подменяет L3:</b> «слой L3 должен был сказать X» → отдельный L3-срез, не runtime-костыль.</li>
   <li><b>4 · Скелет = всё выделение,</b> не патч: row/col-графы поверх всех островов (mesh/shell-уровень).</li>
   <li><b>5 · Семантические правила → L4:</b> в спайке только LEVEL_B_PLACEHOLDER.</li>
   <li><b>6 · Размер:</b> файл ≤ ~600 строк, спайк ≤ ~3000; монолит = смерть CFTUV, не повторяем.</li>
+  <li><b>7 · Multiseam rail loops:</b> ждать ScaffoldTrace/ScaffoldRail. Не добавлять BFS/greedy/sign-propagation в G5a.</li>
 </ul></div>
 
-<footer>SCAFFOLD · docs/scaffold_map.html · источники: G0.md (v1.3) · docs/plans/uv_tracer_revision_plan.md · docs/migration/cftuv_frontier_algorithm_cards.md. Обновлять при смене фазы или после G4-гейта.</footer>
+<footer>SCAFFOLD · docs/scaffold_map.html · источники: G0.md (v1.4) · docs/plans/uv_tracer_revision_plan.md · docs/phases/G5a_skeleton_runtime.md · docs/architecture/scaffold_rail_trace_contract_draft.md. Обновлять при смене фазы или approval Slice J.</footer>
 </body>
 </html>
