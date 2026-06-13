@@ -92,6 +92,7 @@
     <h3>Не путать</h3>
     <ul>
       <li><b>ScaffoldMap</b> — это этот HTML-документ, визуальная карта, не core-сущность.</li>
+      <li><b>Scaffold Graph Viewer</b> — внешний QA sidecar: читает JSON и показывает topological graph, но не строит relations.</li>
       <li><b>Multiseam cylinder</b> всё ещё xfail до consumer integration: наличие Rail v0 не означает, что Layer 5 может открывать loop без явного cut-context.</li>
       <li><b>Следующий срез</b> — подключение потребителя/occurrence-level opening policy, не новый G5a traversal-костыль.</li>
     </ul>
@@ -273,6 +274,7 @@
   <div class="trow"><span class="slice">G5a · Runtime</span><span>Island assembly + skeleton solve + pinned UV write. Validated: two-seam tube, artist_cyl32, extruded_cross, L-corridor. Known limits: artist_cross_band partial, artist_cyl_multiseam xfail.</span><span class="st done">DONE</span></div>
   <div class="trow"><span class="slice">J1 · Trace/Rail DD</span><span>Draft contract: ScaffoldTrace orders graph evidence; ScaffoldRail gives direction-stable rail frame for G5a consumers.</span><span class="st done">DONE</span></div>
   <div class="trow"><span class="slice">J2 · Implementation</span><span>ScaffoldTrace/ScaffoldRail v0 поверх ConnectedDirectionFamily: open rails consumable, loops/branches/occurrence ambiguity explicit.</span><span class="st done">DONE</span></div>
+  <div class="trow"><span class="slice">K1 · Graph Viewer</span><span>External flat topological graph QA viewer for exported JSON. Alias nodes are presentation only; no viewer-side relation construction.</span><span class="st done">DONE</span></div>
   <div class="trow"><span class="slice">J3 · Consumer integration</span><span>Переподключить G5a только к unambiguous ScaffoldRail; loop opening требует явный cut-context/occurrence policy.</span><span class="st active">NEXT</span></div>
 </div>
 

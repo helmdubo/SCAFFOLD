@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scaffold Graph Viewer</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <header class="brand">
+        <div class="mark">SG</div>
+        <div>
+          <h1>Scaffold Graph Viewer</h1>
+          <p>Topological QA canvas</p>
+        </div>
+      </header>
+
+      <section class="panel">
+        <h2>Payload</h2>
+        <label class="file-button">
+          <input id="fileInput" type="file" accept=".json,application/json">
+          Open JSON
+        </label>
+        <button id="demoButton" type="button">Load Demo</button>
+        <div id="payloadMeta" class="meta">No payload loaded.</div>
+      </section>
+
+      <section class="panel">
+        <h2>Layers</h2>
+        <label><input type="checkbox" data-layer="scaffoldEdges" checked> ScaffoldEdges</label>
+        <label><input type="checkbox" data-layer="runEndpoints" checked> RunEndpointJunctions</label>
+        <label><input type="checkbox" data-layer="families" checked> DirectionFamilies</label>
+        <label><input type="checkbox" data-layer="traces" checked> Traces</label>
+        <label><input type="checkbox" data-layer="rails" checked> Rails</label>
+        <label><input type="checkbox" data-layer="ambiguities" checked> Ambiguities</label>
+      </section>
+
+      <section class="panel">
+        <h2>Layout</h2>
+        <label><input id="unrollToggle" type="checkbox" checked> Alias loop endpoints</label>
+        <label><input id="labelsToggle" type="checkbox" checked> Labels</label>
+        <label class="range-row">Zoom <input id="zoomRange" type="range" min="60" max="160" value="100"></label>
+        <button id="relayoutButton" type="button">Relayout</button>
+      </section>
+
+      <section class="panel">
+        <h2>Search</h2>
+        <input id="searchBox" type="search" placeholder="id, patch, family, rail">
+        <div id="searchResults" class="results"></div>
+      </section>
+    </aside>
+
+    <main class="canvas-shell">
+      <div class="toolbar">
+        <div id="summary" class="summary">Drop a Scaffold graph JSON file here.</div>
+        <div id="badges" class="badges"></div>
+      </div>
+      <svg id="graphSvg" role="img" aria-label="Scaffold topological graph"></svg>
+      <div id="dropHint" class="drop-hint">Drop JSON to inspect Scaffold topology</div>
+    </main>
+
+    <aside class="inspector">
+      <header>
+        <h2>Inspector</h2>
+        <button id="clearSelectionButton" type="button">Clear</button>
+      </header>
+      <div id="selectionTitle" class="selection-title">Nothing selected</div>
+      <div id="selectionDetails" class="details">
+        Select a node, edge, trace, rail or ambiguity marker.
+      </div>
+    </aside>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

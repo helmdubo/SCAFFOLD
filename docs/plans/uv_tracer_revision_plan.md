@@ -800,6 +800,38 @@ python -m pytest scaffold_core/tests
 
 Commit message: "Implement ScaffoldTrace and ScaffoldRail v0".
 
+## Sidecar K — Scaffold Graph Viewer QA tool
+
+This is development tooling only. It lives outside `scaffold_core/` and must
+consume exported JSON rather than recreate Scaffold relations.
+
+### Task Card K1 — Flat topological graph viewer
+
+Status: DONE. Implemented in `dev/tools/scaffold_graph_viewer/`.
+
+Result:
+
+```text
+- Static web viewer for raw full inspection JSON or
+  scaffold_graph_viewer_payload_v1 wrapper payloads.
+- Displays ScaffoldNode / RunEndpointJunction atoms, ScaffoldEdges,
+  ConnectedDirectionFamily members, ScaffoldTrace members and ScaffoldRail
+  members in a flat topological graph.
+- Loop/coincident endpoint aliases are display-only visual nodes with a
+  canonical_id back to the real graph atom.
+- Side inspector exposes raw properties; layer toggles and id search support
+  QA without adding viewer-side Scaffold logic.
+- Export scripts exist for in-repo fixtures and active Blender mesh snapshots.
+```
+
+Guard:
+
+```text
+The viewer must not construct rails, choose branches, open loops, compute UVs,
+or introduce new core identities. Missing information stays visible as missing
+or ambiguous.
+```
+
 ### Task Card G4 — walls.004 validation gate
 
 User reruns Blender spike v3 on walls.004 after G1-G3. Pass criteria:
