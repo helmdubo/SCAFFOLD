@@ -104,6 +104,44 @@ class SCAFFOLDGRAPH_OT_UpdateVisibility(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class SCAFFOLDGRAPH_OT_WriteUV(bpy.types.Operator):
+    bl_idname = "scaffold_graph_debug.write_uv_g5a"
+    bl_label = "Write UV (G5a)"
+    bl_description = "Run the G5a skeleton solve and write pinned UVs + conformal fill"
+
+    def execute(self, context):
+        try:
+            from .session import _add_repo_root_to_path
+
+            _add_repo_root_to_path()
+            from scaffold_core.layer_0_source.blender_io import read_source_mesh_from_blender
+            from scaffold_core.layer_5_runtime.pins import run_skeleton_solve
+            from scaffold_core.layer_5_runtime.uv_transfer import write_pinned_uvs
+            from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
+
+            source = read_source_mesh_from_blender(context)
+            if not source.selected_face_ids:
+                self.report({"ERROR"}, "Select faces before writing UVs")
+                return {"CANCELLED"}
+            result = run_skeleton_solve(run_pass_1_relations(run_pass_0(source)))
+            report = write_pinned_uvs(context, result)
+            summary = (
+                f"islands:{len(result.assembly.islands)} "
+                f"pinned:{report['pinned_vertices']} loops:{report['written_loops']} "
+                f"residual:{result.residual_max:.1e} "
+                f"axis_violations:{len(result.axis_parallel_violations)} "
+                f"diags:{len(result.diagnostics)} unwrap:{report['unwrap_status'][:24]}"
+            )
+            print(f"[scaffold G5a] {summary}")
+            for line in result.diagnostics:
+                print(f"[scaffold G5a] diag: {line}")
+            self.report({"INFO"}, summary)
+        except Exception as exc:  # noqa: BLE001 - surface errors to the artist
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
+        return {"FINISHED"}
+
+
 class SCAFFOLDGRAPH_PT_Panel(bpy.types.Panel):
     bl_label = "Scaffold Graph"
     bl_idname = "SCAFFOLDGRAPH_PT_panel"
@@ -131,6 +169,7 @@ class SCAFFOLDGRAPH_PT_Panel(bpy.types.Panel):
         row.prop(settings, "show_seam_verdicts", toggle=True)
         row.prop(settings, "show_junctions", toggle=True)
         row.prop(settings, "show_branch_points", toggle=True)
+        layout.operator("scaffold_graph_debug.write_uv_g5a", icon="UV")
 
         if settings.source_object:
             col.label(text=f"Source: {settings.source_object}")
@@ -139,6 +178,7 @@ class SCAFFOLDGRAPH_PT_Panel(bpy.types.Panel):
 
 
 classes = (
+    SCAFFOLDGRAPH_OT_WriteUV,
     SCAFFOLDGRAPH_Settings,
     SCAFFOLDGRAPH_OT_Show,
     SCAFFOLDGRAPH_OT_Refresh,

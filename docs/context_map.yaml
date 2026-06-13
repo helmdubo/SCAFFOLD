@@ -1,4 +1,4 @@
-current_phase: G3
+current_phase: G5a
 
 canonical_docs:
   architecture: G0.md
@@ -45,6 +45,10 @@ phase_forbidden_dirs:
   G3:
     - scaffold_core/layer_4_features
     - scaffold_core/layer_5_runtime
+    - scaffold_core/api
+    - scaffold_core/ui
+  G5a:
+    - scaffold_core/layer_4_features
     - scaffold_core/api
     - scaffold_core/ui
 
