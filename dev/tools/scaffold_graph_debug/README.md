@@ -51,6 +51,9 @@ not call `bpy.ops.uv.unwrap`, does not switch modes by operator, and does not
 perform conformal fill. After the info-bar reports success, run Blender's
 manual command:
 
+In Edit Mode, selected faces define the run. In Object Mode, selecting one mesh
+object means all faces of that object are used.
+
 ```text
 UV Editor -> U -> Unwrap
 ```

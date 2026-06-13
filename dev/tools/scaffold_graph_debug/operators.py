@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import bpy
 from bpy.props import BoolProperty, PointerProperty, StringProperty
 
@@ -120,7 +122,15 @@ class SCAFFOLDGRAPH_OT_WriteUV(bpy.types.Operator):
             from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 
             source = read_source_mesh_from_blender(context)
-            if not source.selected_face_ids:
+            obj = getattr(context, "active_object", None)
+            if (
+                obj is not None
+                and getattr(obj, "type", None) == "MESH"
+                and getattr(obj, "mode", None) == "OBJECT"
+            ):
+                source = replace(source, selected_face_ids=tuple(source.faces))
+                print("[scaffold G5a] object mode: using all object faces")
+            elif not source.selected_face_ids:
                 self.report({"ERROR"}, "Select faces before writing UVs")
                 return {"CANCELLED"}
             result = run_skeleton_solve(run_pass_1_relations(run_pass_0(source)))

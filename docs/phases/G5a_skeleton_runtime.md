@@ -90,7 +90,8 @@ uv_transfer.py:
 ## Blender workflow
 
 ```text
-1. Select the target mesh faces.
+1. Select the target mesh faces, or select one mesh object in Object Mode
+   to use all faces of that object.
 2. Press Write UV (G5a) in the Scaffold Graph debug panel.
 3. Check the info-bar summary and console diagnostics.
 4. In the UV Editor run U > Unwrap to fill the fabric between pinned rails.
