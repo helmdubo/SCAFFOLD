@@ -128,4 +128,6 @@ artist_cyl_multiseam currently xfails as a missing ScaffoldTrace/ScaffoldRail
 contract case. The multiseam open band needs direction-stable ordered rail
 membership and transport-consistent orientation supplied by Layer 3; G5a must
 not replace that future slice with a local traversal heuristic.
+
+Draft contract: `docs/architecture/scaffold_rail_trace_contract_draft.md`.
 ```

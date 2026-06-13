@@ -680,6 +680,9 @@ before attempting to solve multiseam looped bands in Layer 5. This slice
 exists specifically to prevent CFTUV-style runtime heuristics from
 reappearing inside `scaffold_core/layer_5_runtime/`.
 
+Draft artifact: `docs/architecture/scaffold_rail_trace_contract_draft.md`.
+It is not a G0 amendment until the user approves it.
+
 Architectural guard for all Slice J cards:
 
 ```text
@@ -692,6 +695,9 @@ Architectural guard for all Slice J cards:
 ```
 
 ### Task Card J1 — ScaffoldRail / ScaffoldTrace DD draft and consumer contract
+
+Status: DONE as draft (`docs/architecture/scaffold_rail_trace_contract_draft.md`);
+awaiting Architect/user approval before any implementation card.
 
 ```text
 You are a disposable Architect-support session executing one docs-only
