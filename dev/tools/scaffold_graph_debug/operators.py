@@ -130,12 +130,13 @@ class SCAFFOLDGRAPH_OT_WriteUV(bpy.types.Operator):
                 f"pinned:{report['pinned_vertices']} loops:{report['written_loops']} "
                 f"residual:{result.residual_max:.1e} "
                 f"axis_violations:{len(result.axis_parallel_violations)} "
-                f"diags:{len(result.diagnostics)} unwrap:{report['unwrap_status'][:24]}"
+                f"diags:{len(result.diagnostics)}"
             )
             print(f"[scaffold G5a] {summary}")
+            print(f"[scaffold G5a] {report['next_step']}")
             for line in result.diagnostics:
                 print(f"[scaffold G5a] diag: {line}")
-            self.report({"INFO"}, summary)
+            self.report({"INFO"}, summary + " | U > Unwrap to fill")
         except Exception as exc:  # noqa: BLE001 - surface errors to the artist
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
