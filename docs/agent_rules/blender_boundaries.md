@@ -24,6 +24,18 @@ scaffold_core/layer_5_runtime/uv_transfer.py
 
 No other runtime module should write UVs to BMesh.
 
+Current G5a behavior:
+
+```text
+uv_transfer.py writes pinned skeleton UV coordinates and pin flags only.
+It does not call bpy.ops.mode_set or bpy.ops.uv.unwrap.
+The artist runs Blender's U > Unwrap after the pins are written.
+```
+
+This operator-free split is intentional: Blender 4.3 can crash when pin flags
+are written in one mode and an unwrap/mode operator is invoked from the same
+runtime boundary.
+
 ## Blender add-on exception
 
 A separate Blender add-on package may import `bpy` for:

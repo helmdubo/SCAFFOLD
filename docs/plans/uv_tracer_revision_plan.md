@@ -641,8 +641,17 @@ proven. Next slice (H) builds it in core, not in the spike.
 - User approved DD-44/DD-45; G0 bumped to v1.4. H2a authorized: core
   family v1 (occurrence-aware geodesic continuation), extruded_cross
   core fixture, overlay recolored from core, stash resolution.
+- H3 / G5a Layer 5 v0: DONE, merged to main. Implemented
+  `scaffold_core/layer_5_runtime/` with island assembly, selection-wide
+  skeleton solve, pinned UV output, and the `Write UV (G5a)` debug-panel
+  button. Current `uv_transfer.py` is operator-free: it writes UVs and pin
+  flags only; the artist runs Blender `U > Unwrap` manually for conformal
+  fill. Validated captures include two-seam cylinder / artist Cylinder
+  (68 pins, residual about 4e-15, zero diagnostics), extruded_cross and
+  l_corridor_tunnel. `artist_cross_band` remains a diagnosed partial
+  degradation case rather than a silent success.
 
-## Slice H — Run-endpoint junctions + Layer 5 contracts (next)
+## Slice H — Run-endpoint junctions + Layer 5 contracts (status)
 
 H1: Layer 3 run-endpoint junction evidence (rail-atom nodes: corner
     vertices interior to coalesced chains, derived from

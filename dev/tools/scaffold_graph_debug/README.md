@@ -1,10 +1,12 @@
 # ScaffoldGraph Debug Add-on
 
-Development-only Blender add-on for the ScaffoldGraph Grease Pencil overlay.
+Development-only Blender add-on for the ScaffoldGraph Grease Pencil overlay
+and the temporary G5a UV write button.
 
-It consumes Pass 0 / Pass 1 snapshots from Scaffold Core. It does not write UVs,
-does not store roles, and does not add Scaffold Core relation records. The v2
-overlay rebuilds a temporary artist-facing view each time you press Rebuild.
+It consumes Pass 0 / Pass 1 snapshots from Scaffold Core. The overlay does not
+store roles and does not add Scaffold Core relation records. The v2 overlay
+rebuilds a temporary artist-facing view each time you press Rebuild. `Write UV
+(G5a)` consumes the Layer 5 runtime result and writes pinned UV skeleton loops.
 
 ## Register From Blender
 
@@ -27,12 +29,45 @@ Controls:
 
 ```text
 Rebuild Overlay
+Write UV (G5a)
 Close Graph
 Family Colors / Spines / Ribs / Seam Verdicts (also CutRails) / Junctions / Branches visibility
 ```
 
 `Rebuild Overlay` hides the source mesh while the overlay is active. `Close Graph`
 removes the overlay and restores the mesh visibility.
+
+## Write UV (G5a)
+
+`Write UV (G5a)` runs the Layer 5 v0 runtime:
+
+```text
+Pass 0 / Pass 1 -> build_islands -> build_island_skeletons -> run_skeleton_solve
+-> uv_transfer.write_pinned_uvs
+```
+
+The button writes UV coordinates and pin flags for the skeleton only. It does
+not call `bpy.ops.uv.unwrap`, does not switch modes by operator, and does not
+perform conformal fill. After the info-bar reports success, run Blender's
+manual command:
+
+```text
+UV Editor -> U -> Unwrap
+```
+
+Blender's unwrap respects the pins written by G5a. This split is intentional:
+the `uv_transfer.py` boundary is crash-proof in Blender 4.3 because it writes
+pin flags through bmesh in Edit Mode and avoids operator-context unwrap calls.
+
+Current expected validation on the artist Cylinder capture:
+
+```text
+pinned:68 loops:192 residual:~4e-15 axis_violations:0 diags:0
+```
+
+If the button reports diagnostics, treat them as part of the G5a validation
+surface. They should name the degraded entities instead of silently smearing
+the UV skeleton.
 
 ## Overlay v2 Layers
 

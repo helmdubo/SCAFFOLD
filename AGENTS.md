@@ -87,6 +87,7 @@ Before coding, read only the routed docs needed for the task.
 | G1 topology work | `docs/phases/G1_topology_snapshot.md` + `docs/layers/layer_1_topology.md` + `docs/architecture/segmentation_shell_policy.md` |
 | G2 geometry facts | `docs/phases/G2_geometry_facts.md` + `docs/architecture/G0_full.md` |
 | G3 derived relations | `docs/phases/G3_derived_relations.md` + `docs/architecture/G0_full.md` |
+| G5a skeleton runtime / UV write | `docs/phases/G5a_skeleton_runtime.md` + `docs/agent_rules/blender_boundaries.md` |
 | Patch segmentation / shell detection | `docs/architecture/segmentation_shell_policy.md` |
 | Source mesh snapshot | `docs/layers/layer_0_source.md` |
 | Import rule / new file | `docs/agent_rules/import_boundaries.md` |

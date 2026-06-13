@@ -11,23 +11,25 @@ Read this after `AGENTS.md` and before changing code.
 ```text
 Project: Scaffold
 Core package: scaffold_core/
-Current phase: G3 - Derived Relations
+Current phase: G5a - Skeleton Runtime
 Architecture: immutable B-rep-inspired interpretation pipeline
-G0 contract: v1.2
+G0 contract: v1.4+ (G0.md remains read-only for agents)
 ```
 
-Scaffold Core currently contains Layers 0-3 plus pipeline diagnostics and tests.
-Future layers and wrappers are intentionally not created yet:
+Scaffold Core currently contains Layers 0-3, the G5a Layer 5 runtime,
+pipeline diagnostics and tests. Layer 4, public API and UI packages remain
+deferred:
 
 ```text
 scaffold_core/layer_4_features/
-scaffold_core/layer_5_runtime/
 scaffold_core/api/
 scaffold_core/ui/
 scaffold/
 ```
 
-Do not create them during G3.
+Do not create deferred phase directories during G5a. Layer 5 may consume
+Layers 0-3 read-only; relation contracts remain frozen unless the task
+explicitly authorizes a G3 repair.
 
 Root `scaffold_blender_inspection.json` is a user-only debug artifact and may
 be stale. Do not use it as an architecture reference; use code, docs and tests
@@ -66,7 +68,7 @@ Do not manually create separate Worker/Reviewer chats by default.
 
 1. `AGENTS.md`
 2. `docs/context_map.yaml`
-3. `docs/phases/G3_derived_relations.md`
+3. `docs/phases/G5a_skeleton_runtime.md`
 4. `docs/architecture/G0_full.md`
 5. `docs/architecture/design_decisions.md`
 6. `docs/agent_rules/import_boundaries.md`
@@ -79,7 +81,7 @@ Read `G0.md` when the task touches architecture or phase boundaries.
 
 ---
 
-## Current G3 status
+## Current G3/G5a status
 
 Implemented:
 
@@ -104,6 +106,15 @@ Implemented:
   with direction/flow-family gate
 - SurfaceFlowCompatibilityEvidence v0 evidence-only cross-patch flow-family
   compatibility record
+- ConnectedDirectionFamily v1 occurrence-aware geodesic continuation
+- RunEndpointJunction v0
+- Layer 5 v0 skeleton runtime:
+  - `islands.py` spanning-tree Level A island assembly;
+  - `skeleton.py` selection-wide AXIS_A / AXIS_B solve;
+  - `pins.py` run_skeleton_solve output model and invariants;
+  - `uv_transfer.py` the only bpy write boundary.
+- Debug add-on `Write UV (G5a)` button in
+  `dev/tools/scaffold_graph_debug/`.
 
 Not implemented:
 
@@ -113,9 +124,8 @@ Not implemented:
 - ScaffoldRail
 - WorldOrientation
 - Layer 4 Feature Grammar
-- Layer 5 Runtime/Solve
-- UV transfer
-- UI/add-on wrapper
+- public API
+- product UI/add-on wrapper beyond the dev debug add-on
 
 ---
 

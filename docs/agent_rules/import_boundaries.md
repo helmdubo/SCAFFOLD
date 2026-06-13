@@ -38,18 +38,26 @@ from scaffold_core.pipeline.context import PipelineContext
 
 Layer builder functions may type-reference `PipelineContext` when needed, but must not control pass order.
 
-## G3 forbidden future directories
+## Phase directory boundaries
 
-During G3, the following future-phase directories must not exist:
+During G5a, Layer 5 runtime exists and may consume Layers 0-3 read-only.
+The following directories remain future/deferred:
 
 ```text
 scaffold_core/layer_4_features/
-scaffold_core/layer_5_runtime/
 scaffold_core/api/
 scaffold_core/ui/
 ```
 
-`scaffold_core/layer_2_geometry/` and `scaffold_core/layer_3_relations/` are allowed during G3.
+`scaffold_core/layer_5_runtime/` is allowed during G5a. It must not be
+imported by lower layers, and lower layers must not depend on runtime solve or
+UV transfer output.
+
+`bpy` remains forbidden in core except for:
+
+```text
+scaffold_core/layer_5_runtime/uv_transfer.py
+```
 
 ## Enforced by test
 

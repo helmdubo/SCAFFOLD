@@ -34,8 +34,10 @@ skeleton.py  - selection-wide solve:
   their vertices unpinned; residual reported.
 
 pins.py      - output model: vertex -> (uv, pinned flag, island id).
-uv_transfer.py - the ONLY bpy write boundary (G5 rule): writes UVs+pins,
-  invokes Blender pinned conformal unwrap for the fabric.
+uv_transfer.py - the ONLY bpy write boundary (G5 rule): writes UVs+pins
+  in the mesh's current mode without bpy operators. It does not call
+  mode_set or unwrap; the artist runs Blender's U > Unwrap after the
+  pins are written so the conformal fill is owned by Blender UI state.
 ```
 
 ## Invariants (validation outputs, not hopes)
@@ -53,3 +55,62 @@ uv_transfer.py - the ONLY bpy write boundary (G5 rule): writes UVs+pins,
 
 Texel scale policy, packing, trim semantics, Layer 4 grammar,
 WorldOrientation, curved-chain refinement (OQ-11 remainder).
+
+## Implemented status (H3)
+
+```text
+Layer 5 v0 is implemented in scaffold_core/layer_5_runtime/.
+
+islands.py:
+  spanning-tree island assembly over Level A stitch decisions;
+  mid-chain would-be-interior vertices use Layer 2 angle sums;
+  stitch endpoints are excluded while remaining cut incidence keeps
+  them boundary (T-junction rule);
+  SEAM_SELF always splits and non-tree seams stay cut.
+
+skeleton.py:
+  selection-wide skeleton solve over ScaffoldNode UNION
+  RunEndpointJunction atoms;
+  one length equation per directional run endpoint pair;
+  island-local AXIS_A / AXIS_B roles are derived from
+  ConnectedDirectionFamily v1 in the unfolded island frame;
+  contradictions are excluded as UNCONSTRAINED with diagnostics.
+
+pins.py:
+  run_skeleton_solve() orchestrates islands -> skeleton -> pinned UVs;
+  per-patch pins preserve duplicated seam occurrences;
+  axis-parallel and SEAM_SELF length checks are validation outputs.
+
+uv_transfer.py:
+  writes UV coordinates and pin flags only;
+  uses bmesh in Edit Mode and mesh UV data in Object Mode;
+  calls no bpy operators and performs no automatic unwrap.
+```
+
+## Blender workflow
+
+```text
+1. Select the target mesh faces.
+2. Press Write UV (G5a) in the Scaffold Graph debug panel.
+3. Check the info-bar summary and console diagnostics.
+4. In the UV Editor run U > Unwrap to fill the fabric between pinned rails.
+```
+
+Expected currently validated behavior:
+
+```text
+- cylinder tube with two seams: rectangular side band, one seam stitched
+  inside the island and the other left open;
+- extruded_cross: side band plus two separate cap islands;
+- l_corridor_tunnel_seamed_folds: one island through the folds;
+- artist_cyl32/Cylinder: 68 pins, residual about 4e-15, zero diagnostics
+  in the validated capture.
+```
+
+Known limitation:
+
+```text
+artist_cross_band currently degrades partially with diagnostics instead of
+silently smearing. This is an accepted G5a diagnostic case, not a green
+quality target yet.
+```

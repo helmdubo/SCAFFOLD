@@ -27,6 +27,15 @@ phase_allowed_dirs:
     - scaffold_core/layer_3_relations
     - scaffold_core/pipeline
     - scaffold_core/tests
+  G5a:
+    - scaffold_core/core
+    - scaffold_core/layer_0_source
+    - scaffold_core/layer_1_topology
+    - scaffold_core/layer_2_geometry
+    - scaffold_core/layer_3_relations
+    - scaffold_core/layer_5_runtime
+    - scaffold_core/pipeline
+    - scaffold_core/tests
 
 phase_forbidden_dirs:
   G1:
@@ -114,6 +123,10 @@ task_routes:
   g3_relations:
     - docs/phases/G3_derived_relations.md
     - docs/architecture/G0_full.md
+  g5a_runtime:
+    - docs/phases/G5a_skeleton_runtime.md
+    - docs/agent_rules/blender_boundaries.md
+    - docs/agent_rules/import_boundaries.md
   source_snapshot:
     - docs/layers/layer_0_source.md
   imports:
