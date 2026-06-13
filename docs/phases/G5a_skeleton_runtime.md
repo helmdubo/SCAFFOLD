@@ -54,7 +54,16 @@ uv_transfer.py - the ONLY bpy write boundary (G5 rule): writes UVs+pins
 ## Non-goals in G5a
 
 Texel scale policy, packing, trim semantics, Layer 4 grammar,
-WorldOrientation, curved-chain refinement (OQ-11 remainder).
+WorldOrientation, curved-chain refinement (OQ-11 remainder), and
+ScaffoldTrace/ScaffoldRail construction.
+
+G5a v0 has provisional rail order/sign derivation for the simple validated
+fixtures. That provisional logic must not be widened to compensate for
+missing ScaffoldTrace/ScaffoldRail by adding new rail-order, loop-orientation,
+BFS/greedy traversal or sign-propagation heuristics inside Layer 5. If a
+fixture needs a direction-stable ordered rail or trace to solve, the correct
+G5a behavior is to diagnose/degrade and keep the behavior pinned until the
+Layer 3 rail/trace contract exists.
 
 ## Implemented status (H3)
 
@@ -114,4 +123,9 @@ Known limitation:
 artist_cross_band currently degrades partially with diagnostics instead of
 silently smearing. This is an accepted G5a diagnostic case, not a green
 quality target yet.
+
+artist_cyl_multiseam currently xfails as a missing ScaffoldTrace/ScaffoldRail
+contract case. The multiseam open band needs direction-stable ordered rail
+membership and transport-consistent orientation supplied by Layer 3; G5a must
+not replace that future slice with a local traversal heuristic.
 ```

@@ -167,19 +167,18 @@ import pytest
 
 
 def test_multiseam_cylinder_open_band_should_solve_xfail() -> None:
-    # KNOWN BUG (G5a node identity): a 32-segment cylinder cut into 6 vertical
-    # strips is an OPEN developable band (one seam stays SPLIT, the rest SEW)
-    # and MUST unroll to a rectangle. It currently collapses: vertical seam-
-    # side runs map both endpoints to one solve node, columns never form, the
-    # rim equation graph gains 6 spurious cycles -> all AXIS_A equations
-    # UNCONSTRAINED -> 0 pins. Fix: build skeleton solve nodes from
-    # RunEndpointJunction + topology VertexId (split at cut seams, union at
-    # stitched seams) instead of ad-hoc string keys. Flip when fixed.
+    # KNOWN LIMITATION (missing ScaffoldRail/Trace contract): a 32-segment
+    # cylinder cut into 6 vertical strips is an OPEN developable band (one
+    # seam stays SPLIT, the rest SEW) and MUST unroll to a rectangle. It
+    # currently collapses because G5a is still deriving rail order and
+    # orientation signs from looped ConnectedDirectionFamily membership. Do
+    # not patch this with another Layer 5 traversal heuristic; flip after
+    # Layer 3 exposes direction-stable ordered ScaffoldRail/Trace evidence.
     result = _solve(_load_capture("artist_cyl_multiseam.json"))
     band = max(result.assembly.islands, key=lambda island: len(island.patch_ids))
     pinned_in_band = [
         v for v in result.vertices if v.island_id == band.id and v.pinned
     ]
     if result.diagnostics or not pinned_in_band:
-        pytest.xfail("multiseam open band collapses: skeleton node-identity bug")
+        pytest.xfail("multiseam open band needs ScaffoldRail/Trace contract")
     assert result.residual_max < 1e-6

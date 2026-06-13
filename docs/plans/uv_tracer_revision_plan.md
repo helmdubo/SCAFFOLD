@@ -650,6 +650,16 @@ proven. Next slice (H) builds it in core, not in the spike.
   (68 pins, residual about 4e-15, zero diagnostics), extruded_cross and
   l_corridor_tunnel. `artist_cross_band` remains a diagnosed partial
   degradation case rather than a silent success.
+- Architecture correction (2026-06-13): the multiseam cylinder collapse is
+  not a reason to add more orientation/sign traversal heuristics inside
+  G5a. Investigation showed that node identity and the scalar least-squares
+  solver are not the architectural root; the missing substrate is a
+  direction-stable ordered rail/trace contract. Any "fix" that makes
+  `_solve_axis` infer rail order, loop signs, branch choices or transport
+  consistency locally is a Layer 5 substitute for future ScaffoldTrace /
+  ScaffoldRail work and is out of scope. The current xfail stays pinned as
+  a known limitation until Slice J defines and implements the Layer 3
+  contract G5a should consume.
 
 ## Slice H — Run-endpoint junctions + Layer 5 contracts (status)
 
@@ -662,6 +672,99 @@ H2: G5 contract drafts from accumulated consumption reports and spike
     axis-parallel invariant; UNCONSTRAINED exclusion; T-junction
     interior set; SEAM_SELF split; degradation with diagnostics).
     Architect drafts, user approves phase start.
+
+## Slice J — ScaffoldTrace / ScaffoldRail contract before widening G5a
+
+Purpose: move direction-stable ordered rail/trace semantics into Layer 3
+before attempting to solve multiseam looped bands in Layer 5. This slice
+exists specifically to prevent CFTUV-style runtime heuristics from
+reappearing inside `scaffold_core/layer_5_runtime/`.
+
+Architectural guard for all Slice J cards:
+
+```text
+- G5a may consume ordered rail/trace evidence after it exists.
+- G5a must not infer rail order, loop signs, branch choices or
+  transport-consistent rail orientation by local BFS/greedy traversal.
+- Branches and loops preserve ambiguity unless the ScaffoldRail contract
+  explicitly resolves them.
+- No UV, pins, texel policy, packing, WORLD_UP or H/V semantics in Layer 3.
+```
+
+### Task Card J1 — ScaffoldRail / ScaffoldTrace DD draft and consumer contract
+
+```text
+You are a disposable Architect-support session executing one docs-only
+Task Card for SCAFFOLD. Base on branch main.
+
+READ FIRST
+  1. AGENTS.md
+  2. G0.md sections defining ScaffoldTrace, ScaffoldCircuit, ScaffoldRail,
+     ConnectedDirectionFamily, RunEndpointJunction and DD-37/DD-43/DD-44/DD-45
+  3. docs/phases/G5a_skeleton_runtime.md
+  4. docs/plans/uv_tracer_revision_plan.md -> Slice J
+  5. scaffold_core/tests/test_layer_5_runtime.py ->
+     test_multiseam_cylinder_open_band_should_solve_xfail
+
+TASK CARD: J1 - ScaffoldRail / ScaffoldTrace contract draft
+
+GOAL
+  Draft the contract that will let G5a consume ordered, direction-stable
+  rails instead of deriving them locally. This is a docs-only contract
+  preparation card; do NOT implement rail evidence and do NOT change
+  layer_5_runtime solve behavior.
+
+CONTRACT CONTENT TO DRAFT
+  1. ScaffoldTrace: an ordered connected sequence over existing Layer 3
+     graph atoms (ScaffoldNode and RunEndpointJunction) and existing
+     directional evidence members. It is not Layer 1 identity and does
+     not mutate PatchChain / ScaffoldEdge grouping.
+  2. ScaffoldRail: a direction-stable ScaffoldTrace usable by Layer 5 as
+     a conditional axis input. It carries ordered member evidence ids,
+     endpoint node ids, per-member orientation sign in the transported
+     rail frame, branch/loop ambiguity records, crossing provenance and
+     confidence.
+  3. Loop policy: closed/looped families are not linearly ordered by
+     greedy traversal. The contract must state what remains ambiguous,
+     what is eligible to become an open rail after island cuts, and what
+     becomes a consistency check instead of a sign source.
+  4. Branch policy: valence > 2 never silently picks a trace. It emits
+     branch ambiguity unless an explicit future rule resolves it.
+  5. Consumer API: G5a may consume ScaffoldRail order/orientation when
+     present; when absent or ambiguous it must diagnose/degrade, not
+     reconstruct the missing rail in Layer 5.
+  6. Non-goals: no UV, pins, feature grammar, packing, WORLD_UP, H/V,
+     wall/floor labels, or runtime solve behavior in the Layer 3 contract.
+
+ACCEPTANCE
+  1. docs/plans/uv_tracer_revision_plan.md contains the drafted DD text
+     or points to a new docs/architecture draft file if the text is too
+     large for the plan.
+  2. docs/phases/G5a_skeleton_runtime.md states that multiseam rail-loop
+     collapse is blocked on ScaffoldRail/Trace and must not be fixed by
+     Layer 5 traversal heuristics.
+  3. The xfail comment for artist_cyl_multiseam names the missing
+     ScaffoldRail/Trace substrate, not a node-identity bug.
+  4. No production code behavior changes. `python -m pytest
+     scaffold_core/tests/test_layer_5_runtime.py` stays green.
+
+ALLOWED FILES
+  docs/plans/uv_tracer_revision_plan.md
+  docs/phases/G5a_skeleton_runtime.md
+  docs/architecture/scaffold_rail_trace_contract_draft.md (new, optional)
+  scaffold_core/tests/test_layer_5_runtime.py (comment / xfail text only)
+
+STOP CONDITIONS
+  - Any urge to modify scaffold_core/layer_3_relations or
+    scaffold_core/layer_5_runtime behavior -> stop and report.
+  - Any urge to edit G0.md directly -> stop; draft the amendment text in
+    docs only for user approval.
+  - Any rule requires choosing a branch trace at valence > 2 -> preserve
+    ambiguity and report the unresolved policy.
+
+Run `python -m pytest scaffold_core/tests/test_layer_5_runtime.py`.
+Commit message: "Draft ScaffoldRail contract gate for multiseam G5a".
+```
 
 ### Task Card G4 — walls.004 validation gate
 
