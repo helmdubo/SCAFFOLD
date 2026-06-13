@@ -19,6 +19,7 @@ def write_pinned_uvs(blender_context: Any, result: SolveResult) -> dict[str, Any
     """Write skeleton UVs + pins to the active mesh and run pinned unwrap."""
 
     import bpy  # the G5 write boundary; never imported headlessly
+    import bmesh
 
     active_object = blender_context.object
     # Mesh.polygons/loops/uv_layers.data are EMPTY in Edit Mode (the data
@@ -37,20 +38,30 @@ def write_pinned_uvs(blender_context: Any, result: SolveResult) -> dict[str, Any
     for vertex in result.vertices:
         by_vertex.setdefault(vertex.source_vertex_id, vertex)
     written = 0
+    pinned_by_face_loop: dict[tuple[int, int], bool] = {}
     for polygon in mesh.polygons:
         face_patch = result.patch_by_source_face.get(f"f{polygon.index}")
-        for loop_index in polygon.loop_indices:
+        for loop_offset, loop_index in enumerate(polygon.loop_indices):
             loop = mesh.loops[loop_index]
             key = f"v{loop.vertex_index}"
             pinned_vertex = by_vertex_patch.get((key, face_patch)) or by_vertex.get(key)
             if pinned_vertex is None:
-                uv_layer.data[loop_index].pin_uv = False
+                pinned_by_face_loop[(polygon.index, loop_offset)] = False
                 continue
             uv_layer.data[loop_index].uv = pinned_vertex.uv
-            uv_layer.data[loop_index].pin_uv = pinned_vertex.pinned
+            pinned_by_face_loop[(polygon.index, loop_offset)] = pinned_vertex.pinned
             written += 1
-    # Unwrap runs in Edit Mode and respects the pins we just wrote.
+    # Blender 4.3 can crash when Object Mode writes pin_uv before rebuilding
+    # edit bmesh, so pin in Edit Mode after the UV coordinates are committed.
     bpy.ops.object.mode_set(mode="EDIT")
+    bm = bmesh.from_edit_mesh(mesh)
+    bm.faces.ensure_lookup_table()
+    bm.faces.index_update()
+    edit_uv_layer = bm.loops.layers.uv.active
+    for face in bm.faces:
+        for loop_offset, loop in enumerate(face.loops):
+            loop[edit_uv_layer].pin_uv = bool(pinned_by_face_loop.get((face.index, loop_offset), False))
+    bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
     bpy.ops.mesh.select_all(action="SELECT")
     try:
         unwrap_status = bpy.ops.uv.unwrap(method="CONFORMAL")
