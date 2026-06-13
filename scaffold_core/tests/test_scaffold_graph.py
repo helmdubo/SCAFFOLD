@@ -131,9 +131,9 @@ def test_degraded_non_manifold_graph_preserves_ambiguity_without_path_choices() 
         relation.kind in (ContinuationKind.TERMINUS, ContinuationKind.SPLIT)
         for relation in snapshot.chain_continuations
     )
-    assert not hasattr(snapshot, "scaffold_traces")
     assert not hasattr(snapshot, "scaffold_circuits")
-    assert not hasattr(snapshot, "scaffold_rails")
+    assert snapshot.scaffold_traces
+    assert snapshot.scaffold_rails
 
 
 def test_scaffold_graph_builder_does_not_change_layer_1_identity() -> None:

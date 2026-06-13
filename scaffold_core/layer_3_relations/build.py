@@ -38,6 +38,7 @@ from scaffold_core.layer_3_relations.scaffold_graph import build_scaffold_graph
 from scaffold_core.layer_3_relations.scaffold_graph_relations import build_scaffold_graph_relations
 from scaffold_core.layer_3_relations.scaffold_junctions import build_scaffold_junctions
 from scaffold_core.layer_3_relations.scaffold_nodes import build_scaffold_nodes
+from scaffold_core.layer_3_relations.scaffold_rails import build_scaffold_traces_and_rails
 
 
 ANGLE_TOLERANCE_RADIANS = 1.0e-6
@@ -129,6 +130,11 @@ def build_relation_snapshot(
         scaffold_node_incident_edge_relations,
         shared_chain_patch_chain_relations,
     )
+    scaffold_traces, scaffold_rails = build_scaffold_traces_and_rails(
+        connected_direction_families,
+        patch_chain_directional_evidence,
+        run_endpoint_junctions,
+    )
     return RelationSnapshot(
         patch_adjacencies=patch_adjacencies,
         chain_continuations=build_chain_continuations(topology, patch_chain_vertex_incidence),
@@ -148,6 +154,8 @@ def build_relation_snapshot(
         shared_chain_patch_chain_relations=shared_chain_patch_chain_relations,
         scaffold_continuity_components=scaffold_continuity_components,
         connected_direction_families=connected_direction_families,
+        scaffold_traces=scaffold_traces,
+        scaffold_rails=scaffold_rails,
         alignment_classes=alignment_classes,
         patch_axes=patch_axes,
     )

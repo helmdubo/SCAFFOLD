@@ -772,6 +772,34 @@ Run `python -m pytest scaffold_core/tests/test_layer_5_runtime.py`.
 Commit message: "Draft ScaffoldRail contract gate for multiseam G5a".
 ```
 
+### Task Card J2 — ScaffoldTrace / ScaffoldRail v0 implementation
+
+Status: DONE. Implemented as Layer 3 evidence view in
+`scaffold_core/layer_3_relations/scaffold_rails.py`.
+
+Result:
+
+```text
+- ScaffoldTrace v0 orders ConnectedDirectionFamily members through existing
+  ScaffoldNode / RunEndpointJunction atoms where an unambiguous path exists.
+- ScaffoldRail v0 exposes ordered members, ordered trace nodes, transported
+  orientation signs for open non-branching traces, crossing provenance,
+  branch records, loop ambiguity records, diagnostics and confidence.
+- Closed loops are not opened by the builder. They are explicit
+  non-consumable loop rails until a later cut-context / consumer slice opens
+  them.
+- Branches and occurrence-collapsed open endpoints preserve ambiguity; no
+  Layer 5 traversal heuristic was added.
+```
+
+Acceptance run:
+
+```text
+python -m pytest scaffold_core/tests
+```
+
+Commit message: "Implement ScaffoldTrace and ScaffoldRail v0".
+
 ### Task Card G4 — walls.004 validation gate
 
 User reruns Blender spike v3 on walls.004 after G1-G3. Pass criteria:

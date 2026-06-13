@@ -1,7 +1,7 @@
 # ScaffoldTrace / ScaffoldRail Contract Draft
 
-Status: draft for Architect and user approval. This document is not an
-implemented contract and does not amend `G0.md` by itself.
+Status: draft basis used by Slice J2 ScaffoldTrace / ScaffoldRail v0. This
+document still does not amend `G0.md` by itself.
 
 Purpose: define the Layer 3 substrate that lets G5a consume ordered,
 direction-stable rails instead of reconstructing rail order and orientation

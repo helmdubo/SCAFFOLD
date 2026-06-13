@@ -456,6 +456,63 @@ class ConnectedDirectionFamily:
 
 
 @dataclass(frozen=True)
+class ScaffoldTraceMember:
+    """One ordered directional evidence member inside a ScaffoldTrace."""
+
+    directional_evidence_id: str
+    patch_id: PatchId
+    patch_chain_id: PatchChainId
+    scaffold_edge_id: str | None
+    start_trace_node_id: str | None
+    end_trace_node_id: str | None
+    start_vertex_id: VertexId | None
+    end_vertex_id: VertexId | None
+    previous_crossing_index: int | None
+    next_crossing_index: int | None
+    confidence: float
+
+
+@dataclass(frozen=True)
+class ScaffoldTrace:
+    """Ordered Layer 3 evidence view over existing graph and directional atoms."""
+
+    id: str
+    direction_family_id: str
+    member_directional_evidence_ids: tuple[str, ...]
+    ordered_member_directional_evidence_ids: tuple[str, ...]
+    trace_node_ids: tuple[str, ...]
+    members: tuple[ScaffoldTraceMember, ...]
+    crossing_records: tuple[CrossingRecord, ...]
+    branch_records: Mapping[str, tuple[str, ...]]
+    loop_ambiguity_records: Mapping[str, tuple[str, ...]]
+    diagnostics: tuple[str, ...]
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
+class ScaffoldRail:
+    """Direction-stability view over a ScaffoldTrace for later consumers."""
+
+    id: str
+    scaffold_trace_id: str
+    direction_family_id: str
+    ordered_member_directional_evidence_ids: tuple[str, ...]
+    ordered_trace_node_ids: tuple[str, ...]
+    first_trace_node_id: str | None
+    last_trace_node_id: str | None
+    is_closed_loop: bool
+    orientation_sign_by_member: Mapping[str, int]
+    crossing_records: tuple[CrossingRecord, ...]
+    branch_records: Mapping[str, tuple[str, ...]]
+    loop_ambiguity_records: Mapping[str, tuple[str, ...]]
+    is_consumable_by_g5a: bool
+    diagnostics: tuple[str, ...]
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class SharedChainPatchChainRelation:
     """Graph-level relation between final PatchChains sharing one Chain."""
 
@@ -510,6 +567,8 @@ class RelationSnapshot:
     shared_chain_patch_chain_relations: tuple[SharedChainPatchChainRelation, ...] = ()
     scaffold_continuity_components: tuple[ScaffoldContinuityComponent, ...] = ()
     connected_direction_families: tuple[ConnectedDirectionFamily, ...] = ()
+    scaffold_traces: tuple[ScaffoldTrace, ...] = ()
+    scaffold_rails: tuple[ScaffoldRail, ...] = ()
     alignment_classes: tuple[AlignmentClass, ...] = ()
     patch_axes: Mapping[PatchId, PatchAxes] = field(default_factory=dict)
     diagnostics: tuple[Diagnostic, ...] = ()

@@ -68,7 +68,7 @@
 <body>
 
 <h1>SCAFFOLD — карта архитектуры</h1>
-<div class="sub">Structural UV для архитектурных мешей · контракт G0 v1.4 · текущая фаза G5a Skeleton Runtime · активный фронт: Slice J (ScaffoldTrace / ScaffoldRail draft) · обновлено 2026-06-13</div>
+<div class="sub">Structural UV для архитектурных мешей · контракт G0 v1.4 · текущая фаза G5a Skeleton Runtime · активный фронт: Slice J (ScaffoldTrace / ScaffoldRail v0) · обновлено 2026-06-13</div>
 <div class="legend">
   <span><span class="dot" style="background:var(--ok)"></span>реализовано</span>
   <span><span class="dot" style="background:var(--contract)"></span>контракт утверждён / Blender</span>
@@ -85,15 +85,15 @@
     <ul>
       <li><b>G5a реализован:</b> island assembly, skeleton solve, pinned UV write, debug-button <b>Write UV (G5a)</b>.</li>
       <li><b>ScaffoldGraph уже реализован:</b> это Layer 3 connectivity substrate, не следующий срез.</li>
-      <li><b>Slice J активен:</b> нужен контракт <b>ScaffoldTrace / ScaffoldRail</b>, чтобы G5a перестал угадывать порядок/знаки рельсов.</li>
+      <li><b>Slice J активен:</b> <b>ScaffoldTrace / ScaffoldRail v0</b> теперь есть как Layer 3 evidence-view; G5a ещё не переподключён на него.</li>
     </ul>
   </div>
   <div class="card">
     <h3>Не путать</h3>
     <ul>
       <li><b>ScaffoldMap</b> — это этот HTML-документ, визуальная карта, не core-сущность.</li>
-      <li><b>Multiseam cylinder</b> сейчас xfail: это missing ScaffoldRail/Trace substrate, не повод патчить G5a traversal-костылём.</li>
-      <li><b>Следующий implementation-срез</b> возможен только после approval draft-контракта J1.</li>
+      <li><b>Multiseam cylinder</b> всё ещё xfail до consumer integration: наличие Rail v0 не означает, что Layer 5 может открывать loop без явного cut-context.</li>
+      <li><b>Следующий срез</b> — подключение потребителя/occurrence-level opening policy, не новый G5a traversal-костыль.</li>
     </ul>
   </div>
 </div>
@@ -141,9 +141,9 @@
       <span class="chip substrate">ScaffoldNode/Edge/Graph</span><span class="chip substrate">IncidentEdgeRelation (9 kinds)</span>
       <span class="chip substrate">SideSurface/SurfaceFlow evidence</span><span class="chip substrate">ContinuityComponent</span>
       <span class="chip substrate">AlignmentClass (демоция: вход PatchAxes)</span>
-      <span class="chip defer">ScaffoldTrace / ScaffoldRail (Slice J draft)</span>
+      <span class="chip ok api">ScaffoldTrace / ScaffoldRail v0</span>
     </div>
-    <div class="note">ScaffoldGraph уже реализован как connectivity substrate. Следующая недостающая сущность — не новый Graph, а ordered/direction-stable Trace/Rail поверх него. Evidence не выбирает UV; Trace/Rail draft тоже остаётся Layer 3 evidence.</div>
+    <div class="note">ScaffoldGraph уже реализован как connectivity substrate. Trace/Rail v0 — ordered/direction-stability evidence поверх ConnectedDirectionFamily; loops/branches остаются explicit ambiguity, а G5a не выбирает их сам.</div>
   </div>
 </div>
 
@@ -161,7 +161,7 @@
     <span class="chip ok api">G5a island assembly</span><span class="chip ok api">G5a skeleton solve</span>
     <span class="chip ok api">PinnedVertex output</span><span class="chip ok api">uv_transfer write boundary</span>
     <span class="chip ok">Write UV (G5a) debug button</span><span class="chip defer">PinPolicy · texel scale · packing</span>
-  </div><div class="note">G5a реализован и валидирован на простых developable случаях. Он не должен расширяться новыми rail-order/sign эвристиками для multiseam loop cases; это blocked on ScaffoldTrace/ScaffoldRail.</div></div>
+  </div><div class="note">G5a реализован и валидирован на простых developable случаях. Он не должен расширяться новыми rail-order/sign эвристиками для multiseam loop cases; следующий шаг — потреблять explicit ScaffoldRail v0 там, где он unambiguous.</div></div>
 </div>
 
 <div class="rulebar"><b>Запрещённые циклы:</b> solve не определяет недостающие рельсы · WorldOrientation не определяет alignment · evidence не выбирает UV. <b>Анти-CFTUV:</b> никаких хранимых H/V и WALL/FLOOR в L1–L3 — оси остаются вычисляемыми, а ordered rails должны прийти из Layer 3 контракта.</div>
@@ -271,8 +271,9 @@
   <div class="trow"><span class="slice">G · CFTUV spike</span><span>G1–G3.3 validated skeleton/frontier lessons; spike frozen, production behavior moved into G5a</span><span class="st done">FROZEN</span></div>
   <div class="trow"><span class="slice">I/H · Core rails prep</span><span>Overlay v3, RunEndpointJunction, ConnectedDirectionFamily v1, G5a Layer 5 runtime</span><span class="st done">DONE</span></div>
   <div class="trow"><span class="slice">G5a · Runtime</span><span>Island assembly + skeleton solve + pinned UV write. Validated: two-seam tube, artist_cyl32, extruded_cross, L-corridor. Known limits: artist_cross_band partial, artist_cyl_multiseam xfail.</span><span class="st done">DONE</span></div>
-  <div class="trow"><span class="slice">J1 · Trace/Rail DD</span><span>Draft contract: ScaffoldTrace orders graph evidence; ScaffoldRail gives direction-stable rail frame for G5a consumers.</span><span class="st draft">DRAFT</span></div>
-  <div class="trow"><span class="slice">J2 · Implementation</span><span>После approval: реализовать ScaffoldTrace/ScaffoldRail поверх существующего ScaffoldGraph. Не патчить G5a traversal до этого.</span><span class="st active">NEXT</span></div>
+  <div class="trow"><span class="slice">J1 · Trace/Rail DD</span><span>Draft contract: ScaffoldTrace orders graph evidence; ScaffoldRail gives direction-stable rail frame for G5a consumers.</span><span class="st done">DONE</span></div>
+  <div class="trow"><span class="slice">J2 · Implementation</span><span>ScaffoldTrace/ScaffoldRail v0 поверх ConnectedDirectionFamily: open rails consumable, loops/branches/occurrence ambiguity explicit.</span><span class="st done">DONE</span></div>
+  <div class="trow"><span class="slice">J3 · Consumer integration</span><span>Переподключить G5a только к unambiguous ScaffoldRail; loop opening требует явный cut-context/occurrence policy.</span><span class="st active">NEXT</span></div>
 </div>
 
 <h2>5 · Anti-CFTUV guards (действуют на каждый срез)</h2>
@@ -283,9 +284,9 @@
   <li><b>4 · Скелет = всё выделение,</b> не патч: row/col-графы поверх всех островов (mesh/shell-уровень).</li>
   <li><b>5 · Семантические правила → L4:</b> в спайке только LEVEL_B_PLACEHOLDER.</li>
   <li><b>6 · Размер:</b> файл ≤ ~600 строк, спайк ≤ ~3000; монолит = смерть CFTUV, не повторяем.</li>
-  <li><b>7 · Multiseam rail loops:</b> ждать ScaffoldTrace/ScaffoldRail. Не добавлять BFS/greedy/sign-propagation в G5a.</li>
+  <li><b>7 · Multiseam rail loops:</b> потреблять explicit ScaffoldRail, но не добавлять BFS/greedy/sign-propagation в G5a.</li>
 </ul></div>
 
-<footer>SCAFFOLD · docs/scaffold_map.html · источники: G0.md (v1.4) · docs/plans/uv_tracer_revision_plan.md · docs/phases/G5a_skeleton_runtime.md · docs/architecture/scaffold_rail_trace_contract_draft.md. Обновлять при смене фазы или approval Slice J.</footer>
+<footer>SCAFFOLD · docs/scaffold_map.html · источники: G0.md (v1.4) · docs/plans/uv_tracer_revision_plan.md · docs/phases/G5a_skeleton_runtime.md · docs/architecture/scaffold_rail_trace_contract_draft.md. Обновлять при смене фазы или Slice J consumer integration.</footer>
 </body>
 </html>

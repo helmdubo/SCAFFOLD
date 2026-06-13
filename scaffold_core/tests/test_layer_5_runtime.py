@@ -167,18 +167,18 @@ import pytest
 
 
 def test_multiseam_cylinder_open_band_should_solve_xfail() -> None:
-    # KNOWN LIMITATION (missing ScaffoldRail/Trace contract): a 32-segment
+    # KNOWN LIMITATION (ScaffoldRail/Trace consumer not integrated yet): a 32-segment
     # cylinder cut into 6 vertical strips is an OPEN developable band (one
     # seam stays SPLIT, the rest SEW) and MUST unroll to a rectangle. It
-    # currently collapses because G5a is still deriving rail order and
-    # orientation signs from looped ConnectedDirectionFamily membership. Do
-    # not patch this with another Layer 5 traversal heuristic; flip after
-    # Layer 3 exposes direction-stable ordered ScaffoldRail/Trace evidence.
+    # currently collapses because G5a still does not consume unambiguous
+    # ScaffoldRail evidence or explicit cut-context for loop opening. Do not
+    # patch this with another Layer 5 traversal heuristic; flip after the
+    # consumer slice replaces local rail-order/sign derivation.
     result = _solve(_load_capture("artist_cyl_multiseam.json"))
     band = max(result.assembly.islands, key=lambda island: len(island.patch_ids))
     pinned_in_band = [
         v for v in result.vertices if v.island_id == band.id and v.pinned
     ]
     if result.diagnostics or not pinned_in_band:
-        pytest.xfail("multiseam open band needs ScaffoldRail/Trace contract")
+        pytest.xfail("multiseam open band needs ScaffoldRail consumer integration")
     assert result.residual_max < 1e-6

@@ -168,6 +168,8 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         ),
         "shared_chain_patch_chain_relation_count": len(relations.shared_chain_patch_chain_relations),
         "scaffold_continuity_component_count": len(relations.scaffold_continuity_components),
+        "scaffold_trace_count": len(relations.scaffold_traces),
+        "scaffold_rail_count": len(relations.scaffold_rails),
         "alignment_class_count": len(relations.alignment_classes),
         "patch_axes_count": len(relations.patch_axes),
     }
@@ -329,6 +331,14 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         "connected_direction_families": [
             _connected_direction_family_to_dict(family)
             for family in sorted(relations.connected_direction_families, key=lambda item: item.id)
+        ],
+        "scaffold_traces": [
+            _scaffold_trace_to_dict(trace)
+            for trace in sorted(relations.scaffold_traces, key=lambda item: item.id)
+        ],
+        "scaffold_rails": [
+            _scaffold_rail_to_dict(rail)
+            for rail in sorted(relations.scaffold_rails, key=lambda item: item.id)
         ],
         "patch_axes": [
             {
@@ -1282,6 +1292,99 @@ def _connected_direction_family_crossing_record_to_dict(record) -> dict[str, obj
         "transported_normal_dot": record.transported_normal_dot,
         "measured_angle_radians": record.measured_angle_radians,
         "confidence": record.confidence,
+    }
+
+
+def _scaffold_trace_to_dict(trace) -> dict[str, object]:
+    return {
+        "id": trace.id,
+        "direction_family_id": trace.direction_family_id,
+        "member_directional_evidence_ids": list(trace.member_directional_evidence_ids),
+        "ordered_member_directional_evidence_ids": list(
+            trace.ordered_member_directional_evidence_ids
+        ),
+        "trace_node_ids": list(trace.trace_node_ids),
+        "members": [
+            _scaffold_trace_member_to_dict(member)
+            for member in trace.members
+        ],
+        "crossing_records": [
+            _connected_direction_family_crossing_record_to_dict(record)
+            for record in trace.crossing_records
+        ],
+        "branch_records": {
+            record_id: list(member_ids)
+            for record_id, member_ids in trace.branch_records.items()
+        },
+        "loop_ambiguity_records": {
+            record_id: list(member_ids)
+            for record_id, member_ids in trace.loop_ambiguity_records.items()
+        },
+        "diagnostics": list(trace.diagnostics),
+        "confidence": trace.confidence,
+        "evidence": [
+            {
+                "source": evidence.source,
+                "summary": evidence.summary,
+                "data": dict(evidence.data),
+            }
+            for evidence in trace.evidence
+        ],
+    }
+
+
+def _scaffold_trace_member_to_dict(member) -> dict[str, object]:
+    return {
+        "directional_evidence_id": member.directional_evidence_id,
+        "patch_id": str(member.patch_id),
+        "patch_chain_id": str(member.patch_chain_id),
+        "scaffold_edge_id": member.scaffold_edge_id,
+        "start_trace_node_id": member.start_trace_node_id,
+        "end_trace_node_id": member.end_trace_node_id,
+        "start_vertex_id": str(member.start_vertex_id) if member.start_vertex_id is not None else None,
+        "end_vertex_id": str(member.end_vertex_id) if member.end_vertex_id is not None else None,
+        "previous_crossing_index": member.previous_crossing_index,
+        "next_crossing_index": member.next_crossing_index,
+        "confidence": member.confidence,
+    }
+
+
+def _scaffold_rail_to_dict(rail) -> dict[str, object]:
+    return {
+        "id": rail.id,
+        "scaffold_trace_id": rail.scaffold_trace_id,
+        "direction_family_id": rail.direction_family_id,
+        "ordered_member_directional_evidence_ids": list(
+            rail.ordered_member_directional_evidence_ids
+        ),
+        "ordered_trace_node_ids": list(rail.ordered_trace_node_ids),
+        "first_trace_node_id": rail.first_trace_node_id,
+        "last_trace_node_id": rail.last_trace_node_id,
+        "is_closed_loop": rail.is_closed_loop,
+        "orientation_sign_by_member": dict(rail.orientation_sign_by_member),
+        "crossing_records": [
+            _connected_direction_family_crossing_record_to_dict(record)
+            for record in rail.crossing_records
+        ],
+        "branch_records": {
+            record_id: list(member_ids)
+            for record_id, member_ids in rail.branch_records.items()
+        },
+        "loop_ambiguity_records": {
+            record_id: list(member_ids)
+            for record_id, member_ids in rail.loop_ambiguity_records.items()
+        },
+        "is_consumable_by_g5a": rail.is_consumable_by_g5a,
+        "diagnostics": list(rail.diagnostics),
+        "confidence": rail.confidence,
+        "evidence": [
+            {
+                "source": evidence.source,
+                "summary": evidence.summary,
+                "data": dict(evidence.data),
+            }
+            for evidence in rail.evidence
+        ],
     }
 
 
