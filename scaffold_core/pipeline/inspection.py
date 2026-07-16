@@ -17,9 +17,12 @@ from scaffold_core.layer_0_source.snapshot import SourceMeshSnapshot
 from scaffold_core.layer_1_topology.build import build_topology_snapshot
 from scaffold_core.layer_1_topology.invariants import validate_topology
 from scaffold_core.layer_1_topology.model import PatchChain, SurfaceModel
-from scaffold_core.layer_1_topology.queries import patch_chain_vertices, patch_chains_for_chain
+from scaffold_core.layer_1_topology.queries import patch_chain_vertices
 from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot, Vector3
 from scaffold_core.layer_3_relations.model import RelationSnapshot
+from scaffold_core.layer_3_relations.patch_chain_incidence import (
+    build_chain_patch_chain_incidence_index,
+)
 from scaffold_core.pipeline.context import PipelineContext
 
 
@@ -1414,9 +1417,10 @@ def describe_active_blender_mesh_topology(context: object) -> str:
         f"{tuple(str(loop_id) for loop_id in patch.loop_ids)}"
         for patch in model.patches.values()
     )
+    chain_incidence = build_chain_patch_chain_incidence_index(model)
     lines.extend(
         f"chain {chain.id}: edges {tuple(str(edge_id) for edge_id in chain.source_edge_ids)} "
-        f"uses {len(patch_chains_for_chain(model, chain.id))}"
+        f"uses {len(chain_incidence.get(chain.id, ()))}"
         for chain in model.chains.values()
     )
     lines.extend(

@@ -24,6 +24,7 @@ from scaffold_core.layer_0_source.snapshot import (
 from scaffold_core.layer_5_runtime.pins import run_skeleton_solve
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.cylinder_tube import (
+    make_cylinder_tube_without_caps_with_one_seam_source,
     make_cylinder_tube_without_caps_with_two_seams_source,
 )
 from scaffold_core.tests.fixtures.detached_parallel_walls import (
@@ -148,6 +149,48 @@ def test_frustum_band_is_developable_and_solves_exactly() -> None:
     assert len(result.assembly.islands) == 1
     assert result.residual_max < 1e-6
     assert result.axis_parallel_violations == ()
+
+
+def test_seam_length_mismatch_is_reported_when_one_seam_side_is_scaled() -> None:
+    # Direct unit check of the seam-length invariant: scaling directional
+    # evidence on exactly one patch-chain side of one SELF_SEAM chain must
+    # surface that chain in seam_length_mismatches.
+    from scaffold_core.layer_5_runtime.pins import _seam_length_mismatches
+
+    context = run_pass_1_relations(
+        run_pass_0(make_cylinder_tube_without_caps_with_one_seam_source())
+    )
+    relations = context.relation_snapshot
+    evidence_by_id = {e.id: e for e in relations.patch_chain_directional_evidence}
+
+    assert _seam_length_mismatches(context, None, evidence_by_id) == []
+
+    self_seam_chain_ids = sorted(
+        str(junction.matched_chain_id)
+        for junction in relations.scaffold_junctions
+        if junction.kind.value == "SELF_SEAM" and junction.matched_chain_id is not None
+    )
+    assert self_seam_chain_ids
+    target_chain_id = self_seam_chain_ids[0]
+    seam_uses = [
+        pc
+        for pc in context.topology_snapshot.patch_chains.values()
+        if str(pc.chain_id) == target_chain_id
+    ]
+    assert len(seam_uses) == 2
+    scaled_side_id = str(seam_uses[0].id)
+    perturbed = {
+        evidence_id: (
+            replace(evidence, length=evidence.length * 2.0)
+            if str(evidence.patch_chain_id) == scaled_side_id
+            else evidence
+        )
+        for evidence_id, evidence in evidence_by_id.items()
+    }
+
+    mismatches = _seam_length_mismatches(context, None, perturbed)
+
+    assert any(mismatch.startswith(f"{target_chain_id}:") for mismatch in mismatches)
 
 
 def test_contradictory_equations_are_excluded_with_diagnostics() -> None:
