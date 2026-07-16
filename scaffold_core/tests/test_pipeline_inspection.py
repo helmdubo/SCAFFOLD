@@ -264,6 +264,21 @@ def test_scaffold_graph_node_link_export_returns_none_without_graph() -> None:
     assert scaffold_graph_to_node_link_dict(RelationSnapshot()) is None
 
 
+def test_inspection_reports_pass_stage_timings() -> None:
+    context = run_pass_1_relations(run_pass_0(make_single_quad_source()))
+
+    report = inspect_pipeline_context(context)
+
+    json.dumps(report["pass_timings"])
+    assert [entry["name"] for entry in report["pass_timings"]] == [
+        "pass_0.topology_snapshot",
+        "pass_0.geometry_facts",
+        "pass_0.validate_topology",
+        "pass_1.relation_snapshot",
+    ]
+    assert all(entry["elapsed_seconds"] >= 0.0 for entry in report["pass_timings"])
+
+
 def test_inspection_code_does_not_introduce_deferred_semantic_terms() -> None:
     tree = ast.parse(INSPECTION_MODULE.read_text(encoding="utf-8"))
     identifiers: set[str] = set()

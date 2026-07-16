@@ -9,7 +9,7 @@ Rules:
 from __future__ import annotations
 
 from scaffold_core.core.diagnostics import DiagnosticSeverity
-from scaffold_core.pipeline.passes import run_pass_0
+from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.single_patch import make_single_quad_source
 
 
@@ -34,3 +34,24 @@ def test_pass_0_single_quad_has_no_blocking_diagnostics() -> None:
         for diagnostic in context.diagnostics.diagnostics
         if diagnostic.severity is DiagnosticSeverity.BLOCKING
     ]
+
+
+def test_passes_record_stage_timings_in_execution_order() -> None:
+    context = run_pass_0(make_single_quad_source())
+
+    assert [timing.name for timing in context.pass_timings] == [
+        "pass_0.topology_snapshot",
+        "pass_0.geometry_facts",
+        "pass_0.validate_topology",
+    ]
+    assert all(timing.elapsed_seconds >= 0.0 for timing in context.pass_timings)
+
+    relations_context = run_pass_1_relations(context)
+
+    assert [timing.name for timing in relations_context.pass_timings] == [
+        "pass_0.topology_snapshot",
+        "pass_0.geometry_facts",
+        "pass_0.validate_topology",
+        "pass_1.relation_snapshot",
+    ]
+    assert all(timing.elapsed_seconds >= 0.0 for timing in relations_context.pass_timings)

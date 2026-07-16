@@ -61,6 +61,11 @@ def inspect_pipeline_context(context: PipelineContext, detail: str = "compact") 
             context.relation_snapshot,
             context.geometry_facts,
         )
+    if context.pass_timings:
+        report["pass_timings"] = [
+            {"name": timing.name, "elapsed_seconds": timing.elapsed_seconds}
+            for timing in context.pass_timings
+        ]
     report["diagnostics"] = _diagnostics_to_list(context)
     return report
 
