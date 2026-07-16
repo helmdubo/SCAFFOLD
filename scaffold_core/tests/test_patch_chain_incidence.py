@@ -2,7 +2,7 @@
 Layer: tests
 
 Rules:
-- Layer 3 vertex-incidence query tests only.
+- Layer 3 vertex- and chain-incidence query tests only.
 - Tests may import Scaffold Core but must not define production logic.
 """
 
@@ -13,8 +13,9 @@ from pathlib import Path
 
 from scaffold_core.ids import VertexId
 from scaffold_core.layer_1_topology.build import build_topology_snapshot
-from scaffold_core.layer_1_topology.queries import patch_chain_vertices
+from scaffold_core.layer_1_topology.queries import patch_chain_vertices, patch_chains_for_chain
 from scaffold_core.layer_3_relations.patch_chain_incidence import (
+    build_chain_patch_chain_incidence_index,
     build_patch_chain_vertex_incidence_index,
     has_branching_patch_chain_incidence,
     incident_patch_chains_for_vertex,
@@ -119,6 +120,36 @@ def test_vertex_incidence_index_preserves_scan_query_order_and_content() -> None
             has_branching_patch_chain_incidence(topology, vertex_id, incidence_index)
             is (len(scanned_uses) >= 3)
         )
+
+
+def test_chain_incidence_index_preserves_scan_query_order_and_content() -> None:
+    topologies = (
+        build_topology_snapshot(make_single_quad_source()),
+        build_topology_snapshot(make_two_quad_l_source_with_seam_on_shared_edge()),
+        build_topology_snapshot(make_closed_shared_boundary_loop_source()),
+        make_non_manifold_chain_model(),
+    )
+    for topology in topologies:
+        incidence_index = build_chain_patch_chain_incidence_index(topology)
+
+        assert set(incidence_index) == set(topology.chains)
+        for chain_id in topology.chains:
+            scanned_uses = patch_chains_for_chain(topology, chain_id)
+            indexed_uses = incidence_index[chain_id]
+
+            assert [use.id for use in indexed_uses] == [use.id for use in scanned_uses]
+
+
+def test_chain_incidence_index_covers_shared_chain_use_pairs() -> None:
+    topology = build_topology_snapshot(make_two_quad_l_source_with_seam_on_shared_edge())
+    incidence_index = build_chain_patch_chain_incidence_index(topology)
+
+    shared_use_pairs = [uses for uses in incidence_index.values() if len(uses) == 2]
+
+    assert shared_use_pairs
+    for uses in shared_use_pairs:
+        assert uses[0].chain_id == uses[1].chain_id
+        assert uses[0].id != uses[1].id
 
 
 def test_patch_chain_incidence_queries_do_not_introduce_deferred_semantic_terms() -> None:

@@ -2,7 +2,7 @@
 Layer: 3 - Relations
 
 Rules:
-- Derived vertex-incidence query helpers only.
+- Derived vertex- and chain-incidence query helpers only.
 - Do not mutate lower-layer snapshots.
 - Do not create persistent topology entities.
 - Do not derive alignment, world, feature, runtime, solve, UV, API, UI, or Blender data.
@@ -12,12 +12,36 @@ from __future__ import annotations
 
 from typing import Mapping
 
-from scaffold_core.ids import VertexId
+from scaffold_core.ids import ChainId, VertexId
 from scaffold_core.layer_1_topology.model import PatchChain, SurfaceModel
 from scaffold_core.layer_1_topology.queries import patch_chain_vertices
 
 
 PatchChainVertexIncidenceIndex = Mapping[VertexId, tuple[PatchChain, ...]]
+
+ChainPatchChainIncidenceIndex = Mapping[ChainId, tuple[PatchChain, ...]]
+
+
+def build_chain_patch_chain_incidence_index(
+    topology: SurfaceModel,
+) -> dict[ChainId, tuple[PatchChain, ...]]:
+    """Return one deterministic Chain -> referencing PatchChains index.
+
+    Per-chain use order must stay identical to the
+    queries.patch_chains_for_chain scan order: PatchAdjacency construction
+    unpacks the first/second use pair from it.
+    """
+
+    uses_by_chain: dict[ChainId, list[PatchChain]] = {
+        chain_id: []
+        for chain_id in topology.chains
+    }
+    for use in topology.patch_chains.values():
+        uses_by_chain.setdefault(use.chain_id, []).append(use)
+    return {
+        chain_id: tuple(uses)
+        for chain_id, uses in uses_by_chain.items()
+    }
 
 
 def build_patch_chain_vertex_incidence_index(

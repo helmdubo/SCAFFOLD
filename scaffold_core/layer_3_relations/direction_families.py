@@ -17,7 +17,6 @@ from typing import Mapping
 from scaffold_core.core.evidence import Evidence
 from scaffold_core.ids import ChainId, PatchChainId, PatchId, VertexId
 from scaffold_core.layer_1_topology.model import SurfaceModel
-from scaffold_core.layer_1_topology.queries import patch_chains_for_chain
 from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot, Vector3
 from scaffold_core.layer_2_geometry.measures import EPSILON, add, cross, dot, length, normalize, scale
 from scaffold_core.layer_3_relations.model import (
@@ -32,6 +31,9 @@ from scaffold_core.layer_3_relations.model import (
     ScaffoldNode,
     ScaffoldNodeIncidentEdgeRelationKind,
     SharedChainPatchChainRelation,
+)
+from scaffold_core.layer_3_relations.patch_chain_incidence import (
+    build_chain_patch_chain_incidence_index,
 )
 from scaffold_core.layer_3_relations.scaffold_graph_relations import COMPATIBLE_NORMAL_MIN_DOT
 
@@ -295,8 +297,8 @@ def _patch_occurrence_angle(
 
 def _self_seam_chain_ids(topology: SurfaceModel) -> set[ChainId]:
     self_seam_chain_ids: set[ChainId] = set()
-    for chain_id in topology.chains:
-        patch_ids = tuple(use.patch_id for use in patch_chains_for_chain(topology, chain_id))
+    for chain_id, uses in build_chain_patch_chain_incidence_index(topology).items():
+        patch_ids = tuple(use.patch_id for use in uses)
         if len(patch_ids) != len(set(patch_ids)):
             self_seam_chain_ids.add(chain_id)
     return self_seam_chain_ids

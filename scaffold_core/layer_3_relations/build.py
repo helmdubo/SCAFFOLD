@@ -13,7 +13,7 @@ from math import atan2
 
 from scaffold_core.ids import ChainId
 from scaffold_core.layer_1_topology.model import PatchChain, SurfaceModel
-from scaffold_core.layer_1_topology.queries import patch_chain_vertices, patch_chains_for_chain
+from scaffold_core.layer_1_topology.queries import patch_chain_vertices
 from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot, Vector3
 from scaffold_core.layer_2_geometry.measures import cross, dot, length, normalize, subtract
 from scaffold_core.layer_3_relations.alignment import build_alignment_classes, build_patch_axes
@@ -26,6 +26,7 @@ from scaffold_core.layer_3_relations.direction_families import build_connected_d
 from scaffold_core.layer_3_relations.loop_corners import build_loop_corners
 from scaffold_core.layer_3_relations.model import DihedralKind, PatchAdjacency, RelationSnapshot
 from scaffold_core.layer_3_relations.patch_chain_incidence import (
+    build_chain_patch_chain_incidence_index,
     build_patch_chain_vertex_incidence_index,
 )
 from scaffold_core.layer_3_relations.patch_chain_endpoint_relations import (
@@ -50,9 +51,10 @@ def build_relation_snapshot(
 ) -> RelationSnapshot:
     """Build G3a derived relations."""
 
+    chain_patch_chain_incidence = build_chain_patch_chain_incidence_index(topology)
     patch_adjacencies: dict[str, PatchAdjacency] = {}
     for chain_id in topology.chains:
-        uses = patch_chains_for_chain(topology, chain_id)
+        uses = chain_patch_chain_incidence.get(chain_id, ())
         if not _is_normal_patch_adjacency(uses):
             continue
 
