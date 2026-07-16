@@ -13,12 +13,17 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+from scaffold_core.layer_3_relations.model import RelationSnapshot
 from scaffold_core.pipeline.inspection import (
     describe_active_blender_mesh_topology,
     inspect_pipeline_context,
+    scaffold_graph_to_node_link_dict,
 )
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_boundary_loop_source
+from scaffold_core.tests.fixtures.cylinder_tube import (
+    make_cylinder_tube_without_caps_with_one_seam_source,
+)
 from scaffold_core.tests.fixtures.l_shape import make_two_patch_source_with_two_edge_seam_run
 from scaffold_core.tests.fixtures.single_patch import make_single_quad_source
 
@@ -225,6 +230,38 @@ def test_inspection_default_output_is_compact() -> None:
         "alignment_class_count": 2,
         "patch_axes_count": 2,
     }
+
+
+def test_scaffold_graph_node_link_export_is_networkx_compatible_multigraph() -> None:
+    context = run_pass_1_relations(
+        run_pass_0(make_cylinder_tube_without_caps_with_one_seam_source())
+    )
+
+    report = inspect_pipeline_context(context, detail="full")
+    data = report["scaffold_graph_node_link"]
+
+    json.dumps(data)
+    assert data["directed"] is False
+    assert data["multigraph"] is True
+
+    node_ids = [node["id"] for node in data["nodes"]]
+    assert len(node_ids) == 2  # canonical one-seam tube: two seam endpoint nodes
+    assert len(set(node_ids)) == 2
+    junction_kinds = [node["junction_kind"] for node in data["nodes"]]
+    assert junction_kinds.count("SELF_SEAM") == 2
+    assert all(len(node["position"]) == 3 for node in data["nodes"])
+
+    links = data["links"]
+    assert len(links) == 4  # canonical one-seam tube: four ScaffoldEdges
+    assert len({link["key"] for link in links}) == 4
+    assert all(link["source"] in node_ids for link in links)
+    assert all(link["target"] in node_ids for link in links)
+    assert all(link["continuity_component_id"] is not None for link in links)
+    assert all(link["patch_chain_id"] for link in links)
+
+
+def test_scaffold_graph_node_link_export_returns_none_without_graph() -> None:
+    assert scaffold_graph_to_node_link_dict(RelationSnapshot()) is None
 
 
 def test_inspection_code_does_not_introduce_deferred_semantic_terms() -> None:

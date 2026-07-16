@@ -52,6 +52,15 @@ def inspect_pipeline_context(context: PipelineContext, detail: str = "compact") 
             context.geometry_facts,
             context.relation_snapshot,
         )
+    if (
+        detail == "full"
+        and context.relation_snapshot is not None
+        and context.relation_snapshot.scaffold_graph is not None
+    ):
+        report["scaffold_graph_node_link"] = scaffold_graph_to_node_link_dict(
+            context.relation_snapshot,
+            context.geometry_facts,
+        )
     report["diagnostics"] = _diagnostics_to_list(context)
     return report
 
@@ -361,6 +370,79 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         ],
     })
     return summary
+
+
+def scaffold_graph_to_node_link_dict(
+    relations: RelationSnapshot,
+    geometry: GeometryFactSnapshot | None = None,
+) -> InspectionDict | None:
+    """Return ScaffoldGraph connectivity as a networkx node-link mapping.
+
+    The payload loads via networkx.node_link_graph(data) as an undirected
+    multigraph: parallel ScaffoldEdges between one node pair keep distinct
+    "key" entries. ScaffoldJunction kind and continuity component id ride
+    along as node/link attributes for visual overlays; when geometry is
+    provided, nodes carry a measured 3D "position" for spatial layouts.
+    """
+
+    graph = relations.scaffold_graph
+    if graph is None:
+        return None
+
+    junction_kind_by_node_id = {
+        junction.scaffold_node_id: junction.kind.value
+        for junction in relations.scaffold_junctions
+    }
+    continuity_component_id_by_edge_id = {
+        edge_id: component.id
+        for component in relations.scaffold_continuity_components
+        for edge_id in component.scaffold_edge_ids
+    }
+    node_by_id = {node.id: node for node in relations.scaffold_nodes}
+    edge_by_id = {edge.id: edge for edge in relations.scaffold_edges}
+
+    nodes: list[dict[str, object]] = []
+    for node_id in graph.node_ids:
+        entry: dict[str, object] = {"id": node_id}
+        node = node_by_id.get(node_id)
+        if node is not None:
+            entry["junction_kind"] = junction_kind_by_node_id.get(node_id)
+            entry["vertex_ids"] = [str(vertex_id) for vertex_id in node.vertex_ids]
+            entry["source_vertex_ids"] = [
+                str(source_vertex_id) for source_vertex_id in node.source_vertex_ids
+            ]
+            entry["patch_ids"] = [str(patch_id) for patch_id in node.patch_ids]
+            entry["confidence"] = node.confidence
+            if geometry is not None:
+                entry["position"] = list(_scaffold_node_position(geometry, node.vertex_ids))
+        nodes.append(entry)
+
+    links: list[dict[str, object]] = []
+    for edge_id in graph.edge_ids:
+        edge = edge_by_id.get(edge_id)
+        if edge is None:
+            continue
+        links.append(
+            {
+                "source": edge.start_scaffold_node_id,
+                "target": edge.end_scaffold_node_id,
+                "key": edge_id,
+                "patch_chain_id": str(edge.patch_chain_id),
+                "chain_id": str(edge.chain_id),
+                "patch_id": str(edge.patch_id),
+                "loop_id": str(edge.loop_id),
+                "continuity_component_id": continuity_component_id_by_edge_id.get(edge_id),
+                "confidence": edge.confidence,
+            }
+        )
+
+    return {
+        "directed": False,
+        "multigraph": True,
+        "graph": {"id": graph.id, "confidence": graph.confidence},
+        "nodes": nodes,
+        "links": links,
+    }
 
 
 def scaffold_graph_overlay_to_dict(

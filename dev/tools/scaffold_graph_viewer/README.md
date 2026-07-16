@@ -39,6 +39,33 @@ Outputs go to:
 dev/tools/scaffold_graph_viewer/reports/
 ```
 
+## Export To networkx (node-link JSON)
+
+`export_networkx_graph.py` exports the ScaffoldGraph of a synthetic fixture as
+a networkx-compatible node-link JSON payload (`scaffold_graph_node_link_v1`):
+
+```powershell
+python dev/tools/scaffold_graph_viewer/export_networkx_graph.py cylinder_one_seam
+python dev/tools/scaffold_graph_viewer/export_networkx_graph.py extruded_cross --draw
+```
+
+`--draw` also renders a PNG next to the JSON (requires optional
+`pip install networkx matplotlib`). Node color encodes ScaffoldJunction kind,
+edge color encodes continuity component id, node positions use measured
+Layer 2 geometry projected onto the two widest axes.
+
+The JSON loads directly in any networkx session:
+
+```python
+import json, networkx as nx
+data = json.load(open("dev/tools/scaffold_graph_viewer/reports/cylinder_one_seam.nxgraph.json"))
+graph = nx.node_link_graph(data, edges="links")  # undirected multigraph
+```
+
+The same payload is embedded in `inspect_pipeline_context(context, detail="full")`
+output under the `scaffold_graph_node_link` key, so Blender-side JSON exports
+carry it too.
+
 ## Export From Blender
 
 Preferred path:
