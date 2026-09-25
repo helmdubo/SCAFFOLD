@@ -5,3 +5,7 @@ __pycache__/
 scaffold_blender_inspection.json
 dev/tools/scaffold_graph_viewer/reports/
 dev/tools/blender_smoke/reports/
+
+# GoalBuddy: generated local board files and board-server logs (goal.md,
+# state.yaml and notes/ under docs/goals/<slug>/ stay trackable)
+.goalbuddy-board/
