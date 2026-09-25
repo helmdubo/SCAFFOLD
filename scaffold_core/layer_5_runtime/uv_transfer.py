@@ -46,6 +46,8 @@ def write_pinned_uvs(blender_context: Any, result: SolveResult) -> dict[str, Any
         uv_layer = bm.loops.layers.uv.verify()
         for face in bm.faces:
             face_patch = result.patch_by_source_face.get(f"f{face.index}")
+            if face_patch is None:
+                continue  # outside the solved selection: never touch its loops
             for loop in face.loops:
                 pinned = _pinned_for(loop.vert.index, face_patch)
                 if pinned is None:
@@ -63,6 +65,8 @@ def write_pinned_uvs(blender_context: Any, result: SolveResult) -> dict[str, Any
             uv_layer = bm.loops.layers.uv.verify()
             for face in bm.faces:
                 face_patch = result.patch_by_source_face.get(f"f{face.index}")
+                if face_patch is None:
+                    continue  # outside the solved selection: never touch its loops
                 for loop in face.loops:
                     pinned = _pinned_for(loop.vert.index, face_patch)
                     if pinned is None:

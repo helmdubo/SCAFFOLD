@@ -3,3 +3,5 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 scaffold_blender_inspection.json
+dev/tools/scaffold_graph_viewer/reports/
+dev/tools/blender_smoke/reports/

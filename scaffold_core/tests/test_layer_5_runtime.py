@@ -23,7 +23,9 @@ from scaffold_core.layer_0_source.snapshot import (
 )
 from scaffold_core.layer_5_runtime.pins import run_skeleton_solve
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
+from scaffold_core.tests.fixtures.capped_prism import make_capped_decagon_prism_odd_strips_source
 from scaffold_core.tests.fixtures.cylinder_tube import (
+    make_cylinder_tube_without_caps_with_one_seam_source,
     make_cylinder_tube_without_caps_with_two_seams_source,
 )
 from scaffold_core.tests.fixtures.detached_parallel_walls import (
@@ -150,6 +152,48 @@ def test_frustum_band_is_developable_and_solves_exactly() -> None:
     assert result.axis_parallel_violations == ()
 
 
+def test_seam_length_mismatch_is_reported_when_one_seam_side_is_scaled() -> None:
+    # Direct unit check of the seam-length invariant: scaling directional
+    # evidence on exactly one patch-chain side of one SELF_SEAM chain must
+    # surface that chain in seam_length_mismatches.
+    from scaffold_core.layer_5_runtime.pins import _seam_length_mismatches
+
+    context = run_pass_1_relations(
+        run_pass_0(make_cylinder_tube_without_caps_with_one_seam_source())
+    )
+    relations = context.relation_snapshot
+    evidence_by_id = {e.id: e for e in relations.patch_chain_directional_evidence}
+
+    assert _seam_length_mismatches(context, None, evidence_by_id) == []
+
+    self_seam_chain_ids = sorted(
+        str(junction.matched_chain_id)
+        for junction in relations.scaffold_junctions
+        if junction.kind.value == "SELF_SEAM" and junction.matched_chain_id is not None
+    )
+    assert self_seam_chain_ids
+    target_chain_id = self_seam_chain_ids[0]
+    seam_uses = [
+        pc
+        for pc in context.topology_snapshot.patch_chains.values()
+        if str(pc.chain_id) == target_chain_id
+    ]
+    assert len(seam_uses) == 2
+    scaled_side_id = str(seam_uses[0].id)
+    perturbed = {
+        evidence_id: (
+            replace(evidence, length=evidence.length * 2.0)
+            if str(evidence.patch_chain_id) == scaled_side_id
+            else evidence
+        )
+        for evidence_id, evidence in evidence_by_id.items()
+    }
+
+    mismatches = _seam_length_mismatches(context, None, perturbed)
+
+    assert any(mismatch.startswith(f"{target_chain_id}:") for mismatch in mismatches)
+
+
 def test_contradictory_equations_are_excluded_with_diagnostics() -> None:
     # Direct unit check of the UNCONSTRAINED path: three nodes, two
     # consistent equations plus one contradicting the loop sum.
@@ -163,22 +207,53 @@ def test_contradictory_equations_are_excluded_with_diagnostics() -> None:
     assert max(abs(r) for r in residuals) > 1e-2  # contradiction is visible, not hidden
 
 
-import pytest
-
-
-def test_multiseam_cylinder_open_band_should_solve_xfail() -> None:
-    # KNOWN LIMITATION (ScaffoldRail/Trace consumer not integrated yet): a 32-segment
-    # cylinder cut into 6 vertical strips is an OPEN developable band (one
-    # seam stays SPLIT, the rest SEW) and MUST unroll to a rectangle. It
-    # currently collapses because G5a still does not consume unambiguous
-    # ScaffoldRail evidence or explicit cut-context for loop opening. Do not
-    # patch this with another Layer 5 traversal heuristic; flip after the
-    # consumer slice replaces local rail-order/sign derivation.
+def test_artist_multiseam_cylinder_open_band_unwraps_to_an_exact_rectangle() -> None:
+    # A 32-segment cylinder cut into 6 vertical strips is an OPEN developable
+    # band (one seam stays SPLIT, the rest SEW). It used to collapse because a
+    # Layer 3 family leak through curved cap rims welded top and bottom rims
+    # (plan Slice L). With the L1 straight-hinge rule the unchanged G5a solve
+    # unrolls it; no Layer 5 traversal heuristic is involved.
     result = _solve(_load_capture("artist_cyl_multiseam.json"))
+
+    _assert_band_is_exact_rectangle(result, island_count=3, residual_limit=1e-6)
+
+
+def test_capped_odd_strip_prism_band_unwraps_to_an_exact_rectangle() -> None:
+    # Synthetic reproduction of the multiseam case: a capped 10-segment prism
+    # cut into two 5-segment strips.
+    result = _solve(make_capped_decagon_prism_odd_strips_source())
+
+    _assert_band_is_exact_rectangle(result, island_count=3, residual_limit=1e-9)
+
+
+def _assert_band_is_exact_rectangle(result, island_count: int, residual_limit: float) -> None:
     band = max(result.assembly.islands, key=lambda island: len(island.patch_ids))
-    pinned_in_band = [
-        v for v in result.vertices if v.island_id == band.id and v.pinned
-    ]
-    if result.diagnostics or not pinned_in_band:
-        pytest.xfail("multiseam open band needs ScaffoldRail consumer integration")
-    assert result.residual_max < 1e-6
+    pinned_in_band = [v for v in result.vertices if v.island_id == band.id and v.pinned]
+    assert len(result.assembly.islands) == island_count
+    assert result.diagnostics == ()
+    assert result.axis_parallel_violations == ()
+    assert result.seam_length_mismatches == ()
+    assert result.residual_max < residual_limit
+    assert pinned_in_band
+    rows = sorted({round(vertex.uv[1], 6) for vertex in pinned_in_band})
+    assert len(rows) == 2  # top rail and bottom rail are two straight rows
+    top = sorted(round(v.uv[0], 4) for v in pinned_in_band if round(v.uv[1], 6) == rows[0])
+    bottom = sorted(round(v.uv[0], 4) for v in pinned_in_band if round(v.uv[1], 6) == rows[-1])
+    assert top == bottom  # columns align across the rails
+
+
+def test_artist_walls_captures_keep_g5a_invariants() -> None:
+    # Real buildings.blend walls, nearly every edge seamed (one patch per face).
+    # G5a invariants are validation outputs: pinned UVs stay axis-parallel and
+    # seam sides keep equal length even where families degrade to OBLIQUE.
+    for name, min_pinned in (
+        ("artist_walls_004_selection.json", 100),
+        ("artist_walls_005.json", 1),
+        ("artist_walls_006.json", 1),
+        ("artist_walls_007.json", 1),
+    ):
+        result = _solve(_load_capture(name))
+
+        assert result.axis_parallel_violations == (), name
+        assert result.seam_length_mismatches == (), name
+        assert sum(1 for vertex in result.vertices if vertex.pinned) >= min_pinned, name

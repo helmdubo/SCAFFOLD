@@ -186,13 +186,18 @@ ScaffoldContinuityComponent v0 derived evidence view over ScaffoldEdges
 ScaffoldNodeIncidentEdgeRelationKind SURFACE_SLIDING_CONTINUATION_CANDIDATE v0
 SideSurfaceContinuityEvidence v1 evidence-only same-side surface flow record with direction/flow-family gate
 SurfaceFlowCompatibilityEvidence v0 evidence-only cross-patch flow-family compatibility record
+ConnectedDirectionFamily v1 (G0 DD-43/DD-45) occurrence-aware geodesic families
+RunEndpointJunction v0 (G0 DD-44)
+ScaffoldTrace / ScaffoldRail v0 evidence views (plan Slice J; DD-46/DD-47 draft, not yet in G0)
 ```
 
-Contract-approved during G3, implementation pending:
-
-```text
-ConnectedDirectionFamily v0 (G0 DD-43)
-```
+SHARED_CHAIN family transport crosses only straight single-run hinges
+(plan Slice L1). A family visits each patch at most once as one continuous
+in-patch segment; merges that would revisit a patch are blocked, so opposite
+sides of a patch never share a family (plan Slice L2). Known deferred gap: a run transported through a 90-degree
+corner ScaffoldNode may join an end patch's perimeter family; it is pinned by
+a strict xfail and waits for a future patch-normal filter. Do not add
+cap/wall patch semantics to fix it.
 
 Approved tracer spike home (consumer tooling, outside scaffold_core):
 
@@ -207,7 +212,8 @@ Deferred in G3:
 
 ```text
 ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
-ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
+ScaffoldCircuit
+ScaffoldRail loop opening from island cut context
 WorldOrientation
 ```
 

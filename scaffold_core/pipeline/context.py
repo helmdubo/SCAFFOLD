@@ -19,6 +19,14 @@ from scaffold_core.layer_3_relations.model import RelationSnapshot
 
 
 @dataclass(frozen=True)
+class PassTiming:
+    """Wall-clock timing for one pipeline pass stage, recorded by orchestration."""
+
+    name: str
+    elapsed_seconds: float
+
+
+@dataclass(frozen=True)
 class PipelineContext:
     """Immutable container for pipeline pass outputs."""
 
@@ -27,3 +35,4 @@ class PipelineContext:
     geometry_facts: GeometryFactSnapshot | None = None
     relation_snapshot: RelationSnapshot | None = None
     diagnostics: DiagnosticReport = DiagnosticReport()
+    pass_timings: tuple[PassTiming, ...] = ()

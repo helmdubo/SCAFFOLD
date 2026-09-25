@@ -130,15 +130,18 @@ def _seam_length_mismatches(context, assembly, evidence_by_id):
         for junction in relations.scaffold_junctions
         if junction.kind.value == "SELF_SEAM" and junction.matched_chain_id is not None
     }
+    length_by_patch_chain: dict[str, float] = {}
+    for evidence in evidence_by_id.values():
+        key = str(evidence.patch_chain_id)
+        length_by_patch_chain[key] = length_by_patch_chain.get(key, 0.0) + evidence.length
+    patch_chain_ids_by_chain: dict[str, list[str]] = {}
+    for pc in topology.patch_chains.values():
+        patch_chain_ids_by_chain.setdefault(str(pc.chain_id), []).append(str(pc.id))
     for chain_id in sorted(self_seams):
-        lengths = []
-        for pc in topology.patch_chains.values():
-            if str(pc.chain_id) != chain_id:
-                continue
-            total = sum(
-                e.length for e in evidence_by_id.values() if str(e.patch_chain_id) == str(pc.id)
-            )
-            lengths.append(total)
+        lengths = [
+            length_by_patch_chain.get(patch_chain_id, 0.0)
+            for patch_chain_id in patch_chain_ids_by_chain.get(chain_id, ())
+        ]
         if len(lengths) == 2 and abs(lengths[0] - lengths[1]) > AXIS_PARALLEL_TOLERANCE:
             mismatches.append(f"{chain_id}:{lengths[0]:.6f}!={lengths[1]:.6f}")
     return mismatches

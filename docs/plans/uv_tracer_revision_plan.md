@@ -888,6 +888,180 @@ STOP CONDITIONS
 
 ---
 
+## Slice L — Cap-rim direction-family leak (measured multiseam root cause)
+
+Status: L1 APPROVED by the user and DONE (2026-09). The corner-node gap is
+deferred to a future patch-normal filter.
+
+Finding. The `artist_cyl_multiseam` collapse is a Layer 3
+ConnectedDirectionFamily leak, not a missing Layer 5 rail consumer:
+
+```text
+- One 68-member family holds the top rim, bottom rim and both cap
+  perimeters (DD-45 requires distinct rim families; DD-43 requires cap and
+  side families to stay separate).
+- Leak path: SHARED_CHAIN transport rotates a direction about the CHORD of
+  the shared chain. A curved cap-rim chain is not a rigid hinge. On a
+  5-segment strip the middle rim run is parallel to the chord, so rotation is
+  the identity, the transported normal gate passes (normal_dot 0.995) and the
+  run crosses into the cap. SAME_PATCH_SHARED_CHAIN_BRIDGE (a raw
+  world-direction parallel test inside one patch) then welds top and bottom
+  rim runs of the same strip.
+- Even-segment strips and the in-repo fixtures pass by accident: either no
+  rim run is chord-parallel, or a full-ring band patch has a degenerate
+  averaged normal, which makes the PatchAdjacency dihedral 0 and the raw
+  normal gate rejects the cap crossing.
+- With cap crossings blocked, the unchanged G5a solve pins 76 band vertices
+  on two straight rows with zero diagnostics (residual 8.8e-7 = float32
+  capture noise).
+```
+
+Second, independent leak (does not break any solve today):
+
+```text
+- A vertical seam run transported through a 90-degree rim-corner
+  ScaffoldNode lands on a cap perimeter run. Node crossings are
+  intentionally not normal-gated (DD-43 ring flow), so side and cap join one
+  family. Reproduced by the capped hex prism with 2+4 strips.
+```
+
+Evidence pinned in tests:
+
+```text
+scaffold_core/tests/fixtures/capped_prism.py
+test_direction_families.py::test_capped_odd_strip_prism_keeps_rims_and_caps_separate
+test_direction_families.py::test_artist_multiseam_cylinder_rims_stay_distinct_across_six_strips
+test_direction_families.py::test_capped_uneven_strip_prism_keeps_cap_and_side_families_separate
+  (strict xfail: deferred corner-node gap)
+test_layer_5_runtime.py::test_capped_odd_strip_prism_band_unwraps_to_an_exact_rectangle
+test_layer_5_runtime.py::test_artist_multiseam_cylinder_open_band_unwraps_to_an_exact_rectangle
+```
+
+The artist_cross_band partial degradation is a different cause: its rim
+families are already correct and the transport rule below does not change it.
+Measured 2026-09: the 12-face side band solves cleanly (20 pins, zero
+diagnostics); both 5-face planar cross end patches get 0 pins with 5
+contradictory equations per axis. Their perimeter families are corner-split
+singletons (DD-45), and Layer 5 `_orientation_signs` gives every singleton run
+sign +1 in its own loop direction. Candidate next slice: supply per-run
+orientation in the island frame from Layer 3 (ScaffoldRail consumer) instead
+of widening Layer 5 sign heuristics. Needs an Architect/user decision.
+
+### Task Card L1 — Straight-hinge rule for SHARED_CHAIN transport (DONE)
+
+Rule, implemented in `layer_3_relations/direction_families.py`
+(`SHARED_CHAIN_HINGE_MAX_RUNS`, recorded in family evidence data):
+
+```text
+SHARED_CHAIN crossings transport a direction only when both PatchChains of
+the shared chain carry exactly one directional run (a straight hinge).
+A curved multi-run shared chain has no single rotation axis, so it does not
+transport direction families.
+```
+
+Result: the multiseam capture and the odd-strip prism unwrap to exact
+rectangles (two pinned rows, aligned columns, zero diagnostics); corridor
+folds, beveled corner, two-seam cylinder, extruded_cross, tube_with_cap and
+artist_cyl32 are unchanged. The second (corner-node) gap is not addressed by
+this rule.
+
+User decisions (2026-09):
+
+```text
+- Straight end-patch edges (a box lid) may keep transporting like a corridor
+  ceiling for now. Separating such end patches is a future filter.
+- The corner-node gap stays a strict xfail. Its future fix is a filter based
+  on the patch normal. Scaffold must not introduce cap/wall patch semantics
+  for it: such roles are conditional, not core facts.
+```
+
+### Task Card L2 — A family never revisits a patch (DONE, user-directed)
+
+User direction (2026-09): top and bottom rims must never be glued into one
+family; find an approach.
+
+Measured on the artist `buildings.blend` (Tier 3, 13 seamed objects): the
+same-patch world-direction bridge was only part of the glue. On real walls
+nearly every edge is a seam, so every face is its own patch, and families also
+glued opposite sides through box-like corners (window reveals, wall tops). At a
+cube corner the three geodesic continuations are symmetric; no local,
+semantics-free rule can prefer one of them.
+
+Rule, implemented in `layer_3_relations/direction_families.py`:
+
+```text
+1. SAME_PATCH_SHARED_CHAIN_BRIDGE is removed. Parallel runs are never merged
+   by direction comparison alone.
+2. IN_PATCH_GEODESIC crossings first form continuous in-patch segments.
+3. Other crossings merge in deterministic priority: SHARED_CHAIN (two uses of
+   the same source edges) before SCAFFOLD_NODE (inferred geodesic between
+   different Chains), then by transported direction dot and ids.
+4. A merge that would put two separate segments of one patch into one family
+   is blocked. Blocked counts are recorded per family as
+   blocked_patch_revisit_crossings evidence.
+5. Guard diagnostic FAMILY_SPANS_OPPOSITE_PATCH_SIDES flags any family holding
+   two distinct parallel lines of one patch from different in-patch segments.
+```
+
+Shared-chain-first was chosen by measurement: node-first pinned 723 vertices
+on the 13 objects, shared-first 964, against 841 before L2.
+
+| Object | opposite-side glue | largest family | pinned | Layer 5 diagnostics |
+|---|---|---|---|---|
+| walls / walls.003 | 708 to 0 | 3057 to 21 | 169 to 210 | 61 to 1187 |
+| walls.004 (selection) | 9 to 0 | 20 to 5 | 156 to 156 | 10 to 18 |
+| walls.009 | 350 to 0 | 1582 to 16 | 213 to 161 | 35 to 875 |
+| walls.010 | 152 to 0 | 582 to 10 | 32 to 104 | 4 to 121 |
+| all 13 objects | 1973 to 0 | | 841 to 964 | |
+
+Axis-parallel violations and seam-length mismatches stay 0 before and after.
+Layer 5 diagnostic counts are not comparable one to one: before L2 they were
+one "contradictory equations" summary per axis, now they are mostly one
+"axis bipartition conflict -> OBLIQUE" line per family.
+
+Fixture expectation change (conflicts with G0 DD-43 text, G0 is read-only for
+agents; proposed amendment for the user to apply):
+
+```text
+DD-43 canonical fixture expectations, replace:
+  l_corridor_tunnel_seamed_folds: one length family across floor, wall and
+  ceiling; one width family;
+  beveled_wall_corner: one horizontal family across wall A, chamfer and wall
+  B; one vertical family;
+with:
+  l_corridor_tunnel_seamed_folds: one width (profile) family across floor,
+  wall and ceiling; one length rail per fold line (floor+wall, wall+ceiling);
+  beveled_wall_corner: one horizontal family across wall A, chamfer and wall
+  B; one vertical rail per fold line (wall A+chamfer, chamfer+wall B);
+and add:
+  A ConnectedDirectionFamily visits each patch at most once as one continuous
+  in-patch segment; opposite sides of a patch never share a family.
+```
+
+### Task Card M1 — UV write stays inside the solved faces (DONE, bug fix)
+
+Tier 3 found that `uv_transfer.write_pinned_uvs` wrote UVs and pins onto
+faces outside the solved selection that shared a pinned vertex, and cleared
+pins on every other loop of the mesh. On walls.004 with its stored 55-face
+selection the old writer changed 343 loops outside the selection. The minimal
+patch skips faces without a solved patch; `foreign_loops_changed` is now 0 on
+all 13 objects.
+
+### Next candidate — Layer 5 axis bipartition in the island frame (PENDING)
+
+On real walls most remaining Layer 5 degradation is "axis bipartition
+conflict -> OBLIQUE". Layer 5 pairs families by 3D perpendicularity at nodes,
+and families carry transports across seams that the island leaves cut. At a
+cut reveal corner three families are then mutually perpendicular, which no
+two-axis assignment can satisfy. The G5a module contract already names the
+intended source, "families in the island's unfolded frame (stitch-tree
+parallel transport)". Candidate: restrict family connectivity used by the
+island solve to crossings whose hinge is stitched in that island. This changes
+Layer 5 axis derivation and needs an Architect/user decision under the G5a
+"no widening of Layer 5 heuristics" guard.
+
+---
+
 ## Decisions the user must approve before the relevant slice
 
 ```text
@@ -897,4 +1071,15 @@ STOP CONDITIONS
 2. Slice E: spike home dev/tools/tracer_spike/ — APPROVED; no phase
    exception required.
 3. Slice F: G0 restructuring (constitution vs status split) — PENDING.
+4. Slice L: SHARED_CHAIN straight-hinge transport rule (Task Card L1) as a
+   G3 repair of DD-43 — APPROVED and DONE.
+5. Slice L: end-patch separation (box lids, corner-node gap) — DEFERRED by
+   the user to a future patch-normal filter; no cap/wall semantics.
+6. Slice J: DD-46/DD-47 (ScaffoldTrace/ScaffoldRail) G0 amendment text is
+   implemented as v0 evidence but not yet approved into G0 — PENDING.
+7. Slice L2: G0 DD-43 fixture-expectation amendment (one rail per fold line;
+   no patch revisit) — implemented on user direction; G0 text PENDING the
+   user's edit.
+8. Next: Layer 5 axis bipartition restricted to the island's stitched
+   crossings — PENDING decision.
 ```
