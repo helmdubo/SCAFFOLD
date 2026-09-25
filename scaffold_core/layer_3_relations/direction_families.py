@@ -4,6 +4,9 @@ Layer: 3 - Relations
 Rules:
 - Build ConnectedDirectionFamily evidence over existing directional and graph records.
 - Propagate only through ScaffoldGraph connectivity and shared PatchChain relations.
+- SHARED_CHAIN transport crosses only straight hinges: both PatchChains of the
+  shared Chain carry exactly one directional run. A curved multi-run Chain has
+  no single rotation axis and does not transport families (plan Slice L1).
 - Do not mutate ScaffoldGraph, ScaffoldContinuityComponent, AlignmentClass, or Layer 1 identity.
 - Do not build traces, rails, circuits, UV, solve, feature, API, UI, or runtime semantics.
 """
@@ -42,6 +45,7 @@ POLICY_NAME = "connected_direction_family_v1"
 DIRECTION_COMPATIBILITY_MIN_DOT = 0.996
 GEODESIC_STRAIGHT_TOLERANCE = 0.1
 SHARED_CHAIN_NORMAL_MIN_DOT = 0.9
+SHARED_CHAIN_HINGE_MAX_RUNS = 1
 
 
 @dataclass(frozen=True)
@@ -313,6 +317,8 @@ def _shared_chain_crossings(
 ) -> tuple[_CrossingCandidate, ...]:
     candidates: list[_CrossingCandidate] = []
     for relation in sorted(shared_chain_relations, key=lambda item: item.id):
+        if not _is_straight_shared_chain_hinge(relation, evidence_by_patch_chain):
+            continue
         adjacency = patch_adjacencies.get(relation.patch_adjacency_id or "")
         axis = _transport_axis(geometry, relation.chain_id, ())
         for first in evidence_by_patch_chain.get(relation.first_patch_chain_id, ()):
@@ -362,6 +368,23 @@ def _shared_chain_crossings(
                     confidence=confidence,
                 ))
     return tuple(candidates)
+
+
+def _is_straight_shared_chain_hinge(
+    relation: SharedChainPatchChainRelation,
+    evidence_by_patch_chain: Mapping[PatchChainId, tuple[PatchChainDirectionalEvidence, ...]],
+) -> bool:
+    """Return whether both PatchChains of a shared Chain are single straight runs.
+
+    Rotation about the Chain chord by the signed dihedral is a valid transport
+    only when the Chain itself is the hinge line. On a curved multi-run Chain a
+    chord-parallel middle run would otherwise cross into the neighbour patch.
+    """
+
+    return all(
+        len(evidence_by_patch_chain.get(patch_chain_id, ())) <= SHARED_CHAIN_HINGE_MAX_RUNS
+        for patch_chain_id in (relation.first_patch_chain_id, relation.second_patch_chain_id)
+    )
 
 
 def _same_patch_shared_chain_bridges(
@@ -903,6 +926,7 @@ def _family_evidence(
             "geodesic_straight_tolerance": GEODESIC_STRAIGHT_TOLERANCE,
             "compatible_normal_min_dot": COMPATIBLE_NORMAL_MIN_DOT,
             "shared_chain_normal_min_dot": SHARED_CHAIN_NORMAL_MIN_DOT,
+            "shared_chain_hinge_max_runs": SHARED_CHAIN_HINGE_MAX_RUNS,
             "confidence": confidence,
         },
     )

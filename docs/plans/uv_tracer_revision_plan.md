@@ -890,7 +890,8 @@ STOP CONDITIONS
 
 ## Slice L — Cap-rim direction-family leak (measured multiseam root cause)
 
-Status: DIAGNOSED 2026-09; fix blocked on user approval of a transport rule.
+Status: L1 APPROVED by the user and DONE (2026-09). The corner-node gap is
+deferred to a future patch-normal filter.
 
 Finding. The `artist_cyl_multiseam` collapse is a Layer 3
 ConnectedDirectionFamily leak, not a missing Layer 5 rail consumer:
@@ -924,22 +925,25 @@ Second, independent leak (does not break any solve today):
   family. Reproduced by the capped hex prism with 2+4 strips.
 ```
 
-Evidence pinned in tests (strict xfail until the fix lands):
+Evidence pinned in tests:
 
 ```text
 scaffold_core/tests/fixtures/capped_prism.py
 test_direction_families.py::test_capped_odd_strip_prism_keeps_rims_and_caps_separate
+test_direction_families.py::test_artist_multiseam_cylinder_rims_stay_distinct_across_six_strips
 test_direction_families.py::test_capped_uneven_strip_prism_keeps_cap_and_side_families_separate
-test_layer_5_runtime.py::test_capped_odd_strip_prism_band_should_solve_xfail
-test_layer_5_runtime.py::test_multiseam_cylinder_open_band_should_solve_xfail
+  (strict xfail: deferred corner-node gap)
+test_layer_5_runtime.py::test_capped_odd_strip_prism_band_unwraps_to_an_exact_rectangle
+test_layer_5_runtime.py::test_artist_multiseam_cylinder_open_band_unwraps_to_an_exact_rectangle
 ```
 
 The artist_cross_band partial degradation is a different cause: its rim
 families are already correct and the transport rule below does not change it.
 
-### Task Card L1 — Straight-hinge rule for SHARED_CHAIN transport (DRAFT)
+### Task Card L1 — Straight-hinge rule for SHARED_CHAIN transport (DONE)
 
-Candidate rule, validated against every current fixture and capture:
+Rule, implemented in `layer_3_relations/direction_families.py`
+(`SHARED_CHAIN_HINGE_MAX_RUNS`, recorded in family evidence data):
 
 ```text
 SHARED_CHAIN crossings transport a direction only when both PatchChains of
@@ -948,14 +952,21 @@ A curved multi-run shared chain has no single rotation axis, so it does not
 transport direction families.
 ```
 
-Measured effect: all 268 current tests stay green; the odd-strip prism and
-multiseam tests flip to passing; corridor folds, beveled corner, two-seam
-cylinder, extruded_cross, tube_with_cap and artist_cyl32 are unchanged. The
-second (corner-node) leak is NOT fixed by this rule.
+Result: the multiseam capture and the odd-strip prism unwrap to exact
+rectangles (two pinned rows, aligned columns, zero diagnostics); corridor
+folds, beveled corner, two-seam cylinder, extruded_cross, tube_with_cap and
+artist_cyl32 are unchanged. The second (corner-node) gap is not addressed by
+this rule.
 
-Open consequence: straight cap edges (a box lid) still transport, the same
-way a corridor ceiling does. Families would then merge a box lid edge with
-the wall top edge.
+User decisions (2026-09):
+
+```text
+- Straight end-patch edges (a box lid) may keep transporting like a corridor
+  ceiling for now. Separating such end patches is a future filter.
+- The corner-node gap stays a strict xfail. Its future fix is a filter based
+  on the patch normal. Scaffold must not introduce cap/wall patch semantics
+  for it: such roles are conditional, not core facts.
+```
 
 ---
 
@@ -969,9 +980,9 @@ the wall top edge.
    exception required.
 3. Slice F: G0 restructuring (constitution vs status split) — PENDING.
 4. Slice L: SHARED_CHAIN straight-hinge transport rule (Task Card L1) as a
-   G3 repair of DD-43 — PENDING.
-5. Slice L: cap/side discriminator for the corner-node leak, and whether
-   box-lid edges may share a family with wall edges — PENDING.
+   G3 repair of DD-43 — APPROVED and DONE.
+5. Slice L: end-patch separation (box lids, corner-node gap) — DEFERRED by
+   the user to a future patch-normal filter; no cap/wall semantics.
 6. Slice J: DD-46/DD-47 (ScaffoldTrace/ScaffoldRail) G0 amendment text is
    implemented as v0 evidence but not yet approved into G0 — PENDING.
 ```

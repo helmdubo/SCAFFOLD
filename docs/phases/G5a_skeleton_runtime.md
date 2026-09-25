@@ -114,7 +114,9 @@ Expected currently validated behavior:
 - extruded_cross: side band plus two separate cap islands;
 - l_corridor_tunnel_seamed_folds: one island through the folds;
 - artist_cyl32/Cylinder: 68 pins, residual about 4e-15, zero diagnostics
-  in the validated capture.
+  in the validated capture;
+- artist_cyl_multiseam (6 strips): 76 band pins on two straight rows,
+  residual about 9e-7 (float32 capture noise), zero diagnostics.
 ```
 
 Known limitation:
@@ -124,12 +126,11 @@ artist_cross_band currently degrades partially with diagnostics instead of
 silently smearing. This is an accepted G5a diagnostic case, not a green
 quality target yet.
 
-artist_cyl_multiseam currently xfails. The 2026-09 measurement (plan Slice L)
-located the root cause in Layer 3: a ConnectedDirectionFamily leak through
-curved cap-rim shared chains welds the top and bottom rims into one family.
-With that leak blocked, the existing G5a solve unrolls the band with zero
-diagnostics. The fix belongs to a Layer 3 transport rule; G5a must still not
-compensate with a local traversal heuristic.
+artist_cyl_multiseam is RESOLVED (plan Slice L1). The collapse was a Layer 3
+ConnectedDirectionFamily leak through curved shared chains that welded the
+top and bottom rims into one family. The straight-hinge transport rule fixed
+it in Layer 3; the G5a solve itself is unchanged and must still not gain
+local traversal heuristics.
 
 Draft contract: `docs/architecture/scaffold_rail_trace_contract_draft.md`.
 ```

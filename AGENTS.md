@@ -191,12 +191,11 @@ RunEndpointJunction v0 (G0 DD-44)
 ScaffoldTrace / ScaffoldRail v0 evidence views (plan Slice J; DD-46/DD-47 draft, not yet in G0)
 ```
 
-Known open Layer 3 defect (plan Slice L, fix pending user approval):
-
-```text
-ConnectedDirectionFamily leaks across curved cap-rim shared chains and
-90-degree rim-corner nodes; pinned by strict xfail tests.
-```
+SHARED_CHAIN family transport crosses only straight single-run hinges
+(plan Slice L1). Known deferred gap: a run transported through a 90-degree
+corner ScaffoldNode may join an end patch's perimeter family; it is pinned by
+a strict xfail and waits for a future patch-normal filter. Do not add
+cap/wall patch semantics to fix it.
 
 Approved tracer spike home (consumer tooling, outside scaffold_core):
 

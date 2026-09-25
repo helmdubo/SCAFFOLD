@@ -253,31 +253,58 @@ def test_connected_direction_families_carry_provenance_and_inspect_full() -> Non
     assert "member_map" in serialized_family
 
 
-CURVED_CAP_RIM_TRANSPORT_LEAK = (
-    "Known DD-43/DD-45 violation: SHARED_CHAIN transport rotates directions about "
-    "the chord of a curved cap-rim chain, so a rim run parallel to that chord "
-    "crosses into the cap and the same-patch bridge welds the top and bottom "
-    "rims. Root cause of the artist_cyl_multiseam collapse; the fix awaits a "
-    "user-approved transport rule (see uv_tracer_revision_plan.md Slice L)."
-)
-
 CORNER_NODE_CAP_TRANSPORT_LEAK = (
-    "Known DD-43 violation: a vertical seam run transported through a 90-degree "
-    "rim-corner ScaffoldNode lands on a cap perimeter run, joining side and cap "
-    "into one family. Node crossings are intentionally not normal-gated, so the "
-    "fix needs a user-approved cap/side discriminator (Slice L)."
+    "Known DD-43 gap: a vertical seam run transported through a 90-degree "
+    "rim-corner ScaffoldNode lands on a perimeter run of the end patch, joining "
+    "both patches into one family. Node crossings are intentionally not "
+    "normal-gated. Deferred to a future patch-normal filter; Scaffold does not "
+    "introduce cap/wall patch semantics for it (plan Slice L)."
 )
 
 
-@pytest.mark.xfail(strict=True, reason=CURVED_CAP_RIM_TRANSPORT_LEAK)
 def test_capped_odd_strip_prism_keeps_rims_and_caps_separate() -> None:
+    # Slice L1 straight-hinge rule: each 5-segment strip rim is a curved
+    # multi-run shared Chain, so SHARED_CHAIN transport must not cross into
+    # the end patches, and no same-patch bridge may weld top and bottom rims.
     context = run_pass_1_relations(run_pass_0(make_capped_decagon_prism_odd_strips_source()))
     relations = context.relation_snapshot
 
     top_rim = _single_family_with_member_fragment(relations, "patch:seed:f0:0:3:")
     bottom_rim = _single_family_with_member_fragment(relations, "patch:seed:f0:0:1:")
     assert top_rim.id != bottom_rim.id
+    assert len(top_rim.member_directional_evidence_ids) == 10
+    assert len(bottom_rim.member_directional_evidence_ids) == 10
+    assert all(record.kind != "SHARED_CHAIN" for record in top_rim.crossing_records)
+    assert all(record.kind != "SAME_PATCH_SHARED_CHAIN_BRIDGE" for record in top_rim.crossing_records)
     assert _cap_side_families(relations) == ()
+
+
+def test_artist_multiseam_cylinder_rims_stay_distinct_across_six_strips() -> None:
+    context = run_pass_1_relations(run_pass_0(_load_source_snapshot("artist_cyl_multiseam.json")))
+    relations = context.relation_snapshot
+
+    top_rim = _single_family_with_member_fragment(relations, "patch:seed:f0:0:0:")
+    bottom_rim = _single_family_with_member_fragment(relations, "patch:seed:f0:0:2:")
+    assert top_rim.id != bottom_rim.id
+    assert len(top_rim.member_directional_evidence_ids) == 32
+    assert len(bottom_rim.member_directional_evidence_ids) == 32
+    strip_patch_ids = {"f0", "f6", "f12", "f17", "f22", "f26"}
+    assert {str(patch_id).rsplit(":", 1)[-1] for patch_id in top_rim.patch_ids} == strip_patch_ids
+    assert {str(patch_id).rsplit(":", 1)[-1] for patch_id in bottom_rim.patch_ids} == strip_patch_ids
+    end_patch_families = tuple(
+        family
+        for family in relations.connected_direction_families
+        if any(str(patch_id).endswith(("f30", "f33")) for patch_id in family.patch_ids)
+        and any(not str(patch_id).endswith(("f30", "f33")) for patch_id in family.patch_ids)
+    )
+    assert end_patch_families == ()
+
+
+def test_straight_hinge_rule_is_recorded_in_family_evidence() -> None:
+    context = run_pass_1_relations(run_pass_0(make_l_corridor_tunnel_seamed_folds_source()))
+
+    for family in context.relation_snapshot.connected_direction_families:
+        assert family.evidence[0].data["shared_chain_hinge_max_runs"] == 1
 
 
 @pytest.mark.xfail(strict=True, reason=CORNER_NODE_CAP_TRANSPORT_LEAK)

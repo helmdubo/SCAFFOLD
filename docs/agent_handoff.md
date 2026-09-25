@@ -124,9 +124,10 @@ Implemented:
   node-link ScaffoldGraph export (`scaffold_graph_node_link` in full
   inspection; `dev/tools/scaffold_graph_viewer/export_networkx_graph.py`).
 
-Known open defect: plan Slice L. ConnectedDirectionFamily leaks across
-curved cap-rim shared chains; this is the measured root cause of the
-artist_cyl_multiseam xfail. Fix awaits user approval of a transport rule.
+Plan Slice L: the artist_cyl_multiseam collapse was a Layer 3 family leak
+through curved shared chains, fixed by the straight-hinge SHARED_CHAIN rule
+(L1). A corner-node gap stays a strict xfail until a future patch-normal
+filter; do not introduce cap/wall semantics for it.
 
 Not implemented:
 

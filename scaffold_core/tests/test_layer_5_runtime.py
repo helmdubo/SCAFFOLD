@@ -207,44 +207,36 @@ def test_contradictory_equations_are_excluded_with_diagnostics() -> None:
     assert max(abs(r) for r in residuals) > 1e-2  # contradiction is visible, not hidden
 
 
-import pytest
-
-
-def test_multiseam_cylinder_open_band_should_solve_xfail() -> None:
-    # KNOWN LIMITATION: a 32-segment cylinder cut into 6 vertical strips is an
-    # OPEN developable band (one seam stays SPLIT, the rest SEW) and MUST
-    # unroll to a rectangle. Measured root cause (2026-09): a Layer 3
-    # ConnectedDirectionFamily leak, not Layer 5. The 5-segment strips' curved
-    # cap-rim chains let SHARED_CHAIN transport cross into both caps, and the
-    # same-patch bridge welds top and bottom rims into one 68-member family.
-    # With the leak blocked, the existing G5a solve pins 76 band vertices on
-    # two straight rows with zero diagnostics. Synthetic reproduction:
-    # test_capped_odd_strip_prism_band_should_solve_xfail. Do not patch this
-    # with a Layer 5 traversal heuristic; fix the Layer 3 transport rule.
+def test_artist_multiseam_cylinder_open_band_unwraps_to_an_exact_rectangle() -> None:
+    # A 32-segment cylinder cut into 6 vertical strips is an OPEN developable
+    # band (one seam stays SPLIT, the rest SEW). It used to collapse because a
+    # Layer 3 family leak through curved cap rims welded top and bottom rims
+    # (plan Slice L). With the L1 straight-hinge rule the unchanged G5a solve
+    # unrolls it; no Layer 5 traversal heuristic is involved.
     result = _solve(_load_capture("artist_cyl_multiseam.json"))
-    band = max(result.assembly.islands, key=lambda island: len(island.patch_ids))
-    pinned_in_band = [
-        v for v in result.vertices if v.island_id == band.id and v.pinned
-    ]
-    if result.diagnostics or not pinned_in_band:
-        pytest.xfail("multiseam band collapses on a Layer 3 cap-rim family leak (Slice L)")
-    assert result.residual_max < 1e-6
+
+    _assert_band_is_exact_rectangle(result, island_count=3, residual_limit=1e-6)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Layer 3 cap-rim family leak welds top and bottom rims (Slice L).",
-)
-def test_capped_odd_strip_prism_band_should_solve_xfail() -> None:
-    # Synthetic reproduction of the artist_cyl_multiseam collapse: a capped
-    # 10-segment prism cut into two 5-segment strips. The side band is a
-    # developable open band and must unroll to two straight pinned rows.
+def test_capped_odd_strip_prism_band_unwraps_to_an_exact_rectangle() -> None:
+    # Synthetic reproduction of the multiseam case: a capped 10-segment prism
+    # cut into two 5-segment strips.
     result = _solve(make_capped_decagon_prism_odd_strips_source())
 
+    _assert_band_is_exact_rectangle(result, island_count=3, residual_limit=1e-9)
+
+
+def _assert_band_is_exact_rectangle(result, island_count: int, residual_limit: float) -> None:
     band = max(result.assembly.islands, key=lambda island: len(island.patch_ids))
     pinned_in_band = [v for v in result.vertices if v.island_id == band.id and v.pinned]
-    assert len(result.assembly.islands) == 3  # stitched side band + two caps
+    assert len(result.assembly.islands) == island_count
     assert result.diagnostics == ()
+    assert result.axis_parallel_violations == ()
+    assert result.seam_length_mismatches == ()
+    assert result.residual_max < residual_limit
     assert pinned_in_band
-    assert result.residual_max < 1e-6
-    assert len({round(vertex.uv[1], 6) for vertex in pinned_in_band}) == 2
+    rows = sorted({round(vertex.uv[1], 6) for vertex in pinned_in_band})
+    assert len(rows) == 2  # top rail and bottom rail are two straight rows
+    top = sorted(round(v.uv[0], 4) for v in pinned_in_band if round(v.uv[1], 6) == rows[0])
+    bottom = sorted(round(v.uv[0], 4) for v in pinned_in_band if round(v.uv[1], 6) == rows[-1])
+    assert top == bottom  # columns align across the rails
