@@ -99,6 +99,25 @@ Selection behavior matches Scaffold read semantics:
 
 ## Visual Model
 
+The default **PatchChain-use topology** view is the QA view for shape reading.
+It keeps every PatchChain use separate, expands each loop-use into one visible
+ring from ordered trace members or directional evidence, and draws non-loop
+PatchChains as patch-local bridges. Shared boundary chains are rendered as
+links between uses; they never merge cap and tube PatchChains into one display
+node. For example, a capped cylinder with one tube seam should show the tube
+rim uses, the cap perimeter uses, patch-local seam bridge uses, and shared-chain
+links between cap and tube uses.
+
+`Physics relax loop groups` is an optional layout aid for larger topologies. It
+keeps each PatchChain-use loop rigid as a ring, then applies a small force
+layout to the loop centers: patch bridges and shared-chain links act like
+springs and unrelated groups repel. It is display-only and does not change
+Scaffold identities or relations.
+
+Use **Raw evidence** when you need to inspect every exported relation edge
+directly. It is intentionally noisier because it overlays ScaffoldEdges,
+RunEndpointJunctions, DirectionFamilies, Traces and Rails.
+
 The viewer distinguishes canonical graph facts from display-only aliases:
 
 ```text
@@ -107,6 +126,9 @@ visual_id: canvas-only id used when a loop or coincident endpoint needs an alias
 ```
 
 Alias nodes are presentation only. They never mean new Scaffold Core identity.
+PatchChain-use loop groups are presentation only too; click a loop, bridge or
+shared-chain link to inspect its backing `chain_id`, `patch_chain_id` and
+`scaffold_edge_id`.
 
 Layer meaning:
 

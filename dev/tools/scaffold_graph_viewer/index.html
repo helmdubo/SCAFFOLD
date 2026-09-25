@@ -29,6 +29,13 @@
       </section>
 
       <section class="panel">
+        <h2>View</h2>
+        <label><input type="radio" name="viewMode" value="topology" checked> PatchChain-use topology</label>
+        <label><input type="radio" name="viewMode" value="evidence"> Raw evidence</label>
+        <div class="meta">Topology keeps each PatchChain use separate; shared chains are links, not merged nodes. Raw shows every exported relation.</div>
+      </section>
+
+      <section class="panel">
         <h2>Layers</h2>
         <label><input type="checkbox" data-layer="scaffoldEdges" checked> ScaffoldEdges</label>
         <label><input type="checkbox" data-layer="runEndpoints" checked> RunEndpointJunctions</label>
@@ -42,6 +49,7 @@
         <h2>Layout</h2>
         <label><input id="unrollToggle" type="checkbox" checked> Alias loop endpoints</label>
         <label><input id="labelsToggle" type="checkbox" checked> Labels</label>
+        <label><input id="topologyPhysicsToggle" type="checkbox"> Physics relax loop groups</label>
         <label class="range-row">Zoom <input id="zoomRange" type="range" min="60" max="160" value="100"></label>
         <button id="relayoutButton" type="button">Relayout</button>
       </section>

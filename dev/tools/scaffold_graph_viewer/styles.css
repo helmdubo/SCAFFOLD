@@ -161,6 +161,12 @@ input[type="checkbox"] {
   accent-color: var(--accent);
 }
 
+input[type="radio"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+}
+
 .range-row {
   justify-content: space-between;
 }
@@ -277,6 +283,7 @@ input[type="search"]:focus {
   stroke-width: 1.4;
   fill: none;
   opacity: 0.85;
+  pointer-events: none;
 }
 
 .edge.family {
@@ -292,6 +299,24 @@ input[type="search"]:focus {
 
 .edge.rail {
   stroke-width: 4;
+  opacity: 0.82;
+}
+
+.edge.topology-loop {
+  stroke-width: 2.6;
+  opacity: 0.92;
+}
+
+.edge.topology-bridge {
+  stroke: var(--amber);
+  stroke-width: 4.2;
+  opacity: 0.96;
+}
+
+.edge.topology-shared {
+  stroke: var(--blue);
+  stroke-width: 2.2;
+  stroke-dasharray: 8 5;
   opacity: 0.82;
 }
 
@@ -323,6 +348,10 @@ input[type="search"]:focus {
 
 .node.run .node-shape {
   fill: var(--amber);
+}
+
+.node.topology .node-shape {
+  stroke-width: 1.5;
 }
 
 .node.alias .node-shape {
@@ -363,11 +392,44 @@ input[type="search"]:focus {
   pointer-events: none;
 }
 
+.topology-label {
+  cursor: pointer;
+}
+
+.topology-label-hit {
+  fill: transparent;
+  pointer-events: all;
+}
+
+.loop-title,
+.loop-subtitle {
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(11, 16, 18, 0.92);
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.loop-title {
+  fill: var(--text);
+  font-size: 13px;
+  font-weight: 760;
+  stroke-width: 5px;
+}
+
+.loop-subtitle {
+  fill: var(--muted);
+  font-size: 10px;
+  font-weight: 620;
+  stroke-width: 4px;
+}
+
 .edge-hit {
   stroke: transparent;
   stroke-width: 12;
   fill: none;
   cursor: pointer;
+  pointer-events: stroke;
 }
 
 .inspector header {
