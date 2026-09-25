@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from scaffold_core.ids import SourceEdgeId, SourceFaceId, SourceMeshId, SourceVertexId
 from scaffold_core.layer_0_source.marks import SourceMark, SourceMarkKind
 from scaffold_core.layer_0_source.snapshot import (
@@ -25,6 +27,10 @@ from scaffold_core.layer_3_relations.model import PatchChainEndpointRole
 from scaffold_core.pipeline.inspection import inspect_pipeline_context
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.beveled_wall_corner import make_beveled_wall_corner_source
+from scaffold_core.tests.fixtures.capped_prism import (
+    make_capped_decagon_prism_odd_strips_source,
+    make_capped_hex_prism_uneven_strips_source,
+)
 from scaffold_core.tests.fixtures.cylinder_tube import (
     make_cylinder_tube_without_caps_with_two_seams_source,
 )
@@ -245,6 +251,53 @@ def test_connected_direction_families_carry_provenance_and_inspect_full() -> Non
     assert "run_endpoint_junction_id" in serialized_crossing
     assert "ordered_member_directional_evidence_ids" in serialized_family
     assert "member_map" in serialized_family
+
+
+CURVED_CAP_RIM_TRANSPORT_LEAK = (
+    "Known DD-43/DD-45 violation: SHARED_CHAIN transport rotates directions about "
+    "the chord of a curved cap-rim chain, so a rim run parallel to that chord "
+    "crosses into the cap and the same-patch bridge welds the top and bottom "
+    "rims. Root cause of the artist_cyl_multiseam collapse; the fix awaits a "
+    "user-approved transport rule (see uv_tracer_revision_plan.md Slice L)."
+)
+
+CORNER_NODE_CAP_TRANSPORT_LEAK = (
+    "Known DD-43 violation: a vertical seam run transported through a 90-degree "
+    "rim-corner ScaffoldNode lands on a cap perimeter run, joining side and cap "
+    "into one family. Node crossings are intentionally not normal-gated, so the "
+    "fix needs a user-approved cap/side discriminator (Slice L)."
+)
+
+
+@pytest.mark.xfail(strict=True, reason=CURVED_CAP_RIM_TRANSPORT_LEAK)
+def test_capped_odd_strip_prism_keeps_rims_and_caps_separate() -> None:
+    context = run_pass_1_relations(run_pass_0(make_capped_decagon_prism_odd_strips_source()))
+    relations = context.relation_snapshot
+
+    top_rim = _single_family_with_member_fragment(relations, "patch:seed:f0:0:3:")
+    bottom_rim = _single_family_with_member_fragment(relations, "patch:seed:f0:0:1:")
+    assert top_rim.id != bottom_rim.id
+    assert _cap_side_families(relations) == ()
+
+
+@pytest.mark.xfail(strict=True, reason=CORNER_NODE_CAP_TRANSPORT_LEAK)
+def test_capped_uneven_strip_prism_keeps_cap_and_side_families_separate() -> None:
+    context = run_pass_1_relations(run_pass_0(make_capped_hex_prism_uneven_strips_source()))
+    relations = context.relation_snapshot
+
+    top_rim = _single_family_with_member_fragment(relations, "patch:seed:f0:0:3:")
+    bottom_rim = _single_family_with_member_fragment(relations, "patch:seed:f0:0:1:")
+    assert top_rim.id != bottom_rim.id
+    assert _cap_side_families(relations) == ()
+
+
+def _cap_side_families(relations):
+    return tuple(
+        family
+        for family in relations.connected_direction_families
+        if any("f_cap" in str(patch_id) for patch_id in family.patch_ids)
+        and any("f_cap" not in str(patch_id) for patch_id in family.patch_ids)
+    )
 
 
 def _has_family_with_patches(relations, patch_fragments, directions) -> bool:

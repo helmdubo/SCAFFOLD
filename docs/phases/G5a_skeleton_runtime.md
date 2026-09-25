@@ -124,10 +124,12 @@ artist_cross_band currently degrades partially with diagnostics instead of
 silently smearing. This is an accepted G5a diagnostic case, not a green
 quality target yet.
 
-artist_cyl_multiseam currently xfails as a missing ScaffoldTrace/ScaffoldRail
-contract case. The multiseam open band needs direction-stable ordered rail
-membership and transport-consistent orientation supplied by Layer 3; G5a must
-not replace that future slice with a local traversal heuristic.
+artist_cyl_multiseam currently xfails. The 2026-09 measurement (plan Slice L)
+located the root cause in Layer 3: a ConnectedDirectionFamily leak through
+curved cap-rim shared chains welds the top and bottom rims into one family.
+With that leak blocked, the existing G5a solve unrolls the band with zero
+diagnostics. The fix belongs to a Layer 3 transport rule; G5a must still not
+compensate with a local traversal heuristic.
 
 Draft contract: `docs/architecture/scaffold_rail_trace_contract_draft.md`.
 ```

@@ -888,6 +888,77 @@ STOP CONDITIONS
 
 ---
 
+## Slice L — Cap-rim direction-family leak (measured multiseam root cause)
+
+Status: DIAGNOSED 2026-09; fix blocked on user approval of a transport rule.
+
+Finding. The `artist_cyl_multiseam` collapse is a Layer 3
+ConnectedDirectionFamily leak, not a missing Layer 5 rail consumer:
+
+```text
+- One 68-member family holds the top rim, bottom rim and both cap
+  perimeters (DD-45 requires distinct rim families; DD-43 requires cap and
+  side families to stay separate).
+- Leak path: SHARED_CHAIN transport rotates a direction about the CHORD of
+  the shared chain. A curved cap-rim chain is not a rigid hinge. On a
+  5-segment strip the middle rim run is parallel to the chord, so rotation is
+  the identity, the transported normal gate passes (normal_dot 0.995) and the
+  run crosses into the cap. SAME_PATCH_SHARED_CHAIN_BRIDGE (a raw
+  world-direction parallel test inside one patch) then welds top and bottom
+  rim runs of the same strip.
+- Even-segment strips and the in-repo fixtures pass by accident: either no
+  rim run is chord-parallel, or a full-ring band patch has a degenerate
+  averaged normal, which makes the PatchAdjacency dihedral 0 and the raw
+  normal gate rejects the cap crossing.
+- With cap crossings blocked, the unchanged G5a solve pins 76 band vertices
+  on two straight rows with zero diagnostics (residual 8.8e-7 = float32
+  capture noise).
+```
+
+Second, independent leak (does not break any solve today):
+
+```text
+- A vertical seam run transported through a 90-degree rim-corner
+  ScaffoldNode lands on a cap perimeter run. Node crossings are
+  intentionally not normal-gated (DD-43 ring flow), so side and cap join one
+  family. Reproduced by the capped hex prism with 2+4 strips.
+```
+
+Evidence pinned in tests (strict xfail until the fix lands):
+
+```text
+scaffold_core/tests/fixtures/capped_prism.py
+test_direction_families.py::test_capped_odd_strip_prism_keeps_rims_and_caps_separate
+test_direction_families.py::test_capped_uneven_strip_prism_keeps_cap_and_side_families_separate
+test_layer_5_runtime.py::test_capped_odd_strip_prism_band_should_solve_xfail
+test_layer_5_runtime.py::test_multiseam_cylinder_open_band_should_solve_xfail
+```
+
+The artist_cross_band partial degradation is a different cause: its rim
+families are already correct and the transport rule below does not change it.
+
+### Task Card L1 — Straight-hinge rule for SHARED_CHAIN transport (DRAFT)
+
+Candidate rule, validated against every current fixture and capture:
+
+```text
+SHARED_CHAIN crossings transport a direction only when both PatchChains of
+the shared chain carry exactly one directional run (a straight hinge).
+A curved multi-run shared chain has no single rotation axis, so it does not
+transport direction families.
+```
+
+Measured effect: all 268 current tests stay green; the odd-strip prism and
+multiseam tests flip to passing; corridor folds, beveled corner, two-seam
+cylinder, extruded_cross, tube_with_cap and artist_cyl32 are unchanged. The
+second (corner-node) leak is NOT fixed by this rule.
+
+Open consequence: straight cap edges (a box lid) still transport, the same
+way a corridor ceiling does. Families would then merge a box lid edge with
+the wall top edge.
+
+---
+
 ## Decisions the user must approve before the relevant slice
 
 ```text
@@ -897,4 +968,10 @@ STOP CONDITIONS
 2. Slice E: spike home dev/tools/tracer_spike/ — APPROVED; no phase
    exception required.
 3. Slice F: G0 restructuring (constitution vs status split) — PENDING.
+4. Slice L: SHARED_CHAIN straight-hinge transport rule (Task Card L1) as a
+   G3 repair of DD-43 — PENDING.
+5. Slice L: cap/side discriminator for the corner-node leak, and whether
+   box-lid edges may share a family with wall edges — PENDING.
+6. Slice J: DD-46/DD-47 (ScaffoldTrace/ScaffoldRail) G0 amendment text is
+   implemented as v0 evidence but not yet approved into G0 — PENDING.
 ```

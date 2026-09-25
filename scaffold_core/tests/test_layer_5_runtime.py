@@ -23,6 +23,7 @@ from scaffold_core.layer_0_source.snapshot import (
 )
 from scaffold_core.layer_5_runtime.pins import run_skeleton_solve
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
+from scaffold_core.tests.fixtures.capped_prism import make_capped_decagon_prism_odd_strips_source
 from scaffold_core.tests.fixtures.cylinder_tube import (
     make_cylinder_tube_without_caps_with_one_seam_source,
     make_cylinder_tube_without_caps_with_two_seams_source,
@@ -210,18 +211,40 @@ import pytest
 
 
 def test_multiseam_cylinder_open_band_should_solve_xfail() -> None:
-    # KNOWN LIMITATION (ScaffoldRail/Trace consumer not integrated yet): a 32-segment
-    # cylinder cut into 6 vertical strips is an OPEN developable band (one
-    # seam stays SPLIT, the rest SEW) and MUST unroll to a rectangle. It
-    # currently collapses because G5a still does not consume unambiguous
-    # ScaffoldRail evidence or explicit cut-context for loop opening. Do not
-    # patch this with another Layer 5 traversal heuristic; flip after the
-    # consumer slice replaces local rail-order/sign derivation.
+    # KNOWN LIMITATION: a 32-segment cylinder cut into 6 vertical strips is an
+    # OPEN developable band (one seam stays SPLIT, the rest SEW) and MUST
+    # unroll to a rectangle. Measured root cause (2026-09): a Layer 3
+    # ConnectedDirectionFamily leak, not Layer 5. The 5-segment strips' curved
+    # cap-rim chains let SHARED_CHAIN transport cross into both caps, and the
+    # same-patch bridge welds top and bottom rims into one 68-member family.
+    # With the leak blocked, the existing G5a solve pins 76 band vertices on
+    # two straight rows with zero diagnostics. Synthetic reproduction:
+    # test_capped_odd_strip_prism_band_should_solve_xfail. Do not patch this
+    # with a Layer 5 traversal heuristic; fix the Layer 3 transport rule.
     result = _solve(_load_capture("artist_cyl_multiseam.json"))
     band = max(result.assembly.islands, key=lambda island: len(island.patch_ids))
     pinned_in_band = [
         v for v in result.vertices if v.island_id == band.id and v.pinned
     ]
     if result.diagnostics or not pinned_in_band:
-        pytest.xfail("multiseam open band needs ScaffoldRail consumer integration")
+        pytest.xfail("multiseam band collapses on a Layer 3 cap-rim family leak (Slice L)")
     assert result.residual_max < 1e-6
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Layer 3 cap-rim family leak welds top and bottom rims (Slice L).",
+)
+def test_capped_odd_strip_prism_band_should_solve_xfail() -> None:
+    # Synthetic reproduction of the artist_cyl_multiseam collapse: a capped
+    # 10-segment prism cut into two 5-segment strips. The side band is a
+    # developable open band and must unroll to two straight pinned rows.
+    result = _solve(make_capped_decagon_prism_odd_strips_source())
+
+    band = max(result.assembly.islands, key=lambda island: len(island.patch_ids))
+    pinned_in_band = [v for v in result.vertices if v.island_id == band.id and v.pinned]
+    assert len(result.assembly.islands) == 3  # stitched side band + two caps
+    assert result.diagnostics == ()
+    assert pinned_in_band
+    assert result.residual_max < 1e-6
+    assert len({round(vertex.uv[1], 6) for vertex in pinned_in_band}) == 2
