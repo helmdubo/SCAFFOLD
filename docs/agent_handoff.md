@@ -115,13 +115,24 @@ Implemented:
   - `uv_transfer.py` the only bpy write boundary.
 - Debug add-on `Write UV (G5a)` button in
   `dev/tools/scaffold_graph_debug/`.
+- ScaffoldTrace / ScaffoldRail v0 Layer 3 evidence views
+  (`layer_3_relations/scaffold_rails.py`); closed loops stay non-consumable
+  until cut context opens them.
+- Pipeline tooling: Chain -> PatchChain incidence index
+  (`layer_3_relations/patch_chain_incidence.py`), per-pass stage timings in
+  `PipelineContext.pass_timings` (reported by inspection), and a networkx
+  node-link ScaffoldGraph export (`scaffold_graph_node_link` in full
+  inspection; `dev/tools/scaffold_graph_viewer/export_networkx_graph.py`).
+
+Known open defect: plan Slice L. ConnectedDirectionFamily leaks across
+curved cap-rim shared chains; this is the measured root cause of the
+artist_cyl_multiseam xfail. Fix awaits user approval of a transport rule.
 
 Not implemented:
 
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
-- ScaffoldTrace
 - ScaffoldCircuit
-- ScaffoldRail
+- ScaffoldRail loop opening from island cut context
 - WorldOrientation
 - Layer 4 Feature Grammar
 - public API
@@ -175,13 +186,15 @@ ScaffoldGraph:
   ScaffoldEdges.
 
 ScaffoldTrace:
-  future connected sequence of ScaffoldEdges through ScaffoldNodes.
+  implemented v0 ordered evidence view over ConnectedDirectionFamily members
+  through ScaffoldNode / RunEndpointJunction atoms.
 
 ScaffoldCircuit:
   future closed ScaffoldTrace.
 
 ScaffoldRail:
-  future direction-stable ScaffoldTrace usable as a conditional axis.
+  implemented v0 direction-stability view over a ScaffoldTrace; branches and
+  closed loops stay ambiguous and non-consumable by G5a.
 
 ScaffoldContinuityComponent:
   implemented Layer 3 derived evidence view grouping existing ScaffoldEdges into

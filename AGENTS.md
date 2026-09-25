@@ -186,12 +186,16 @@ ScaffoldContinuityComponent v0 derived evidence view over ScaffoldEdges
 ScaffoldNodeIncidentEdgeRelationKind SURFACE_SLIDING_CONTINUATION_CANDIDATE v0
 SideSurfaceContinuityEvidence v1 evidence-only same-side surface flow record with direction/flow-family gate
 SurfaceFlowCompatibilityEvidence v0 evidence-only cross-patch flow-family compatibility record
+ConnectedDirectionFamily v1 (G0 DD-43/DD-45) occurrence-aware geodesic families
+RunEndpointJunction v0 (G0 DD-44)
+ScaffoldTrace / ScaffoldRail v0 evidence views (plan Slice J; DD-46/DD-47 draft, not yet in G0)
 ```
 
-Contract-approved during G3, implementation pending:
+Known open Layer 3 defect (plan Slice L, fix pending user approval):
 
 ```text
-ConnectedDirectionFamily v0 (G0 DD-43)
+ConnectedDirectionFamily leaks across curved cap-rim shared chains and
+90-degree rim-corner nodes; pinned by strict xfail tests.
 ```
 
 Approved tracer spike home (consumer tooling, outside scaffold_core):
@@ -207,7 +211,8 @@ Deferred in G3:
 
 ```text
 ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
-ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
+ScaffoldCircuit
+ScaffoldRail loop opening from island cut context
 WorldOrientation
 ```
 
