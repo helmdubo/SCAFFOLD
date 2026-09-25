@@ -939,6 +939,13 @@ test_layer_5_runtime.py::test_artist_multiseam_cylinder_open_band_unwraps_to_an_
 
 The artist_cross_band partial degradation is a different cause: its rim
 families are already correct and the transport rule below does not change it.
+Measured 2026-09: the 12-face side band solves cleanly (20 pins, zero
+diagnostics); both 5-face planar cross end patches get 0 pins with 5
+contradictory equations per axis. Their perimeter families are corner-split
+singletons (DD-45), and Layer 5 `_orientation_signs` gives every singleton run
+sign +1 in its own loop direction. Candidate next slice: supply per-run
+orientation in the island frame from Layer 3 (ScaffoldRail consumer) instead
+of widening Layer 5 sign heuristics. Needs an Architect/user decision.
 
 ### Task Card L1 — Straight-hinge rule for SHARED_CHAIN transport (DONE)
 
