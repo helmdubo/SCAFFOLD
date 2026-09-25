@@ -22,7 +22,10 @@ from scaffold_core.layer_3_relations.chain_refinement import (
     build_chain_directional_runs,
 )
 from scaffold_core.layer_3_relations.continuation import build_chain_continuations
-from scaffold_core.layer_3_relations.direction_families import build_connected_direction_families
+from scaffold_core.layer_3_relations.direction_families import (
+    build_connected_direction_families,
+    connected_direction_family_diagnostics,
+)
 from scaffold_core.layer_3_relations.loop_corners import build_loop_corners
 from scaffold_core.layer_3_relations.model import DihedralKind, PatchAdjacency, RelationSnapshot
 from scaffold_core.layer_3_relations.patch_chain_incidence import (
@@ -160,6 +163,11 @@ def build_relation_snapshot(
         scaffold_rails=scaffold_rails,
         alignment_classes=alignment_classes,
         patch_axes=patch_axes,
+        diagnostics=connected_direction_family_diagnostics(
+            connected_direction_families,
+            patch_chain_directional_evidence,
+            geometry,
+        ),
     )
 
 

@@ -7,6 +7,10 @@ Rules:
 - SHARED_CHAIN transport crosses only straight hinges: both PatchChains of the
   shared Chain carry exactly one directional run. A curved multi-run Chain has
   no single rotation axis and does not transport families (plan Slice L1).
+- A family is one connected line that visits each patch at most once as one
+  continuous in-patch segment. Parallel runs are never merged by direction
+  comparison alone, and merges that would revisit a patch are blocked, so
+  opposite sides of a patch never share a family (plan Slice L2).
 - Do not mutate ScaffoldGraph, ScaffoldContinuityComponent, AlignmentClass, or Layer 1 identity.
 - Do not build traces, rails, circuits, UV, solve, feature, API, UI, or runtime semantics.
 """
@@ -17,6 +21,7 @@ from dataclasses import dataclass
 from math import atan2, cos, pi, sin
 from typing import Mapping
 
+from scaffold_core.core.diagnostics import Diagnostic, DiagnosticSeverity
 from scaffold_core.core.evidence import Evidence
 from scaffold_core.ids import ChainId, PatchChainId, PatchId, VertexId
 from scaffold_core.layer_1_topology.model import SurfaceModel
@@ -46,6 +51,9 @@ DIRECTION_COMPATIBILITY_MIN_DOT = 0.996
 GEODESIC_STRAIGHT_TOLERANCE = 0.1
 SHARED_CHAIN_NORMAL_MIN_DOT = 0.9
 SHARED_CHAIN_HINGE_MAX_RUNS = 1
+OPPOSITE_SIDE_MIN_OFFSET = 1.0e-6
+OPPOSITE_PATCH_SIDES_CODE = "FAMILY_SPANS_OPPOSITE_PATCH_SIDES"
+CROSSING_KIND_PRIORITY = {"IN_PATCH_GEODESIC": 0, "SHARED_CHAIN": 1, "SCAFFOLD_NODE": 2}
 
 
 @dataclass(frozen=True)
@@ -105,7 +113,6 @@ def build_connected_direction_families(
     )
     crossing_candidates = (
         *shared_chain_candidates,
-        *_same_patch_shared_chain_bridges(evidence_by_id, shared_chain_candidates),
         *_node_crossings(
             geometry,
             scaffold_nodes,
@@ -125,7 +132,7 @@ def build_connected_direction_families(
             self_seam_chain_ids,
         ),
     )
-    components = _connected_components(evidence_by_id, crossing_candidates)
+    components, blocked_by_evidence_id = _connected_components(evidence_by_id, crossing_candidates)
     family_crossings = _crossings_by_component(components, crossing_candidates)
 
     families: list[ConnectedDirectionFamily] = []
@@ -162,7 +169,12 @@ def build_connected_direction_families(
                 branch_records=branch_records,
                 member_map=member_map,
                 confidence=confidence,
-                evidence=(_family_evidence(member_ids, crossings, confidence),),
+                evidence=(_family_evidence(
+                    member_ids,
+                    crossings,
+                    confidence,
+                    sum(blocked_by_evidence_id.get(member_id, 0) for member_id in member_ids),
+                ),),
             )
         )
     return tuple(families)
@@ -370,6 +382,117 @@ def _shared_chain_crossings(
     return tuple(candidates)
 
 
+def connected_direction_family_diagnostics(
+    families: tuple[ConnectedDirectionFamily, ...],
+    directional_evidence_items: tuple[PatchChainDirectionalEvidence, ...],
+    geometry: GeometryFactSnapshot,
+) -> tuple[Diagnostic, ...]:
+    """Flag families that hold two distinct parallel lines of one patch.
+
+    A family is one transported line (rail). Two PatchChains of the same patch
+    that run parallel on different lines, such as the top and bottom rim of a
+    strip, must never share a family. Collinear pieces of one line and one
+    continuous in-patch segment bending over a fold are not flagged. One
+    diagnostic is emitted per family and patch. The family builder already
+    blocks patch revisits, so this is a guard, not a repair.
+    """
+
+    evidence_by_id = {item.id: item for item in directional_evidence_items}
+    diagnostics: list[Diagnostic] = []
+    for family in sorted(families, key=lambda item: item.id):
+        members_by_patch: dict[str, list[PatchChainDirectionalEvidence]] = {}
+        for member_id in family.member_directional_evidence_ids:
+            evidence = evidence_by_id.get(member_id)
+            if evidence is not None:
+                members_by_patch.setdefault(str(evidence.patch_id), []).append(evidence)
+        segment_of = _in_patch_segments(family)
+        for patch_id, members in sorted(members_by_patch.items()):
+            pair = _opposite_side_pair(members, family.member_map, geometry, segment_of)
+            if pair is None:
+                continue
+            first, second = pair
+            diagnostics.append(Diagnostic(
+                code=OPPOSITE_PATCH_SIDES_CODE,
+                severity=DiagnosticSeverity.WARNING,
+                message=(
+                    f"{family.id} holds two parallel sides of {patch_id}: "
+                    f"{first.patch_chain_id} and {second.patch_chain_id}"
+                ),
+                source="layer_3_relations.direction_families",
+                entity_ids=(family.id, patch_id, str(first.patch_chain_id), str(second.patch_chain_id)),
+                evidence={
+                    "first_loop_id": str(first.loop_id),
+                    "second_loop_id": str(second.loop_id),
+                    "first_directional_evidence_id": first.id,
+                    "second_directional_evidence_id": second.id,
+                },
+            ))
+    return tuple(diagnostics)
+
+
+def _in_patch_segments(family: ConnectedDirectionFamily) -> dict[str, str]:
+    """Map each member to its continuous in-patch segment inside the family."""
+
+    segment_of = {member_id: member_id for member_id in family.member_directional_evidence_ids}
+
+    def find(member_id: str) -> str:
+        while segment_of[member_id] != member_id:
+            segment_of[member_id] = segment_of[segment_of[member_id]]
+            member_id = segment_of[member_id]
+        return member_id
+
+    for crossing in family.crossing_records:
+        if crossing.kind != "IN_PATCH_GEODESIC":
+            continue
+        first = find(crossing.first_directional_evidence_id)
+        second = find(crossing.second_directional_evidence_id)
+        if first != second:
+            segment_of[max(first, second)] = min(first, second)
+    return {member_id: find(member_id) for member_id in segment_of}
+
+
+def _opposite_side_pair(
+    members: list[PatchChainDirectionalEvidence],
+    member_map: Mapping[str, tuple[PatchChainId, str | None, VertexId | None, VertexId | None]],
+    geometry: GeometryFactSnapshot,
+    segment_of: Mapping[str, str],
+) -> tuple[PatchChainDirectionalEvidence, PatchChainDirectionalEvidence] | None:
+    ordered = sorted(members, key=lambda item: item.id)
+    for first_index, first in enumerate(ordered):
+        first_start = _member_start_position(first.id, member_map, geometry)
+        first_direction = normalize(first.direction)
+        if first_start is None or length(first_direction) <= EPSILON:
+            continue
+        for second in ordered[first_index + 1:]:
+            if second.patch_chain_id == first.patch_chain_id:
+                continue
+            if segment_of.get(first.id) == segment_of.get(second.id):
+                continue  # one continuous in-patch line bending over a fold
+            if abs(dot(first_direction, normalize(second.direction))) < DIRECTION_COMPATIBILITY_MIN_DOT:
+                continue
+            second_start = _member_start_position(second.id, member_map, geometry)
+            if second_start is None:
+                continue
+            offset = tuple(b - a for a, b in zip(first_start, second_start))
+            along = dot(offset, first_direction)
+            perpendicular = tuple(o - along * d for o, d in zip(offset, first_direction))
+            if length(perpendicular) > OPPOSITE_SIDE_MIN_OFFSET:
+                return first, second
+    return None
+
+
+def _member_start_position(
+    member_id: str,
+    member_map: Mapping[str, tuple[PatchChainId, str | None, VertexId | None, VertexId | None]],
+    geometry: GeometryFactSnapshot,
+) -> Vector3 | None:
+    member = member_map.get(member_id)
+    if member is None or member[2] is None:
+        return None
+    facts = geometry.vertex_facts.get(member[2])
+    return None if facts is None else facts.position
+
+
 def _is_straight_shared_chain_hinge(
     relation: SharedChainPatchChainRelation,
     evidence_by_patch_chain: Mapping[PatchChainId, tuple[PatchChainDirectionalEvidence, ...]],
@@ -385,67 +508,6 @@ def _is_straight_shared_chain_hinge(
         len(evidence_by_patch_chain.get(patch_chain_id, ())) <= SHARED_CHAIN_HINGE_MAX_RUNS
         for patch_chain_id in (relation.first_patch_chain_id, relation.second_patch_chain_id)
     )
-
-
-def _same_patch_shared_chain_bridges(
-    evidence_by_id: Mapping[str, PatchChainDirectionalEvidence],
-    shared_chain_candidates: tuple[_CrossingCandidate, ...],
-) -> tuple[_CrossingCandidate, ...]:
-    shared_chain_ids_by_evidence_id: dict[str, set[str]] = {}
-    for candidate in shared_chain_candidates:
-        shared_chain_id = candidate.record.shared_chain_id
-        if shared_chain_id is None:
-            continue
-        shared_chain_ids_by_evidence_id.setdefault(
-            candidate.first_directional_evidence_id,
-            set(),
-        ).add(str(shared_chain_id))
-        shared_chain_ids_by_evidence_id.setdefault(
-            candidate.second_directional_evidence_id,
-            set(),
-        ).add(str(shared_chain_id))
-
-    evidence_by_patch: dict[PatchId, list[PatchChainDirectionalEvidence]] = {}
-    for evidence_id in shared_chain_ids_by_evidence_id:
-        evidence = evidence_by_id[evidence_id]
-        evidence_by_patch.setdefault(evidence.patch_id, []).append(evidence)
-
-    candidates: list[_CrossingCandidate] = []
-    for patch_id in sorted(evidence_by_patch, key=str):
-        patch_evidence = tuple(sorted(evidence_by_patch[patch_id], key=lambda item: item.id))
-        for first_index, first in enumerate(patch_evidence):
-            for second in patch_evidence[first_index + 1:]:
-                transport_dot = _transport_direction_dot(
-                    first.direction,
-                    second.direction,
-                    (0.0, 0.0, 0.0),
-                    0.0,
-                )
-                if transport_dot < DIRECTION_COMPATIBILITY_MIN_DOT:
-                    continue
-                confidence = min(first.confidence, second.confidence)
-                candidates.append(_CrossingCandidate(
-                    first_directional_evidence_id=first.id,
-                    second_directional_evidence_id=second.id,
-                    record=CrossingRecord(
-                        kind="SAME_PATCH_SHARED_CHAIN_BRIDGE",
-                        scaffold_node_id=None,
-                        shared_chain_id=None,
-                        patch_adjacency_id=None,
-                        first_directional_evidence_id=first.id,
-                        second_directional_evidence_id=second.id,
-                        first_patch_chain_id=first.patch_chain_id,
-                        second_patch_chain_id=second.patch_chain_id,
-                        first_patch_id=patch_id,
-                        second_patch_id=patch_id,
-                        signed_dihedral_radians=0.0,
-                        transported_direction_dot=transport_dot,
-                        transported_normal_dot=None,
-                        confidence=confidence,
-                    ),
-                    confidence=confidence,
-                ))
-    return tuple(candidates)
 
 
 def _node_crossings(
@@ -786,8 +848,24 @@ def _deduplicate_crossings(
 def _connected_components(
     evidence_by_id: Mapping[str, PatchChainDirectionalEvidence],
     crossing_candidates: tuple[_CrossingCandidate, ...],
-) -> dict[str, tuple[str, ...]]:
+) -> tuple[dict[str, tuple[str, ...]], dict[str, int]]:
+    """Union crossings into families that visit each patch at most once.
+
+    IN_PATCH_GEODESIC crossings first form continuous in-patch segments. Other
+    crossings then merge families in deterministic priority order: SHARED_CHAIN
+    merges two uses of the same source edges (identity of one physical line)
+    before SCAFFOLD_NODE continuations (an inferred geodesic between different
+    Chains). A merge that would put two separate segments of one patch into one
+    family is blocked, so opposite or otherwise disconnected sides of a patch
+    never share a family (Slice L2). Returns components and the
+    blocked-crossing count per evidence id.
+    """
+
     parents = {evidence_id: evidence_id for evidence_id in evidence_by_id}
+    patch_segments: dict[str, dict[str, str]] = {
+        evidence_id: {str(evidence.patch_id): evidence_id}
+        for evidence_id, evidence in evidence_by_id.items()
+    }
 
     def find(evidence_id: str) -> str:
         while parents[evidence_id] != evidence_id:
@@ -795,26 +873,45 @@ def _connected_components(
             evidence_id = parents[evidence_id]
         return evidence_id
 
-    def union(first_id: str, second_id: str) -> None:
+    def union(first_id: str, second_id: str, constrained: bool) -> bool:
         first_root = find(first_id)
         second_root = find(second_id)
         if first_root == second_root:
-            return
-        if first_root < second_root:
-            parents[second_root] = first_root
-        else:
-            parents[first_root] = second_root
+            return True
+        first_patches = patch_segments[first_root]
+        second_patches = patch_segments[second_root]
+        if constrained and first_patches.keys() & second_patches.keys():
+            return False
+        root, child = sorted((first_root, second_root))
+        parents[child] = root
+        merged = {**patch_segments.pop(child), **patch_segments[root]}
+        patch_segments[root] = merged
+        return True
 
-    for crossing in crossing_candidates:
-        union(crossing.first_directional_evidence_id, crossing.second_directional_evidence_id)
+    blocked: dict[str, int] = {}
+    for crossing in sorted(crossing_candidates, key=_crossing_priority):
+        constrained = crossing.record.kind != "IN_PATCH_GEODESIC"
+        if not union(crossing.first_directional_evidence_id, crossing.second_directional_evidence_id, constrained):
+            for evidence_id in (crossing.first_directional_evidence_id, crossing.second_directional_evidence_id):
+                blocked[evidence_id] = blocked.get(evidence_id, 0) + 1
 
     components: dict[str, list[str]] = {}
     for evidence_id in sorted(evidence_by_id):
         components.setdefault(find(evidence_id), []).append(evidence_id)
-    return {
-        root: tuple(member_ids)
-        for root, member_ids in components.items()
-    }
+    return (
+        {root: tuple(member_ids) for root, member_ids in components.items()},
+        blocked,
+    )
+
+
+def _crossing_priority(crossing: _CrossingCandidate) -> tuple:
+    rank = CROSSING_KIND_PRIORITY.get(crossing.record.kind, len(CROSSING_KIND_PRIORITY))
+    return (
+        rank,
+        -(crossing.record.transported_direction_dot or 0.0),
+        crossing.first_directional_evidence_id,
+        crossing.second_directional_evidence_id,
+    )
 
 
 def _crossings_by_component(
@@ -914,6 +1011,7 @@ def _family_evidence(
     member_ids: tuple[str, ...],
     crossings: tuple[CrossingRecord, ...],
     confidence: float,
+    blocked_patch_revisit_crossings: int = 0,
 ) -> Evidence:
     return Evidence(
         source="layer_3_relations.direction_families",
@@ -927,6 +1025,7 @@ def _family_evidence(
             "compatible_normal_min_dot": COMPATIBLE_NORMAL_MIN_DOT,
             "shared_chain_normal_min_dot": SHARED_CHAIN_NORMAL_MIN_DOT,
             "shared_chain_hinge_max_runs": SHARED_CHAIN_HINGE_MAX_RUNS,
+            "blocked_patch_revisit_crossings": blocked_patch_revisit_crossings,
             "confidence": confidence,
         },
     )

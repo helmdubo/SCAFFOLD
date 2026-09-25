@@ -30,6 +30,7 @@ from scaffold_core.tests.fixtures.beveled_wall_corner import make_beveled_wall_c
 from scaffold_core.tests.fixtures.capped_prism import (
     make_capped_decagon_prism_odd_strips_source,
     make_capped_hex_prism_uneven_strips_source,
+    make_capped_square_prism_all_seams_source,
 )
 from scaffold_core.tests.fixtures.cylinder_tube import (
     make_cylinder_tube_without_caps_with_two_seams_source,
@@ -61,11 +62,16 @@ def test_l_corridor_tunnel_connected_families_span_length_and_width() -> None:
         ("f_floor", "f_wall", "f_ceiling"),
         directions=((1.0, 0.0, 0.0), (0.0, 0.0, 1.0)),
     )
-    assert _has_family_with_patches(
+    # Slice L2: a family is one line. The two fold lines are separate length
+    # rails; the wall's bottom and top edges never share a family.
+    assert _has_family_with_patches(relations, ("f_floor", "f_wall"), directions=((0.0, 1.0, 0.0),))
+    assert _has_family_with_patches(relations, ("f_wall", "f_ceiling"), directions=((0.0, 1.0, 0.0),))
+    assert not _has_family_with_patches(
         relations,
         ("f_floor", "f_wall", "f_ceiling"),
         directions=((0.0, 1.0, 0.0),),
     )
+    assert _opposite_side_diagnostics(relations) == ()
 
 
 def test_beveled_wall_corner_connected_families_span_horizontal_and_vertical() -> None:
@@ -77,11 +83,15 @@ def test_beveled_wall_corner_connected_families_span_horizontal_and_vertical() -
         ("f_wall_a", "f_chamfer", "f_wall_b"),
         directions=((1.0, 0.0, 0.0), (1.0, -1.0, 0.0), (0.0, 1.0, 0.0)),
     )
-    assert _has_family_with_patches(
+    # Slice L2: the two vertical fold lines of the chamfer are separate rails.
+    assert _has_family_with_patches(relations, ("f_wall_a", "f_chamfer"), directions=((0.0, 0.0, 1.0),))
+    assert _has_family_with_patches(relations, ("f_chamfer", "f_wall_b"), directions=((0.0, 0.0, 1.0),))
+    assert not _has_family_with_patches(
         relations,
         ("f_wall_a", "f_chamfer", "f_wall_b"),
         directions=((0.0, 0.0, 1.0),),
     )
+    assert _opposite_side_diagnostics(relations) == ()
 
 
 def test_tube_with_cap_connected_families_keep_cap_and_side_separate() -> None:
@@ -253,6 +263,13 @@ def test_connected_direction_families_carry_provenance_and_inspect_full() -> Non
     assert "member_map" in serialized_family
 
 
+ARTIST_WALL_CAPTURES = (
+    "artist_walls_004_selection.json",
+    "artist_walls_005.json",
+    "artist_walls_006.json",
+    "artist_walls_007.json",
+)
+
 CORNER_NODE_CAP_TRANSPORT_LEAK = (
     "Known DD-43 gap: a vertical seam run transported through a 90-degree "
     "rim-corner ScaffoldNode lands on a perimeter run of the end patch, joining "
@@ -275,7 +292,6 @@ def test_capped_odd_strip_prism_keeps_rims_and_caps_separate() -> None:
     assert len(top_rim.member_directional_evidence_ids) == 10
     assert len(bottom_rim.member_directional_evidence_ids) == 10
     assert all(record.kind != "SHARED_CHAIN" for record in top_rim.crossing_records)
-    assert all(record.kind != "SAME_PATCH_SHARED_CHAIN_BRIDGE" for record in top_rim.crossing_records)
     assert _cap_side_families(relations) == ()
 
 
@@ -316,6 +332,54 @@ def test_capped_uneven_strip_prism_keeps_cap_and_side_families_separate() -> Non
     bottom_rim = _single_family_with_member_fragment(relations, "patch:seed:f0:0:1:")
     assert top_rim.id != bottom_rim.id
     assert _cap_side_families(relations) == ()
+
+
+def test_fully_seamed_capped_box_never_joins_opposite_wall_sides() -> None:
+    # Every edge is a seam and every face its own patch, like the real walls
+    # meshes. At a cube corner three geodesic continuations are symmetric, so
+    # the family builder must block any merge that revisits a patch instead of
+    # welding a wall's top and bottom edges through the end patches.
+    context = run_pass_1_relations(run_pass_0(make_capped_square_prism_all_seams_source()))
+    relations = context.relation_snapshot
+
+    for wall in ("f0", "f1", "f2", "f3"):
+        top = _single_family_with_member_fragment(relations, f"patch:seed:{wall}:0:3:")
+        bottom = _single_family_with_member_fragment(relations, f"patch:seed:{wall}:0:1:")
+        assert top.id != bottom.id
+    assert _opposite_side_diagnostics(relations) == ()
+    assert any(
+        family.evidence[0].data["blocked_patch_revisit_crossings"] > 0
+        for family in relations.connected_direction_families
+    )
+
+
+def test_no_family_spans_opposite_patch_sides_on_any_fixture() -> None:
+    sources = (
+        make_l_corridor_tunnel_seamed_folds_source(),
+        make_beveled_wall_corner_source(),
+        make_cylinder_tube_without_caps_with_two_seams_source(),
+        make_extruded_cross_source(),
+        make_tube_with_cap_source(),
+        make_detached_parallel_walls_source(),
+        make_capped_decagon_prism_odd_strips_source(),
+        make_capped_hex_prism_uneven_strips_source(),
+        make_capped_square_prism_all_seams_source(),
+        _load_artist_cross_band_source(),
+        _load_artist_cyl32_source(),
+        _load_source_snapshot("artist_cyl_multiseam.json"),
+        *(_load_source_snapshot(name) for name in ARTIST_WALL_CAPTURES),
+    )
+    for source in sources:
+        relations = run_pass_1_relations(run_pass_0(source)).relation_snapshot
+        assert _opposite_side_diagnostics(relations) == (), source.id
+
+
+def _opposite_side_diagnostics(relations):
+    return tuple(
+        diagnostic
+        for diagnostic in relations.diagnostics
+        if diagnostic.code == "FAMILY_SPANS_OPPOSITE_PATCH_SIDES"
+    )
 
 
 def _cap_side_families(relations):

@@ -54,6 +54,22 @@ def make_capped_hex_prism_uneven_strips_source() -> SourceMeshSnapshot:
     )
 
 
+def make_capped_square_prism_all_seams_source() -> SourceMeshSnapshot:
+    """Return a capped square prism (a box) with every edge seamed.
+
+    Each face is its own patch, like the artist walls meshes where nearly every
+    edge carries a seam. Rim chains are straight single runs, so the Slice L1
+    straight-hinge rule lets families cross into the end patches; the Slice L2
+    patch-revisit rule must still keep each wall's top and bottom apart.
+    """
+
+    return _make_capped_prism_source(
+        "capped_square_prism_all_seams",
+        segment_count=4,
+        seam_vertex_indices=(0, 1, 2, 3),
+    )
+
+
 def _make_capped_prism_source(
     name: str,
     segment_count: int,
