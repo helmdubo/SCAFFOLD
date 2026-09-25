@@ -91,7 +91,8 @@ pins.py:
   axis-parallel and SEAM_SELF length checks are validation outputs.
 
 uv_transfer.py:
-  writes UV coordinates and pin flags only;
+  writes UV coordinates and pin flags only, and only on faces of the solved
+  selection (Slice M1: faces outside it are never touched);
   uses bmesh in Edit Mode and Object Mode (from_edit_mesh / from_mesh);
   calls no bpy operators and performs no automatic unwrap.
 ```
@@ -134,3 +135,14 @@ local traversal heuristics.
 
 Draft contract: `docs/architecture/scaffold_rail_trace_contract_draft.md`.
 ```
+
+## Tier 3 validation (buildings.blend, Blender 4.5.9, 2026-09)
+
+`dev/tools/blender_smoke/` runs the real read and write boundaries headless on
+the 13 seamed objects of the artist file; the baseline lives in
+`dev/tools/blender_smoke/baselines/buildings_seamed.json`. All objects keep
+zero axis-parallel violations, zero seam-length mismatches, zero opposite-side
+family glue and zero loops changed outside the solved faces. Remaining
+degradation on the walls meshes is "axis bipartition conflict -> OBLIQUE"
+(see plan, next candidate after Slice L2).
+

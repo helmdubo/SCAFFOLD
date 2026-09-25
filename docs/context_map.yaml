@@ -108,6 +108,7 @@ task_routes:
   blender_regression:
     - docs/agent_rules/blender_boundaries.md
     - docs/agent_rules/testing_rules.md
+    - dev/tools/blender_smoke/README.md
     - docs/agent_rules/codex_workflow.md
   design_decisions:
     - docs/architecture/design_decisions.md

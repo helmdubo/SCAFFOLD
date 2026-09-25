@@ -126,7 +126,9 @@ Implemented:
 
 Plan Slice L: the artist_cyl_multiseam collapse was a Layer 3 family leak
 through curved shared chains, fixed by the straight-hinge SHARED_CHAIN rule
-(L1). A corner-node gap stays a strict xfail until a future patch-normal
+(L1). Slice L2 removed the same-patch bridge and blocks any family merge that
+revisits a patch. Slice M1 keeps UV writes inside the solved faces. Tier 3
+Blender smoke runner: `dev/tools/blender_smoke/` (Blender 4.5.9 headless). A corner-node gap stays a strict xfail until a future patch-normal
 filter; do not introduce cap/wall semantics for it.
 
 Not implemented:

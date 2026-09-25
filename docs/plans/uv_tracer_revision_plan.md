@@ -975,6 +975,91 @@ User decisions (2026-09):
   for it: such roles are conditional, not core facts.
 ```
 
+### Task Card L2 — A family never revisits a patch (DONE, user-directed)
+
+User direction (2026-09): top and bottom rims must never be glued into one
+family; find an approach.
+
+Measured on the artist `buildings.blend` (Tier 3, 13 seamed objects): the
+same-patch world-direction bridge was only part of the glue. On real walls
+nearly every edge is a seam, so every face is its own patch, and families also
+glued opposite sides through box-like corners (window reveals, wall tops). At a
+cube corner the three geodesic continuations are symmetric; no local,
+semantics-free rule can prefer one of them.
+
+Rule, implemented in `layer_3_relations/direction_families.py`:
+
+```text
+1. SAME_PATCH_SHARED_CHAIN_BRIDGE is removed. Parallel runs are never merged
+   by direction comparison alone.
+2. IN_PATCH_GEODESIC crossings first form continuous in-patch segments.
+3. Other crossings merge in deterministic priority: SHARED_CHAIN (two uses of
+   the same source edges) before SCAFFOLD_NODE (inferred geodesic between
+   different Chains), then by transported direction dot and ids.
+4. A merge that would put two separate segments of one patch into one family
+   is blocked. Blocked counts are recorded per family as
+   blocked_patch_revisit_crossings evidence.
+5. Guard diagnostic FAMILY_SPANS_OPPOSITE_PATCH_SIDES flags any family holding
+   two distinct parallel lines of one patch from different in-patch segments.
+```
+
+Shared-chain-first was chosen by measurement: node-first pinned 723 vertices
+on the 13 objects, shared-first 964, against 841 before L2.
+
+| Object | opposite-side glue | largest family | pinned | Layer 5 diagnostics |
+|---|---|---|---|---|
+| walls / walls.003 | 708 to 0 | 3057 to 21 | 169 to 210 | 61 to 1187 |
+| walls.004 (selection) | 9 to 0 | 20 to 5 | 156 to 156 | 10 to 18 |
+| walls.009 | 350 to 0 | 1582 to 16 | 213 to 161 | 35 to 875 |
+| walls.010 | 152 to 0 | 582 to 10 | 32 to 104 | 4 to 121 |
+| all 13 objects | 1973 to 0 | | 841 to 964 | |
+
+Axis-parallel violations and seam-length mismatches stay 0 before and after.
+Layer 5 diagnostic counts are not comparable one to one: before L2 they were
+one "contradictory equations" summary per axis, now they are mostly one
+"axis bipartition conflict -> OBLIQUE" line per family.
+
+Fixture expectation change (conflicts with G0 DD-43 text, G0 is read-only for
+agents; proposed amendment for the user to apply):
+
+```text
+DD-43 canonical fixture expectations, replace:
+  l_corridor_tunnel_seamed_folds: one length family across floor, wall and
+  ceiling; one width family;
+  beveled_wall_corner: one horizontal family across wall A, chamfer and wall
+  B; one vertical family;
+with:
+  l_corridor_tunnel_seamed_folds: one width (profile) family across floor,
+  wall and ceiling; one length rail per fold line (floor+wall, wall+ceiling);
+  beveled_wall_corner: one horizontal family across wall A, chamfer and wall
+  B; one vertical rail per fold line (wall A+chamfer, chamfer+wall B);
+and add:
+  A ConnectedDirectionFamily visits each patch at most once as one continuous
+  in-patch segment; opposite sides of a patch never share a family.
+```
+
+### Task Card M1 — UV write stays inside the solved faces (DONE, bug fix)
+
+Tier 3 found that `uv_transfer.write_pinned_uvs` wrote UVs and pins onto
+faces outside the solved selection that shared a pinned vertex, and cleared
+pins on every other loop of the mesh. On walls.004 with its stored 55-face
+selection the old writer changed 343 loops outside the selection. The minimal
+patch skips faces without a solved patch; `foreign_loops_changed` is now 0 on
+all 13 objects.
+
+### Next candidate — Layer 5 axis bipartition in the island frame (PENDING)
+
+On real walls most remaining Layer 5 degradation is "axis bipartition
+conflict -> OBLIQUE". Layer 5 pairs families by 3D perpendicularity at nodes,
+and families carry transports across seams that the island leaves cut. At a
+cut reveal corner three families are then mutually perpendicular, which no
+two-axis assignment can satisfy. The G5a module contract already names the
+intended source, "families in the island's unfolded frame (stitch-tree
+parallel transport)". Candidate: restrict family connectivity used by the
+island solve to crossings whose hinge is stitched in that island. This changes
+Layer 5 axis derivation and needs an Architect/user decision under the G5a
+"no widening of Layer 5 heuristics" guard.
+
 ---
 
 ## Decisions the user must approve before the relevant slice
@@ -992,4 +1077,9 @@ User decisions (2026-09):
    the user to a future patch-normal filter; no cap/wall semantics.
 6. Slice J: DD-46/DD-47 (ScaffoldTrace/ScaffoldRail) G0 amendment text is
    implemented as v0 evidence but not yet approved into G0 — PENDING.
+7. Slice L2: G0 DD-43 fixture-expectation amendment (one rail per fold line;
+   no patch revisit) — implemented on user direction; G0 text PENDING the
+   user's edit.
+8. Next: Layer 5 axis bipartition restricted to the island's stitched
+   crossings — PENDING decision.
 ```

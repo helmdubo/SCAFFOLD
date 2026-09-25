@@ -83,6 +83,22 @@ Tier 4 - Production regression
   run manually or nightly
 ```
 
+Tier 3 runner: `dev/tools/blender_smoke/` (see its README). Default check:
+
+```bash
+python dev/tools/blender_smoke/run_smoke.py <file.blend> --seamed --write-uv \
+  --baseline dev/tools/blender_smoke/baselines/buildings_seamed.json
+```
+
+An unchanged run prints two lines. Rewrite the baseline with
+`--update-baseline` only when a behavior change is intended, and record the
+diff in the plan. Hard Tier 3 invariants: `opposite_side_families`,
+`axis_violations`, `seam_mismatches` and `foreign_loops_changed` are 0.
+
+Real-mesh Tier 2 captures from `buildings.blend` live in
+`scaffold_core/tests/data/artist_walls_*.json`; dump new ones with
+`--capture-dir` and replay them in pure Python instead of relaunching Blender.
+
 AI agents should prefer Tier 0-2 during ordinary core work. Use Tier 3 only when
 the slice touches Blender boundaries, mesh snapshot integration, geometry cases
 that cannot be represented synthetically, or runtime/UV behavior in later phases.
