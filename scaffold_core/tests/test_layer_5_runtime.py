@@ -240,3 +240,20 @@ def _assert_band_is_exact_rectangle(result, island_count: int, residual_limit: f
     top = sorted(round(v.uv[0], 4) for v in pinned_in_band if round(v.uv[1], 6) == rows[0])
     bottom = sorted(round(v.uv[0], 4) for v in pinned_in_band if round(v.uv[1], 6) == rows[-1])
     assert top == bottom  # columns align across the rails
+
+
+def test_artist_walls_captures_keep_g5a_invariants() -> None:
+    # Real buildings.blend walls, nearly every edge seamed (one patch per face).
+    # G5a invariants are validation outputs: pinned UVs stay axis-parallel and
+    # seam sides keep equal length even where families degrade to OBLIQUE.
+    for name, min_pinned in (
+        ("artist_walls_004_selection.json", 100),
+        ("artist_walls_005.json", 1),
+        ("artist_walls_006.json", 1),
+        ("artist_walls_007.json", 1),
+    ):
+        result = _solve(_load_capture(name))
+
+        assert result.axis_parallel_violations == (), name
+        assert result.seam_length_mismatches == (), name
+        assert sum(1 for vertex in result.vertices if vertex.pinned) >= min_pinned, name
