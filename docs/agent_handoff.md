@@ -482,26 +482,35 @@ Still unresolved:
 - closed-loop wrap merge policy;
 - advanced corner detection;
 - local face-fan refinement policy;
-- trace/circuit/rail construction over ScaffoldGraph.
+- ScaffoldCircuit and ScaffoldRail loop opening from island cut context.
 - lower-side cross-patch or same-chain lower-ring flow endpoint fallback.
 
 ---
 
 ## Next architecture decision
 
-Current implementation checkpoint: SideSurfaceContinuityEvidence v1 is
-implemented as the evidence-only Layer 3 same-patch/same-loop record consumed by
-SURFACE_SLIDING_CONTINUATION_CANDIDATE. SurfaceFlowCompatibilityEvidence v0 is
-implemented as cross-patch flow-family compatibility evidence.
-ScaffoldContinuityComponent v0 continues to propagate only through
-SURFACE_*_CONTINUATION_CANDIDATE relation kinds, not directly through
-SideSurfaceContinuityEvidence or SurfaceFlowCompatibilityEvidence. Treat local
-`D:\cylinder.blend` as exploratory smoke only, not as the canonical synthetic
-fixture. Wrong merges P1C1->P1C2, P1C2->P1C3, P2C3->P2C0 and P2C2->P2C3 in
-Cube.001 are examples of ORTHOGONAL_CORNER pairs crossing alignment:0 <->
-alignment:1 that v1 blocks instead of promoting. Missing lower-side endpoint
-fallback such as P1C0/P2C1 remains deferred and requires a separate evidence
-contract if needed later.
+Checkpoint 2026-09 (plan Slices L1, L2, M1). ConnectedDirectionFamily
+transports SHARED_CHAIN only across straight single-run hinges, and a family
+visits each patch at most once, so opposite patch sides never share a family.
+UV writes stay inside the solved faces. The Tier 3 Blender runner
+(`dev/tools/blender_smoke/`) and its `buildings_seamed.json` baseline cover
+13 seamed artist objects.
+
+Open decisions, all owned by the user (plan "Decisions the user must
+approve", items 3-8):
+
+- G0 DD-43 fixture text: corridor and bevel now expect one rail per fold
+  line; the amendment text is drafted in plan Slice L2. G0 stays read-only
+  for agents.
+- DD-46/DD-47 ScaffoldTrace/ScaffoldRail G0 approval.
+- Next Layer 5 slice: axis bipartition restricted to the island's stitched
+  crossings. On real walls most degradation is "axis bipartition conflict
+  -> OBLIQUE" because families carry transports across seams the island
+  leaves cut.
+- artist_cross_band planar end patches: orientation for corner-split
+  singleton families (ScaffoldRail consumer candidate).
+- Corner-node gap (strict xfail): deferred to a future patch-normal filter;
+  do not add cap/wall semantics.
 
 Grease Pencil rendering consumes the pipeline inspection overlay payload instead
 of duplicating core graph logic. Do not import Blender into Scaffold Core.
@@ -526,10 +535,18 @@ of duplicating core graph logic. Do not import Blender into Scaffold Core.
 
 ## How to verify
 
-Run:
+Run (fresh cloud containers need `python -m pip install pytest` first):
 
 ```bash
 python -m pytest scaffold_core/tests
+```
+
+Tier 3, only when a slice touches Blender boundaries or real-mesh behavior
+(Blender 4.5 headless, see `dev/tools/blender_smoke/README.md`):
+
+```bash
+python dev/tools/blender_smoke/run_smoke.py <buildings.blend> --seamed --write-uv \
+  --baseline dev/tools/blender_smoke/baselines/buildings_seamed.json
 ```
 
 Architectural tests to keep green:
