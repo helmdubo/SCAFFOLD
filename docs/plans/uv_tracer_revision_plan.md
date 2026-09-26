@@ -157,7 +157,8 @@ D2 review notes — known v0 conservatism, input for the tracer (E1):
 4. adjacency_by_patch_pair keeps one PatchAdjacency per patch pair;
    pairs sharing two different chains (two-seam tube) keep an arbitrary
    one. Masked by symmetric fixtures; conservative on asymmetric ones.
-   Candidate cleanup in Slice F.
+   Candidate cleanup in Slice F. RESOLVED by Slice N2: node crossings pick
+   the hinge Chain through their node.
 5. direction_families digs source_edge_id/segment_index out of
    Evidence.data payloads — the shadow-API smell again; add to the
    Slice F evidence-payload cleanup list.
@@ -1047,18 +1048,172 @@ selection the old writer changed 343 loops outside the selection. The minimal
 patch skips faces without a solved patch; `foreign_loops_changed` is now 0 on
 all 13 objects.
 
-### Next candidate — Layer 5 axis bipartition in the island frame (PENDING)
+## Slice N — Consistent patch -> line -> island structure (DONE, 2026-09)
 
-On real walls most remaining Layer 5 degradation is "axis bipartition
-conflict -> OBLIQUE". Layer 5 pairs families by 3D perpendicularity at nodes,
-and families carry transports across seams that the island leaves cut. At a
-cut reveal corner three families are then mutually perpendicular, which no
-two-axis assignment can satisfy. The G5a module contract already names the
-intended source, "families in the island's unfolded frame (stitch-tree
-parallel transport)". Candidate: restrict family connectivity used by the
-island solve to crossings whose hinge is stitched in that island. This changes
-Layer 5 axis derivation and needs an Architect/user decision under the G5a
-"no widening of Layer 5 heuristics" guard.
+User decisions (2026-09):
+
+```text
+- Target of this stage: a consistent structure on the levels patch -> line
+  -> island, which a later slice turns into an unwrap along the rails. The
+  final unwrap is a test tool here, not a quality target.
+- Approved: the whole Layer 5 slice (island lines, axes and orientation from
+  the island frame, _node_map repair, structural metrics in Tier 3) and both
+  Layer 3 repairs below.
+- G0: delegated to the agent. Applied: DD-43 repair text (L1, L2, node
+  crossing provenance) and a DD-45 clarification -> G0 v1.5. DD-46/DD-47 stay
+  a draft: rails are not yet reconciled with island lines (loop opening by
+  island cuts).
+```
+
+Root cause of the "axis bipartition conflict -> OBLIQUE" flood: two
+level mismatches, measured on the 13 seamed buildings.blend objects.
+
+```text
+1. Layer 5 used global ConnectedDirectionFamilies inside an island, but a
+   family also transports across seams the island leaves cut. Restricting
+   families alone removed 3522 -> 897 conflicts.
+2. Layer 5 derived axes from 3D perpendicularity at nodes (frame-free),
+   although the G5a module contract names the island's unfolded frame. In
+   a folded island (wall + reveals, box unfoldings) 3D angles are not layout
+   angles. Restricting perpendicularity to same-patch pairs alone left
+   3147 conflicts; both together removed all of them.
+```
+
+### Task Card N1 — DD-45 continuation independent of edge order (DONE, G3 repair)
+
+`direction_families._pair_endpoint_vertex_ids` mixed endpoint samples in the
+run's own orientation with LOCAL_SEGMENT samples in the PatchChain loop
+orientation, so the geodesic angle check also saw the far ends of both runs
+and dropped the continuation. `_can_attempt_in_patch_geodesic` also demanded
+END meeting START, although runs of different Chains keep their own
+source-edge orientation. A straight patch side split by a T-vertex (walls.005
+f2) became two families in 3 of 4 edge orientations. Repair: only samples at
+the junction count, and roles are not compared (DD-45 decides by the angle).
+Fixture: `scaffold_core/tests/fixtures/t_vertex_wall.py`, all four edge
+orders. buildings: in-patch geodesic crossings 44 -> 72, families 4790 ->
+4762, opposite-side families stay 0.
+
+### Task Card N2 — Node crossings name their hinge (DONE, G3 repair)
+
+`_node_crossings` looked up one PatchAdjacency per patch pair (last one wins,
+D2 review note 4). On the two-seam tube and the artist_cyl32 band both
+crossings at the stitched seam named the other seam. Repair: pick the
+adjacency whose Chain passes through the node; without a hinge through the
+node there is no transport axis and no crossing (never the case on the
+in-repo fixtures and the buildings captures). Test: every node crossing of
+the two-seam tube names a Chain through its node.
+
+### Task Card N3 — Island lines and the unfolded island frame (DONE)
+
+`layer_5_runtime/skeleton.py`:
+
+```text
+- Island lines: a family keeps only crossings inside one patch or through a
+  hinge stitched in the island (N2 makes the recorded hinge exact). A family
+  that crosses a cut seam splits into several island lines.
+- Rigid frame: when no island patch is curved (face-fan normals within ~5
+  degrees of the patch normal), each patch is rotated into the root plane
+  along the stitch tree (rotation about the hinge Chain by the angle between
+  patch normals). The frame crosses only straight hinges (the Layer 3 L1 rule:
+  every use of the Chain carries one directional run) or joins of coplanar
+  patches, which take no rotation; warped n-gons (boundary runs out of the
+  patch plane) and patches behind a bent hinge stay outside with "patch
+  outside the rigid island frame".
+- Axes and orientation in the frame: AXIS_A follows the longest island line,
+  AXIS_B = root normal x AXIS_A, so islands are not mirrored. Every framed run
+  gets its role and sign from its unfolded direction; a line whose members
+  disagree degrades to OBLIQUE with "island line not straight in the unfolded
+  frame". The head-to-tail/co-orientation sign heuristics and the 3D
+  bipartition are no longer used in framed islands.
+- Curved islands (cylinder bands, strips) keep the provisional frame-free
+  derivation over island lines.
+- _node_map finds chain ends by the PatchChain end vertices, not by segment
+  index: a closed rim cut by a SEAM_SELF starts its segments at an arbitrary
+  ring vertex (artist_cross_band joined the seam sides and split the rim at
+  the wrong vertex). When both PatchChain ends sit on one source vertex, the
+  run's own seam side is the occurrence whose face fan holds the face on the
+  run's end edge. The Layer 1 orientation sign of such closed Chains cannot
+  be trusted there: it put each rim end on the opposite side, and the band's
+  bottom row came out as the mirror of the top row (9 of 10 columns off,
+  residual 5e-15, zero diagnostics) before and after the segment fix. Now
+  every column lines up.
+- New validation output node_frame_mismatches: solve nodes whose occurrences
+  sit apart in the rigid frame (Layer 5 node identity vs the frame).
+- Dead duplicate definitions and unused helpers removed from skeleton.py.
+```
+
+Tier 3 (`buildings_seamed.json` rewritten) now records structure metrics:
+rigid_islands, island_lines, axis_runs, oblique_runs, bipartition_conflicts,
+lines_not_straight, patches_outside_frame, node_frame_mismatches.
+
+| Object | pinned | L5 diagnostics | rigid/islands | axis/oblique runs | lines not straight | outside frame |
+|---|---|---|---|---|---|---|
+| walls / walls.003 | 210 to 2215 | 1187 / 1189 to 11 | 8/8 | 3521/31 | 2 | 3 |
+| walls.004 | 156 to 188 | 18 to 2 | 27/27 | 224/0 | 0 | 0 |
+| walls.005 | 31 to 55 | 13 to 0 | 1/1 | 53/2 | 0 | 0 |
+| walls.006 | 20 to 20 | 7 to 0 | 1/1 | 20/0 | 0 | 0 |
+| walls.007 | 8 to 196 | 150 to 2 | 1/1 | 201/0 | 0 | 0 |
+| walls.009 | 161 to 1486 | 875 to 6 | 3/3 | 1790/29 | 0 | 4 |
+| walls.010 | 104 to 477 | 121 to 3 | 3/3 | 704/4 | 1 | 0 |
+| all 13 objects | 964 to 6924 | 3561 to 36 | 60/62 | 10117/97 | 5 | 10 |
+
+Node/frame mismatches, axis-parallel violations, seam-length mismatches,
+opposite-side families and foreign loops are 0 on all 13 objects. Framed
+islands no longer run the frame-free bipartition, so its 3522 conflicts are
+gone by construction; in framed islands the frame's own degradation signals
+replace them (5 lines not straight, 10 patches outside the frame, 97 OBLIQUE
+runs). Check against the exact rigid unfolding: every walls.004 island with
+pins (26 of 27) coincides with it up to a rigid motion (pairwise distances
+within 8e-6); larger islands differ by the deferred component gauge and by
+the straightening of slightly slanted runs. In-repo fixtures: the fully seamed
+box went from 0 pins (16 OBLIQUE runs, bipartition conflicts) to 24 pins with
+every face counterclockwise in UV and exact face areas.
+
+Reviewer gate (mandatory, independent agent): PASS WITH FIXES. Fixed before
+landing: the mirrored artist_cross_band band (seam side by face fan), the
+node-crossing fallback (now no crossing), vacuous or missing tests (bent hinge
+pair, not-straight line, node/frame detector, band columns; each of the four
+matching code mutations is now caught by exactly its test), doc numbers, one
+straight-hinge definition shared with Layer 3. Re-review: PASS; its two
+optional pins were added too (nearly coplanar bent join, node crossing
+without a hinge through its node).
+
+Structural signals the new metrics expose (inputs for later slices, not
+regressions):
+
+```text
+- lines not straight: a Layer 3 line runs through a curved run. Node
+  crossings test straightness on the local segment at the node, while the
+  run chord bends away (walls.010 arch run f90:1:0:0, 31 degrees). This is
+  the OQ-11 curved-chain remainder.
+- patches outside the frame: single n-gons folded around a corner (walls.009
+  f715, an L-shaped reveal with an L-shaped hinge) and the patches the stitch
+  tree reaches only through them.
+```
+
+Deferred, unwrap level (the concrete unwrap along rails is a later stage):
+
+```text
+- gauge: disconnected skeleton components of one island get arbitrary
+  offsets (lstsq pins only the first node); the rigid frame knows their
+  placement.
+- RESIDUAL_TOLERANCE is absolute (1e-5). artist_cross_band end patches close
+  their loops only to 0.004, so every equation is dropped as contradictory.
+  This refutes the old hypothesis that their 0 pins come from singleton
+  orientation signs: exact signs from the frame leave the same 5
+  contradictions per axis.
+- uv_transfer._pinned_for falls back to another patch's pin of the same
+  source vertex; on buildings every such loop (669) lands at the other seam
+  side's place inside the island.
+- pins.PinnedVertex is keyed by (source vertex, patch), so the two seam-side
+  occurrences of a SEAM_SELF band collapse into one pin: the solve gives two
+  UVs per seam vertex on the one-seam tube and artist_cross_band, the write
+  keeps one and puts it on both sides' loops. This contradicts the G5a claim
+  that duplicated seam occurrences keep both UVs (found by the Slice N
+  reviewer; pre-existing).
+- island assembly: the Level A spanning tree accepts self-overlapping
+  unfoldings (walls.007 facade and back side over each other).
+```
 
 ---
 
@@ -1076,10 +1231,17 @@ Layer 5 axis derivation and needs an Architect/user decision under the G5a
 5. Slice L: end-patch separation (box lids, corner-node gap) — DEFERRED by
    the user to a future patch-normal filter; no cap/wall semantics.
 6. Slice J: DD-46/DD-47 (ScaffoldTrace/ScaffoldRail) G0 amendment text is
-   implemented as v0 evidence but not yet approved into G0 — PENDING.
+   implemented as v0 evidence but not yet approved into G0 — PENDING
+   (agent decision under user delegation, 2026-09: keep as draft until rails
+   are reconciled with Slice N island lines).
 7. Slice L2: G0 DD-43 fixture-expectation amendment (one rail per fold line;
-   no patch revisit) — implemented on user direction; G0 text PENDING the
-   user's edit.
-8. Next: Layer 5 axis bipartition restricted to the island's stitched
-   crossings — PENDING decision.
+   no patch revisit) — APPLIED to G0 v1.5 by the agent under explicit user
+   delegation (2026-09).
+8. Slice N: Layer 5 island lines, axes and orientation in the island frame;
+   Layer 3 DD-45 continuation and node-crossing provenance repairs —
+   APPROVED and DONE.
+9. Next, open: which level to consolidate after patch -> line -> island
+   (cross-island axis agreement through shared families; ScaffoldRail over
+   island lines with loop opening by island cuts; island assembly without
+   self-overlap; curved runs inside Layer 3 lines, OQ-11) — PENDING.
 ```

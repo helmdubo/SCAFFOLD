@@ -9,8 +9,8 @@ The tool lives outside `scaffold_core/` and consumes it like the debug add-on.
 
 ## Run
 
-From the repository root, with Blender on `$SCAFFOLD_BLENDER`, `/opt/blender/*/blender`
-or `PATH`:
+From the repository root, with Blender on `$SCAFFOLD_BLENDER`, `/opt/blender/*/blender`,
+`C:/Program Files/Blender Foundation/Blender */blender.exe` or `PATH`:
 
 ```bash
 # token-lean regression check: prints only differences from the baseline
@@ -65,6 +65,19 @@ written_loops, pinned_loops          UV write summary (--write-uv)
 foreign_loops_changed                loops outside the solved faces touched (must be 0)
 pipeline_codes                       diagnostic code histogram
 ms                                   wall time, never baselined
+```
+
+Structure metrics (plan Slice N) measure whether patch -> line -> island
+agree, not the quality of a final unwrap:
+
+```text
+rigid_islands                        islands with a rigid unfolded frame
+island_lines                         families split at the seams each island cuts
+axis_runs, oblique_runs              runs with / without an island axis
+bipartition_conflicts                frame-free axis conflicts (curved islands)
+lines_not_straight                   island lines whose members disagree in the frame
+patches_outside_frame                warped n-gons and patches behind a bent hinge
+node_frame_mismatches                solve nodes whose occurrences sit apart in the frame (must be 0)
 ```
 
 ## Why not a Blender MCP add-on
