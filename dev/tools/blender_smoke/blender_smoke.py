@@ -137,6 +137,7 @@ def _pipeline_metrics(source, context) -> dict:
 
 
 def _solve_metrics(solve) -> dict:
+    roles = Counter(role for skeleton in solve.skeletons for role in skeleton.axis_role_by_run.values())
     return {
         "islands": len(solve.assembly.islands),
         "pinned": sum(1 for vertex in solve.vertices if vertex.pinned),
@@ -146,6 +147,25 @@ def _solve_metrics(solve) -> dict:
         "axis_violations": len(solve.axis_parallel_violations),
         "seam_mismatches": len(solve.seam_length_mismatches),
         "first_solve_diagnostic": solve.diagnostics[0][:120] if solve.diagnostics else "",
+        **_structure_metrics(solve, roles),
+    }
+
+
+def _structure_metrics(solve, roles: Counter) -> dict:
+    """Consistency of patch -> line -> island structure (plan Slice N), not UV quality."""
+
+    def count(prefix: str) -> int:
+        return sum(1 for diagnostic in solve.diagnostics if diagnostic.startswith(prefix))
+
+    return {
+        "rigid_islands": sum(1 for skeleton in solve.skeletons if skeleton.frame == "UNFOLDED"),
+        "island_lines": sum(len(set(skeleton.line_by_run.values())) for skeleton in solve.skeletons),
+        "axis_runs": roles.get("AXIS_A", 0) + roles.get("AXIS_B", 0),
+        "oblique_runs": roles.get("OBLIQUE", 0),
+        "bipartition_conflicts": count("axis bipartition conflict"),
+        "lines_not_straight": count("island line not straight"),
+        "patches_outside_frame": count("patch outside the rigid island frame"),
+        "node_frame_mismatches": len(solve.node_frame_mismatches),
     }
 
 

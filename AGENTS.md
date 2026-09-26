@@ -194,7 +194,10 @@ ScaffoldTrace / ScaffoldRail v0 evidence views (plan Slice J; DD-46/DD-47 draft,
 SHARED_CHAIN family transport crosses only straight single-run hinges
 (plan Slice L1). A family visits each patch at most once as one continuous
 in-patch segment; merges that would revisit a patch are blocked, so opposite
-sides of a patch never share a family (plan Slice L2). Known deferred gap: a run transported through a 90-degree
+sides of a patch never share a family (plan Slice L2). In-patch geodesic
+continuation depends on the junction angle alone, and node crossings record
+the hinge Chain through their node (plan Slice N, G0 v1.5). Layer 5 splits
+families into island lines at seams the island cuts. Known deferred gap: a run transported through a 90-degree
 corner ScaffoldNode may join an end patch's perimeter family; it is pinned by
 a strict xfail and waits for a future patch-normal filter. Do not add
 cap/wall patch semantics to fix it.

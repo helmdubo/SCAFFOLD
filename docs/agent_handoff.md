@@ -13,7 +13,7 @@ Project: Scaffold
 Core package: scaffold_core/
 Current phase: G5a - Skeleton Runtime
 Architecture: immutable B-rep-inspired interpretation pipeline
-G0 contract: v1.4+ (G0.md remains read-only for agents)
+G0 contract: v1.5 (G0.md remains read-only for agents)
 ```
 
 Scaffold Core currently contains Layers 0-3, the G5a Layer 5 runtime,
@@ -110,8 +110,12 @@ Implemented:
 - RunEndpointJunction v0
 - Layer 5 v0 skeleton runtime:
   - `islands.py` spanning-tree Level A island assembly;
-  - `skeleton.py` selection-wide AXIS_A / AXIS_B solve;
-  - `pins.py` run_skeleton_solve output model and invariants;
+  - `skeleton.py` selection-wide AXIS_A / AXIS_B solve over island lines
+    (families split at seams the island cuts); axes and run orientation from
+    the rigid unfolded island frame when no island patch is curved (plan
+    Slice N), frame-free provisional derivation for curved islands;
+  - `pins.py` run_skeleton_solve output model and invariants (axis-parallel,
+    SEAM_SELF length, node/frame agreement);
   - `uv_transfer.py` the only bpy write boundary.
 - Debug add-on `Write UV (G5a)` button in
   `dev/tools/scaffold_graph_debug/`.
@@ -130,6 +134,17 @@ through curved shared chains, fixed by the straight-hinge SHARED_CHAIN rule
 revisits a patch. Slice M1 keeps UV writes inside the solved faces. Tier 3
 Blender smoke runner: `dev/tools/blender_smoke/` (Blender 4.5.9 headless). A corner-node gap stays a strict xfail until a future patch-normal
 filter; do not introduce cap/wall semantics for it.
+
+Plan Slice N (consistent patch -> line -> island structure): Layer 3
+in-patch geodesic continuation no longer depends on edge vertex order (DD-45),
+and node crossings name the hinge through their node (DD-43 provenance).
+Layer 5 splits families into island lines at cut seams and derives axes and
+orientation in the rigid unfolded island frame; 60 of 62 islands have one, so
+the frame-free bipartition (3522 conflicts before) no longer runs there. On
+the 13 seamed buildings objects: pins 964 -> 6924, Layer 5 diagnostics 3561
+-> 36, OBLIQUE runs 7458 -> 97. Tier 3 now records structure metrics
+(`rigid_islands`, `island_lines`, `oblique_runs`, `lines_not_straight`,
+`patches_outside_frame`, `node_frame_mismatches`).
 
 Not implemented:
 
@@ -489,26 +504,30 @@ Still unresolved:
 
 ## Next architecture decision
 
-Checkpoint 2026-09 (plan Slices L1, L2, M1). ConnectedDirectionFamily
+Checkpoint 2026-09 (plan Slices L1, L2, M1, N). ConnectedDirectionFamily
 transports SHARED_CHAIN only across straight single-run hinges, and a family
-visits each patch at most once, so opposite patch sides never share a family.
-UV writes stay inside the solved faces. The Tier 3 Blender runner
-(`dev/tools/blender_smoke/`) and its `buildings_seamed.json` baseline cover
-13 seamed artist objects.
+visits each patch at most once (G0 v1.5 DD-43). UV writes stay inside the
+solved faces. Layer 5 works on island lines in the unfolded island frame. The
+Tier 3 Blender runner (`dev/tools/blender_smoke/`) and its
+`buildings_seamed.json` baseline cover 13 seamed artist objects and record
+structure metrics.
+
+The user's goal for this stage is a consistent structure on the levels patch
+-> line -> island; the concrete unwrap along rails comes later, and the final
+unwrap is only a test tool.
 
 Open decisions, all owned by the user (plan "Decisions the user must
-approve", items 3-8):
+approve", items 3, 6 and 9):
 
-- G0 DD-43 fixture text: corridor and bevel now expect one rail per fold
-  line; the amendment text is drafted in plan Slice L2. G0 stays read-only
-  for agents.
-- DD-46/DD-47 ScaffoldTrace/ScaffoldRail G0 approval.
-- Next Layer 5 slice: axis bipartition restricted to the island's stitched
-  crossings. On real walls most degradation is "axis bipartition conflict
-  -> OBLIQUE" because families carry transports across seams the island
-  leaves cut.
-- artist_cross_band planar end patches: orientation for corner-split
-  singleton families (ScaffoldRail consumer candidate).
+- Next level to consolidate: cross-island axis agreement through shared
+  families; ScaffoldRail over island lines (loop opening by island cuts);
+  island assembly without self-overlap (walls.007); curved runs inside Layer
+  3 lines (OQ-11, walls.010 arch).
+- DD-46/DD-47 ScaffoldTrace/ScaffoldRail G0 approval (kept as a draft until
+  rails are reconciled with island lines).
+- Unwrap-level items recorded in plan Slice N: per-component gauge,
+  absolute residual tolerance (artist_cross_band end patches), uv_transfer
+  cross-patch fallback.
 - Corner-node gap (strict xfail): deferred to a future patch-normal filter;
   do not add cap/wall semantics.
 
@@ -542,7 +561,9 @@ python -m pytest scaffold_core/tests
 ```
 
 Tier 3, only when a slice touches Blender boundaries or real-mesh behavior
-(Blender 4.5 headless, see `dev/tools/blender_smoke/README.md`):
+(Blender 4.5 headless, see `dev/tools/blender_smoke/README.md`; the user's
+local copy of the artist file is `E:\buildings.blend`, and the runner also
+finds Blender under `C:/Program Files/Blender Foundation/`):
 
 ```bash
 python dev/tools/blender_smoke/run_smoke.py <buildings.blend> --seamed --write-uv \
