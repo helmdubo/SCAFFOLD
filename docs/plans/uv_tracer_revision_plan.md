@@ -1665,9 +1665,9 @@ Tests:
   (added after review: a single-run piece no longer takes a silent +1).
 
 Reviewer gate (independent agent): PASS. Notes fixed: G5a says an unsigned
-run keeps its axis role; a single-run unordered piece is tested. Open for
-the user: DD-47 does not yet say that axis bipartition and cross-rail
-co-orientation stay with Layer 5.
+run keeps its axis role; a single-run unordered piece is tested. DD-47 now
+says that axis bipartition and cross-rail co-orientation stay with Layer 5
+(user-approved, 2026-11-07).
 
 Mutations: 7 of 8 caught. The survivor drops the "signed runs only" guard
 of the co-orientation flip. It is equivalent: an unsigned line never links,
