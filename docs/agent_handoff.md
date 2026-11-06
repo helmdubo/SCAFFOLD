@@ -115,8 +115,10 @@ Implemented:
     the rigid unfolded island frame when no island patch is curved (plan
     Slice N), frame-free provisional derivation for curved islands;
   - `pins.py` run_skeleton_solve output model and invariants (axis-parallel,
-    SEAM_SELF length, node/frame agreement);
-  - `uv_transfer.py` the only bpy write boundary.
+    SEAM_SELF length, node/frame agreement); pins are keyed by topology
+    vertex occurrence (DD-37), so both sides of a seam keep their own UV;
+  - `uv_transfer.py` the only bpy write boundary; a loop takes only the pin
+    of its own vertex occurrence in its own patch.
 - Debug add-on `Write UV (G5a)` button in
   `dev/tools/scaffold_graph_debug/`.
 - ScaffoldTrace / ScaffoldRail v0 Layer 3 evidence views
@@ -145,6 +147,14 @@ the 13 seamed buildings objects: pins 964 -> 6924, Layer 5 diagnostics 3561
 -> 36, OBLIQUE runs 7458 -> 97. Tier 3 now records structure metrics
 (`rigid_islands`, `island_lines`, `oblique_runs`, `lines_not_straight`,
 `patches_outside_frame`, `node_frame_mismatches`).
+
+Plan Task Card M2 (bug fix after Slice N): pins were keyed by (source vertex,
+patch), so the two seam-side occurrences of a SEAM_SELF band collapsed into
+one pin, and uv_transfer borrowed another patch's pin for loops without one.
+Pins now carry their vertex occurrence and the write looks each loop up by its
+face corner's occurrence; the solve is unchanged. Tier 3: Cube pins 40 -> 42,
+and 706 borrowed loops on four walls objects are no longer written. A run end
+on a seam-cut mid-chain vertex stays unpinned with a diagnostic.
 
 Not implemented:
 
@@ -504,10 +514,12 @@ Still unresolved:
 
 ## Next architecture decision
 
-Checkpoint 2026-09 (plan Slices L1, L2, M1, N). ConnectedDirectionFamily
-transports SHARED_CHAIN only across straight single-run hinges, and a family
-visits each patch at most once (G0 v1.5 DD-43). UV writes stay inside the
-solved faces. Layer 5 works on island lines in the unfolded island frame. The
+Checkpoint 2026-11 (plan Slices L1, L2, M1, N and Task Card M2).
+ConnectedDirectionFamily transports SHARED_CHAIN only across straight
+single-run hinges, and a family visits each patch at most once (G0 v1.5
+DD-43). UV writes stay inside the solved faces, and each loop takes only the
+pin of its own vertex occurrence. Layer 5 works on island lines in the
+unfolded island frame. The
 Tier 3 Blender runner (`dev/tools/blender_smoke/`) and its
 `buildings_seamed.json` baseline cover 13 seamed artist objects and record
 structure metrics.
@@ -525,9 +537,10 @@ approve", items 3, 6 and 9):
   3 lines (OQ-11, walls.010 arch).
 - DD-46/DD-47 ScaffoldTrace/ScaffoldRail G0 approval (kept as a draft until
   rails are reconciled with island lines).
-- Unwrap-level items recorded in plan Slice N: per-component gauge,
-  absolute residual tolerance (artist_cross_band end patches), uv_transfer
-  cross-patch fallback.
+- Unwrap-level items recorded in plan Slice N: per-component gauge and
+  absolute residual tolerance (artist_cross_band end patches). The
+  uv_transfer cross-patch fallback and the seam-side pin collapse are fixed
+  (Task Card M2).
 - Corner-node gap (strict xfail): deferred to a future patch-normal filter;
   do not add cap/wall semantics.
 
