@@ -1039,6 +1039,16 @@ and add:
   in-patch segment; opposite sides of a patch never share a family.
 ```
 
+Follow-up (2026-11, landed with Slice N): L2 also changed the debug-overlay
+rails of beveled_wall_corner. Before L2 its SPINE was the two fold lines glued
+through the chamfer's opposite sides, and the outer verticals were PARALLEL to
+it. `dev/tools/scaffold_graph_debug/test_overlay_v2.py::test_beveled_corner_has_horizontal_spine_and_vertical_ribs`
+kept that expectation (two PARALLEL rails) and failed on main from 196f9dd on,
+unnoticed because verification ran only `scaffold_core/tests`. The test now
+expects the horizontal SPINE, one PARALLEL (the opposite horizontal side) and
+four vertical RIBs, one per fold line and outer edge; verification runs the
+full suite from the repository root.
+
 ### Task Card M1 — UV write stays inside the solved faces (DONE, bug fix)
 
 Tier 3 found that `uv_transfer.write_pinned_uvs` wrote UVs and pins onto

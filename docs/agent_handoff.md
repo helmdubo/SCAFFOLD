@@ -554,10 +554,14 @@ of duplicating core graph logic. Do not import Blender into Scaffold Core.
 
 ## How to verify
 
-Run (fresh cloud containers need `python -m pip install pytest` first):
+Run from the repository root (fresh cloud containers need
+`python -m pip install pytest` first). This collects `scaffold_core/tests` and
+the pure overlay tests in `dev/tools/scaffold_graph_debug`, which consume
+Layer 3 rails and need no Blender; running only `scaffold_core/tests` misses
+them:
 
 ```bash
-python -m pytest scaffold_core/tests
+python -m pytest
 ```
 
 Tier 3, only when a slice touches Blender boundaries or real-mesh behavior
