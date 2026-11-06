@@ -1647,8 +1647,10 @@ Remaining after Slice P (inputs for later slices):
    - 5 warped n-gons (28 OBLIQUE runs);
    - 12 OBLIQUE runs on 5 lines through curved runs (OQ-11);
    - island assembly without self-overlap (walls.007);
-   - the solve consuming island rail order (provisional curved-island
-     signs already agree with the rails on all 8 lines);
+   - the solve consuming island rail order: 2 islands have no rigid frame
+     (Cube, walls.012); their provisional signs agree with the island
+     rails on both multi-run lines, and on all 6 in the in-repo artist
+     captures;
    - island lines taken from the Layer 3 cut;
    - branch resolution for the 4 unordered island rails;
    - 21 contradictory-equation diagnostics (unwrap level).

@@ -561,8 +561,10 @@ approve", items 3 and 11; item 6 is applied as G0 v1.6):
 - Next level (plan decision 11), measured after Slice P on the 13 seamed
   objects: 5 warped n-gons (28 OBLIQUE runs); curved runs inside Layer 3
   lines (OQ-11; 12 OBLIQUE runs); island assembly without self-overlap
-  (walls.007); the solve consuming island rail order (provisional
-  curved-island signs already agree with the rails on all 8 lines);
+  (walls.007); the solve consuming island rail order (2 islands without a
+  rigid frame, Cube and walls.012; their provisional signs agree with the
+  island rails on both multi-run lines, and on all 6 in the in-repo artist
+  captures);
   island lines taken from the Layer 3 cut; branch resolution for the 4
   unordered island rails. Cross-island axis agreement has nothing to
   agree yet: no family spans two islands on those objects.
