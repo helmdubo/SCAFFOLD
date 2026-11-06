@@ -51,7 +51,8 @@ Each trace member records:
 - directional evidence id;
 - patch id and patch-chain id;
 - start/end trace node ids;
-- topology/source start/end vertex provenance where available;
+- the vertex occurrences of its endpoint samples (by sample role, which
+  follows the PatchChain traversal, not the trace direction);
 - crossing provenance to the previous and next member;
 - confidence.
 
@@ -111,13 +112,13 @@ pins, island packing, texel scale, feature constraints, or Blender operations.
 
 Closed or looped direction families are not automatically linear rails.
 
-A loop may become an ordered open rail only when a lower-layer structural cut
-already provides an ordered opening, for example an island cut or selected
-split seam that turns the loop into a trace with distinct first and last
-nodes. The cut is an input from topology/island assembly, not a decision
-invented by the rail builder. Implemented as the cut view
-(`cut_scaffold_rail`); the global rail of a loop stays a closed, non-consumable
-loop rail.
+A loop may become an ordered open rail only when a structural cut the rail
+builder does not own already provides an ordered opening, for example the
+seams an island leaves cut or a selected split seam that turns the loop into
+a trace with distinct first and last nodes. The cut is an input from
+topology or island assembly, not a decision invented by the rail builder.
+Implemented as the cut view (`cut_scaffold_rail`); the global rail of a loop
+stays a closed, non-consumable loop rail.
 
 For a closed loop with no such opening:
 
