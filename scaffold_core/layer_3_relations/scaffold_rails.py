@@ -6,12 +6,16 @@ Rules:
 - Do not mutate topology, ScaffoldGraph, ConnectedDirectionFamily, or directional evidence.
 - Do not choose paths through branches or open closed loops without an explicit structural cut.
 - Do not derive coordinates, pins, packing, feature labels, world roles, or runtime behavior.
+
+A rail is ordered by stations. The two uses of one hinge Chain (a SHARED_CHAIN
+crossing) cover the same source edges, so they form one station rather than two
+consecutive members; stations connect through node crossings at trace nodes.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Iterable, Mapping
 
 from scaffold_core.core.evidence import Evidence
 from scaffold_core.layer_3_relations.model import (
@@ -21,18 +25,35 @@ from scaffold_core.layer_3_relations.model import (
     PatchChainEndpointRole,
     RunEndpointJunction,
     ScaffoldRail,
+    ScaffoldRailSegment,
     ScaffoldTrace,
     ScaffoldTraceMember,
 )
 
 
-POLICY_NAME = "scaffold_trace_rail_v0"
+POLICY_NAME = "scaffold_trace_rail_v1"
+STATION_CROSSING_KIND = "SHARED_CHAIN"
 
 
 @dataclass(frozen=True)
-class _MemberEndpoint:
+class MemberTraceEndpoints:
+    """Trace nodes at the start and the end of one directional member."""
+
     start_trace_node_id: str | None
     end_trace_node_id: str | None
+
+
+@dataclass(frozen=True)
+class _StationRail:
+    ordered_member_ids: tuple[str, ...]
+    ordered_node_ids: tuple[str, ...]
+    signs: Mapping[str, int]
+    branch_records: Mapping[str, tuple[str, ...]]
+    is_closed_loop: bool
+    diagnostics: tuple[str, ...]
+    station_of: Mapping[str, str]
+    member_crossing_index: Mapping[frozenset[str], int]
+    station_link_index: Mapping[frozenset[str], int]
 
 
 def build_scaffold_traces_and_rails(
@@ -43,7 +64,7 @@ def build_scaffold_traces_and_rails(
     """Build ordered trace/rail evidence from ConnectedDirectionFamily records."""
 
     evidence_by_id = {item.id: item for item in directional_evidence_items}
-    endpoint_by_member_id = _member_endpoints(run_endpoint_junctions)
+    endpoint_by_member_id = rail_member_endpoints(run_endpoint_junctions)
     traces: list[ScaffoldTrace] = []
     rails: list[ScaffoldRail] = []
 
@@ -59,31 +80,104 @@ def build_scaffold_traces_and_rails(
     return tuple(traces), tuple(rails)
 
 
+def rail_member_endpoints(
+    run_endpoint_junctions: tuple[RunEndpointJunction, ...],
+) -> dict[str, MemberTraceEndpoints]:
+    """Map each directional member to the trace nodes at its start and end."""
+
+    starts: dict[str, str] = {}
+    ends: dict[str, str] = {}
+    for junction in sorted(run_endpoint_junctions, key=lambda item: item.id):
+        trace_node_id = junction.anchor_scaffold_node_id or junction.id
+        for member_id, role in junction.incident_run_endpoint_occurrences:
+            if role is PatchChainEndpointRole.START:
+                starts.setdefault(member_id, trace_node_id)
+            elif role is PatchChainEndpointRole.END:
+                ends.setdefault(member_id, trace_node_id)
+    return {
+        member_id: MemberTraceEndpoints(starts.get(member_id), ends.get(member_id))
+        for member_id in sorted(set(starts) | set(ends))
+    }
+
+
+def cut_scaffold_rail(
+    family: ConnectedDirectionFamily,
+    member_endpoints: Mapping[str, MemberTraceEndpoints],
+    member_ids: Iterable[str],
+    kept_chain_ids: Iterable[str],
+) -> tuple[ScaffoldRailSegment, ...]:
+    """Cut a family's rail by a caller-supplied structural cut (DD-47 draft).
+
+    The caller keeps a set of members (for example the runs of one island) and
+    the Chains its cut keeps joined (for example the island's stitched hinges).
+    A crossing survives when both members are kept and it stays in one patch or
+    passes a kept Chain. Each connected piece is ordered through its stations
+    like a whole rail, so a loop opens exactly where the caller cut it. A branch
+    or a loop the cut leaves closed stays unordered with a diagnostic; this
+    function never chooses an opening or a branch itself.
+    """
+
+    kept_members = set(member_ids)
+    kept_chains = {str(chain_id) for chain_id in kept_chain_ids}
+    members = sorted(member for member in family.member_directional_evidence_ids if member in kept_members)
+    crossings = [
+        (index, crossing)
+        for index, crossing in enumerate(family.crossing_records)
+        if crossing.first_directional_evidence_id in kept_members
+        and crossing.second_directional_evidence_id in kept_members
+        and (
+            crossing.first_patch_id == crossing.second_patch_id
+            or str(crossing.shared_chain_id) in kept_chains
+        )
+    ]
+    segments: list[ScaffoldRailSegment] = []
+    for piece, piece_crossings in _connected_pieces(members, crossings):
+        rail = _station_rail(piece, piece_crossings, member_endpoints)
+        diagnostics = list(rail.diagnostics)
+        if rail.is_closed_loop:
+            diagnostics.append("closed_loop")
+        diagnostics.extend(f"branch:{record_id}" for record_id in sorted(rail.branch_records))
+        is_ordered = not diagnostics and all(rail.signs.get(member, 0) != 0 for member in piece)
+        segments.append(ScaffoldRailSegment(
+            direction_family_id=family.id,
+            ordered_member_directional_evidence_ids=rail.ordered_member_ids if is_ordered else tuple(piece),
+            ordered_trace_node_ids=rail.ordered_node_ids,
+            orientation_sign_by_member=dict(rail.signs) if is_ordered else {member: 0 for member in piece},
+            is_ordered=is_ordered,
+            diagnostics=tuple(diagnostics),
+        ))
+    return tuple(segments)
+
+
 def _build_family_trace_and_rail(
     index: int,
     family: ConnectedDirectionFamily,
     evidence_by_id: Mapping[str, PatchChainDirectionalEvidence],
-    endpoint_by_member_id: Mapping[str, _MemberEndpoint],
+    endpoint_by_member_id: Mapping[str, MemberTraceEndpoints],
 ) -> tuple[ScaffoldTrace, ScaffoldRail]:
-    member_graph, crossing_index_by_pair, crossing_node_by_pair, diagnostics = _family_member_graph(family)
-    branch_records = _branch_records(family, member_graph, endpoint_by_member_id)
+    station_rail = _station_rail(
+        sorted(family.member_directional_evidence_ids),
+        list(enumerate(family.crossing_records)),
+        endpoint_by_member_id,
+    )
+    branch_records = dict(station_rail.branch_records)
     is_branch_ambiguous = bool(branch_records)
-    is_closed_loop = _is_closed_loop(family.member_directional_evidence_ids, member_graph)
+    is_closed_loop = station_rail.is_closed_loop
     loop_ambiguity_records = (
         {"closed_loop": tuple(sorted(family.member_directional_evidence_ids))}
         if is_closed_loop
         else {}
     )
+    if is_branch_ambiguous or is_closed_loop:
+        ordered_member_ids = tuple(family.ordered_member_directional_evidence_ids)
+        ordered_node_ids = _unordered_node_ids(ordered_member_ids, endpoint_by_member_id)
+        orientation_sign_by_member = {member_id: 0 for member_id in ordered_member_ids}
+    else:
+        ordered_member_ids = station_rail.ordered_member_ids
+        ordered_node_ids = list(station_rail.ordered_node_ids)
+        orientation_sign_by_member = dict(station_rail.signs)
 
-    ordered_member_ids = _ordered_member_ids(family, member_graph, is_branch_ambiguous, is_closed_loop)
-    ordered_node_ids, orientation_sign_by_member, orientation_diagnostics = _rail_orientation(
-        ordered_member_ids,
-        endpoint_by_member_id,
-        crossing_node_by_pair,
-        is_branch_ambiguous,
-        is_closed_loop,
-    )
-    diagnostics.extend(orientation_diagnostics)
+    diagnostics = list(station_rail.diagnostics)
     if (
         len(ordered_node_ids) > 1
         and not is_closed_loop
@@ -100,7 +194,7 @@ def _build_family_trace_and_rail(
             family,
             evidence_by_id,
             endpoint_by_member_id,
-            crossing_index_by_pair,
+            station_rail,
             ordered_member_ids,
         )
         for member_id in ordered_member_ids
@@ -149,182 +243,217 @@ def _build_family_trace_and_rail(
     return trace, rail
 
 
-def _member_endpoints(
-    run_endpoint_junctions: tuple[RunEndpointJunction, ...],
-) -> dict[str, _MemberEndpoint]:
-    starts: dict[str, str] = {}
-    ends: dict[str, str] = {}
-    for junction in sorted(run_endpoint_junctions, key=lambda item: item.id):
-        trace_node_id = junction.anchor_scaffold_node_id or junction.id
-        for member_id, role in junction.incident_run_endpoint_occurrences:
-            if role is PatchChainEndpointRole.START:
-                starts.setdefault(member_id, trace_node_id)
-            elif role is PatchChainEndpointRole.END:
-                ends.setdefault(member_id, trace_node_id)
-    return {
-        member_id: _MemberEndpoint(starts.get(member_id), ends.get(member_id))
-        for member_id in sorted(set(starts) | set(ends))
-    }
+def _connected_pieces(
+    members: list[str],
+    crossings: list[tuple[int, CrossingRecord]],
+) -> list[tuple[list[str], list[tuple[int, CrossingRecord]]]]:
+    parents = {member: member for member in members}
+
+    def find(member: str) -> str:
+        while parents[member] != member:
+            parents[member] = parents[parents[member]]
+            member = parents[member]
+        return member
+
+    for _, crossing in crossings:
+        first_root = find(crossing.first_directional_evidence_id)
+        second_root = find(crossing.second_directional_evidence_id)
+        if first_root != second_root:
+            parents[max(first_root, second_root)] = min(first_root, second_root)
+    members_by_root: dict[str, list[str]] = {}
+    for member in members:
+        members_by_root.setdefault(find(member), []).append(member)
+    crossings_by_root: dict[str, list[tuple[int, CrossingRecord]]] = {}
+    for item in crossings:
+        crossings_by_root.setdefault(find(item[1].first_directional_evidence_id), []).append(item)
+    return [
+        (sorted(members_by_root[root]), crossings_by_root.get(root, []))
+        for root in sorted(members_by_root)
+    ]
 
 
-def _family_member_graph(
-    family: ConnectedDirectionFamily,
-) -> tuple[dict[str, set[str]], dict[frozenset[str], int], dict[frozenset[str], str | None], list[str]]:
-    graph = {member_id: set() for member_id in family.member_directional_evidence_ids}
-    crossing_index_by_pair: dict[frozenset[str], int] = {}
-    crossing_node_by_pair: dict[frozenset[str], str | None] = {}
-    diagnostics: list[str] = []
-    for index, crossing in enumerate(family.crossing_records):
+def _station_rail(
+    members: list[str],
+    crossings: list[tuple[int, CrossingRecord]],
+    member_endpoints: Mapping[str, MemberTraceEndpoints],
+) -> _StationRail:
+    """Order one connected member set through its stations.
+
+    Stations are the members joined by SHARED_CHAIN crossings; every other
+    crossing links two stations at its trace node. Branches are counted on
+    stations, never on the two uses of one hinge.
+    """
+
+    parents = {member: member for member in members}
+
+    def find(member: str) -> str:
+        while parents[member] != member:
+            parents[member] = parents[parents[member]]
+            member = parents[member]
+        return member
+
+    member_crossing_index: dict[frozenset[str], int] = {}
+    for index, crossing in crossings:
         first_id = crossing.first_directional_evidence_id
         second_id = crossing.second_directional_evidence_id
-        if first_id not in graph or second_id not in graph:
+        member_crossing_index.setdefault(frozenset((first_id, second_id)), index)
+        if crossing.kind == STATION_CROSSING_KIND:
+            first_root, second_root = find(first_id), find(second_id)
+            if first_root != second_root:
+                parents[max(first_root, second_root)] = min(first_root, second_root)
+    station_of = {member: find(member) for member in members}
+    members_of: dict[str, list[str]] = {}
+    for member in members:
+        members_of.setdefault(station_of[member], []).append(member)
+
+    diagnostics: list[str] = []
+    links: dict[str, list[tuple[str, str | None]]] = {station: [] for station in members_of}
+    station_link_index: dict[frozenset[str], int] = {}
+    for index, crossing in crossings:
+        if crossing.kind == STATION_CROSSING_KIND:
             continue
-        graph[first_id].add(second_id)
-        graph[second_id].add(first_id)
-        pair = frozenset((first_id, second_id))
-        if pair in crossing_index_by_pair:
-            diagnostics.append(f"multiple_crossings:{first_id}:{second_id}")
+        first_id = crossing.first_directional_evidence_id
+        second_id = crossing.second_directional_evidence_id
+        first_station, second_station = station_of[first_id], station_of[second_id]
+        if first_station == second_station:
+            diagnostics.append(f"crossing_inside_station:{first_id}:{second_id}:{crossing.kind}")
             continue
-        crossing_index_by_pair[pair] = index
-        crossing_node_by_pair[pair] = _crossing_trace_node_id(crossing)
-        if crossing_node_by_pair[pair] is None:
+        node = crossing.scaffold_node_id or crossing.run_endpoint_junction_id
+        if node is None:
             diagnostics.append(f"non_node_crossing:{first_id}:{second_id}:{crossing.kind}")
-    return graph, crossing_index_by_pair, crossing_node_by_pair, diagnostics
+        if (second_station, node) in links[first_station]:
+            continue
+        links[first_station].append((second_station, node))
+        links[second_station].append((first_station, node))
+        station_link_index.setdefault(frozenset((first_station, second_station)), index)
 
-
-def _crossing_trace_node_id(crossing: CrossingRecord) -> str | None:
-    return crossing.scaffold_node_id or crossing.run_endpoint_junction_id
-
-
-def _branch_records(
-    family: ConnectedDirectionFamily,
-    member_graph: Mapping[str, set[str]],
-    endpoint_by_member_id: Mapping[str, _MemberEndpoint],
-) -> dict[str, tuple[str, ...]]:
-    records = {
-        record_id: tuple(neighbor_ids)
-        for record_id, neighbor_ids in family.branch_records.items()
-    }
-    for member_id, neighbor_ids in sorted(member_graph.items()):
-        if len(neighbor_ids) > 2:
-            records[f"member:{member_id}"] = tuple(sorted(neighbor_ids))
-
-    incident_members_by_node: dict[str, set[str]] = {}
-    for member_id in family.member_directional_evidence_ids:
-        endpoints = endpoint_by_member_id.get(member_id)
+    branch_records: dict[str, tuple[str, ...]] = {}
+    for station, station_links in sorted(links.items()):
+        if len(station_links) > 2:
+            branch_records[f"station:{station}"] = tuple(sorted({neighbor for neighbor, _ in station_links}))
+    stations_by_node: dict[str, set[str]] = {}
+    for member in members:
+        endpoints = member_endpoints.get(member)
         if endpoints is None:
             continue
         for trace_node_id in (endpoints.start_trace_node_id, endpoints.end_trace_node_id):
             if trace_node_id is not None:
-                incident_members_by_node.setdefault(trace_node_id, set()).add(member_id)
-    for trace_node_id, member_ids in sorted(incident_members_by_node.items()):
-        if len(member_ids) > 2:
-            records[f"trace_node:{trace_node_id}"] = tuple(sorted(member_ids))
-    return records
+                stations_by_node.setdefault(trace_node_id, set()).add(station_of[member])
+    for trace_node_id, station_ids in sorted(stations_by_node.items()):
+        if len(station_ids) > 2:
+            branch_records[f"trace_node:{trace_node_id}"] = tuple(sorted(station_ids))
+    is_closed_loop = len(links) > 1 and all(len(station_links) == 2 for station_links in links.values())
 
+    if branch_records or is_closed_loop or not members:
+        return _StationRail(
+            tuple(members),
+            tuple(_unordered_node_ids(tuple(members), member_endpoints)),
+            {member: 0 for member in members},
+            branch_records,
+            is_closed_loop,
+            tuple(diagnostics),
+            station_of,
+            member_crossing_index,
+            station_link_index,
+        )
 
-def _is_closed_loop(member_ids: tuple[str, ...], member_graph: Mapping[str, set[str]]) -> bool:
-    if len(member_ids) <= 1:
-        return False
-    if not member_graph:
-        return False
-    return all(len(member_graph.get(member_id, set())) == 2 for member_id in member_ids)
-
-
-def _ordered_member_ids(
-    family: ConnectedDirectionFamily,
-    member_graph: Mapping[str, set[str]],
-    is_branch_ambiguous: bool,
-    is_closed_loop: bool,
-) -> tuple[str, ...]:
-    if is_branch_ambiguous or is_closed_loop or not member_graph:
-        return tuple(family.ordered_member_directional_evidence_ids)
-
-    leaf_ids = sorted(member_id for member_id, neighbors in member_graph.items() if len(neighbors) <= 1)
-    if not leaf_ids:
-        return tuple(family.ordered_member_directional_evidence_ids)
-
-    ordered: list[str] = []
-    previous_id: str | None = None
-    current_id: str | None = leaf_ids[0]
-    while current_id is not None and current_id not in ordered:
-        ordered.append(current_id)
-        candidates = sorted(member_graph[current_id] - ({previous_id} if previous_id else set()))
-        previous_id, current_id = current_id, candidates[0] if len(candidates) == 1 else None
-    ordered.extend(member_id for member_id in family.ordered_member_directional_evidence_ids if member_id not in ordered)
-    return tuple(ordered)
-
-
-def _rail_orientation(
-    ordered_member_ids: tuple[str, ...],
-    endpoint_by_member_id: Mapping[str, _MemberEndpoint],
-    crossing_node_by_pair: Mapping[frozenset[str], str | None],
-    is_branch_ambiguous: bool,
-    is_closed_loop: bool,
-) -> tuple[list[str], dict[str, int], list[str]]:
-    if is_branch_ambiguous or is_closed_loop:
-        return _unordered_node_ids(ordered_member_ids, endpoint_by_member_id), {
-            member_id: 0 for member_id in ordered_member_ids
-        }, []
-
-    if not ordered_member_ids:
-        return [], {}, []
-
-    diagnostics: list[str] = []
+    order = _station_order(links)
+    if len(order) != len(links):
+        diagnostics.append("disconnected_stations")
+        order.extend(station for station in sorted(links) if station not in order)
     signs: dict[str, int] = {}
     ordered_nodes: list[str] = []
-    previous_crossing_node: str | None = None
-
-    for index, member_id in enumerate(ordered_member_ids):
-        endpoints = endpoint_by_member_id.get(member_id)
-        if endpoints is None:
-            signs[member_id] = 0
-            diagnostics.append(f"missing_endpoints:{member_id}")
-            continue
-        next_crossing_node = _adjacent_crossing_node(
-            ordered_member_ids,
-            index,
-            crossing_node_by_pair,
-            forward=True,
-        )
-        previous_crossing_node = previous_crossing_node or _adjacent_crossing_node(
-            ordered_member_ids,
-            index,
-            crossing_node_by_pair,
-            forward=False,
-        )
-        sign, member_nodes = _member_orientation(
-            member_id,
-            endpoints,
-            previous_crossing_node,
-            next_crossing_node,
-            diagnostics,
-        )
-        signs[member_id] = sign
-        for trace_node_id in member_nodes:
+    for position, station in enumerate(order):
+        previous_node = _link_node(links, station, order[position - 1]) if position > 0 else None
+        next_node = _link_node(links, station, order[position + 1]) if position + 1 < len(order) else None
+        station_members = members_of[station]
+        if len(order) == 1:
+            station_nodes = _orient_single_station(station_members, member_endpoints, signs, diagnostics)
+        else:
+            station_nodes = ()
+            for member in station_members:
+                endpoints = member_endpoints.get(member)
+                if endpoints is None:
+                    signs[member] = 0
+                    diagnostics.append(f"missing_endpoints:{member}")
+                    continue
+                sign, member_nodes = _member_orientation(member, endpoints, previous_node, next_node, diagnostics)
+                signs[member] = sign
+                if not station_nodes and sign != 0:
+                    station_nodes = member_nodes
+        for trace_node_id in station_nodes:
             if not ordered_nodes or ordered_nodes[-1] != trace_node_id:
                 ordered_nodes.append(trace_node_id)
-        previous_crossing_node = next_crossing_node
+    ordered_member_ids = tuple(member for station in order for member in members_of[station])
+    return _StationRail(
+        ordered_member_ids,
+        tuple(ordered_nodes),
+        signs,
+        branch_records,
+        False,
+        tuple(diagnostics),
+        station_of,
+        member_crossing_index,
+        station_link_index,
+    )
 
-    return ordered_nodes, signs, diagnostics
+
+def _station_order(links: Mapping[str, list[tuple[str, str | None]]]) -> list[str]:
+    leaves = sorted(station for station, station_links in links.items() if len(station_links) <= 1)
+    if not leaves:
+        return []
+    order: list[str] = []
+    previous: str | None = None
+    current: str | None = leaves[0]
+    while current is not None and current not in order:
+        order.append(current)
+        candidates = [neighbor for neighbor, _ in links[current] if neighbor != previous]
+        previous, current = current, (candidates[0] if len(candidates) == 1 else None)
+    return order
 
 
-def _adjacent_crossing_node(
-    ordered_member_ids: tuple[str, ...],
-    index: int,
-    crossing_node_by_pair: Mapping[frozenset[str], str | None],
-    *,
-    forward: bool,
+def _link_node(
+    links: Mapping[str, list[tuple[str, str | None]]],
+    station: str,
+    neighbor: str,
 ) -> str | None:
-    other_index = index + 1 if forward else index - 1
-    if other_index < 0 or other_index >= len(ordered_member_ids):
-        return None
-    return crossing_node_by_pair.get(frozenset((ordered_member_ids[index], ordered_member_ids[other_index])))
+    for linked_station, trace_node_id in links[station]:
+        if linked_station == neighbor:
+            return trace_node_id
+    return None
+
+
+def _orient_single_station(
+    station_members: list[str],
+    member_endpoints: Mapping[str, MemberTraceEndpoints],
+    signs: dict[str, int],
+    diagnostics: list[str],
+) -> tuple[str, ...]:
+    """Orient the uses of one station against its first member."""
+
+    reference = member_endpoints.get(station_members[0])
+    if reference is None or reference.start_trace_node_id is None or reference.end_trace_node_id is None:
+        for member in station_members:
+            signs[member] = 0
+            diagnostics.append(f"missing_endpoint_node:{member}")
+        return ()
+    forward = (reference.start_trace_node_id, reference.end_trace_node_id)
+    for member in station_members:
+        endpoints = member_endpoints.get(member)
+        nodes = (endpoints.start_trace_node_id, endpoints.end_trace_node_id) if endpoints else (None, None)
+        if nodes == forward:
+            signs[member] = 1
+        elif nodes == forward[::-1]:
+            signs[member] = -1
+        else:
+            signs[member] = 0
+            diagnostics.append(f"inconsistent_orientation:{member}")
+    return forward
 
 
 def _member_orientation(
     member_id: str,
-    endpoints: _MemberEndpoint,
+    endpoints: MemberTraceEndpoints,
     previous_crossing_node: str | None,
     next_crossing_node: str | None,
     diagnostics: list[str],
@@ -359,7 +488,7 @@ def _member_orientation(
 
 def _unordered_node_ids(
     ordered_member_ids: tuple[str, ...],
-    endpoint_by_member_id: Mapping[str, _MemberEndpoint],
+    endpoint_by_member_id: Mapping[str, MemberTraceEndpoints],
 ) -> list[str]:
     node_ids: set[str] = set()
     for member_id in ordered_member_ids:
@@ -375,7 +504,7 @@ def _unordered_node_ids(
 def _missing_member_diagnostics(
     ordered_member_ids: tuple[str, ...],
     evidence_by_id: Mapping[str, PatchChainDirectionalEvidence],
-    endpoint_by_member_id: Mapping[str, _MemberEndpoint],
+    endpoint_by_member_id: Mapping[str, MemberTraceEndpoints],
 ) -> list[str]:
     diagnostics: list[str] = []
     for member_id in ordered_member_ids:
@@ -393,21 +522,21 @@ def _trace_member(
     member_id: str,
     family: ConnectedDirectionFamily,
     evidence_by_id: Mapping[str, PatchChainDirectionalEvidence],
-    endpoint_by_member_id: Mapping[str, _MemberEndpoint],
-    crossing_index_by_pair: Mapping[frozenset[str], int],
+    endpoint_by_member_id: Mapping[str, MemberTraceEndpoints],
+    station_rail: _StationRail,
     ordered_member_ids: tuple[str, ...],
 ) -> ScaffoldTraceMember:
     evidence = evidence_by_id[member_id]
     member_map = family.member_map[member_id]
-    endpoints = endpoint_by_member_id.get(member_id, _MemberEndpoint(None, None))
+    endpoints = endpoint_by_member_id.get(member_id, MemberTraceEndpoints(None, None))
     member_index = ordered_member_ids.index(member_id)
     previous_index = (
-        crossing_index_by_pair.get(frozenset((ordered_member_ids[member_index - 1], member_id)))
+        _crossing_index(station_rail, ordered_member_ids[member_index - 1], member_id)
         if member_index > 0
         else None
     )
     next_index = (
-        crossing_index_by_pair.get(frozenset((member_id, ordered_member_ids[member_index + 1])))
+        _crossing_index(station_rail, member_id, ordered_member_ids[member_index + 1])
         if member_index + 1 < len(ordered_member_ids)
         else None
     )
@@ -424,6 +553,17 @@ def _trace_member(
         next_crossing_index=next_index,
         confidence=evidence.confidence,
     )
+
+
+def _crossing_index(station_rail: _StationRail, first_id: str, second_id: str) -> int | None:
+    direct = station_rail.member_crossing_index.get(frozenset((first_id, second_id)))
+    if direct is not None:
+        return direct
+    first_station = station_rail.station_of.get(first_id)
+    second_station = station_rail.station_of.get(second_id)
+    if first_station is None or second_station is None or first_station == second_station:
+        return None
+    return station_rail.station_link_index.get(frozenset((first_station, second_station)))
 
 
 def _confidence(
@@ -447,7 +587,7 @@ def _trace_evidence(
 ) -> Evidence:
     return Evidence(
         source="layer_3_relations.scaffold_rails",
-        summary="ScaffoldTrace v0 derived from ConnectedDirectionFamily ordering",
+        summary="ScaffoldTrace v1 ordered through stations of ConnectedDirectionFamily members",
         data={
             "policy": POLICY_NAME,
             "direction_family_id": family.id,
@@ -468,7 +608,7 @@ def _rail_evidence(
 ) -> Evidence:
     return Evidence(
         source="layer_3_relations.scaffold_rails",
-        summary="ScaffoldRail v0 direction-stability view over ScaffoldTrace",
+        summary="ScaffoldRail v1 direction-stability view over ScaffoldTrace",
         data={
             "policy": POLICY_NAME,
             "direction_family_id": family.id,
