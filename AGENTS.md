@@ -188,7 +188,7 @@ SideSurfaceContinuityEvidence v1 evidence-only same-side surface flow record wit
 SurfaceFlowCompatibilityEvidence v0 evidence-only cross-patch flow-family compatibility record
 ConnectedDirectionFamily v1 (G0 DD-43/DD-45) occurrence-aware geodesic families
 RunEndpointJunction v0 (G0 DD-44)
-ScaffoldTrace / ScaffoldRail v1 evidence views: station order and island cut view (plan Slices J, O; DD-46/DD-47 draft, not yet in G0)
+ScaffoldTrace / ScaffoldRail v1 evidence views: station order and island cut view (G0 DD-46/DD-47; plan Slices J, O)
 ```
 
 SHARED_CHAIN family transport crosses only straight single-run hinges
@@ -198,7 +198,7 @@ sides of a patch never share a family (plan Slice L2). In-patch geodesic
 continuation depends on the junction angle alone, and node crossings record
 the hinge Chain through their node (plan Slice N, G0 v1.5). A node crossing
 never folds back: after transport about the hinge its two runs leave the
-node in opposite directions (plan Slice O1). Layer 5 splits families into
+node in opposite directions (plan Slice O1, G0 v1.6). Layer 5 splits families into
 island lines at seams the island cuts, and checks them against the rails
 that the Layer 3 cut view orders for the island (plan Slice O). Known
 deferred gap: a run transported through a 90-degree

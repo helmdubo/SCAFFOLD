@@ -13,7 +13,7 @@ Project: Scaffold
 Core package: scaffold_core/
 Current phase: G5a - Skeleton Runtime
 Architecture: immutable B-rep-inspired interpretation pipeline
-G0 contract: v1.5 (G0.md remains read-only for agents)
+G0 contract: v1.6 (G0.md remains read-only for agents)
 ```
 
 Scaffold Core currently contains Layers 0-3, the G5a Layer 5 runtime,
@@ -229,15 +229,17 @@ ScaffoldGraph:
   ScaffoldEdges.
 
 ScaffoldTrace:
-  implemented v0 ordered evidence view over ConnectedDirectionFamily members
-  through ScaffoldNode / RunEndpointJunction atoms.
+  implemented v1 (G0 DD-46) ordered evidence view over ConnectedDirectionFamily
+  members through ScaffoldNode / RunEndpointJunction atoms, by stations: the
+  two uses of one hinge Chain are one step between two trace nodes.
 
 ScaffoldCircuit:
   future closed ScaffoldTrace.
 
 ScaffoldRail:
-  implemented v0 direction-stability view over a ScaffoldTrace; branches and
-  closed loops stay ambiguous and non-consumable by G5a.
+  implemented v1 (G0 DD-47) direction-stability view over a ScaffoldTrace;
+  branches and closed loops stay ambiguous and non-consumable by G5a; the
+  on-demand cut view orders the pieces of a consumer's cut (an island).
 
 ScaffoldContinuityComponent:
   implemented Layer 3 derived evidence view grouping existing ScaffoldEdges into
@@ -545,16 +547,21 @@ The user's goal for this stage is a consistent structure on the levels patch
 unwrap is only a test tool.
 
 Open decisions, all owned by the user (plan "Decisions the user must
-approve", items 3, 6 and 10):
+approve", items 3 and 10; item 6 is applied as G0 v1.6):
 
-- Next level to consolidate: cross-island axis agreement through shared
-  families; island assembly without self-overlap (walls.007); curved runs
-  inside Layer 3 lines (OQ-11, walls.010 arch); island lines taken from the
-  Layer 3 cut; the solve consuming island rail order (the unwrap along
-  rails); branch resolution for the 4 unordered island rails.
-- DD-46/DD-47 ScaffoldTrace/ScaffoldRail G0 approval: rails are now
-  reconciled with island lines (Slice O); the proposed final text is in
-  `docs/architecture/scaffold_rail_trace_contract_draft.md`.
+- Next slice, chosen by the user (2026-11-06): patches outside the rigid
+  island frame (10 patches carry 60 of the 97 OBLIQUE runs on the 13
+  seamed objects); it starts with a case analysis, then a proposed rule.
+  Other measured candidates: curved runs inside Layer 3 lines (OQ-11; 12
+  OBLIQUE runs); island assembly without self-overlap (walls.007); the
+  solve consuming island rail order (provisional curved-island signs
+  already agree with the rails on all 8 lines); island lines taken from
+  the Layer 3 cut; branch resolution for the 4 unordered island rails.
+  Cross-island axis agreement has nothing to agree yet: no family spans
+  two islands on those objects.
+- DD-46/DD-47 ScaffoldTrace/ScaffoldRail: approved by the user and applied
+  as G0 v1.6 (2026-11-06), together with the Slice O1 fold-back rule in
+  DD-43.
 - Unwrap-level items recorded in plan Slice N: per-component gauge and
   absolute residual tolerance (artist_cross_band end patches). The
   uv_transfer cross-patch fallback and the seam-side pin collapse are fixed

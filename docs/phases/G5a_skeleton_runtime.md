@@ -179,7 +179,8 @@ top and bottom rims into one family. The straight-hinge transport rule fixed
 it in Layer 3; the G5a solve itself is unchanged and must still not gain
 local traversal heuristics.
 
-Draft contract: `docs/architecture/scaffold_rail_trace_contract_draft.md`.
+Rail contract: G0 DD-46/DD-47 (v1.6); background in
+`docs/architecture/scaffold_rail_trace_contract_draft.md`.
 ```
 
 ## Tier 3 validation (buildings.blend, Blender 4.5.9, 2026-09)

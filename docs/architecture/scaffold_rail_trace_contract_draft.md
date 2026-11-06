@@ -1,9 +1,9 @@
 # ScaffoldTrace / ScaffoldRail Contract Draft
 
-Status: draft basis for ScaffoldTrace / ScaffoldRail v1 (plan Slice J2, then
-Slice O: stations and the cut view). This document does not amend `G0.md` by
-itself. The text under "Proposed G0 Amendment Text" is the proposed final
-DD-46/DD-47 text after Slice O and waits for user approval.
+Status: APPLIED. The user approved the DD-46/DD-47 text below after plan
+Slice O, and it is in `G0.md` v1.6 (2026-11-06). G0 is the contract; this
+document keeps the background: motivation, loop and branch policy,
+fixtures and the answers to the open questions.
 
 Purpose: define the Layer 3 substrate that lets G5a consume ordered,
 direction-stable rails instead of reconstructing rail order and orientation

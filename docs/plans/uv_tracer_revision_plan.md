@@ -1294,9 +1294,8 @@ User decisions (2026-11-06):
   Layer 3; rail checks in Layer 5; Tier 3 metrics.
 - Approved: fix the fold-back node crossing found while measuring, first, as
   a G3 repair under Minimal Patch Protocol (Task Card O1).
-- G0: DD-46/DD-47 are decided after the slice. The proposed final text is in
-  docs/architecture/scaffold_rail_trace_contract_draft.md and waits for the
-  user's approval.
+- G0: DD-46/DD-47 are decided after the slice. The user approved the final
+  text after the slice; it is applied as G0 v1.6 with the O1 rule in DD-43.
 ```
 
 Starting point on the 13 seamed buildings objects (PR #21 head): only 233 of
@@ -1516,14 +1515,11 @@ regressions):
    G3 repair of DD-43 — APPROVED and DONE.
 5. Slice L: end-patch separation (box lids, corner-node gap) — DEFERRED by
    the user to a future patch-normal filter; no cap/wall semantics.
-6. Slice J: DD-46/DD-47 (ScaffoldTrace/ScaffoldRail) G0 amendment text is
-   implemented as v1 evidence (Slice O: stations, island cut view) but not
-   yet approved into G0 — PENDING. Rails are now reconciled with the Slice N
-   island lines; the user decided (2026-11-06) to settle the G0 text after
-   Slice O. The proposed final text is in
-   docs/architecture/scaffold_rail_trace_contract_draft.md. The same
-   amendment would record the Slice O1 rule in DD-43 (a node crossing never
-   folds back), like the L1/L2/N repairs in G0 v1.5.
+6. Slice J/O: DD-46/DD-47 (ScaffoldTrace/ScaffoldRail v1) and the Slice O1
+   fold-back rule in DD-43 — APPROVED by the user after Slice O and APPLIED
+   as G0 v1.6 (2026-11-06). Background (loop and branch policy, fixtures,
+   answers to the open questions) stays in
+   docs/architecture/scaffold_rail_trace_contract_draft.md.
 7. Slice L2: G0 DD-43 fixture-expectation amendment (one rail per fold line;
    no patch revisit) — APPLIED to G0 v1.5 by the agent under explicit user
    delegation (2026-09).
@@ -1533,10 +1529,16 @@ regressions):
 9. Next level after patch -> line -> island: ScaffoldRail over island lines
    with loop opening by island cuts — CHOSEN by the user (2026-11-06) and
    DONE as Slice O, including the O1 fold-back repair.
-10. Next, open: cross-island axis agreement through shared families; island
-   assembly without self-overlap (walls.007); curved runs inside Layer 3
-   lines (OQ-11, walls.010 arch); island lines taken directly from the
-   Layer 3 cut; the solve consuming island rail order and signs (the unwrap
-   along rails); branch resolution for the 4 unordered island rails —
-   PENDING.
+10. Next after Slice O — CHOSEN by the user (2026-11-06): patches outside
+   the rigid island frame. Measured on the 13 seamed objects: 10 patches
+   carry 60 of the 97 OBLIQUE runs (walls and walls.003 19 each, walls.009
+   22); 12 more sit on lines through curved runs and 25 are genuinely
+   oblique. The slice starts with a case analysis and then proposes a rule
+   for approval. Other candidates stay open: curved runs inside Layer 3
+   lines (OQ-11); island assembly without self-overlap (walls.007); the
+   solve consuming island rail order (provisional curved-island signs
+   already agree with the rails on all 8 lines); island lines taken from
+   the Layer 3 cut; branch resolution for the 4 unordered island rails.
+   Cross-island axis agreement has nothing to agree yet: no family spans
+   two islands on those objects.
 ```
