@@ -369,14 +369,18 @@ def test_t_vertex_wall_island_has_consistent_lines_and_axes() -> None:
     assert all(area > 0.0 for area in _pinned_face_areas(context, result))
 
 
-def test_warped_face_stays_outside_the_rigid_island_frame() -> None:
-    # A single warped n-gon has no rotation axis. It stays OBLIQUE with a
-    # diagnostic; the planar wall keeps the rigid frame and its axes.
+def _t_vertex_wall_with_warped_floor_a() -> SourceMeshSnapshot:
     source = make_t_vertex_wall_source()
     lifted = dict(source.vertices)
     corner = SourceVertexId("a0")
     lifted[corner] = MeshVertexRef(corner, (0.0, -1.0, 0.5))
-    result = _solve(replace(source, vertices=lifted))
+    return replace(source, vertices=lifted)
+
+
+def test_warped_face_stays_outside_the_rigid_island_frame() -> None:
+    # A single warped n-gon has no rotation axis. It stays OBLIQUE with a
+    # diagnostic; the planar wall keeps the rigid frame and its axes.
+    result = _solve(_t_vertex_wall_with_warped_floor_a())
 
     skeleton = result.skeletons[0]
     assert skeleton.frame == "UNFOLDED"
@@ -392,6 +396,28 @@ def test_warped_face_stays_outside_the_rigid_island_frame() -> None:
         if ":f_wall:" in run_id
     } == {"AXIS_A", "AXIS_B"}
     assert result.node_frame_mismatches == ()
+
+
+def test_rigid_seams_enter_the_island_tree_first() -> None:
+    # Plan Slice P: every seam of the T-vertex wall is one edge long, so the
+    # longest-seam-first tree used to reach the planar floor_b only through
+    # the warped floor_a, and both fell out of the rigid frame. The straight
+    # hinge e_w12 between the wall and floor_b is rigid and enters the tree
+    # first; the warped floor_a joins afterwards over one non-rigid seam.
+    result = _solve(_t_vertex_wall_with_warped_floor_a())
+    decisions = {decision.chain_id: decision for decision in result.assembly.decisions}
+    (skeleton,) = result.skeletons
+
+    assert len(result.assembly.islands) == 1
+    assert decisions["chain:e_w12"].accepted
+    assert [decisions[chain].accepted for chain in ("chain:e_a1", "chain:e_w01")].count(True) == 1
+    assert [d for d in skeleton.diagnostics if d.startswith("patch outside the rigid island frame")] == [
+        "patch outside the rigid island frame: patch:seed:f_floor_a -> OBLIQUE"
+    ]
+    floor_b_roles = {role for run_id, role in skeleton.axis_role_by_run.items() if ":f_floor_b:" in run_id}
+    assert floor_b_roles == {"AXIS_A", "AXIS_B"}
+    assert result.node_frame_mismatches == ()
+    assert result.rail_frame_conflicts == ()
 
 
 def test_curved_islands_keep_the_frame_free_derivation() -> None:

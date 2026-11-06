@@ -171,6 +171,15 @@ conflicts. Tier 3 records `island_rails`, `unordered_island_rails` and
 `rail_frame_conflicts` (O5). The solve does not use rail order yet; pins,
 Layer 5 diagnostics and OBLIQUE runs are unchanged.
 
+Plan Slice P (rigid seams first): the island tree takes straight hinges
+and coplanar joins between planar, unwarped patches before the other
+accepted seams, so a planar patch no longer hangs off a warped n-gon when
+it has a rigid seam to the frame. The tree and the rigid frame share one
+predicate (`islands.is_rigid_seam`). On buildings, patches outside the
+frame go 10 -> 5 (only warped n-gons remain), OBLIQUE runs 97 -> 65, pins
+6926 -> 6957 and Layer 5 diagnostics 36 -> 31; four seams swap between
+stitched and cut.
+
 Not implemented:
 
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
@@ -547,18 +556,16 @@ The user's goal for this stage is a consistent structure on the levels patch
 unwrap is only a test tool.
 
 Open decisions, all owned by the user (plan "Decisions the user must
-approve", items 3 and 10; item 6 is applied as G0 v1.6):
+approve", items 3 and 11; item 6 is applied as G0 v1.6):
 
-- Next slice, chosen by the user (2026-11-06): patches outside the rigid
-  island frame (10 patches carry 60 of the 97 OBLIQUE runs on the 13
-  seamed objects); it starts with a case analysis, then a proposed rule.
-  Other measured candidates: curved runs inside Layer 3 lines (OQ-11; 12
-  OBLIQUE runs); island assembly without self-overlap (walls.007); the
-  solve consuming island rail order (provisional curved-island signs
-  already agree with the rails on all 8 lines); island lines taken from
-  the Layer 3 cut; branch resolution for the 4 unordered island rails.
-  Cross-island axis agreement has nothing to agree yet: no family spans
-  two islands on those objects.
+- Next level (plan decision 11), measured after Slice P on the 13 seamed
+  objects: 5 warped n-gons (28 OBLIQUE runs); curved runs inside Layer 3
+  lines (OQ-11; 12 OBLIQUE runs); island assembly without self-overlap
+  (walls.007); the solve consuming island rail order (provisional
+  curved-island signs already agree with the rails on all 8 lines);
+  island lines taken from the Layer 3 cut; branch resolution for the 4
+  unordered island rails. Cross-island axis agreement has nothing to
+  agree yet: no family spans two islands on those objects.
 - DD-46/DD-47 ScaffoldTrace/ScaffoldRail: approved by the user and applied
   as G0 v1.6 (2026-11-06), together with the Slice O1 fold-back rule in
   DD-43.

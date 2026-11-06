@@ -23,6 +23,10 @@ islands.py   - island assembly: spanning tree of stitch decisions.
   mid-chain seam vertices tested |2pi - angle_sum| <= tolerance;
   chain endpoints excluded while they keep any remaining cut incidence
   (T-junction rule). SEAM_SELF always splits. Non-tree seams stay cut.
+  Tree-edge priority (plan Slice P): rigid seams first (a straight hinge
+  or a coplanar join between planar, unwarped patches; the same
+  predicate, is_rigid_seam, decides what the rigid frame crosses), then
+  the other accepted seams; longest first inside each group.
 
 skeleton.py  - selection-wide solve:
   nodes = ScaffoldNode UNION RunEndpointJunction (rail atoms);
@@ -87,7 +91,10 @@ islands.py:
   mid-chain would-be-interior vertices use Layer 2 angle sums;
   stitch endpoints are excluded while remaining cut incidence keeps
   them boundary (T-junction rule);
-  SEAM_SELF always splits and non-tree seams stay cut.
+  SEAM_SELF always splits and non-tree seams stay cut;
+  rigid seams enter the tree first (plan Slice P), so a planar patch
+  joins the rigid frame over a straight hinge whenever it has one
+  instead of hanging off a warped n-gon.
 
 skeleton.py:
   selection-wide skeleton solve over ScaffoldNode UNION
@@ -201,4 +208,9 @@ of one family. No island rail splits an island line or runs against the frame
 (rail_frame_conflicts 0). The fold-back repair (Slice O1) raised island
 lines 7606 -> 7646; pins, Layer 5 diagnostics and OBLIQUE runs are
 unchanged.
+
+After Slice P (2026-11) the island tree takes rigid seams first: patches
+outside the frame 10 -> 5 (only warped n-gons folded around a corner
+remain), OBLIQUE runs 97 -> 65, pins 6926 -> 6957, Layer 5 diagnostics
+36 -> 31; invariants and rail/frame conflicts stay 0.
 

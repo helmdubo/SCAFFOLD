@@ -1500,6 +1500,94 @@ regressions):
   gauge and tolerance items.
 ```
 
+## Slice P — Rigid seams first in the island tree (DONE, 2026-11)
+
+User decisions (2026-11-06):
+
+```text
+- Next slice after Slice O: patches outside the rigid island frame, starting
+  with a case analysis and a proposed rule.
+- Approved after the analysis: the rule "rigid seams first" in Layer 5
+  island assembly.
+```
+
+Case analysis (13 seamed buildings objects, after Slice O). 10 patches outside
+the rigid frame carried 60 of the 97 OBLIQUE runs:
+
+```text
+- 5 are warped n-gons: one face folded 90 degrees around a corner (walls
+  and walls.003 f1415 and f1352, walls.009 f715). They have no rigid
+  unfolding and stay outside the frame (28 OBLIQUE runs).
+- 5 are planar (walls and walls.003 f712; walls.009 f218, f664, f233). The
+  longest-seam-first tree reached them only through a warped n-gon, often
+  over its long L-shaped (bent) hinge. Each of them has a short straight
+  seam to a framed patch, and the tree had left that seam cut.
+```
+
+Rule: the island tree takes the rigid seams first, then the other accepted
+seams, longest first inside each group. A rigid seam is a straight hinge (the
+Layer 3 straight-hinge rule) or a coplanar join between two planar, unwarped
+patches.
+
+- The Level A gate and the seams it accepts are unchanged, so the islands
+  are the same; only which accepted seams become tree edges changes.
+- Semantic stitch preferences stay a Layer 4 placeholder.
+
+Implementation:
+
+- `layer_5_runtime/islands.py` now owns `SeamRigidity`, `seam_rigidity` and
+  `is_rigid_seam`. They hold patch planarity, warp and straight hinges, moved
+  from `skeleton.py`.
+- The island tree and the rigid frame (`skeleton._unfolded_frame`) use the
+  same predicate, so the tree never prefers a seam the frame cannot cross.
+- The frame rule itself is unchanged.
+
+Test: `test_rigid_seams_enter_the_island_tree_first`, on the T-vertex wall
+with a warped floor_a. Every seam there is one edge long, so floor_b used to
+hang off floor_a and both fell out of the frame. Now the straight hinge e_w12
+joins floor_b to the wall, floor_b enters the frame, and only floor_a stays
+outside. Each of these mutations is caught:
+
+- no rigid rank;
+- the rank reversed;
+- warp ignored;
+- the frame entering a warped child;
+- coplanar joins never rigid.
+
+Tier 3 (`buildings_seamed.json` rewritten and confirmed identical on a rerun):
+
+| Metric, 13 seamed objects | Slice O | Slice P |
+|---|---|---|
+| patches outside the frame | 10 | 5 |
+| OBLIQUE runs | 97 | 65 |
+| axis runs | 10117 | 10149 |
+| pins | 6926 | 6957 |
+| Layer 5 diagnostics | 36 | 31 |
+| written loops | 9597 | 9652 |
+| island lines / island rails | 7646 / 2094 | 7643 / 2097 |
+
+Changes by object:
+
+- walls, walls.003: outside 3 -> 2, OBLIQUE 31 -> 23, pins +8.
+- walls.009: outside 4 -> 1, OBLIQUE 29 -> 13, pins +15.
+
+Four accepted seams swap between stitched and cut, which adds one cut edge on
+each of walls, walls.003 and walls.009. Islands (62), rigid frames (60),
+unordered island rails (4) and lines not straight (5) are unchanged. Axis
+violations, seam mismatches, node/frame mismatches, rail/frame conflicts,
+opposite-side families and foreign loops stay 0. The in-repo captures do not
+change.
+
+Reviewer gate (independent agent): see the result below.
+
+Remaining after Slice P (inputs for later slices):
+
+```text
+- 5 warped n-gons (28 OBLIQUE runs): a face folded around a corner has no
+  rigid unfolding. Later options: user split marks (OQ-11) or a per-face
+  local frame.
+```
+
 ---
 
 ## Decisions the user must approve before the relevant slice
@@ -1529,16 +1617,19 @@ regressions):
 9. Next level after patch -> line -> island: ScaffoldRail over island lines
    with loop opening by island cuts — CHOSEN by the user (2026-11-06) and
    DONE as Slice O, including the O1 fold-back repair.
-10. Next after Slice O — CHOSEN by the user (2026-11-06): patches outside
-   the rigid island frame. Measured on the 13 seamed objects: 10 patches
-   carry 60 of the 97 OBLIQUE runs (walls and walls.003 19 each, walls.009
-   22); 12 more sit on lines through curved runs and 25 are genuinely
-   oblique. The slice starts with a case analysis and then proposes a rule
-   for approval. Other candidates stay open: curved runs inside Layer 3
-   lines (OQ-11); island assembly without self-overlap (walls.007); the
-   solve consuming island rail order (provisional curved-island signs
-   already agree with the rails on all 8 lines); island lines taken from
-   the Layer 3 cut; branch resolution for the 4 unordered island rails.
+10. Next after Slice O: patches outside the rigid island frame — CHOSEN by
+   the user (2026-11-06). The rule "rigid seams first" in the island tree
+   was APPROVED after the case analysis and is DONE as Slice P (outside
+   patches 10 -> 5, OBLIQUE runs 97 -> 65).
+11. Next, open (measured on the 13 seamed objects after Slice P):
+   - 5 warped n-gons (28 OBLIQUE runs);
+   - 12 OBLIQUE runs on 5 lines through curved runs (OQ-11);
+   - island assembly without self-overlap (walls.007);
+   - the solve consuming island rail order (provisional curved-island
+     signs already agree with the rails on all 8 lines);
+   - island lines taken from the Layer 3 cut;
+   - branch resolution for the 4 unordered island rails;
+   - 21 contradictory-equation diagnostics (unwrap level).
    Cross-island axis agreement has nothing to agree yet: no family spans
-   two islands on those objects.
+   two islands on those objects. — PENDING.
 ```
