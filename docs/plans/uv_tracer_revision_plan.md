@@ -1597,10 +1597,11 @@ nothing blocking.
     side) and the priority (rigid first with the warped patch second,
     longest first, id tiebreak).
   - 13 mutations, each caught.
-- Open, waits for the user (W1): the DD-47 consumer rule forbids Layer 5
-  to rebuild rail signs by local propagation, but islands without a rigid
-  frame still run the provisional frame-free derivation
-  (`skeleton._orientation_signs`, `_co_orient_axis_families`), which does.
+- W1: the DD-47 consumer rule forbids Layer 5 to rebuild rail signs by
+  local propagation, but islands without a rigid frame still run the
+  provisional frame-free derivation (`skeleton._orientation_signs`),
+  which does. User decision (2026-11-07): G0 v1.6 DD-47 records this as a
+  provisional exception; plan Slice Q removes it.
 
 Remaining after Slice P (inputs for later slices):
 
@@ -1655,5 +1656,12 @@ Remaining after Slice P (inputs for later slices):
    - branch resolution for the 4 unordered island rails;
    - 21 contradictory-equation diagnostics (unwrap level).
    Cross-island axis agreement has nothing to agree yet: no family spans
-   two islands on those objects. — PENDING.
+   two islands on those objects.
+   CHOSEN by the user (2026-11-07) as Slice Q, "Layer 5 on rails":
+   island lines come from the Layer 3 rail cut, and islands without a
+   rigid frame take their in-line run signs from the ordered island
+   segments; branches and uncut loops degrade with a diagnostic. It
+   removes the DD-47 provisional exception. The slice starts with a
+   measurement and brings the rule for approval. The other items stay
+   open.
 ```

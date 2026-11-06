@@ -568,6 +568,12 @@ approve", items 3 and 11; item 6 is applied as G0 v1.6):
   island lines taken from the Layer 3 cut; branch resolution for the 4
   unordered island rails. Cross-island axis agreement has nothing to
   agree yet: no family spans two islands on those objects.
+- Chosen next (2026-11-07): plan Slice Q, "Layer 5 on rails". Island
+  lines come from the Layer 3 rail cut, and islands without a rigid frame
+  take in-line run signs from the ordered island segments. Branches and
+  uncut loops degrade. The slice removes the DD-47 provisional
+  exception, and its rule comes to the user for approval after a
+  measurement.
 - DD-46/DD-47 ScaffoldTrace/ScaffoldRail: approved by the user and applied
   as G0 v1.6 (2026-11-06), together with the Slice O1 fold-back rule in
   DD-43.

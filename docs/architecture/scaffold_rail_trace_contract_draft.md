@@ -180,6 +180,13 @@ validation outputs (`SolveResult.rail_frame_conflicts`):
 The solve does not use rail order yet; the unwrap along rails is a later
 stage.
 
+Provisional exception (G0 v1.6 DD-47, approved 2026-11-07): an island
+without a rigid unfolded frame still takes its axis roles and in-line run
+signs from the provisional frame-free derivation
+(`skeleton._orientation_signs`); only the first check above applies to it.
+Plan Slice Q moves such islands onto island rail signs and removes the
+exception.
+
 When `ScaffoldRail` is absent, degraded, branch-ambiguous, or loop-ambiguous,
 G5a must:
 
