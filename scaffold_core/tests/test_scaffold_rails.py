@@ -232,6 +232,22 @@ def test_cut_rail_keeps_a_branch_unordered() -> None:
     assert set(segment.orientation_sign_by_member.values()) == {0}
 
 
+def test_cut_rail_lists_an_unordered_segment_by_station_id() -> None:
+    """A walked path whose member cannot be oriented lists stations by id, not walk order."""
+
+    family = _synthetic_family(_node_crossing("b", "a", "n1"), _node_crossing("a", "c", "n2"))
+    endpoints = {
+        "a": MemberTraceEndpoints("n9", "n2"),  # its link at n1 is not one of its ends
+        "b": MemberTraceEndpoints("n0", "n1"),
+        "c": MemberTraceEndpoints("n2", "n3"),
+    }
+
+    (segment,) = cut_scaffold_rail(family, endpoints, family.member_directional_evidence_ids, _all_chains(family))
+    assert not segment.is_ordered
+    assert segment.diagnostics == ("inconsistent_orientation:a",)
+    assert segment.ordered_station_member_ids == (("a",), ("b",), ("c",))
+
+
 def test_cut_rail_keeps_a_rail_that_returns_to_its_own_node_unordered() -> None:
     """A path of stations that comes back to a node it passed is not a line."""
 
@@ -293,6 +309,7 @@ def test_scaffold_rails_inspect_full_serializes_typed_records() -> None:
     consumable = next(rail for rail in serialized["scaffold_rails"] if rail["is_consumable_by_g5a"])
     assert "ordered_member_directional_evidence_ids" in consumable
     assert "ordered_station_member_ids" in consumable
+    assert all("ordered_station_member_ids" in trace for trace in serialized["scaffold_traces"])
     assert "orientation_sign_by_member" in consumable
     assert "crossing_records" in consumable
 

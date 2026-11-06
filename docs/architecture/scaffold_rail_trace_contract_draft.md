@@ -70,8 +70,9 @@ Layer 5.
 Each rail carries:
 
 - ordered directional-evidence member ids;
-- ordered stations (`ordered_station_member_ids`); in an ordered rail
-  station i is the step between trace nodes i and i + 1;
+- ordered stations (`ordered_station_member_ids`); in a consumable rail
+  station i is the step between trace nodes i and i + 1, and a branched or
+  looped rail lists its stations by station id;
 - ordered trace node ids;
 - first and last trace node ids;
 - closed-loop flag (the stations form one cycle);

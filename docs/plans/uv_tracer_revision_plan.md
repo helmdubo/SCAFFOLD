@@ -1349,9 +1349,10 @@ rails).
   sign comes from the trace nodes of the links before and after its station;
   a single station orients its uses against its first member.
 - Stations are explicit: ScaffoldTrace, ScaffoldRail and the cut segments
-  carry ordered_station_member_ids; in an ordered rail station i is the
-  step between trace nodes i and i + 1, so no consumer regroups the uses of
-  a hinge itself (added after the reviewer gate).
+  carry ordered_station_member_ids; in a consumable rail or an ordered
+  segment station i is the step between trace nodes i and i + 1, so no
+  consumer regroups the uses of a hinge itself (added after the reviewer
+  gate). Branched, looped or unordered views list stations by station id.
 - Unchanged: one trace and one rail per family, the consumable rule, and the
   coincident-endpoint and missing-member diagnostics. Branched and closed
   rails keep family order with zero signs.
@@ -1453,8 +1454,10 @@ families and foreign loops stay 0.
 
 Reviewer gate (independent agent): PASS WITH FIXES, nothing blocking. It
 confirmed that UVs, pins and diagnostics are identical before and after the
-slice on every fixture and capture, and that every mutation of O1-O4 logic
-it tried is caught. Fixed before landing:
+slice on every fixture and capture. Of the mutations of O1-O4 logic it
+tried, only two survived the suite (the trace-node branch threshold and the
+frame check wiring); they are the second and third items below. Fixed
+before landing:
 
 ```text
 - The rail did not name its stations, and the draft DD-46 sentence "a trace
@@ -1473,7 +1476,12 @@ it tried is caught. Fixed before landing:
 
 Each of the five matching mutations (both branch rules off, stations out of
 rail order, stations split into single members, the frame check unwired)
-is caught by exactly the new or updated tests.
+is caught by exactly the new or updated tests. Re-review of the fixes:
+PASS. Stations are consistent on all 672 rails and traces and 771 island
+segments of the fixtures and captures. Its last notes were applied: tests
+for station order in an unordered segment and for the serialized trace
+stations, and the one-step-per-station guarantee is stated for consumable
+rails and ordered segments only.
 
 Structure signals and deferred items (inputs for later slices, not
 regressions):
