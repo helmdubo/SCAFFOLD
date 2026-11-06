@@ -198,9 +198,10 @@ sides of a patch never share a family (plan Slice L2). In-patch geodesic
 continuation depends on the junction angle alone, and node crossings record
 the hinge Chain through their node (plan Slice N, G0 v1.5). A node crossing
 never folds back: after transport about the hinge its two runs leave the
-node in opposite directions (plan Slice O1, G0 v1.6). Layer 5 splits families into
-island lines at seams the island cuts, and checks them against the rails
-that the Layer 3 cut view orders for the island (plan Slice O). Known
+node in opposite directions (plan Slice O1, G0 v1.6). Layer 5 takes its
+island lines from the Layer 3 cut view of each family's rail by the island
+(plan Slices O, Q); an island without a rigid frame takes its in-line run
+signs from those rails. Known
 deferred gap: a run transported through a 90-degree
 corner ScaffoldNode may join an end patch's perimeter family; it is pinned by
 a strict xfail and waits for a future patch-normal filter. Do not add

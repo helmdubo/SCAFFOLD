@@ -108,12 +108,12 @@ Implemented:
 - RunEndpointJunction v0
 - Layer 5 v0 skeleton runtime:
   - `islands.py` spanning-tree Level A island assembly;
-  - `skeleton.py` selection-wide AXIS_A / AXIS_B solve over island lines
-    (families split at seams the island cuts); axes and run orientation from
-    the rigid unfolded island frame when no island patch is curved (plan
-    Slice N), frame-free provisional derivation for curved islands;
-    island rails cut by the Layer 3 cut view are checked against the
-    island lines and the frame (plan Slice O);
+  - `skeleton.py` selection-wide AXIS_A / AXIS_B solve over island lines,
+    which are the pieces of the Layer 3 rail cut by the island (plan
+    Slices O, Q); axes and run orientation from the rigid unfolded island
+    frame when no island patch is curved (plan Slice N); an island without
+    one takes in-line run signs from its ordered island rails (plan
+    Slice Q); the rails are checked against the frame (plan Slice O);
   - `pins.py` run_skeleton_solve output model and invariants (axis-parallel,
     SEAM_SELF length, node/frame and rail/line/frame agreement); pins are
     keyed by topology vertex occurrence (DD-37), so both sides of a seam keep
@@ -179,6 +179,13 @@ frame share one predicate (`islands.is_rigid_seam`). On buildings, patches
 outside the frame go 10 -> 5 (only warped n-gons remain), OBLIQUE runs
 97 -> 65, pins 6926 -> 6957 and Layer 5 diagnostics 36 -> 31; four seams
 swap between stitched and cut.
+
+Plan Slice Q (Layer 5 on rails): island lines are the pieces of the Layer
+3 rail cut, and an island without a rigid frame takes its in-line run
+signs from its ordered island rails; a run on an unordered rail stays
+unsigned with a diagnostic. Layer 5's own family split and head-to-tail
+sign walk are gone, and so is the DD-47 provisional exception. Results
+are identical on all 101 islands of the buildings and in-repo captures.
 
 Not implemented:
 
@@ -561,19 +568,9 @@ approve", items 3 and 11; item 6 is applied as G0 v1.6):
 - Next level (plan decision 11), measured after Slice P on the 13 seamed
   objects: 5 warped n-gons (28 OBLIQUE runs); curved runs inside Layer 3
   lines (OQ-11; 12 OBLIQUE runs); island assembly without self-overlap
-  (walls.007); the solve consuming island rail order (2 islands without a
-  rigid frame, Cube and walls.012; their provisional signs agree with the
-  island rails on both multi-run lines, and on all 6 in the in-repo artist
-  captures);
-  island lines taken from the Layer 3 cut; branch resolution for the 4
-  unordered island rails. Cross-island axis agreement has nothing to
-  agree yet: no family spans two islands on those objects.
-- Chosen next (2026-11-07): plan Slice Q, "Layer 5 on rails". Island
-  lines come from the Layer 3 rail cut, and islands without a rigid frame
-  take in-line run signs from the ordered island segments. Branches and
-  uncut loops degrade. The slice removes the DD-47 provisional
-  exception, and its rule comes to the user for approval after a
-  measurement.
+  (walls.007); branch resolution for the 4 unordered island rails.
+  Cross-island axis agreement has nothing to agree yet: no family spans
+  two islands on those objects. Plan Slice Q (Layer 5 on rails) is DONE.
 - DD-46/DD-47 ScaffoldTrace/ScaffoldRail: approved by the user and applied
   as G0 v1.6 (2026-11-06), together with the Slice O1 fold-back rule in
   DD-43.

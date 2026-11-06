@@ -1614,7 +1614,7 @@ Remaining after Slice P (inputs for later slices):
   local frame.
 ```
 
-## Slice Q — Layer 5 on rails (IN PROGRESS, 2026-11)
+## Slice Q — Layer 5 on rails (DONE, 2026-11)
 
 User decision (2026-11-07): next after Slice P, "Layer 5 on rails". The
 slice starts with a measurement and brings its rule for approval.
@@ -1636,6 +1636,41 @@ In-repo captures (scaffold_core/tests/data):
   whole-line opposite of the provisional sign, nowhere do they disagree
   inside a line.
 ```
+
+Rule (approved by the user, 2026-11-07):
+
+1. Island lines are the pieces of the Layer 3 rail cut by the island;
+   Layer 5's own family split (`skeleton._island_lines`) is removed. A line
+   id stays the family id plus the smallest member id of its piece.
+2. An island without a rigid frame takes its in-line run signs from its
+   ordered island rails; `skeleton._orientation_signs` (head-to-tail walk)
+   is removed. A run on an unordered island rail stays unsigned with the
+   diagnostic `unordered island rail: <line> -> unsigned` and adds no length
+   equation.
+3. The DD-47 provisional exception is removed (G0 v1.6, user-approved).
+
+Stays in Layer 5, because it is not rail order and rails do not supply it:
+the frame-free axis bipartition by local orthogonality and the
+co-orientation of parallel lines through their cross runs.
+
+Tests:
+
+- `test_frame_free_island_takes_lines_and_in_line_signs_from_its_rails`
+  (one rail sign flipped on the way out of the cut view; the island must
+  follow it, and every line is its segment);
+- `test_unordered_island_rail_stays_unsigned_in_a_frame_free_island`
+  (diagnostic, no sign, fewer equations).
+
+Mutations: 7 of 8 caught. The survivor drops the "signed runs only" guard
+of the co-orientation flip. It is equivalent: an unsigned line never links,
+so it is never flipped.
+
+Results: solve output (frame, roles, final signs, lines, coordinates,
+diagnostics) is identical before and after on all 101 islands of the 13
+buildings captures and the in-repo captures. On the three in-repo
+frame-free islands where a rail runs opposite to the old walk, the
+co-orientation restores the same final signs. Tier 3: baseline identical
+(13 objects, 0 errors).
 
 ---
 
@@ -1687,7 +1722,6 @@ In-repo captures (scaffold_core/tests/data):
    island lines come from the Layer 3 rail cut, and islands without a
    rigid frame take their in-line run signs from the ordered island
    segments; branches and uncut loops degrade with a diagnostic. It
-   removes the DD-47 provisional exception. The slice starts with a
-   measurement and brings the rule for approval. The other items stay
-   open.
+   removes the DD-47 provisional exception. Rule APPROVED after the
+   measurement and DONE. The other items stay open.
 ```

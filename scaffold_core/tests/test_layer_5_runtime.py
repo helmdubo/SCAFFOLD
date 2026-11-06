@@ -699,6 +699,71 @@ def test_framed_island_reports_an_island_rail_against_its_frame(monkeypatch) -> 
     )
 
 
+def test_frame_free_island_takes_lines_and_in_line_signs_from_its_rails(monkeypatch) -> None:
+    # Plan Slice Q: Layer 5 never orders a line itself. One sign of every
+    # ordered multi-run island rail is flipped on its way out of the Layer 3
+    # cut view; the frame-free island must follow the rail, while a
+    # head-to-tail walk of its own would ignore the flip.
+    import scaffold_core.layer_5_runtime.skeleton as skeleton_module
+
+    real_cut = skeleton_module.cut_scaffold_rail
+
+    def cut_with_one_sign_flipped(*args):
+        segments = []
+        for segment in real_cut(*args):
+            if segment.is_ordered and len(segment.ordered_member_directional_evidence_ids) > 1:
+                first = segment.ordered_member_directional_evidence_ids[0]
+                signs = dict(segment.orientation_sign_by_member)
+                signs[first] = -signs[first]
+                segment = replace(segment, orientation_sign_by_member=signs)
+            segments.append(segment)
+        return tuple(segments)
+
+    monkeypatch.setattr(skeleton_module, "cut_scaffold_rail", cut_with_one_sign_flipped)
+    result = _solve(make_cylinder_tube_without_caps_with_two_seams_source())
+    skeleton = result.skeletons[0]
+
+    assert skeleton.frame == "FRAME_FREE"
+    multi_run = [s for s in skeleton.rail_segments if len(s.ordered_member_directional_evidence_ids) > 1]
+    assert multi_run and all(segment.is_ordered for segment in multi_run)
+    for segment in skeleton.rail_segments:
+        members = segment.ordered_member_directional_evidence_ids
+        assert {skeleton.line_by_run[member] for member in members} == {
+            f"{segment.direction_family_id}@{min(members)}"
+        }
+        # Co-orientation between rails may flip a whole line, never one run.
+        assert len({
+            skeleton.orientation_by_run[member] * segment.orientation_sign_by_member[member]
+            for member in members
+        }) == 1
+
+
+def test_unordered_island_rail_stays_unsigned_in_a_frame_free_island(monkeypatch) -> None:
+    import scaffold_core.layer_5_runtime.skeleton as skeleton_module
+
+    baseline = _solve(make_cylinder_tube_without_caps_with_two_seams_source()).skeletons[0]
+    real_cut = skeleton_module.cut_scaffold_rail
+
+    def cut_with_multi_run_rails_unordered(*args):
+        return tuple(
+            replace(segment, is_ordered=False)
+            if len(segment.ordered_member_directional_evidence_ids) > 1 else segment
+            for segment in real_cut(*args)
+        )
+
+    monkeypatch.setattr(skeleton_module, "cut_scaffold_rail", cut_with_multi_run_rails_unordered)
+    skeleton = _solve(make_cylinder_tube_without_caps_with_two_seams_source()).skeletons[0]
+
+    unordered = [s for s in skeleton.rail_segments if not s.is_ordered]
+    assert unordered
+    for segment in unordered:
+        members = segment.ordered_member_directional_evidence_ids
+        assert f"unordered island rail: {skeleton.line_by_run[members[0]]} -> unsigned" in skeleton.diagnostics
+        assert not set(members) & set(skeleton.orientation_by_run)
+    equations = skeleton.axis_a.equation_count + skeleton.axis_b.equation_count
+    assert equations < baseline.axis_a.equation_count + baseline.axis_b.equation_count
+
+
 def test_node_frame_mismatch_names_a_node_whose_occurrences_sit_apart() -> None:
     from scaffold_core.layer_5_runtime.skeleton import (
         _IslandFrame,

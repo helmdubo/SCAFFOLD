@@ -38,8 +38,9 @@ skeleton.py  - selection-wide solve:
   spread safety: contradictory components -> UNCONSTRAINED, excluded,
   their vertices unpinned; residual reported;
   island rails: Layer 3 cuts each family's ScaffoldRail by the island
-  (its runs and stitched hinges) and orders the pieces; Layer 5 checks
-  them against the island lines and the frame and never orders a line.
+  (its runs and stitched hinges) and orders the pieces; the pieces are
+  the island lines (plan Slice Q), Layer 5 checks them against the frame
+  and never orders a line.
 
 pins.py      - output model: vertex -> (uv, pinned flag, island id).
 uv_transfer.py - the ONLY bpy write boundary (G5 rule): writes UVs+pins
@@ -73,9 +74,10 @@ Texel scale policy, packing, trim semantics, Layer 4 grammar,
 WorldOrientation, curved-chain refinement (OQ-11 remainder), and
 ScaffoldTrace/ScaffoldRail construction.
 
-G5a v0 has provisional rail order/sign derivation for the simple validated
-fixtures. That provisional logic must not be widened to compensate for
-missing ScaffoldTrace/ScaffoldRail by adding new rail-order, loop-orientation,
+Since plan Slice Q, G5a has no rail order or in-line sign derivation of its
+own: lines and the signs of islands without a rigid frame come from the
+island rails. Layer 5 must not compensate for a missing or unordered
+ScaffoldTrace/ScaffoldRail by adding new rail-order, loop-orientation,
 BFS/greedy traversal or sign-propagation heuristics inside Layer 5. If a
 fixture needs a direction-stable ordered rail or trace to solve, the correct
 G5a behavior is to diagnose/degrade and keep the behavior pinned until the
@@ -100,11 +102,10 @@ skeleton.py:
   selection-wide skeleton solve over ScaffoldNode UNION
   RunEndpointJunction atoms;
   one length equation per directional run endpoint pair;
-  island lines (plan Slice N): a ConnectedDirectionFamily keeps only
-  crossings inside one patch or through a hinge stitched in the island,
-  so a family that crosses a cut seam splits into several lines;
-  island rails (plan Slice O): the Layer 3 cut view cuts each family's
-  rail by the same rule and orders every piece through its stations, so
+  island lines and rails (plan Slices N, O, Q): the Layer 3 cut view
+  keeps only crossings inside one patch or through a hinge stitched in
+  the island, so a family that crosses a cut seam splits into several
+  lines, and it orders every piece through its stations, so
   a ring opens exactly at the seam the island leaves cut; branches and
   uncut loops stay unordered with diagnostics; IslandSkeleton.rail_segments
   holds the pieces, and the checks of invariant 6 go to
@@ -122,9 +123,11 @@ skeleton.py:
   unfolded direction (AXIS_A = longest island line, AXIS_B = root normal x
   AXIS_A, so islands are not mirrored); a line whose members disagree
   degrades to OBLIQUE with a diagnostic;
-  curved islands keep the provisional frame-free derivation (3D
-  perpendicularity at nodes, head-to-tail and co-orientation signs) over
-  island lines;
+  an island without a rigid frame bipartitions its lines into axes by 3D
+  perpendicularity at nodes, takes in-line run signs from its ordered
+  island rails (plan Slice Q; a run on an unordered rail stays unsigned
+  with a diagnostic and adds no equation) and co-orients parallel lines
+  through their cross runs;
   contradictions are excluded as UNCONSTRAINED with diagnostics.
 
 pins.py:
