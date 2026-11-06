@@ -1602,6 +1602,9 @@ nothing blocking.
   provisional frame-free derivation (`skeleton._orientation_signs`),
   which does. User decision (2026-11-07): G0 v1.6 DD-47 records this as a
   provisional exception; plan Slice Q removes it.
+- Re-review: PASS. One optional note: an island made only of warped
+  n-gons also has no rigid frame, so "(a curved island)" in the
+  exception is narrower than the code; the user-approved text is kept.
 
 Remaining after Slice P (inputs for later slices):
 
@@ -1609,6 +1612,29 @@ Remaining after Slice P (inputs for later slices):
 - 5 warped n-gons (28 OBLIQUE runs): a face folded around a corner has no
   rigid unfolding. Later options: user split marks (OQ-11) or a per-face
   local frame.
+```
+
+## Slice Q — Layer 5 on rails (IN PROGRESS, 2026-11)
+
+User decision (2026-11-07): next after Slice P, "Layer 5 on rails". The
+slice starts with a measurement and brings its rule for approval.
+
+Measurement (`scratchpad` probe over the island tree after Slice P):
+
+```text
+13 seamed buildings objects:
+- island lines 7643, Layer 3 cut segments 7643; every line, single-run
+  lines included, is exactly one segment; every run has a line.
+- 4 unordered segments (walls, walls.003, walls.009, walls.010), all in
+  islands with a rigid frame.
+- 2 islands without a rigid frame (Cube, walls.012), 13 lines, all with an
+  ordered segment whose sign agrees with the provisional sign.
+In-repo captures (scaffold_core/tests/data):
+- 532 lines = 532 segments, 0 unordered.
+- 3 islands without a rigid frame (artist_cross_band, artist_cyl32,
+  artist_cyl_multiseam), 24 lines; on one line of each the rail sign is the
+  whole-line opposite of the provisional sign, nowhere do they disagree
+  inside a line.
 ```
 
 ---
