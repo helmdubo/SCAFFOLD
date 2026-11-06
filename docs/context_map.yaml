@@ -120,10 +120,10 @@ task_routes:
     - docs/architecture/segmentation_shell_policy.md
   g2_geometry:
     - docs/phases/G2_geometry_facts.md
-    - docs/architecture/G0_full.md
+    - G0.md
   g3_relations:
     - docs/phases/G3_derived_relations.md
-    - docs/architecture/G0_full.md
+    - G0.md
   g5a_runtime:
     - docs/phases/G5a_skeleton_runtime.md
     - docs/agent_rules/blender_boundaries.md
@@ -190,7 +190,6 @@ task_routes:
   surface_flow_compatibility_evidence:
     - G0.md
     - docs/phases/G3_derived_relations.md
-    - docs/architecture/G0_full.md
     - docs/architecture/design_decisions.md
     - docs/agent_handoff.md
   scaffold_junction:
