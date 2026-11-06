@@ -587,6 +587,8 @@ def _node_crossings(
                 transport_dot = _transport_direction_dot(first_direction, second_direction, axis, signed_dihedral)
                 if transport_dot < DIRECTION_COMPATIBILITY_MIN_DOT:
                     continue
+                if _leaves_node_the_same_way(geometry, first, second, node.source_vertex_ids, axis, signed_dihedral):
+                    continue
                 confidence = min(first.confidence, second.confidence, first_sample.confidence, second_sample.confidence)
                 candidates.append(_CrossingCandidate(
                     first_directional_evidence_id=first.id,
@@ -769,6 +771,35 @@ def _local_signed_dihedral_for_samples(
         dot(normalized_axis, cross(first_normal, second_normal)),
         dot(first_normal, second_normal),
     )
+
+
+def _leaves_node_the_same_way(
+    geometry: GeometryFactSnapshot,
+    first: PatchChainDirectionalEvidence,
+    second: PatchChainDirectionalEvidence,
+    node_source_vertex_ids,
+    axis: Vector3,
+    signed_dihedral: float,
+) -> bool:
+    """Return whether a node pair folds back instead of continuing (DD-43/45).
+
+    Both directions point away from the node. After the transport a line that
+    continues through the node has them opposite; a fold-back, where one run
+    turns back over the other, has them equal. The run end at the node comes
+    from the node vertex: an endpoint sample's role may follow the PatchChain
+    traversal, which can run against the run direction.
+    """
+
+    away_directions = []
+    for evidence in (first, second):
+        at_start = evidence.start_source_vertex_id in node_source_vertex_ids
+        at_end = evidence.end_source_vertex_id in node_source_vertex_ids
+        if at_start == at_end:
+            return False
+        role = PatchChainEndpointRole.START if at_start else PatchChainEndpointRole.END
+        away_directions.append(_endpoint_local_direction(geometry, evidence, role))
+    transported = _rotate_around_axis(away_directions[0], axis, signed_dihedral)
+    return dot(normalize(transported), normalize(away_directions[1])) > 0.0
 
 
 def _endpoint_local_direction(

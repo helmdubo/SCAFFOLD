@@ -39,6 +39,7 @@ from scaffold_core.tests.fixtures.detached_parallel_walls import make_detached_p
 from scaffold_core.tests.fixtures.extruded_cross import make_extruded_cross_source
 from scaffold_core.tests.fixtures.l_corridor_tunnel import make_l_corridor_tunnel_seamed_folds_source
 from scaffold_core.tests.fixtures.l_corridor_tunnel import make_l_corridor_tunnel_single_patch_source
+from scaffold_core.tests.fixtures.reflex_corner import make_reflex_corner_walls_source
 from scaffold_core.tests.fixtures.single_patch import make_single_quad_source
 from scaffold_core.tests.fixtures.t_vertex_wall import make_t_vertex_wall_source
 from scaffold_core.tests.fixtures.tube_with_cap import make_tube_with_cap_source
@@ -431,6 +432,34 @@ def test_node_crossing_needs_a_hinge_through_its_node() -> None:
     assert _adjacency_through_node((first, second), (SourceVertexId("not_on_a_hinge"),), geometry) is None
 
 
+def test_node_crossing_never_folds_back_over_a_reflex_patch_corner() -> None:
+    """Wall A butts into the vertical edge of a notch in wall B (a reflex corner).
+
+    Unfolded about the hinge, A fills the notch: its top continues B's top
+    through the hinge top, but its bottom lies on B's notch bottom and points
+    back at the corner. A node crossing continues a line through its node, so
+    only the tops share a family.
+    """
+
+    relations = run_pass_1_relations(run_pass_0(make_reflex_corner_walls_source())).relation_snapshot
+    family_of = {
+        member: family.id
+        for family in relations.connected_direction_families
+        for member in family.member_directional_evidence_ids
+    }
+
+    def run_on(edge_name: str) -> str:
+        (run_id,) = (
+            evidence.id
+            for evidence in relations.patch_chain_directional_evidence
+            if SourceEdgeId(edge_name) in evidence.source_edge_ids
+        )
+        return run_id
+
+    assert family_of[run_on("e_a_top")] == family_of[run_on("e_b_top")]
+    assert family_of[run_on("e_a_bottom")] != family_of[run_on("e_b_notch_bottom")]
+
+
 def test_no_family_spans_opposite_patch_sides_on_any_fixture() -> None:
     sources = (
         make_l_corridor_tunnel_seamed_folds_source(),
@@ -444,6 +473,7 @@ def test_no_family_spans_opposite_patch_sides_on_any_fixture() -> None:
         make_capped_square_prism_all_seams_source(),
         make_t_vertex_wall_source(),
         make_t_vertex_wall_source(True, False),
+        make_reflex_corner_walls_source(),
         _load_artist_cross_band_source(),
         _load_artist_cyl32_source(),
         _load_source_snapshot("artist_cyl_multiseam.json"),
