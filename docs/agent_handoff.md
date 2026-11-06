@@ -173,12 +173,12 @@ Layer 5 diagnostics and OBLIQUE runs are unchanged.
 
 Plan Slice P (rigid seams first): the island tree takes straight hinges
 and coplanar joins between planar, unwarped patches before the other
-accepted seams, so a planar patch no longer hangs off a warped n-gon when
-it has a rigid seam to the frame. The tree and the rigid frame share one
-predicate (`islands.is_rigid_seam`). On buildings, patches outside the
-frame go 10 -> 5 (only warped n-gons remain), OBLIQUE runs 97 -> 65, pins
-6926 -> 6957 and Layer 5 diagnostics 36 -> 31; four seams swap between
-stitched and cut.
+accepted seams, so a planar patch no longer hangs off a warped n-gon when a
+path of rigid seams connects it to the frame root. The tree and the rigid
+frame share one predicate (`islands.is_rigid_seam`). On buildings, patches
+outside the frame go 10 -> 5 (only warped n-gons remain), OBLIQUE runs
+97 -> 65, pins 6926 -> 6957 and Layer 5 diagnostics 36 -> 31; four seams
+swap between stitched and cut.
 
 Not implemented:
 

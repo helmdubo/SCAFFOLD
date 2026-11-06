@@ -420,6 +420,57 @@ def test_rigid_seams_enter_the_island_tree_first() -> None:
     assert result.rail_frame_conflicts == ()
 
 
+def test_rigid_seam_is_a_straight_hinge_or_coplanar_join_of_planar_unwarped_patches() -> None:
+    from scaffold_core.layer_5_runtime.islands import SeamRigidity, is_rigid_seam
+
+    rigidity = SeamRigidity(
+        planar_patch_ids=frozenset({"a", "b", "c", "warped"}),
+        warped_patch_ids=frozenset({"warped"}),
+        straight_chain_ids=frozenset({"hinge"}),
+        normal_by_patch={
+            "a": (0.0, 0.0, 1.0),
+            "b": (0.0, 0.0, 0.5),  # patch normals need not be unit length
+            "c": (0.0, 1.0, 0.0),
+            "warped": (0.0, 0.0, 1.0),
+            "curved": (0.0, 0.0, 1.0),
+        },
+    )
+
+    assert is_rigid_seam(rigidity, "hinge", "a", "c")  # straight hinge at any angle
+    assert is_rigid_seam(rigidity, "bent", "a", "b")  # coplanar join over a bent chain
+    assert not is_rigid_seam(rigidity, "bent", "a", "c")  # bent hinge, no rotation axis
+    assert not is_rigid_seam(rigidity, "hinge", "a", "warped")
+    assert not is_rigid_seam(rigidity, "hinge", "curved", "a")  # not planar
+
+
+def test_tree_edge_priority_takes_rigid_seams_first_then_the_longest_then_by_id() -> None:
+    from scaffold_core.layer_5_runtime.islands import SeamRigidity, _tree_edge_priority
+
+    rigidity = SeamRigidity(
+        planar_patch_ids=frozenset({"wall", "floor", "lid"}),
+        warped_patch_ids=frozenset({"lid"}),
+        straight_chain_ids=frozenset({"short", "short_b", "long", "to_lid"}),
+        normal_by_patch={"wall": (0.0, -1.0, 0.0), "floor": (0.0, 0.0, 1.0), "lid": (0.0, 0.0, 1.0)},
+    )
+    topology = SimpleNamespace(chains={
+        "short": SimpleNamespace(source_edge_ids=("e1",)),
+        "short_b": SimpleNamespace(source_edge_ids=("e5",)),
+        "long": SimpleNamespace(source_edge_ids=("e1", "e2", "e3")),
+        "to_lid": SimpleNamespace(source_edge_ids=("e1", "e2", "e3", "e4")),
+    })
+    seams = [
+        SimpleNamespace(id="a0", chain_id="to_lid", first_patch_id="wall", second_patch_id="lid"),
+        SimpleNamespace(id="a3", chain_id="short_b", first_patch_id="floor", second_patch_id="wall"),
+        SimpleNamespace(id="a1", chain_id="short", first_patch_id="wall", second_patch_id="floor"),
+        SimpleNamespace(id="a2", chain_id="long", first_patch_id="floor", second_patch_id="wall"),
+    ]
+
+    ordered = sorted(seams, key=lambda seam: _tree_edge_priority(seam, rigidity, topology))
+    # The longest seam reaches the warped lid, so it comes last; inside the
+    # rigid group the longer hinge comes first, and equal lengths go by id.
+    assert [seam.id for seam in ordered] == ["a2", "a1", "a3", "a0"]
+
+
 def test_curved_islands_keep_the_frame_free_derivation() -> None:
     result = _solve(make_cylinder_tube_without_caps_with_two_seams_source())
 

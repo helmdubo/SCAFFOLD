@@ -93,7 +93,7 @@ islands.py:
   them boundary (T-junction rule);
   SEAM_SELF always splits and non-tree seams stay cut;
   rigid seams enter the tree first (plan Slice P), so a planar patch
-  joins the rigid frame over a straight hinge whenever it has one
+  with a path of rigid seams to the frame root joins the frame
   instead of hanging off a warped n-gon.
 
 skeleton.py:

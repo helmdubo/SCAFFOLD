@@ -1578,7 +1578,29 @@ violations, seam mismatches, node/frame mismatches, rail/frame conflicts,
 opposite-side families and foreign loops stay 0. The in-repo captures do not
 change.
 
-Reviewer gate (independent agent): see the result below.
+Reviewer gate (independent agent, Slice P with G0 v1.6): PASS WITH FIXES,
+nothing blocking.
+
+- Fixed, G0 v1.6 wording:
+  - DD-33: traces and rails are separate views over direction families
+    and run-endpoint junctions, not over ScaffoldGraph;
+  - DD-46: a member's vertices are the occurrences of its endpoint
+    samples by sample role (PatchChain traversal, not trace direction);
+  - DD-47: a loop opens at a cut the rail builder does not own (island
+    assembly is Layer 5, not a lower layer);
+  - OQ-11: only circuit construction stays unresolved.
+- Fixed, docs: a planar patch joins the frame only over a path of rigid
+  seams to the frame root (G5a, handoff).
+- Fixed, tests: the sort key is now `islands._tree_edge_priority`.
+  - Unit tests cover `is_rigid_seam` (straight hinge, coplanar join with a
+    non-unit normal, bent hinge, a warped or non-planar patch on either
+    side) and the priority (rigid first with the warped patch second,
+    longest first, id tiebreak).
+  - 13 mutations, each caught.
+- Open, waits for the user (W1): the DD-47 consumer rule forbids Layer 5
+  to rebuild rail signs by local propagation, but islands without a rigid
+  frame still run the provisional frame-free derivation
+  (`skeleton._orientation_signs`, `_co_orient_axis_families`), which does.
 
 Remaining after Slice P (inputs for later slices):
 

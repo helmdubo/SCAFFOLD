@@ -133,11 +133,7 @@ def build_islands(context: Any) -> IslandAssembly:
     # preferences belong to the future Layer 4 grammar.
     adjacencies = sorted(
         relations.patch_adjacencies.values(),
-        key=lambda item: (
-            not is_rigid_seam(rigidity, str(item.chain_id), str(item.first_patch_id), str(item.second_patch_id)),
-            -_chain_edge_count(topology, item.chain_id),
-            str(item.id),
-        ),
+        key=lambda item: _tree_edge_priority(item, rigidity, topology),
     )
     for adjacency in adjacencies:
         chain_id = str(adjacency.chain_id)
@@ -181,6 +177,15 @@ def build_islands(context: Any) -> IslandAssembly:
         for patch_id in members[root]:
             island_by_patch[patch_id] = island_id
     return IslandAssembly(tuple(islands), tuple(decisions), island_by_patch)
+
+
+def _tree_edge_priority(adjacency, rigidity: SeamRigidity, topology) -> tuple[bool, int, str]:
+    """Rigid seams first (plan Slice P), longest seam first inside each group, then by id."""
+
+    rigid = is_rigid_seam(
+        rigidity, str(adjacency.chain_id), str(adjacency.first_patch_id), str(adjacency.second_patch_id)
+    )
+    return (not rigid, -_chain_edge_count(topology, adjacency.chain_id), str(adjacency.id))
 
 
 def _gate(source, topology, chain_id, angle_by_source_vertex, cut_chains_by_vertex, border_vertices):
