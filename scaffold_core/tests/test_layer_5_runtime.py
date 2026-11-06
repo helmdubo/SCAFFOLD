@@ -10,9 +10,12 @@ Rules:
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from scaffold_core.ids import SourceEdgeId, SourceFaceId, SourceMeshId, SourceVertexId
 from scaffold_core.layer_0_source.marks import SourceMark, SourceMarkKind
@@ -22,7 +25,9 @@ from scaffold_core.layer_0_source.snapshot import (
     MeshVertexRef,
     SourceMeshSnapshot,
 )
-from scaffold_core.layer_5_runtime.pins import run_skeleton_solve
+from scaffold_core.layer_5_runtime.islands import IslandAssembly
+from scaffold_core.layer_5_runtime.pins import PinnedVertex, SolveResult, run_skeleton_solve
+from scaffold_core.layer_5_runtime.uv_transfer import write_pinned_uvs
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.bent_hinge import make_bent_hinge_panels_source
 from scaffold_core.tests.fixtures.capped_prism import (
@@ -32,6 +37,7 @@ from scaffold_core.tests.fixtures.capped_prism import (
 from scaffold_core.tests.fixtures.cylinder_tube import (
     make_cylinder_tube_without_caps_with_one_seam_source,
     make_cylinder_tube_without_caps_with_two_seams_source,
+    make_segmented_cylinder_tube_without_caps_with_one_seam_source,
 )
 from scaffold_core.tests.fixtures.detached_parallel_walls import (
     make_detached_parallel_walls_source,
@@ -388,7 +394,7 @@ def test_closed_rim_cut_by_self_seam_splits_only_at_the_seam() -> None:
     # Each rim end sits on its own seam side, so the band's vertical edges
     # stay columns: top and bottom ends share u (a swapped side mirrors the
     # bottom row with zero residual and zero diagnostics).
-    band_uv = {vertex.source_vertex_id: vertex.uv for vertex in result.vertices if vertex.patch_id == "patch:seed:f1"}
+    band_uv = {vertex.vertex_id: vertex.uv for vertex in result.vertices if vertex.patch_id == "patch:seed:f1"}
     source = context.source_snapshot
     columns = 0
     for face_id in context.topology_snapshot.patches["patch:seed:f1"].source_face_ids:
@@ -399,10 +405,13 @@ def test_closed_rim_cut_by_self_seam_splits_only_at_the_seam() -> None:
                 for start, end in zip(source.vertices[first].position, source.vertices[second].position)
             ]
             vertical = abs(delta[2]) >= 0.9 * sum(value * value for value in delta) ** 0.5
-            if not vertical or str(first) not in band_uv or str(second) not in band_uv:
+            # Each face corner reads the pin of its own seam side (occurrence).
+            first_uv = band_uv.get(result.vertex_by_face_corner[(str(face_id), str(first))])
+            second_uv = band_uv.get(result.vertex_by_face_corner[(str(face_id), str(second))])
+            if not vertical or first_uv is None or second_uv is None:
                 continue
             columns += 1
-            assert abs(band_uv[str(first)][0] - band_uv[str(second)][0]) < 1e-6, edge_id
+            assert abs(first_uv[0] - second_uv[0]) < 1e-6, edge_id
     assert columns >= 10
 
 
@@ -506,6 +515,138 @@ def test_node_frame_mismatch_names_a_node_whose_occurrences_sit_apart() -> None:
     assert _node_frame_mismatches(frame(0.5), runs, node_by_run_end, positions) == ("node:v",)
 
 
+def test_self_seam_sides_keep_their_own_pins() -> None:
+    # One patch cut by one seam: each seam vertex has one topology occurrence
+    # per seam side (DD-37), and the solve places the two sides at the two ends
+    # of the unrolled band. Pins keyed by (source vertex, patch) kept only one
+    # of them (plan Slice N, deferred unwrap-level finding).
+    result = _solve(make_cylinder_tube_without_caps_with_one_seam_source())
+
+    band_length = 4.0 * 2.0 ** 0.5
+    for source_vertex in ("v0", "v4"):
+        pins = [vertex for vertex in result.vertices if vertex.source_vertex_id == source_vertex]
+        assert len(pins) == 2, source_vertex
+        assert pins[0].vertex_id != pins[1].vertex_id
+        assert abs(abs(pins[0].uv[0] - pins[1].uv[0]) - band_length) < 1e-6
+    # f0 and f3 lie on the two sides of the seam edge v0-v4: each side's pins
+    # form one straight column of the band.
+    pin_by_vertex = {(vertex.vertex_id, vertex.patch_id): vertex for vertex in result.vertices}
+    for face_id in ("f0", "f3"):
+        patch_id = result.patch_by_source_face[face_id]
+        top, bottom = (
+            pin_by_vertex[(result.vertex_by_face_corner[(face_id, source_vertex)], patch_id)]
+            for source_vertex in ("v0", "v4")
+        )
+        assert abs(top.uv[0] - bottom.uv[0]) < 1e-6, face_id
+
+
+@pytest.mark.parametrize("mode", ("OBJECT", "EDIT"))
+def test_uv_write_puts_each_seam_side_loop_on_its_own_side(monkeypatch, mode: str) -> None:
+    # A loop never takes another occurrence's UV: the band unrolls exactly, so
+    # every face keeps its 3D edge lengths in UV. A seam loop at the other
+    # side's place would stretch its face across the whole band.
+    source = make_cylinder_tube_without_caps_with_one_seam_source()
+    written = _write_with_fake_bmesh(monkeypatch, source, _solve(source), mode)
+
+    for face_id, face in source.faces.items():
+        corners = face.vertex_ids
+        for index, first in enumerate(corners):
+            second = corners[(index + 1) % len(corners)]
+            first_uv, second_uv = written[(str(face_id), str(first))], written[(str(face_id), str(second))]
+            assert first_uv.pin_uv and second_uv.pin_uv
+            uv_length = sum((a - b) ** 2 for a, b in zip(first_uv.uv, second_uv.uv)) ** 0.5
+            mesh_length = sum(
+                (a - b) ** 2 for a, b in zip(source.vertices[first].position, source.vertices[second].position)
+            ) ** 0.5
+            assert abs(uv_length - mesh_length) < 1e-6, (face_id, first, second)
+    assert written[("f0", "v0")].uv != written[("f3", "v0")].uv
+
+
+@pytest.mark.parametrize("mode", ("OBJECT", "EDIT"))
+def test_uv_write_never_borrows_a_pin_from_another_patch(monkeypatch, mode: str) -> None:
+    # The two 32-gon caps of artist_cyl32 are islands without pins of their
+    # own. Their loops used to take the band's rim pins (another island), which
+    # laid each cap onto the band's rim row. A loop without a pin of its own
+    # stays unpinned and untouched for U > Unwrap.
+    source = _load_capture("artist_cyl32.json")
+    result = _solve(source)
+    own_pins = {(vertex.source_vertex_id, vertex.patch_id) for vertex in result.vertices}
+    written = _write_with_fake_bmesh(monkeypatch, source, result, mode)
+
+    without_own_pin = [
+        (face_id, vertex_id)
+        for face_id, vertex_id in written
+        if (vertex_id, result.patch_by_source_face[face_id]) not in own_pins
+    ]
+    assert len(without_own_pin) == 64  # every rim corner of both caps
+    for corner in without_own_pin:
+        assert written[corner].pin_uv is False and written[corner].uv is None, corner
+
+
+@pytest.mark.parametrize("mode", ("OBJECT", "EDIT"))
+def test_uv_write_never_borrows_a_pin_inside_the_island(monkeypatch, mode: str) -> None:
+    # Hand-built solve output: patches P and Q of one island share source
+    # vertex v1 (f0 in P, f1 in Q), and only P has a pin there, as when Q's own
+    # solve node at v1 lacks an axis coordinate. The solve never glued Q's
+    # corner to P's node, so Q's loop stays unpinned (the Tier 3 case of plan
+    # Task Card M2).
+    pin = PinnedVertex(
+        source_vertex_id="v1", island_id="island:0", patch_id="P", uv=(1.0, 2.0), pinned=True, vertex_id="vertex:v1"
+    )
+    result = SolveResult(
+        assembly=IslandAssembly(islands=(), decisions=(), island_by_patch_id={"P": "island:0", "Q": "island:0"}),
+        skeletons=(),
+        vertices=(pin,),
+        residual_max=0.0,
+        axis_parallel_violations=(),
+        seam_length_mismatches=(),
+        diagnostics=(),
+        patch_by_source_face={"f0": "P", "f1": "Q"},
+        vertex_by_face_corner={("f0", "v1"): "vertex:v1", ("f1", "v1"): "vertex:v1"},
+    )
+    tube = make_cylinder_tube_without_caps_with_one_seam_source()  # faces f0 and f1 share v1
+    written = _write_with_fake_bmesh(monkeypatch, tube, result, mode)
+
+    assert written[("f0", "v1")].pin_uv is True and written[("f0", "v1")].uv == (1.0, 2.0)
+    assert written[("f1", "v1")].pin_uv is False and written[("f1", "v1")].uv is None
+
+
+def test_pinch_vertex_keeps_its_pin_on_both_boundary_passes(monkeypatch) -> None:
+    # Without seams the patch touches itself at v5 (f1 and f3 meet only
+    # there), so v5 has one occurrence per boundary pass (DD-37). The run's own
+    # edges tell the passes apart: both loops keep the pin of their one solve
+    # node, and no seam-cut diagnostic fires.
+    source = _pinched_grid_source()
+    result = _solve(source)
+    written = _write_with_fake_bmesh(monkeypatch, source, result, "OBJECT")
+
+    assert not any("seam-cut" in diagnostic for diagnostic in result.diagnostics)
+    assert result.vertex_by_face_corner[("f1", "v5")] != result.vertex_by_face_corner[("f3", "v5")]
+    assert written[("f1", "v5")].pin_uv and written[("f3", "v5")].pin_uv
+    assert written[("f1", "v5")].uv == written[("f3", "v5")].uv
+
+
+def test_seam_cut_mid_chain_vertex_stays_unpinned_with_diagnostics() -> None:
+    # A kinked self-seam splits into two runs at a mid-chain vertex that has
+    # one occurrence per seam side, and the two sides solve to different UVs.
+    # The run's own seam edge has both sides' faces, so the run end does not
+    # name its side: both sides stay unpinned with a diagnostic instead of
+    # sharing one pin.
+    source = make_segmented_cylinder_tube_without_caps_with_one_seam_source()
+    kink = SourceVertexId("v_a_m")
+    vertices = dict(source.vertices)
+    vertices[kink] = MeshVertexRef(kink, (1.5, 0.0, 1.0))
+    result = _solve(replace(source, vertices=vertices))
+
+    unresolved = [
+        diagnostic
+        for diagnostic in result.diagnostics
+        if diagnostic.startswith("run end on a seam-cut mid-chain vertex touches both seam sides")
+    ]
+    assert len(unresolved) == 4  # two run ends meet at the kink on each seam side
+    assert not any(vertex.source_vertex_id == "v_a_m" for vertex in result.vertices)
+
+
 def _pinned_face_areas(context, result) -> list[float]:
     uv_by_vertex_patch = {
         (vertex.source_vertex_id, vertex.patch_id): vertex.uv
@@ -527,3 +668,80 @@ def _pinned_face_areas(context, result) -> list[float]:
                 for index in range(len(points))
             ))
     return areas
+
+
+def _pinched_grid_source() -> SourceMeshSnapshot:
+    """Planar 3x3 quad grid without cells f0 and f4: f1 and f3 touch only at v5.
+
+    Blender-style ids (v<i + 4j>, f<i + 3j>) so the fake BMesh can write it.
+    """
+
+    vertices, edges, faces = {}, {}, {}
+    for j in range(3):
+        for i in range(3):
+            if i + 3 * j in (0, 4):
+                continue
+            corners = ((i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1))
+            ids = tuple(SourceVertexId(f"v{a + 4 * b}") for a, b in corners)
+            for vertex_id, (a, b) in zip(ids, corners):
+                vertices[vertex_id] = MeshVertexRef(vertex_id, (float(a), float(b), 0.0))
+            edge_ids = []
+            for pair in (tuple(sorted(pair)) for pair in zip(ids, ids[1:] + ids[:1])):
+                edge_id = SourceEdgeId(f"e_{pair[0]}_{pair[1]}")
+                edges.setdefault(edge_id, MeshEdgeRef(edge_id, pair))
+                edge_ids.append(edge_id)
+            face_id = SourceFaceId(f"f{i + 3 * j}")
+            faces[face_id] = MeshFaceRef(face_id, ids, tuple(edge_ids))
+    return SourceMeshSnapshot(
+        id=SourceMeshId("pinched_grid"),
+        vertices=vertices,
+        edges=edges,
+        faces=faces,
+        selected_face_ids=tuple(faces),
+        marks=(),
+    )
+
+
+class _FakeLoop:
+    """BMesh loop stand-in: loop[uv_layer] is this loop's UV data."""
+
+    def __init__(self, vertex_index: int) -> None:
+        self.vert = SimpleNamespace(index=vertex_index)
+        self.uv_data = SimpleNamespace(uv=None, pin_uv=None)
+
+    def __getitem__(self, uv_layer):
+        return self.uv_data
+
+
+class _FakeFaces(list):
+    def ensure_lookup_table(self) -> None:
+        pass
+
+
+def _write_with_fake_bmesh(monkeypatch, source, result, mode: str) -> dict:
+    """Run the real uv_transfer write on a fake BMesh; UV data per (face, vertex)."""
+
+    faces = _FakeFaces(
+        SimpleNamespace(
+            index=int(str(face_id)[1:]),
+            loops=[_FakeLoop(int(str(vertex_id)[1:])) for vertex_id in face.vertex_ids],
+        )
+        for face_id, face in source.faces.items()
+    )
+    bm = SimpleNamespace(
+        faces=faces,
+        loops=SimpleNamespace(layers=SimpleNamespace(uv=SimpleNamespace(verify=lambda: "uv"))),
+        from_mesh=lambda mesh: None,
+        to_mesh=lambda mesh: None,
+        free=lambda: None,
+    )
+    monkeypatch.setitem(sys.modules, "bpy", SimpleNamespace())
+    monkeypatch.setitem(sys.modules, "bmesh", SimpleNamespace(
+        new=lambda: bm,
+        from_edit_mesh=lambda mesh: bm,
+        update_edit_mesh=lambda mesh: None,
+    ))
+    mesh_object = SimpleNamespace(type="MESH", mode=mode, data=SimpleNamespace(update=lambda: None))
+    write_pinned_uvs(SimpleNamespace(object=mesh_object), result)
+    # uv_transfer names Blender elements like blender_io: f<index>, v<index>.
+    return {(f"f{face.index}", f"v{loop.vert.index}"): loop.uv_data for face in faces for loop in face.loops}

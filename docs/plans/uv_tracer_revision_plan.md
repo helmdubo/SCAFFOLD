@@ -1212,18 +1212,78 @@ Deferred, unwrap level (the concrete unwrap along rails is a later stage):
   This refutes the old hypothesis that their 0 pins come from singleton
   orientation signs: exact signs from the frame leave the same 5
   contradictions per axis.
-- uv_transfer._pinned_for falls back to another patch's pin of the same
-  source vertex; on buildings every such loop (669) lands at the other seam
-  side's place inside the island.
-- pins.PinnedVertex is keyed by (source vertex, patch), so the two seam-side
-  occurrences of a SEAM_SELF band collapse into one pin: the solve gives two
-  UVs per seam vertex on the one-seam tube and artist_cross_band, the write
-  keeps one and puts it on both sides' loops. This contradicts the G5a claim
-  that duplicated seam occurrences keep both UVs (found by the Slice N
-  reviewer; pre-existing).
+- RESOLVED by Task Card M2 below: uv_transfer._pinned_for fell back to
+  another patch's pin of the same source vertex, and pins.PinnedVertex was
+  keyed by (source vertex, patch), so the two seam-side occurrences of a
+  SEAM_SELF band collapsed into one pin (found by the Slice N reviewer;
+  pre-existing).
 - island assembly: the Level A spanning tree accepts self-overlapping
   unfoldings (walls.007 facade and back side over each other).
 ```
+
+### Task Card M2 — Pins keep their own vertex occurrence (DONE, bug fix)
+
+One root cause for both deferred findings: pin identity was the source vertex
+per patch, not the topology vertex occurrence (DD-37). On the one-seam tube and
+artist_cross_band the solve gives two UVs per seam vertex (one per seam side),
+but only one pin survived and the write put it on both sides' loops; the
+tube's written seam column came out sheared. The G5a claim that duplicated
+seam occurrences keep both UVs was false until this card.
+
+Minimal patch, no traversal heuristic:
+
+```text
+- skeleton._node_map also returns the occurrence it already picks for each
+  run end (IslandSkeleton.vertex_by_run_end): a chain end sits on its
+  PatchChain end occurrence (Slice N face-fan rule for closed rims); at a
+  mid-chain vertex the same face-fan rule applies: the occurrence whose fan
+  holds the faces on the run's own edges, so a boundary pinch keeps one
+  occurrence per pass. A seam cutting a mid-chain vertex puts both sides'
+  faces on the run's seam edge and the run end does not name its side: it
+  stays unpinned with a diagnostic (no such vertex in the in-repo fixtures,
+  the captures or the 13 buildings objects).
+- pins: PinnedVertex.vertex_id; pins are keyed by (occurrence, patch);
+  SolveResult.vertex_by_face_corner maps (face, source vertex) to the
+  corner's own occurrence from the Layer 2 patch-side face fans.
+- uv_transfer: a loop takes only the pin of its own corner occurrence in
+  its own patch. The fallback to another patch's pin is gone; a loop
+  without its own pin stays unpinned for U > Unwrap, as pins.py already
+  requires for vertices without both axis coordinates.
+```
+
+Tests (fail before the patch): the one-seam tube keeps both seam-side pins
+as two straight columns; the real write boundary on a fake BMesh (Object and
+Edit Mode) unrolls the tube exactly, leaves the artist_cyl32 caps (islands
+without pins, 64 rim loops) unpinned and, on a hand-built solve output,
+never gives a loop another patch's pin of the same island; a kinked
+self-seam leaves its seam-cut mid-chain vertex unpinned with 4 diagnostics;
+a pinched grid keeps its pin on both boundary passes of the pinch vertex.
+
+Reviewer gate (independent agent): WARNING, non-blocking. Fixed before
+landing: a first "single occurrence per patch" rule for mid-chain vertices
+dropped the correct pins of a seamless boundary pinch under a misleading
+"seam-cut" diagnostic; the face-fan rule above restores them. Added: the
+hand-built same-island write test, because every in-repo fallback crossed
+islands and a same-island-only fallback survived the suite (now caught).
+
+Tier 3 (`buildings_seamed.json` rewritten, 9 fields):
+
+| Object | before -> after |
+|---|---|
+| Cube | pinned 40 -> 42: the second side of a SEAM_SELF band keeps its own pins; 2 loops move to their own side, written loops stay 72 |
+| walls, walls.003 | written/pinned loops 3407 -> 3104 each |
+| walls.009 | written/pinned loops 2084 -> 2008 |
+| walls.010 | written/pinned loops 744 -> 720 |
+
+A per-corner replay of the old and new lookups on captures of the 13 objects
+accounts for every difference. The 706 loops no longer written (303 + 303 +
+76 + 24; the Slice N review recorded 669, not reproduced at this head) are
+all fallback loops: each
+corner's own solve node lacks an axis coordinate, and the fallback gave it
+the pin of another patch's node in the same island. The other 9595 written
+loops are unchanged, and no loop gains a pin. Axis violations, seam
+mismatches, node/frame mismatches, opposite-side families and foreign loops
+stay 0.
 
 ---
 

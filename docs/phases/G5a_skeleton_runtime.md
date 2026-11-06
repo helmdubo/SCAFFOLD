@@ -106,13 +106,19 @@ skeleton.py:
 
 pins.py:
   run_skeleton_solve() orchestrates islands -> skeleton -> pinned UVs;
-  per-patch pins preserve duplicated seam occurrences;
+  pins are keyed by topology vertex occurrence (DD-37), so the two sides of
+  a seam keep their own UV (plan Task Card M2); a run end on a seam-cut
+  mid-chain vertex touches both seam sides and stays unpinned with a
+  diagnostic;
   axis-parallel, SEAM_SELF length and node/frame checks are validation
   outputs.
 
 uv_transfer.py:
   writes UV coordinates and pin flags only, and only on faces of the solved
   selection (Slice M1: faces outside it are never touched);
+  a loop takes only the pin of its own vertex occurrence in its own patch,
+  found through the face corner's Layer 2 face fan; there is no fallback to
+  another patch's pin (Task Card M2);
   uses bmesh in Edit Mode and Object Mode (from_edit_mesh / from_mesh);
   calls no bpy operators and performs no automatic unwrap.
 ```

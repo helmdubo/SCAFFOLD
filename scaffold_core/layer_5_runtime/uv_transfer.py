@@ -30,15 +30,13 @@ def write_pinned_uvs(blender_context: Any, result: SolveResult) -> dict[str, Any
     mesh = mesh_object.data
 
     by_vertex_patch = {
-        (vertex.source_vertex_id, vertex.patch_id): vertex for vertex in result.vertices
+        (vertex.vertex_id, vertex.patch_id): vertex for vertex in result.vertices
     }
-    by_vertex: dict[str, Any] = {}
-    for vertex in result.vertices:
-        by_vertex.setdefault(vertex.source_vertex_id, vertex)
 
-    def _pinned_for(vertex_index: int, face_patch: str | None):
-        key = f"v{vertex_index}"
-        return by_vertex_patch.get((key, face_patch)) or by_vertex.get(key)
+    def _pinned_for(face_index: int, vertex_index: int, face_patch: str | None):
+        # Only the loop's own occurrence: never another seam side's or patch's pin.
+        corner = (f"f{face_index}", f"v{vertex_index}")
+        return by_vertex_patch.get((result.vertex_by_face_corner.get(corner), face_patch))
 
     written = 0
     if mesh_object.mode == "EDIT":
@@ -49,7 +47,7 @@ def write_pinned_uvs(blender_context: Any, result: SolveResult) -> dict[str, Any
             if face_patch is None:
                 continue  # outside the solved selection: never touch its loops
             for loop in face.loops:
-                pinned = _pinned_for(loop.vert.index, face_patch)
+                pinned = _pinned_for(face.index, loop.vert.index, face_patch)
                 if pinned is None:
                     loop[uv_layer].pin_uv = False
                     continue
@@ -68,7 +66,7 @@ def write_pinned_uvs(blender_context: Any, result: SolveResult) -> dict[str, Any
                 if face_patch is None:
                     continue  # outside the solved selection: never touch its loops
                 for loop in face.loops:
-                    pinned = _pinned_for(loop.vert.index, face_patch)
+                    pinned = _pinned_for(face.index, loop.vert.index, face_patch)
                     if pinned is None:
                         loop[uv_layer].pin_uv = False
                         continue
