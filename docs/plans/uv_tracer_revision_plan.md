@@ -1348,15 +1348,23 @@ rails).
 - Order and signs: walk the stations from the smallest leaf. Each member's
   sign comes from the trace nodes of the links before and after its station;
   a single station orients its uses against its first member.
+- Stations are explicit: ScaffoldTrace, ScaffoldRail and the cut segments
+  carry ordered_station_member_ids; in an ordered rail station i is the
+  step between trace nodes i and i + 1, so no consumer regroups the uses of
+  a hinge itself (added after the reviewer gate).
 - Unchanged: one trace and one rail per family, the consumable rule, and the
   coincident-endpoint and missing-member diagnostics. Branched and closed
   rails keep family order with zero signs.
+- Dropped from v0: the multiple_crossings diagnostic (duplicate crossings
+  between two stations at one node merge into one link; at two nodes they
+  form a closed loop of two stations) and copying the family's member-level
+  branch_records into the rail (branches are counted on stations now).
 ```
 
 Tests: `test_fold_line_rail_is_one_station_of_both_hinge_uses` (beveled
 corner) and `test_rail_orders_hinge_stations_through_their_node` (T-vertex
-wall: two stations linked at w1). All Slice J rail tests stay unchanged and
-green.
+wall: two stations linked at w1, each one step between consecutive trace
+nodes). All Slice J rail tests stay green.
 
 ### Task Card O3 — Rail cut by a given structural cut (DONE, Layer 3)
 
@@ -1376,7 +1384,12 @@ Tests:
 - `test_cut_rail_opens_a_loop_only_where_the_cut_is` (two-seam tube): both
   seams kept -> closed loop; one -> one ordered segment; none -> two ordered
   halves.
-- `test_cut_rail_keeps_a_branch_unordered`.
+- `test_cut_rail_keeps_a_branch_unordered` (a station with three links).
+- `test_cut_rail_keeps_a_rail_that_returns_to_its_own_node_unordered` and
+  `test_cut_rail_names_the_branch_where_a_cut_hinge_parts_its_uses` (the
+  T-vertex wall with its right hinge cut): the trace-node branch rule. In
+  real data a link node is an endpoint of both stations, so this rule, not
+  the station rule, is the one that decides.
 
 ### Task Card O4 — Layer 5 checks the island rails (DONE)
 
@@ -1399,6 +1412,9 @@ Tests:
   are closed loop rails across the six strips, and the band island orders each.
 - `test_reflex_corner_island_rails_agree_with_the_unfolded_frame`
 - `test_island_rail_conflicts_name_rails_against_the_frame_and_split_lines`
+- `test_framed_island_reports_an_island_rail_against_its_frame`: wiring of
+  the frame check; one sign per ordered island rail is flipped on its way
+  out of the cut view, since after O1 no real rail runs against the frame.
 - The artist walls invariant test now also requires zero conflicts and
   ordered island rails.
 
@@ -1435,15 +1451,37 @@ non-consumable rails are:
 Axis violations, seam mismatches, node/frame mismatches, opposite-side
 families and foreign loops stay 0.
 
-Reviewer gate (independent agent): see the result below.
+Reviewer gate (independent agent): PASS WITH FIXES, nothing blocking. It
+confirmed that UVs, pins and diagnostics are identical before and after the
+slice on every fixture and capture, and that every mutation of O1-O4 logic
+it tried is caught. Fixed before landing:
+
+```text
+- The rail did not name its stations, and the draft DD-46 sentence "a trace
+  never puts the two uses of one hinge one after the other" contradicted
+  the stored order. Stations are now explicit (O2 above), and DD-46 says
+  that the uses are listed together as one step.
+- The trace-node branch rule had no test (changing its threshold left the
+  suite green), and the station-rule test used an impossible input (a link
+  at a node that is not an endpoint of its station). Both rules now have
+  realistic tests (O3 above).
+- The frame check ran only in a unit test; a wiring test now covers it
+  (O4 above).
+- Plan notes: the v0 behaviours dropped by v1, and the pending G0 note for
+  the O1 rule (decision 6).
+```
+
+Each of the five matching mutations (both branch rules off, stations out of
+rail order, stations split into single members, the frame check unwired)
+is caught by exactly the new or updated tests.
 
 Structure signals and deferred items (inputs for later slices, not
 regressions):
 
 ```text
 - 4 island rails stay unordered as branches (walls and walls.003 at v1544,
-  walls.009 at v869, walls.010 at v119): three stations of one family meet
-  at one node. Branch resolution is open (DD-47 draft, question 4).
+  walls.009 at v869, walls.010 at v119): more than two stations of one
+  family meet at one node. Branch resolution is open (DD-47 draft, question 4).
 - Island lines and the Layer 3 cut apply the same rule twice. The check
   proves they agree (0 disagreements); a later slice may take the island
   lines from the cut directly.
@@ -1475,7 +1513,9 @@ regressions):
    yet approved into G0 — PENDING. Rails are now reconciled with the Slice N
    island lines; the user decided (2026-11-06) to settle the G0 text after
    Slice O. The proposed final text is in
-   docs/architecture/scaffold_rail_trace_contract_draft.md.
+   docs/architecture/scaffold_rail_trace_contract_draft.md. The same
+   amendment would record the Slice O1 rule in DD-43 (a node crossing never
+   folds back), like the L1/L2/N repairs in G0 v1.5.
 7. Slice L2: G0 DD-43 fixture-expectation amendment (one rail per fold line;
    no patch revisit) — APPLIED to G0 v1.5 by the agent under explicit user
    delegation (2026-09).

@@ -569,6 +569,7 @@ def test_island_rail_conflicts_name_rails_against_the_frame_and_split_lines() ->
         return ScaffoldRailSegment(
             direction_family_id="family",
             ordered_member_directional_evidence_ids=members,
+            ordered_station_member_ids=tuple((member,) for member in members),
             ordered_trace_node_ids=(),
             orientation_sign_by_member=signs or {member: 1 for member in members},
             is_ordered=True,
@@ -590,6 +591,34 @@ def test_island_rail_conflicts_name_rails_against_the_frame_and_split_lines() ->
     assert _island_rail_conflicts((flipped,), line_of, roles, against, True) == ()
     assert _island_rail_conflicts((segment("a"), segment("b")), line_of, roles, along, True) == (
         "island rail and island line disagree: line",
+    )
+
+
+def test_framed_island_reports_an_island_rail_against_its_frame(monkeypatch) -> None:
+    # Wiring of invariant 6: after Slice O1 no real rail runs against the
+    # frame, so one sign of every ordered island rail is flipped on its way
+    # out of the Layer 3 cut view; a framed island must report it.
+    import scaffold_core.layer_5_runtime.skeleton as skeleton_module
+
+    real_cut = skeleton_module.cut_scaffold_rail
+
+    def cut_with_one_sign_flipped(*args):
+        segments = []
+        for segment in real_cut(*args):
+            if segment.is_ordered and len(segment.ordered_member_directional_evidence_ids) > 1:
+                first = segment.ordered_member_directional_evidence_ids[0]
+                signs = dict(segment.orientation_sign_by_member)
+                signs[first] = -signs[first]
+                segment = replace(segment, orientation_sign_by_member=signs)
+            segments.append(segment)
+        return tuple(segments)
+
+    monkeypatch.setattr(skeleton_module, "cut_scaffold_rail", cut_with_one_sign_flipped)
+    result = _solve(make_l_corridor_tunnel_seamed_folds_source())
+
+    assert all(skeleton.frame == "UNFOLDED" for skeleton in result.skeletons)
+    assert any(
+        "island rail runs against the unfolded frame" in conflict for conflict in result.rail_frame_conflicts
     )
 
 

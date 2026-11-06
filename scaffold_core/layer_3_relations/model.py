@@ -480,6 +480,9 @@ class ScaffoldTrace:
     direction_family_id: str
     member_directional_evidence_ids: tuple[str, ...]
     ordered_member_directional_evidence_ids: tuple[str, ...]
+    # The uses of one hinge Chain form one station (one step between two
+    # trace nodes); stations follow the order above when the view is ordered.
+    ordered_station_member_ids: tuple[tuple[str, ...], ...]
     trace_node_ids: tuple[str, ...]
     members: tuple[ScaffoldTraceMember, ...]
     crossing_records: tuple[CrossingRecord, ...]
@@ -498,6 +501,9 @@ class ScaffoldRail:
     scaffold_trace_id: str
     direction_family_id: str
     ordered_member_directional_evidence_ids: tuple[str, ...]
+    # The uses of one hinge Chain form one station (one step between two
+    # trace nodes); stations follow the order above when the view is ordered.
+    ordered_station_member_ids: tuple[tuple[str, ...], ...]
     ordered_trace_node_ids: tuple[str, ...]
     first_trace_node_id: str | None
     last_trace_node_id: str | None
@@ -523,6 +529,9 @@ class ScaffoldRailSegment:
 
     direction_family_id: str
     ordered_member_directional_evidence_ids: tuple[str, ...]
+    # The uses of one hinge Chain form one station (one step between two
+    # trace nodes); stations follow the order above when the view is ordered.
+    ordered_station_member_ids: tuple[tuple[str, ...], ...]
     ordered_trace_node_ids: tuple[str, ...]
     orientation_sign_by_member: Mapping[str, int]
     is_ordered: bool

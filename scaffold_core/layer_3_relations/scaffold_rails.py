@@ -46,6 +46,7 @@ class MemberTraceEndpoints:
 @dataclass(frozen=True)
 class _StationRail:
     ordered_member_ids: tuple[str, ...]
+    stations: tuple[tuple[str, ...], ...]
     ordered_node_ids: tuple[str, ...]
     signs: Mapping[str, int]
     branch_records: Mapping[str, tuple[str, ...]]
@@ -141,6 +142,7 @@ def cut_scaffold_rail(
         segments.append(ScaffoldRailSegment(
             direction_family_id=family.id,
             ordered_member_directional_evidence_ids=rail.ordered_member_ids if is_ordered else tuple(piece),
+            ordered_station_member_ids=rail.stations if is_ordered else tuple(sorted(rail.stations)),
             ordered_trace_node_ids=rail.ordered_node_ids,
             orientation_sign_by_member=dict(rail.signs) if is_ordered else {member: 0 for member in piece},
             is_ordered=is_ordered,
@@ -206,6 +208,7 @@ def _build_family_trace_and_rail(
         direction_family_id=family.id,
         member_directional_evidence_ids=family.member_directional_evidence_ids,
         ordered_member_directional_evidence_ids=ordered_member_ids,
+        ordered_station_member_ids=station_rail.stations,
         trace_node_ids=tuple(ordered_node_ids),
         members=members,
         crossing_records=family.crossing_records,
@@ -227,6 +230,7 @@ def _build_family_trace_and_rail(
         scaffold_trace_id=trace_id,
         direction_family_id=family.id,
         ordered_member_directional_evidence_ids=ordered_member_ids,
+        ordered_station_member_ids=station_rail.stations,
         ordered_trace_node_ids=tuple(ordered_node_ids),
         first_trace_node_id=ordered_node_ids[0] if ordered_node_ids else None,
         last_trace_node_id=ordered_node_ids[-1] if ordered_node_ids else None,
@@ -347,6 +351,7 @@ def _station_rail(
     if branch_records or is_closed_loop or not members:
         return _StationRail(
             tuple(members),
+            tuple(tuple(members_of[station]) for station in sorted(members_of)),
             tuple(_unordered_node_ids(tuple(members), member_endpoints)),
             {member: 0 for member in members},
             branch_records,
@@ -387,6 +392,7 @@ def _station_rail(
     ordered_member_ids = tuple(member for station in order for member in members_of[station])
     return _StationRail(
         ordered_member_ids,
+        tuple(tuple(members_of[station]) for station in order),
         tuple(ordered_nodes),
         signs,
         branch_records,

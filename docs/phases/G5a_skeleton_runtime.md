@@ -195,8 +195,8 @@ and the remaining structure signals are 5 island lines through curved runs
 and 10 patches outside a rigid frame (warped n-gons folded around a corner).
 
 After Slice O (2026-11) 2094 island rails have more than one run; 2090 are
-ordered and 4 stay unordered at nodes where three stations of one family
-meet. No island rail splits an island line or runs against the frame
+ordered and 4 stay unordered at nodes touched by more than two stations
+of one family. No island rail splits an island line or runs against the frame
 (rail_frame_conflicts 0). The fold-back repair (Slice O1) raised island
 lines 7606 -> 7646; pins, Layer 5 diagnostics and OBLIQUE runs are
 unchanged.
