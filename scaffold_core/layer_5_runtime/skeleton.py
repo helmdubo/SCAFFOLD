@@ -12,6 +12,9 @@ Rules:
 - Axis roles and run orientation come from the island's unfolded frame
   (stitch-tree parallel transport) when every island patch is planar;
   curved islands keep the provisional frame-free derivation. No world axes.
+- Island rails: Layer 3 cuts each family's ScaffoldRail by the island (its
+  runs and stitched hinges) and orders the pieces; Layer 5 only checks them
+  against the island lines and the unfolded frame, never orders a line.
 - Contradictions -> UNCONSTRAINED + diagnostics, never silent smearing.
 """
 
@@ -23,6 +26,8 @@ from typing import Any, Mapping
 
 from scaffold_core.layer_2_geometry.measures import EPSILON, cross, dot, length, normalize
 from scaffold_core.layer_3_relations.direction_families import SHARED_CHAIN_HINGE_MAX_RUNS
+from scaffold_core.layer_3_relations.model import ScaffoldRailSegment
+from scaffold_core.layer_3_relations.scaffold_rails import cut_scaffold_rail, rail_member_endpoints
 from scaffold_core.layer_5_runtime.islands import IslandAssembly
 
 AXIS_CLASS_MIN_COS = 0.92
@@ -56,6 +61,8 @@ class IslandSkeleton:
     frame: str = FRAME_FREE
     node_frame_mismatches: tuple[str, ...] = ()
     vertex_by_run_end: Mapping[tuple[str, str], str] = field(default_factory=dict)
+    rail_segments: tuple[ScaffoldRailSegment, ...] = ()
+    rail_frame_conflicts: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -82,6 +89,8 @@ class _SelectionLookups:
     planar_patch_ids: frozenset
     warped_patch_ids: frozenset
     straight_chain_ids: frozenset
+    family_by_member: Mapping[str, Any] = field(default_factory=dict)
+    rail_endpoints: Mapping[str, Any] = field(default_factory=dict)
 
 
 def build_island_skeletons(context: Any, assembly: IslandAssembly) -> tuple[IslandSkeleton, ...]:
@@ -141,6 +150,12 @@ def _selection_lookups(context: Any) -> _SelectionLookups:
             for chain_id, uses in uses_by_chain.items()
             if all(run_count_by_patch_chain.get(use, 0) <= SHARED_CHAIN_HINGE_MAX_RUNS for use in uses)
         ),
+        family_by_member={
+            member: family
+            for family in relations.connected_direction_families
+            for member in family.member_directional_evidence_ids
+        },
+        rail_endpoints=rail_member_endpoints(relations.run_endpoint_junctions),
     )
 
 
@@ -175,6 +190,8 @@ def _island_skeleton(island, assembly, relations, geometry, lookups):
             diagnostics.append(f"patch outside the rigid island frame: {patch_id} -> OBLIQUE")
         roles, signs = _frame_roles_and_signs(runs, framed, line_of, direction_of, frame.normal, diagnostics)
         mismatches = _node_frame_mismatches(frame, framed, node_by_run_end, lookups.position_of_source)
+    rail_segments = _island_rail_segments(island, runs, lookups)
+    rail_conflicts = _island_rail_conflicts(rail_segments, line_of, roles, signs, frame is not None)
     axis_a = _solve_axis("AXIS_A", runs, roles, signs, node_by_run_end, diagnostics, direction_of)
     axis_b = _solve_axis("AXIS_B", runs, roles, signs, node_by_run_end, diagnostics, direction_of)
     return IslandSkeleton(
@@ -184,7 +201,76 @@ def _island_skeleton(island, assembly, relations, geometry, lookups):
         frame=FRAME_FREE if frame is None else UNFOLDED_FRAME,
         node_frame_mismatches=mismatches,
         vertex_by_run_end=vertex_by_run_end,
+        rail_segments=rail_segments,
+        rail_frame_conflicts=rail_conflicts,
     )
+
+
+def _island_rail_segments(island, runs, lookups) -> tuple[ScaffoldRailSegment, ...]:
+    """Cut every family's ScaffoldRail by this island (DD-47 draft loop policy).
+
+    Layer 3 orders the pieces; the island only supplies the cut: its runs and
+    the hinges it stitches. A loop opens exactly where the island cuts it.
+    """
+
+    family_by_id: dict[str, Any] = {}
+    run_ids_by_family: dict[str, set[str]] = {}
+    for e in runs:
+        family = lookups.family_by_member.get(e.id)
+        if family is None:
+            continue
+        family_by_id[family.id] = family
+        run_ids_by_family.setdefault(family.id, set()).add(e.id)
+    segments = []
+    for family_id in sorted(run_ids_by_family):
+        segments.extend(cut_scaffold_rail(
+            family_by_id[family_id],
+            lookups.rail_endpoints,
+            run_ids_by_family[family_id],
+            island.stitched_chain_ids,
+        ))
+    return tuple(segments)
+
+
+def _island_rail_conflicts(segments, line_of, roles, signs, framed: bool) -> tuple[str, ...]:
+    """Check the island rails against the island lines and the unfolded frame.
+
+    Both views cut the same family by the same island, so every line with more
+    than one run is exactly one rail segment. In a framed island an ordered
+    rail runs one way along its axis: the rail sign times the frame sign is the
+    same for every axis run of the line.
+    """
+
+    segment_index_by_member: dict[str, int] = {}
+    for index, segment in enumerate(segments):
+        for member in segment.ordered_member_directional_evidence_ids:
+            segment_index_by_member[member] = index
+    members_by_line: dict[str, set[str]] = {}
+    for run_id, line_id in line_of.items():
+        members_by_line.setdefault(line_id, set()).add(run_id)
+    conflicts: list[str] = []
+    for line_id, members in sorted(members_by_line.items()):
+        if len(members) < 2:
+            continue
+        indexes = {segment_index_by_member.get(member) for member in members}
+        if (
+            len(indexes) != 1
+            or None in indexes
+            or set(segments[next(iter(indexes))].ordered_member_directional_evidence_ids) != members
+        ):
+            conflicts.append(f"island rail and island line disagree: {line_id}")
+            continue
+        segment = segments[next(iter(indexes))]
+        if not framed or not segment.is_ordered:
+            continue
+        products = {
+            1 if segment.orientation_sign_by_member[member] * signs.get(member, 0) > 0 else -1
+            for member in members
+            if roles.get(member) in ("AXIS_A", "AXIS_B") and signs.get(member, 0) != 0
+        }
+        if len(products) > 1:
+            conflicts.append(f"island rail runs against the unfolded frame: {line_id}")
+    return tuple(conflicts)
 
 
 def _island_lines(island, runs, relations) -> dict[str, str]:

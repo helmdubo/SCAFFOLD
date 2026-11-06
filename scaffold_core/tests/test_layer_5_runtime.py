@@ -46,6 +46,7 @@ from scaffold_core.tests.fixtures.extruded_cross import make_extruded_cross_sour
 from scaffold_core.tests.fixtures.l_corridor_tunnel import (
     make_l_corridor_tunnel_seamed_folds_source,
 )
+from scaffold_core.tests.fixtures.reflex_corner import make_reflex_corner_walls_source
 from scaffold_core.tests.fixtures.t_vertex_wall import make_t_vertex_wall_source
 from scaffold_core.tests.fixtures.tube_with_cap import make_tube_with_cap_source
 
@@ -230,6 +231,30 @@ def test_artist_multiseam_cylinder_open_band_unwraps_to_an_exact_rectangle() -> 
     _assert_band_is_exact_rectangle(result, island_count=3, residual_limit=1e-6)
 
 
+def test_artist_multiseam_band_rims_open_into_ordered_island_rails() -> None:
+    # Each rim closes into a loop rail across the six strips; Layer 3 keeps it
+    # a closed, unordered loop. The band island leaves one seam cut, and the
+    # Layer 3 cut view opens each rim there into one ordered rail (plan Slice O).
+    context = run_pass_1_relations(run_pass_0(_load_capture("artist_cyl_multiseam.json")))
+    rims = {
+        frozenset(rail.ordered_member_directional_evidence_ids)
+        for rail in context.relation_snapshot.scaffold_rails
+        if rail.is_closed_loop
+    }
+    result = run_skeleton_solve(context)
+    island_rails = [
+        segment
+        for skeleton in result.skeletons
+        for segment in skeleton.rail_segments
+        if len(segment.ordered_member_directional_evidence_ids) > 1
+    ]
+
+    assert len(rims) == 2
+    assert {frozenset(segment.ordered_member_directional_evidence_ids) for segment in island_rails} == rims
+    assert all(segment.is_ordered for segment in island_rails)
+    assert result.rail_frame_conflicts == ()
+
+
 def test_capped_odd_strip_prism_band_unwraps_to_an_exact_rectangle() -> None:
     # Synthetic reproduction of the multiseam case: a capped 10-segment prism
     # cut into two 5-segment strips.
@@ -279,6 +304,15 @@ def test_artist_walls_captures_keep_g5a_invariants() -> None:
             for diagnostic in result.diagnostics
         ), name
         assert sum(1 for vertex in result.vertices if vertex.pinned) >= min_pinned, name
+        # Plan Slice O: Layer 3 orders every island rail of these walls, and
+        # each runs one way along its axis in the unfolded frame.
+        assert result.rail_frame_conflicts == (), name
+        assert all(
+            segment.is_ordered
+            for skeleton in result.skeletons
+            for segment in skeleton.rail_segments
+            if len(segment.ordered_member_directional_evidence_ids) > 1
+        ), name
 
 
 def test_fully_seamed_box_unfolds_as_one_consistent_island() -> None:
@@ -483,6 +517,80 @@ def test_island_line_whose_members_disagree_degrades_to_oblique() -> None:
     assert diagnostics == ["island line not straight in the unfolded frame: line:bent -> OBLIQUE"]
     assert signs["seed"] == 1.0  # AXIS_A follows the seed run itself
     assert signs["rung"] == -1.0  # AXIS_B = normal x AXIS_A points along -y
+
+
+def test_island_cut_opens_the_ring_rails_of_a_two_seam_tube() -> None:
+    # Layer 3 keeps each rim ring a closed loop rail: it has no start of its
+    # own. The island stitches one seam and cuts the other, so Layer 3 cuts
+    # the ring there and each rim becomes one ordered rail through both halves.
+    context = run_pass_1_relations(run_pass_0(make_cylinder_tube_without_caps_with_two_seams_source()))
+    ring_rails = [rail for rail in context.relation_snapshot.scaffold_rails if rail.is_closed_loop]
+    ring_members = {frozenset(rail.ordered_member_directional_evidence_ids) for rail in ring_rails}
+    result = run_skeleton_solve(context)
+    (skeleton,) = result.skeletons
+    opened = [
+        segment
+        for segment in skeleton.rail_segments
+        if frozenset(segment.ordered_member_directional_evidence_ids) in ring_members
+    ]
+
+    assert len(ring_rails) == 2
+    assert not any(rail.is_consumable_by_g5a for rail in ring_rails)
+    assert len(opened) == 2
+    assert all(segment.is_ordered for segment in opened)
+    assert result.rail_frame_conflicts == ()
+
+
+def test_reflex_corner_island_rails_agree_with_the_unfolded_frame() -> None:
+    # Wall A unfolds into the notch of wall B, so A's bottom lies on B's notch
+    # bottom pointing back (a fold-back). Layer 3 keeps them on separate lines
+    # (plan Slice O1); were they one rail, it would run against the frame.
+    source = make_reflex_corner_walls_source()
+    context = run_pass_1_relations(run_pass_0(source))
+    run_on = {
+        str(edge_id): evidence.id
+        for evidence in context.relation_snapshot.patch_chain_directional_evidence
+        for edge_id in evidence.source_edge_ids
+    }
+    result = run_skeleton_solve(context)
+    (skeleton,) = result.skeletons
+
+    assert skeleton.frame == "UNFOLDED"
+    assert result.rail_frame_conflicts == ()
+    assert skeleton.line_by_run[run_on["e_a_bottom"]] != skeleton.line_by_run[run_on["e_b_notch_bottom"]]
+    assert skeleton.line_by_run[run_on["e_a_top"]] == skeleton.line_by_run[run_on["e_b_top"]]
+
+
+def test_island_rail_conflicts_name_rails_against_the_frame_and_split_lines() -> None:
+    from scaffold_core.layer_3_relations.model import ScaffoldRailSegment
+    from scaffold_core.layer_5_runtime.skeleton import _island_rail_conflicts
+
+    def segment(*members, signs=None):
+        return ScaffoldRailSegment(
+            direction_family_id="family",
+            ordered_member_directional_evidence_ids=members,
+            ordered_trace_node_ids=(),
+            orientation_sign_by_member=signs or {member: 1 for member in members},
+            is_ordered=True,
+            diagnostics=(),
+        )
+
+    line_of = {"a": "line", "b": "line"}
+    roles = {"a": "AXIS_A", "b": "AXIS_A"}
+    along = {"a": 1.0, "b": 1.0}
+    against = {"a": 1.0, "b": -1.0}
+
+    assert _island_rail_conflicts((segment("a", "b"),), line_of, roles, along, True) == ()
+    assert _island_rail_conflicts((segment("a", "b"),), line_of, roles, against, True) == (
+        "island rail runs against the unfolded frame: line",
+    )
+    assert _island_rail_conflicts((segment("a", "b"),), line_of, roles, against, False) == ()
+    # A rail sign that flips with the frame sign still runs one way along the axis.
+    flipped = segment("a", "b", signs={"a": 1, "b": -1})
+    assert _island_rail_conflicts((flipped,), line_of, roles, against, True) == ()
+    assert _island_rail_conflicts((segment("a"), segment("b")), line_of, roles, along, True) == (
+        "island rail and island line disagree: line",
+    )
 
 
 def test_node_frame_mismatch_names_a_node_whose_occurrences_sit_apart() -> None:

@@ -11,7 +11,8 @@ optional constraints; the L4 grammar plugs in later without rework).
 Layer 1 topology, Layer 2 facts (incl. per-vertex angle defect,
 LocalFaceFan), Layer 3: ConnectedDirectionFamily v1 (per-use, geodesic),
 RunEndpointJunction, ScaffoldNode/PatchAdjacency/ScaffoldJunction,
-PatchChainDirectionalEvidence, PatchAxes.
+PatchChainDirectionalEvidence, PatchAxes, ScaffoldRail v1 through the
+island cut view (cut_scaffold_rail, plan Slice O).
 ```
 
 ## Module contract (scaffold_core/layer_5_runtime/)
@@ -31,7 +32,10 @@ skeleton.py  - selection-wide solve:
   island's unfolded frame (stitch-tree parallel transport);
   numpy dense lstsq per axis; gauge = seed component pinned;
   spread safety: contradictory components -> UNCONSTRAINED, excluded,
-  their vertices unpinned; residual reported.
+  their vertices unpinned; residual reported;
+  island rails: Layer 3 cuts each family's ScaffoldRail by the island
+  (its runs and stitched hinges) and orders the pieces; Layer 5 checks
+  them against the island lines and the frame and never orders a line.
 
 pins.py      - output model: vertex -> (uv, pinned flag, island id).
 uv_transfer.py - the ONLY bpy write boundary (G5 rule): writes UVs+pins
@@ -51,7 +55,12 @@ uv_transfer.py - the ONLY bpy write boundary (G5 rule): writes UVs+pins
 4. degradation always carries diagnostics naming entities;
 5. node/frame agreement (plan Slice N): in an island with a rigid unfolded
    frame, the occurrences unioned into one solve node coincide in that
-   frame (node_frame_mismatches is a validation output).
+   frame (node_frame_mismatches is a validation output);
+6. rail/line/frame agreement (plan Slice O): every island line with more
+   than one run is exactly one island rail segment, and in an island with
+   a rigid unfolded frame an ordered island rail runs one way along its
+   axis (rail sign times frame sign is constant; rail_frame_conflicts is a
+   validation output).
 ```
 
 ## Non-goals in G5a
@@ -87,6 +96,13 @@ skeleton.py:
   island lines (plan Slice N): a ConnectedDirectionFamily keeps only
   crossings inside one patch or through a hinge stitched in the island,
   so a family that crosses a cut seam splits into several lines;
+  island rails (plan Slice O): the Layer 3 cut view cuts each family's
+  rail by the same rule and orders every piece through its stations, so
+  a ring opens exactly at the seam the island leaves cut; branches and
+  uncut loops stay unordered with diagnostics; IslandSkeleton.rail_segments
+  holds the pieces, and the checks of invariant 6 go to
+  IslandSkeleton.rail_frame_conflicts (the solve does not use rail order
+  yet);
   rigid unfolded frame when no island patch is curved: each patch is
   rotated into the root plane along the stitch tree (rotation about the
   hinge Chain); the frame crosses only straight hinges (the Layer 3
@@ -110,8 +126,8 @@ pins.py:
   a seam keep their own UV (plan Task Card M2); a run end on a seam-cut
   mid-chain vertex touches both seam sides and stays unpinned with a
   diagnostic;
-  axis-parallel, SEAM_SELF length and node/frame checks are validation
-  outputs.
+  axis-parallel, SEAM_SELF length, node/frame and rail/line/frame checks
+  are validation outputs.
 
 uv_transfer.py:
   writes UV coordinates and pin flags only, and only on faces of the solved
@@ -177,4 +193,11 @@ mismatches. After Slice N 60 of 62 islands have a rigid unfolded frame (the
 frame-free bipartition no longer runs there), 97 of 10214 runs stay OBLIQUE,
 and the remaining structure signals are 5 island lines through curved runs
 and 10 patches outside a rigid frame (warped n-gons folded around a corner).
+
+After Slice O (2026-11) 2094 island rails have more than one run; 2090 are
+ordered and 4 stay unordered at nodes where three stations of one family
+meet. No island rail splits an island line or runs against the frame
+(rail_frame_conflicts 0). The fold-back repair (Slice O1) raised island
+lines 7606 -> 7646; pins, Layer 5 diagnostics and OBLIQUE runs are
+unchanged.
 

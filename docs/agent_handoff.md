@@ -112,16 +112,21 @@ Implemented:
     (families split at seams the island cuts); axes and run orientation from
     the rigid unfolded island frame when no island patch is curved (plan
     Slice N), frame-free provisional derivation for curved islands;
+    island rails cut by the Layer 3 cut view are checked against the
+    island lines and the frame (plan Slice O);
   - `pins.py` run_skeleton_solve output model and invariants (axis-parallel,
-    SEAM_SELF length, node/frame agreement); pins are keyed by topology
-    vertex occurrence (DD-37), so both sides of a seam keep their own UV;
+    SEAM_SELF length, node/frame and rail/line/frame agreement); pins are
+    keyed by topology vertex occurrence (DD-37), so both sides of a seam keep
+    their own UV;
   - `uv_transfer.py` the only bpy write boundary; a loop takes only the pin
     of its own vertex occurrence in its own patch.
 - Debug add-on `Write UV (G5a)` button in
   `dev/tools/scaffold_graph_debug/`.
-- ScaffoldTrace / ScaffoldRail v0 Layer 3 evidence views
-  (`layer_3_relations/scaffold_rails.py`); closed loops stay non-consumable
-  until cut context opens them.
+- ScaffoldTrace / ScaffoldRail v1 Layer 3 evidence views
+  (`layer_3_relations/scaffold_rails.py`): ordered through hinge stations;
+  closed loops stay non-consumable globally, and the pure cut view
+  `cut_scaffold_rail` opens them only where a caller's structural cut
+  (an island) opens them.
 - Pipeline tooling: Chain -> PatchChain incidence index
   (`layer_3_relations/patch_chain_incidence.py`), per-pass stage timings in
   `PipelineContext.pass_timings` (reported by inspection), and a networkx
@@ -154,11 +159,23 @@ face corner's occurrence; the solve is unchanged. Tier 3: Cube pins 40 -> 42,
 and 706 borrowed loops on four walls objects are no longer written. A run end
 on a seam-cut mid-chain vertex stays unpinned with a diagnostic.
 
+Plan Slice O (ScaffoldRail over island lines): a node crossing no longer
+folds back over a patch that wraps around a corner node (O1, G3 repair; 75
+fold-backs on buildings -> 0). Rails are ordered through hinge stations:
+the two uses of one hinge Chain are one station, not two members in a row
+(O2; consumable rails 233 -> 4301 of 4821). The Layer 3 cut view orders a
+rail cut by a caller's cut, so a loop opens only where the island cuts it
+(O3). Layer 5 checks every island line against its island rail and the
+frame (O4): 2094 island rails with more than one run, 2090 ordered, 0
+conflicts. Tier 3 records `island_rails`, `unordered_island_rails` and
+`rail_frame_conflicts` (O5). The solve does not use rail order yet; pins,
+Layer 5 diagnostics and OBLIQUE runs are unchanged.
+
 Not implemented:
 
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
 - ScaffoldCircuit
-- ScaffoldRail loop opening from island cut context
+- ScaffoldRail branch resolution
 - WorldOrientation
 - Layer 4 Feature Grammar
 - public API
@@ -505,19 +522,20 @@ Still unresolved:
 - closed-loop wrap merge policy;
 - advanced corner detection;
 - local face-fan refinement policy;
-- ScaffoldCircuit and ScaffoldRail loop opening from island cut context.
+- ScaffoldCircuit and ScaffoldRail branch resolution.
 - lower-side cross-patch or same-chain lower-ring flow endpoint fallback.
 
 ---
 
 ## Next architecture decision
 
-Checkpoint 2026-11 (plan Slices L1, L2, M1, N and Task Card M2).
+Checkpoint 2026-11 (plan Slices L1, L2, M1, N, Task Card M2 and Slice O).
 ConnectedDirectionFamily transports SHARED_CHAIN only across straight
 single-run hinges, and a family visits each patch at most once (G0 v1.5
 DD-43). UV writes stay inside the solved faces, and each loop takes only the
 pin of its own vertex occurrence. Layer 5 works on island lines in the
-unfolded island frame. The
+unfolded island frame and checks them against the island rails that the
+Layer 3 cut view orders (Slice O). The
 Tier 3 Blender runner (`dev/tools/blender_smoke/`) and its
 `buildings_seamed.json` baseline cover 13 seamed artist objects and record
 structure metrics.
@@ -527,14 +545,16 @@ The user's goal for this stage is a consistent structure on the levels patch
 unwrap is only a test tool.
 
 Open decisions, all owned by the user (plan "Decisions the user must
-approve", items 3, 6 and 9):
+approve", items 3, 6 and 10):
 
 - Next level to consolidate: cross-island axis agreement through shared
-  families; ScaffoldRail over island lines (loop opening by island cuts);
-  island assembly without self-overlap (walls.007); curved runs inside Layer
-  3 lines (OQ-11, walls.010 arch).
-- DD-46/DD-47 ScaffoldTrace/ScaffoldRail G0 approval (kept as a draft until
-  rails are reconciled with island lines).
+  families; island assembly without self-overlap (walls.007); curved runs
+  inside Layer 3 lines (OQ-11, walls.010 arch); island lines taken from the
+  Layer 3 cut; the solve consuming island rail order (the unwrap along
+  rails); branch resolution for the 4 unordered island rails.
+- DD-46/DD-47 ScaffoldTrace/ScaffoldRail G0 approval: rails are now
+  reconciled with island lines (Slice O); the proposed final text is in
+  `docs/architecture/scaffold_rail_trace_contract_draft.md`.
 - Unwrap-level items recorded in plan Slice N: per-component gauge and
   absolute residual tolerance (artist_cross_band end patches). The
   uv_transfer cross-patch fallback and the seam-side pin collapse are fixed

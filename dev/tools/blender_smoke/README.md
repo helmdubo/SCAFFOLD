@@ -56,7 +56,7 @@ Full JSON reports go to `dev/tools/blender_smoke/reports/` (git-ignored).
 faces, shells, patches, chains       Layer 0/1 scope actually read
 families, family_max                 ConnectedDirectionFamily count and size
 opposite_side_families               FAMILY_SPANS_OPPOSITE_PATCH_SIDES diagnostics (must be 0)
-rails, rails_consumable              ScaffoldRail v0 records
+rails, rails_consumable              ScaffoldRail records (v1: ordered through hinge stations)
 islands, pinned                      G5a assembly and pinned vertices
 solve_diagnostics, first_solve_...   Layer 5 degradation diagnostics
 axis_violations, seam_mismatches     G5a invariants (must be 0)
@@ -78,6 +78,15 @@ bipartition_conflicts                frame-free axis conflicts (curved islands)
 lines_not_straight                   island lines whose members disagree in the frame
 patches_outside_frame                warped n-gons and patches behind a bent hinge
 node_frame_mismatches                solve nodes whose occurrences sit apart in the frame (must be 0)
+```
+
+Island rail metrics (plan Slice O) check the Layer 3 rails cut by each
+island (`cut_scaffold_rail`) against the island lines and the frame:
+
+```text
+island_rails                         island rail segments with two or more runs
+unordered_island_rails               of those, segments left unordered (branch or uncut loop)
+rail_frame_conflicts                 rails that split an island line or run against the frame (must be 0)
 ```
 
 ## Why not a Blender MCP add-on

@@ -1,7 +1,9 @@
 # ScaffoldTrace / ScaffoldRail Contract Draft
 
-Status: draft basis used by Slice J2 ScaffoldTrace / ScaffoldRail v0. This
-document still does not amend `G0.md` by itself.
+Status: draft basis for ScaffoldTrace / ScaffoldRail v1 (plan Slice J2, then
+Slice O: stations and the cut view). This document does not amend `G0.md` by
+itself. The text under "Proposed G0 Amendment Text" is the proposed final
+DD-46/DD-47 text after Slice O and waits for user approval.
 
 Purpose: define the Layer 3 substrate that lets G5a consume ordered,
 direction-stable rails instead of reconstructing rail order and orientation
@@ -9,16 +11,16 @@ inside the runtime solver.
 
 ## Motivation
 
-G5a v0 validates the pinned-skeleton pipeline on simple developable fixtures,
-but the multiseam cylinder exposes a layer inversion: Layer 5 tries to infer
+G5a v0 validated the pinned-skeleton pipeline on simple developable fixtures,
+and the multiseam cylinder exposed a layer inversion: Layer 5 tried to infer
 rail order and orientation signs from looped `ConnectedDirectionFamily`
 membership. That is not a runtime responsibility. A direction-stable ordered
 rail is a Layer 3 graph fact over existing topology and relation evidence.
 
-The current `artist_cyl_multiseam` xfail is therefore a missing
-`ScaffoldTrace` / `ScaffoldRail` contract, not an invitation to add another
-BFS, greedy traversal, or sign-propagation heuristic to
-`scaffold_core/layer_5_runtime/`.
+The `artist_cyl_multiseam` collapse itself turned out to be a Layer 3 family
+leak (plan Slice L1). The layer rule stands: missing rail order is never an
+invitation to add another BFS, greedy traversal, or sign-propagation heuristic
+to `scaffold_core/layer_5_runtime/`.
 
 ## Proposed G0 Amendment Text
 
@@ -29,12 +31,18 @@ BFS, greedy traversal, or sign-propagation heuristic to
 - `ScaffoldNode`;
 - `RunEndpointJunction`;
 - `PatchChainDirectionalEvidence`;
-- existing crossing/provenance records such as shared-chain and node crossings.
+- the crossing records of one `ConnectedDirectionFamily`.
 
-It is an ordered connected sequence of directional evidence members through
-existing graph nodes. It must not mutate or replace Layer 1 `Vertex`, `Chain`,
-`PatchChain`, `BoundaryLoop`, Layer 3 `ScaffoldNode`, or `ScaffoldEdge`
-identity.
+It orders the family's directional members through trace nodes by stations.
+The two uses of one hinge Chain, joined by a SHARED_CHAIN crossing, cover the
+same source edges and form one station. Every other crossing links two
+stations at its trace node: a `ScaffoldNode`, or a `RunEndpointJunction`
+inside a coalesced Chain. A trace never puts the two uses of one hinge one
+after the other.
+
+It must not mutate or replace Layer 1 `Vertex`, `Chain`, `PatchChain`,
+`BoundaryLoop`, Layer 3 `ScaffoldNode` or `ScaffoldEdge` identity, or the
+family membership.
 
 Each trace member records:
 
@@ -43,7 +51,9 @@ Each trace member records:
 - start/end trace node ids;
 - topology/source start/end vertex provenance where available;
 - crossing provenance to the previous and next member;
-- confidence and diagnostics.
+- confidence.
+
+The trace records branch and loop ambiguity and its diagnostics.
 
 `ScaffoldTrace` is evidence only. It is not UV, pins, feature grammar,
 packing, texel policy, H/V, WORLD_UP, wall/floor labeling, runtime solve
@@ -51,26 +61,42 @@ behavior, or a user-visible edit operation.
 
 ### DD-47 - ScaffoldRail is a direction-stable ScaffoldTrace
 
-`ScaffoldRail` is a `ScaffoldTrace` whose ordered member sequence has a stable
-transported direction frame suitable for consumption as a conditional axis by
+`ScaffoldRail` is a `ScaffoldTrace` whose station order carries a transported
+orientation sign per member, suitable for consumption as a conditional axis by
 Layer 5.
 
 Each rail carries:
 
 - ordered directional-evidence member ids;
 - ordered trace node ids;
-- first and last trace node ids for open rails;
-- closed-loop flag for loop rails;
-- per-member orientation sign in the transported rail frame;
+- first and last trace node ids;
+- closed-loop flag (the stations form one cycle);
+- per-member orientation sign: +1 along the rail, -1 against it, 0 unknown;
 - crossing records used to transport the frame;
-- branch records where valence is greater than two;
+- branch records: a station with more than two links, or a trace node touched
+  by more than two stations;
 - loop ambiguity records where no linear start/end order is intrinsic;
 - confidence and degradation diagnostics.
 
-The per-member orientation sign is supplied by rail-frame transport, not by
-world direction comparison and not by a runtime greedy walk. Dihedral and
-in-patch geodesic crossings modulate how the frame transports; they do not
-turn rail construction into a UV solve.
+A member's sign comes from the trace nodes of the links before and after its
+station; a rail of one station orients its uses against its first member. The
+sign is never taken from world direction comparison or a runtime greedy walk.
+Dihedral and in-patch geodesic crossings modulate how the frame transports;
+they do not turn rail construction into a UV solve.
+
+A rail is consumable by Layer 5 only when it has more than one member, no
+branch record, no closed loop, no diagnostics, and a nonzero sign on every
+member.
+
+Cut view. A consumer that owns a structural cut (the members it keeps and the
+hinge Chains its cut keeps joined, for example one island's runs and stitched
+seams) may ask Layer 3 to cut a family's rail. A crossing survives when both
+members are kept and it stays inside one patch or passes a kept Chain. Each
+connected piece is ordered through its stations like a whole rail. A loop
+opens exactly where the cut opens it; a branch, or a loop the cut leaves
+closed, stays unordered with a diagnostic. The cut view is computed on demand
+from Layer 3 evidence and the consumer's cut. It is not stored in
+`RelationSnapshot`, and it never chooses an opening or a branch itself.
 
 `ScaffoldRail` remains Layer 3 evidence. It must not choose UV coordinates,
 pins, island packing, texel scale, feature constraints, or Blender operations.
@@ -79,11 +105,13 @@ pins, island packing, texel scale, feature constraints, or Blender operations.
 
 Closed or looped direction families are not automatically linear rails.
 
-A loop may become a consumable open `ScaffoldRail` only when a lower-layer
-structural cut already provides an ordered opening, for example an island cut
-or selected split seam that turns the loop into a trace with distinct first and
-last nodes. The cut is an input from topology/island assembly, not a decision
-invented by the rail builder.
+A loop may become an ordered open rail only when a lower-layer structural cut
+already provides an ordered opening, for example an island cut or selected
+split seam that turns the loop into a trace with distinct first and last
+nodes. The cut is an input from topology/island assembly, not a decision
+invented by the rail builder. Implemented as the cut view
+(`cut_scaffold_rail`); the global rail of a loop stays a closed, non-consumable
+loop rail.
 
 For a closed loop with no such opening:
 
@@ -98,19 +126,17 @@ orientation signs for the whole family.
 
 ## Branch Policy
 
-At valence greater than two, the contract must preserve ambiguity unless a
-future explicit rule resolves it.
+At valence greater than two, the contract preserves ambiguity unless a future
+explicit rule resolves it.
 
-The rail builder may emit:
-
-- branch records naming the junction id;
-- incident directional evidence ids;
-- candidate continuation pairs;
-- evidence/confidence for each candidate.
+The rail builder emits branch records keyed by the branching station
+(`station:<member>`) or trace node (`trace_node:<node>`) with the stations
+involved. A cut segment that still branches carries `branch:<record>`
+diagnostics and zero signs.
 
 It must not silently choose one outgoing trace at a branch. A future Layer 4
 feature rule or an approved Layer 3 continuation contract may resolve such a
-branch, but this draft does not define that policy.
+branch; this contract does not define that policy.
 
 ## Relationship To Existing Evidence
 
@@ -130,7 +156,20 @@ replace it.
 ## Layer 5 Consumer Rule
 
 G5a may consume `ScaffoldRail` order and per-member transported orientation
-when present and unambiguous enough for the current solve.
+when present and unambiguous enough for the current solve. Inside an island it
+consumes rails through the cut view, with the island's runs and stitched hinge
+Chains as the cut.
+
+Since plan Slice O, G5a checks the island rails and reports failures as
+validation outputs (`SolveResult.rail_frame_conflicts`):
+
+- every island line with more than one run is exactly one cut segment;
+- in an island with a rigid unfolded frame, an ordered segment runs one way
+  along its axis: the rail sign times the frame sign is the same for every
+  axis run of the line.
+
+The solve does not use rail order yet; the unwrap along rails is a later
+stage.
 
 When `ScaffoldRail` is absent, degraded, branch-ambiguous, or loop-ambiguous,
 G5a must:
@@ -143,32 +182,49 @@ G5a must:
 
 ## Positive And Negative Contract Fixtures
 
-Required positive fixtures before implementation:
+Positive fixtures, all covered by tests:
 
-- two-seam cylinder tube: top and bottom rails remain consumable open rails
-  and G5a keeps the validated rectangle;
-- l-corridor tunnel: length rail transports across folds, width rails remain
-  stable;
+- two-seam cylinder tube: both rim rings stay closed loop rails in Layer 3;
+  the island cut opens each at the seam the island leaves cut into one ordered
+  rail (`test_cut_rail_opens_a_loop_only_where_the_cut_is`,
+  `test_island_cut_opens_the_ring_rails_of_a_two_seam_tube`);
+- l-corridor tunnel: length rails transport across the folds and stay open
+  and consumable;
+- beveled wall corner and T-vertex wall: the two uses of a hinge are one
+  station, and stations line up through their nodes;
 - extruded_cross: side-band top rim and bottom rim are distinct rails;
-- artist multiseam cylinder capture or in-repo synthetic equivalent:
-  multiseam open band exposes ordered rails after the island cut.
+- artist multiseam cylinder capture: both rims are closed loop rails across
+  the six strips, and the band island opens each into one ordered rail
+  (`test_artist_multiseam_band_rims_open_into_ordered_island_rails`).
 
-Required negative fixtures:
+Negative fixtures:
 
 - tube_with_cap: cap perimeter must not merge with side-band rails;
-- detached_parallel_walls: disconnected shells never share rails;
-- branch fixture with valence > 2: emits branch ambiguity, no silent trace
-  choice;
-- closed loop with no structural opening: remains loop/ambiguous, not a
-  forced linear rail.
+- detached_parallel_walls: the two shells share no topology, and no family
+  (so no rail) spans both (checked at Slice O, not pinned by a rail test);
+- branch fixture with valence > 2: a station with three links stays unordered
+  with a branch diagnostic (`test_cut_rail_keeps_a_branch_unordered`);
+- closed loop with no structural opening: remains a loop rail, not a forced
+  linear rail;
+- reflex corner (plan Slice O1): a node crossing never folds back over a
+  patch that wraps around a corner node, so no rail doubles back in the frame.
 
-## Open Questions For Approval
+## Answers To The Open Questions (Slice O)
 
-1. Should `ScaffoldRail` be a separate Layer 3 record type, or a typed view
-   attached to `ConnectedDirectionFamily` inspection output?
-2. Does island assembly provide the structural cut context to open loop rails,
-   or should the rail builder expose both closed-loop and cut-open views?
-3. What minimum confidence/degradation fields are required before G5a may
-   consume a rail?
-4. Which branch-resolution rules belong in Layer 3, and which must wait for
-   Layer 4 feature grammar?
+1. Separate record or typed view? Separate Layer 3 records: `ScaffoldTrace`
+   and `ScaffoldRail`, one per family, in `RelationSnapshot`. A cut segment
+   (`ScaffoldRailSegment`) is a value of the on-demand cut view, not a stored
+   record.
+2. Who opens loops? Island assembly owns the cut, and the rail builder exposes
+   both views: the uncut global rail (loops stay loops) and the cut view that
+   orders the pieces of a caller's cut.
+3. Minimum fields before G5a may consume a rail: the consumable rule above
+   (`is_consumable_by_g5a`) for a global rail, and `is_ordered` for a cut
+   segment (no branch, no uncut loop, no diagnostics, every sign nonzero).
+   Confidence is informational: diagnostics cap it at 0.5, branches and loops
+   at 0.75.
+4. Branch resolution: none in Layer 3 yet. Branches stay explicit; resolving
+   them needs a Layer 4 feature rule or an approved Layer 3 continuation
+   contract. On the 13 seamed buildings objects 10 of 4821 global rails
+   branch, and 4 of 2094 island rails with more than one run stay unordered,
+   each at a node where three stations of one family meet.

@@ -33,6 +33,7 @@ TABLE_COLUMNS = (
     ("rigid_islands", 5),
     ("pinned", 6),
     ("oblique_runs", 5),
+    ("unordered_island_rails", 5),
     ("solve_diagnostics", 4),
     ("residual_max", 8),
     ("ms", 6),
@@ -41,6 +42,7 @@ COLUMN_TITLES = {
     "opposite_side_families": "opp",
     "rigid_islands": "rigid",
     "oblique_runs": "obliq",
+    "unordered_island_rails": "unord",
     "solve_diagnostics": "diag",
 }
 
