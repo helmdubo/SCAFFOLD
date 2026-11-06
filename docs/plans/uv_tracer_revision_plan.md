@@ -1661,6 +1661,14 @@ Tests:
 - `test_unordered_island_rail_stays_unsigned_in_a_frame_free_island`
   (diagnostic, no sign, fewer equations).
 
+- `test_unordered_single_run_rail_stays_unsigned_in_a_frame_free_island`
+  (added after review: a single-run piece no longer takes a silent +1).
+
+Reviewer gate (independent agent): PASS. Notes fixed: G5a says an unsigned
+run keeps its axis role; a single-run unordered piece is tested. Open for
+the user: DD-47 does not yet say that axis bipartition and cross-rail
+co-orientation stay with Layer 5.
+
 Mutations: 7 of 8 caught. The survivor drops the "signed runs only" guard
 of the co-orientation flip. It is equivalent: an unsigned line never links,
 so it is never flipped.

@@ -764,6 +764,30 @@ def test_unordered_island_rail_stays_unsigned_in_a_frame_free_island(monkeypatch
     assert equations < baseline.axis_a.equation_count + baseline.axis_b.equation_count
 
 
+def test_unordered_single_run_rail_stays_unsigned_in_a_frame_free_island(monkeypatch) -> None:
+    # Before Slice Q such a run silently took sign +1 and wrote an equation.
+    import scaffold_core.layer_5_runtime.skeleton as skeleton_module
+
+    real_cut = skeleton_module.cut_scaffold_rail
+
+    def cut_with_single_run_rails_unordered(*args):
+        return tuple(
+            replace(segment, is_ordered=False)
+            if len(segment.ordered_member_directional_evidence_ids) == 1 else segment
+            for segment in real_cut(*args)
+        )
+
+    monkeypatch.setattr(skeleton_module, "cut_scaffold_rail", cut_with_single_run_rails_unordered)
+    skeleton = _solve(make_cylinder_tube_without_caps_with_two_seams_source()).skeletons[0]
+
+    singles = [s for s in skeleton.rail_segments if len(s.ordered_member_directional_evidence_ids) == 1]
+    assert singles
+    for segment in singles:
+        (member,) = segment.ordered_member_directional_evidence_ids
+        assert f"unordered island rail: {skeleton.line_by_run[member]} -> unsigned" in skeleton.diagnostics
+        assert member not in skeleton.orientation_by_run
+
+
 def test_node_frame_mismatch_names_a_node_whose_occurrences_sit_apart() -> None:
     from scaffold_core.layer_5_runtime.skeleton import (
         _IslandFrame,

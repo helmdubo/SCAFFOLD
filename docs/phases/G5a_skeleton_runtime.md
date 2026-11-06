@@ -126,7 +126,9 @@ skeleton.py:
   an island without a rigid frame bipartitions its lines into axes by 3D
   perpendicularity at nodes, takes in-line run signs from its ordered
   island rails (plan Slice Q; a run on an unordered rail stays unsigned
-  with a diagnostic and adds no equation) and co-orients parallel lines
+  with a diagnostic and adds no length equation, but keeps its axis role,
+  so it still joins its end nodes for the other axis) and co-orients
+  parallel lines
   through their cross runs;
   contradictions are excluded as UNCONSTRAINED with diagnostics.
 
