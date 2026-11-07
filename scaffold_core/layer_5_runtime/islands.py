@@ -227,7 +227,10 @@ def _warped_patch_ids(geometry, directional_evidence) -> set[str]:
     """Patches with a boundary run outside the patch plane.
 
     A single warped n-gon has only its own average normal as face-fan normal,
-    so the fan test cannot see the warp; its runs can.
+    so the fan test cannot see the warp; its runs can. A run leaves the plane
+    when it climbs out of it by more than the planar tolerance at the patch
+    scale (square root of the area), so a centimetre-long edge with a tilted
+    direction does not warp a metre-wide face.
     """
 
     max_out_of_plane = (1.0 - PLANAR_PATCH_MIN_NORMAL_DOT ** 2) ** 0.5
@@ -236,7 +239,8 @@ def _warped_patch_ids(geometry, directional_evidence) -> set[str]:
         facts = geometry.patch_facts.get(e.patch_id)
         if facts is None or length(facts.normal) <= EPSILON:
             continue
-        if abs(dot(normalize(e.direction), normalize(facts.normal))) > max_out_of_plane:
+        climb = abs(dot(normalize(e.direction), normalize(facts.normal))) * e.length
+        if climb > max_out_of_plane * facts.area ** 0.5:
             warped.add(str(e.patch_id))
     return warped
 

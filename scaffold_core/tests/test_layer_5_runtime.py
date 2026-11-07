@@ -398,6 +398,30 @@ def test_warped_face_stays_outside_the_rigid_island_frame() -> None:
     assert result.node_frame_mismatches == ()
 
 
+def test_warp_is_measured_at_the_patch_scale_not_by_one_short_edge() -> None:
+    # buildings walls/f1352: a 12 x 8 m face with one vertex 1 cm off its plane
+    # has a 2 cm edge tilted 63 degrees out of the plane; walls/f1411 is a
+    # hexagon folded 90 degrees around a box corner (runs 45 degrees out).
+    from scaffold_core.layer_5_runtime.islands import _warped_patch_ids
+
+    up = (0.0, 0.0, 1.0)
+    geometry = SimpleNamespace(patch_facts={
+        "wall": SimpleNamespace(normal=up, area=100.0),
+        "folded": SimpleNamespace(normal=up, area=2.0),
+    })
+
+    def run(patch_id, direction, run_length):
+        return SimpleNamespace(patch_id=patch_id, direction=direction, length=run_length)
+
+    evidence = (
+        run("wall", (1.0, 0.0, 0.0), 12.0),
+        run("wall", (0.45, 0.0, 0.89), 0.02),  # 63 degrees out of plane, 1.8 cm climb
+        run("folded", (0.71, 0.0, 0.71), 1.2),  # 0.85 m climb on a 1.4 m patch
+    )
+
+    assert _warped_patch_ids(geometry, evidence) == {"folded"}
+
+
 def test_rigid_seams_enter_the_island_tree_first() -> None:
     # Plan Slice P: every seam of the T-vertex wall is one edge long, so the
     # longest-seam-first tree used to reach the planar floor_b only through

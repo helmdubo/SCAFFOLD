@@ -1682,6 +1682,37 @@ co-orientation restores the same final signs. Tier 3: baseline identical
 
 ---
 
+## Slice R — warp measured at the patch scale (DONE, 2026-11, bug fix)
+
+Measurement of the 5 warped n-gons left after Slice P (13 seamed buildings
+objects) found two cases, each a single-face patch:
+
+- walls/f1415, walls.003/f1411, walls.009/f715: a hexagon folded 90 degrees
+  around a box corner (half on the top face, half on the side face). Its
+  runs climb 0.88 m out of the average plane on a 1.4 m patch. This is real
+  warp in the source mesh; the patch stays outside the frame with its
+  diagnostic. Unfolding a face along an inner fold that is not an edge is
+  not attempted.
+- walls/f1352, walls.003/f1348 (and walls.012/f0, not counted above because
+  that island had no frame at all): a 12 x 8 m face with one vertex 1 cm off
+  its plane. The 2 cm edge to that vertex points 63 degrees out of the plane,
+  and `islands._warped_patch_ids` judged warp by run direction alone.
+
+Fix (Minimal Patch Protocol, `islands._warped_patch_ids` only): a run warps
+its patch when its climb out of the patch plane (|direction . normal| times
+run length) exceeds the planar tolerance times the patch scale (square root
+of the area). The tolerance constant is unchanged.
+
+Test: `test_warp_is_measured_at_the_patch_scale_not_by_one_short_edge`
+(fails when the scale is the run length again, i.e. the old rule).
+
+Results: 98 of 101 islands (buildings and in-repo captures) are unchanged.
+walls.012 now has a rigid frame and solves (pins 0 -> 9, its 5
+contradictory equations are gone); walls and walls.003 island 6: OBLIQUE
+runs 6 -> 2. Tier 3 totals: patches outside the frame 5 -> 3, OBLIQUE runs
+65 -> 58, pins 6957 -> 6966, Layer 5 diagnostics 31 -> 28, rigid islands
+60 -> 61 of 62 (Cube stays frame-free). Baseline updated.
+
 ## Decisions the user must approve before the relevant slice
 
 ```text
@@ -1714,7 +1745,8 @@ co-orientation restores the same final signs. Tier 3: baseline identical
    was APPROVED after the case analysis and is DONE as Slice P (outside
    patches 10 -> 5, OBLIQUE runs 97 -> 65).
 11. Next, open (measured on the 13 seamed objects after Slice P):
-   - 5 warped n-gons (28 OBLIQUE runs);
+   - 5 warped n-gons (28 OBLIQUE runs); after Slice R (bug fix) 3 remain,
+     all one hexagon folded around a box corner (source mesh warp);
    - 12 OBLIQUE runs on 5 lines through curved runs (OQ-11);
    - island assembly without self-overlap (walls.007);
    - the solve consuming island rail order: 2 islands have no rigid frame
