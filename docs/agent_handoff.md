@@ -575,8 +575,10 @@ approve", items 3 and 11; item 6 is applied as G0 v1.6):
 - DD-46/DD-47 ScaffoldTrace/ScaffoldRail: approved by the user and applied
   as G0 v1.6 (2026-11-06), together with the Slice O1 fold-back rule in
   DD-43.
-- Unwrap-level items recorded in plan Slice N: per-component gauge and
-  absolute residual tolerance (artist_cross_band end patches). The
+- Plan Slice S (user-approved): the rigid frame snaps runs to an axis only
+  within about 5 degrees, and the solve absorbs 1 mm per metre of drift;
+  pins 6966 -> 10104, contradictions 20 -> 5, artist_cross_band end
+  patches solve. Per-component gauge stays an unwrap-level item. The
   uv_transfer cross-patch fallback and the seam-side pin collapse are fixed
   (Task Card M2).
 - Corner-node gap (strict xfail): deferred to a future patch-normal filter;

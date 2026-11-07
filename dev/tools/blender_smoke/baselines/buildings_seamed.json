@@ -73,7 +73,7 @@
   "written_loops": 8
  },
  "walls": {
-  "axis_runs": 3533,
+  "axis_runs": 3513,
   "axis_violations": 0,
   "bipartition_conflicts": 0,
   "chains": 1961,
@@ -85,15 +85,15 @@
   "island_lines": 2658,
   "island_rails": 735,
   "islands": 8,
-  "lines_not_straight": 2,
+  "lines_not_straight": 4,
   "node_frame_mismatches": 0,
   "object": "walls",
-  "oblique_runs": 19,
+  "oblique_runs": 39,
   "opposite_side_families": 0,
   "patches": 612,
   "patches_outside_frame": 1,
-  "pinned": 2223,
-  "pinned_loops": 3120,
+  "pinned": 3529,
+  "pinned_loops": 4848,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 489,
    "TOPOLOGY_CHAIN_SHARED": 1472
@@ -101,16 +101,16 @@
   "rail_frame_conflicts": 0,
   "rails": 1648,
   "rails_consumable": 1515,
-  "residual_ok": true,
+  "residual_ok": false,
   "rigid_islands": 8,
   "seam_mismatches": 0,
   "shells": 8,
-  "solve_diagnostics": 9,
+  "solve_diagnostics": 6,
   "unordered_island_rails": 1,
-  "written_loops": 3120
+  "written_loops": 4848
  },
  "walls.003": {
-  "axis_runs": 3533,
+  "axis_runs": 3513,
   "axis_violations": 0,
   "bipartition_conflicts": 0,
   "chains": 1961,
@@ -122,15 +122,15 @@
   "island_lines": 2658,
   "island_rails": 735,
   "islands": 8,
-  "lines_not_straight": 2,
+  "lines_not_straight": 4,
   "node_frame_mismatches": 0,
   "object": "walls.003",
-  "oblique_runs": 19,
+  "oblique_runs": 39,
   "opposite_side_families": 0,
   "patches": 612,
   "patches_outside_frame": 1,
-  "pinned": 2223,
-  "pinned_loops": 3120,
+  "pinned": 3529,
+  "pinned_loops": 4843,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 489,
    "TOPOLOGY_CHAIN_SHARED": 1472
@@ -138,13 +138,13 @@
   "rail_frame_conflicts": 0,
   "rails": 1648,
   "rails_consumable": 1515,
-  "residual_ok": true,
+  "residual_ok": false,
   "rigid_islands": 8,
   "seam_mismatches": 0,
   "shells": 8,
-  "solve_diagnostics": 9,
+  "solve_diagnostics": 6,
   "unordered_island_rails": 1,
-  "written_loops": 3120
+  "written_loops": 4843
  },
  "walls.004": {
   "axis_runs": 224,
@@ -175,16 +175,16 @@
   "rail_frame_conflicts": 0,
   "rails": 140,
   "rails_consumable": 64,
-  "residual_ok": true,
+  "residual_ok": false,
   "rigid_islands": 27,
   "seam_mismatches": 0,
   "shells": 27,
-  "solve_diagnostics": 2,
+  "solve_diagnostics": 1,
   "unordered_island_rails": 0,
   "written_loops": 188
  },
  "walls.005": {
-  "axis_runs": 53,
+  "axis_runs": 52,
   "axis_violations": 0,
   "bipartition_conflicts": 0,
   "chains": 26,
@@ -199,7 +199,7 @@
   "lines_not_straight": 0,
   "node_frame_mismatches": 0,
   "object": "walls.005",
-  "oblique_runs": 2,
+  "oblique_runs": 3,
   "opposite_side_families": 0,
   "patches": 10,
   "patches_outside_frame": 0,
@@ -286,11 +286,11 @@
   "rail_frame_conflicts": 0,
   "rails": 98,
   "rails_consumable": 92,
-  "residual_ok": true,
+  "residual_ok": false,
   "rigid_islands": 1,
   "seam_mismatches": 0,
   "shells": 1,
-  "solve_diagnostics": 2,
+  "solve_diagnostics": 1,
   "unordered_island_rails": 0,
   "written_loops": 269
  },
@@ -331,7 +331,7 @@
   "written_loops": 12
  },
  "walls.009": {
-  "axis_runs": 1806,
+  "axis_runs": 1803,
   "axis_violations": 0,
   "bipartition_conflicts": 0,
   "chains": 1014,
@@ -343,15 +343,15 @@
   "island_lines": 1366,
   "island_rails": 367,
   "islands": 3,
-  "lines_not_straight": 0,
+  "lines_not_straight": 1,
   "node_frame_mismatches": 0,
   "object": "walls.009",
-  "oblique_runs": 13,
+  "oblique_runs": 16,
   "opposite_side_families": 0,
   "patches": 310,
   "patches_outside_frame": 1,
-  "pinned": 1501,
-  "pinned_loops": 2031,
+  "pinned": 1812,
+  "pinned_loops": 2408,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 270,
    "TOPOLOGY_CHAIN_SHARED": 744
@@ -359,13 +359,13 @@
   "rail_frame_conflicts": 0,
   "rails": 836,
   "rails_consumable": 783,
-  "residual_ok": true,
+  "residual_ok": false,
   "rigid_islands": 3,
   "seam_mismatches": 0,
   "shells": 3,
-  "solve_diagnostics": 3,
+  "solve_diagnostics": 2,
   "unordered_island_rails": 1,
-  "written_loops": 2031
+  "written_loops": 2408
  },
  "walls.010": {
   "axis_runs": 704,
@@ -387,8 +387,8 @@
   "opposite_side_families": 0,
   "patches": 122,
   "patches_outside_frame": 0,
-  "pinned": 477,
-  "pinned_loops": 720,
+  "pinned": 692,
+  "pinned_loops": 1018,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 90,
    "TOPOLOGY_CHAIN_SHARED": 295
@@ -396,13 +396,13 @@
   "rail_frame_conflicts": 0,
   "rails": 347,
   "rails_consumable": 307,
-  "residual_ok": true,
+  "residual_ok": false,
   "rigid_islands": 3,
   "seam_mismatches": 0,
   "shells": 3,
-  "solve_diagnostics": 3,
+  "solve_diagnostics": 2,
   "unordered_island_rails": 1,
-  "written_loops": 720
+  "written_loops": 1018
  },
  "walls.011": {
   "axis_runs": 12,
