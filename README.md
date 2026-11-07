@@ -165,7 +165,6 @@ scaffold_core/tests/test_module_docstrings.py
 | Need | Read |
 |---|---|
 | Architecture contract | `G0.md` |
-| Full architecture reference | `docs/architecture/G0_full.md` |
 | Current phase | `docs/phases/G3_derived_relations.md` |
 | G2 geometry facts | docs/phases/G2_geometry_facts.md |
 | G3 derived relations | docs/phases/G3_derived_relations.md |

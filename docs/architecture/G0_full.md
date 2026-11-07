@@ -1,5 +1,11 @@
 # Scaffold Core — G0 v1.2
 
+> **Historical snapshot (G0 v1.2) — not maintained.** The canonical
+> architectural contract is the root `G0.md`, which supersedes this file;
+> if they disagree, `G0.md` wins. This snapshot predates DD-43 onward
+> (e.g. ConnectedDirectionFamily, RunEndpointJunction) and later OQ-11
+> updates. Kept for background only; task routes point to `G0.md`.
+
 > **Immutable B-rep-inspired Interpretation Pipeline**
 
 **Status:** architectural contract v1.2

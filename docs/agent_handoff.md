@@ -69,15 +69,13 @@ Do not manually create separate Worker/Reviewer chats by default.
 1. `AGENTS.md`
 2. `docs/context_map.yaml`
 3. `docs/phases/G5a_skeleton_runtime.md`
-4. `docs/architecture/G0_full.md`
+4. `G0.md`
 5. `docs/architecture/design_decisions.md`
 6. `docs/agent_rules/import_boundaries.md`
 7. `docs/agent_rules/anti_overengineering.md`
 8. `docs/agent_rules/testing_rules.md`
 9. `docs/agent_rules/minimal_patch_protocol.md` if fixing existing code
 10. `docs/agent_rules/codex_subagents.md` if using Codex subagents
-
-Read `G0.md` when the task touches architecture or phase boundaries.
 
 ---
 
