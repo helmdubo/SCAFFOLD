@@ -29,11 +29,22 @@ from typing import Any, Mapping
 from scaffold_core.layer_2_geometry.measures import EPSILON, cross, dot, normalize
 from scaffold_core.layer_3_relations.model import ScaffoldRailSegment
 from scaffold_core.layer_3_relations.scaffold_rails import cut_scaffold_rail, rail_member_endpoints
-from scaffold_core.layer_5_runtime.islands import IslandAssembly, SeamRigidity, is_rigid_seam, seam_rigidity
+from scaffold_core.layer_5_runtime.islands import (
+    PLANAR_PATCH_MIN_NORMAL_DOT,
+    IslandAssembly,
+    SeamRigidity,
+    is_rigid_seam,
+    seam_rigidity,
+)
 
-AXIS_CLASS_MIN_COS = 0.92
+# A run takes an axis in the rigid unfolded frame only within the planar
+# tolerance angle (~5 degrees, plan Slice S); steeper runs stay OBLIQUE.
+AXIS_CLASS_MIN_COS = PLANAR_PATCH_MIN_NORMAL_DOT
 NODE_FRAME_TOLERANCE = 1e-6  # relative to the island extent
 RESIDUAL_TOLERANCE = 1e-5
+# Modelling drift the solve absorbs: 1 mm per metre of the island's span
+# along the axis (plan Slice S); larger residuals are contradictions.
+RESIDUAL_TOLERANCE_PER_SPAN = 1e-3
 GAUGE_WEIGHT = 1e6
 UNFOLDED_FRAME = "UNFOLDED"
 FRAME_FREE = "FRAME_FREE"
@@ -729,7 +740,9 @@ def _solve_axis(axis_name, runs, roles, signs, node_by_run_end, diagnostics, dir
     if not equations:
         return AxisSolve(axis_name, {}, 0.0, (), 0)
     coords, residuals = _lstsq(equations)
-    bad = [i for i, r in enumerate(residuals) if abs(r) > RESIDUAL_TOLERANCE]
+    span = max(coords.values()) - min(coords.values()) if coords else 0.0
+    tolerance = max(RESIDUAL_TOLERANCE, RESIDUAL_TOLERANCE_PER_SPAN * span)
+    bad = [i for i, r in enumerate(residuals) if abs(r) > tolerance]
     unconstrained: tuple[int, ...] = ()
     if bad:
         bad_components = {equations[i][0] for i in bad} | {equations[i][1] for i in bad}

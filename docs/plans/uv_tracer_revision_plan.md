@@ -1713,6 +1713,47 @@ runs 6 -> 2. Tier 3 totals: patches outside the frame 5 -> 3, OBLIQUE runs
 65 -> 58, pins 6957 -> 6966, Layer 5 diagnostics 31 -> 28, rigid islands
 60 -> 61 of 62 (Cube stays frame-free). Baseline updated.
 
+## Slice S — snap angle and drift tolerance (DONE, 2026-11, user-approved)
+
+Measurement after Slice R (13 seamed buildings objects): 20 contradictory-
+equation diagnostics on 6 objects; any residual above an absolute 1e-5
+dropped whole components, so 2057 of 6801 solve nodes lost a coordinate
+(the main walls island dropped 316 of 1715 AXIS_A equations). Two causes:
+
+- in the rigid unfolded frame a run took an axis within 23 degrees
+  (AXIS_CLASS_MIN_COS = 0.92). Cross runs tilted that far glued nodes up to
+  3 m apart into one column, and tilted runs carried their full length as
+  an axis length. A 32-gon cap snapped its 0, 11.25 and 22.5 degree edges
+  and became a square;
+- with the snap angle tight, columns still spread up to 10 cm: the source
+  meshes drift by millimetres to centimetres over tens of metres.
+
+Options measured (solve nodes with both axes / OBLIQUE / contradictions):
+current 4744 / 58 / 20; tolerance only 6516 / 58 / 9; 5 degrees plus
+tolerance 6578 / 86 / 9; 1 degree plus tolerance 6738 / 268 / 2 (absolute
+3 cm tolerance standing in for the relative one).
+
+Rule (chosen by the user, 2026-11-07, "5 degrees + tolerance"):
+
+1. In the rigid frame a run takes an axis only within the planar tolerance
+   angle (`AXIS_CLASS_MIN_COS = PLANAR_PATCH_MIN_NORMAL_DOT`, about 5
+   degrees); steeper runs stay OBLIQUE.
+2. The solve absorbs drift of 1 mm per metre of the island's span along the
+   axis (`RESIDUAL_TOLERANCE_PER_SPAN`); larger residuals stay
+   contradictions with their diagnostic, as before.
+
+Tests: `test_rigid_frame_gives_an_axis_only_within_the_planar_tolerance_angle`,
+`test_solve_absorbs_modelling_drift_relative_to_the_island_span`. Mutations:
+the old snap angle, the absolute tolerance and a 10x looser span tolerance
+are each caught.
+
+Results (Tier 3, baseline updated): pins 6966 -> 10104, Layer 5 diagnostics
+28 -> 18, contradictions 20 -> 5 (walls, walls.003, walls.004, walls.007,
+walls.010), OBLIQUE runs 58 -> 102, island lines not straight in the frame
+5 -> 10; invariants stay 0. In-repo captures: artist_cross_band end patches
+now solve (the known limitation of Slice N); cylinder caps keep only their
+axis-parallel edges on axes, so a round cap stays round.
+
 ## Decisions the user must approve before the relevant slice
 
 ```text
@@ -1755,7 +1796,8 @@ runs 6 -> 2. Tier 3 totals: patches outside the frame 5 -> 3, OBLIQUE runs
      captures;
    - island lines taken from the Layer 3 cut;
    - branch resolution for the 4 unordered island rails;
-   - 21 contradictory-equation diagnostics (unwrap level).
+   - 21 contradictory-equation diagnostics (unwrap level); after Slice S
+     (user-approved snap angle and drift tolerance) 5 remain.
    Cross-island axis agreement has nothing to agree yet: no family spans
    two islands on those objects.
    CHOSEN by the user (2026-11-07) as Slice Q, "Layer 5 on rails":

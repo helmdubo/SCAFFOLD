@@ -35,6 +35,9 @@ skeleton.py  - selection-wide solve:
   axes = island-local AXIS_A/AXIS_B projected from families in the
   island's unfolded frame (stitch-tree parallel transport);
   numpy dense lstsq per axis; gauge = seed component pinned;
+  snap and drift (plan Slice S): in the rigid frame a run takes an axis
+  only within the planar tolerance angle (~5 degrees), and residuals up
+  to 1 mm per metre of the island's span along the axis are drift;
   spread safety: contradictory components -> UNCONSTRAINED, excluded,
   their vertices unpinned; residual reported;
   island rails: Layer 3 cuts each family's ScaffoldRail by the island
@@ -180,10 +183,8 @@ Known limitation:
 artist_cross_band: the side band solves with aligned columns (before Slice N
 its bottom row was silently mirrored: the closed rim's ends sat on the wrong
 seam sides, residual 5e-15, zero diagnostics). The two planar end patches
-still degrade with diagnostics: they close their loops only to 0.004 while
-RESIDUAL_TOLERANCE is an absolute 1e-5, so every equation is dropped as
-contradictory; exact orientation from the frame does not change that.
-Tolerance policy belongs to the later unwrap stage.
+close their loops only to 0.004; since plan Slice S the solve absorbs
+drift of 1 mm per metre of island span, and they solve.
 
 artist_cyl_multiseam is RESOLVED (plan Slice L1). The collapse was a Layer 3
 ConnectedDirectionFamily leak through curved shared chains that welded the
@@ -224,4 +225,9 @@ edge tilted out of a 12 m face no longer warps it: patches outside the
 frame 5 -> 3 (one hexagon folded around a box corner, in three objects),
 OBLIQUE runs 65 -> 58, pins 6957 -> 6966, Layer 5 diagnostics 31 -> 28,
 rigid islands 61 of 62 (walls.012 gains its frame).
+
+After Slice S (2026-11) pins 6966 -> 10104, Layer 5 diagnostics 28 -> 18
+(contradictions 20 -> 5), OBLIQUE runs 58 -> 102 (runs tilted more than
+about 5 degrees in the frame), island lines not straight 5 -> 10;
+invariants stay 0.
 

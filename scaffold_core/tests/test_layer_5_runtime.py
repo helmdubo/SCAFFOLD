@@ -398,6 +398,58 @@ def test_warped_face_stays_outside_the_rigid_island_frame() -> None:
     assert result.node_frame_mismatches == ()
 
 
+def _ladder(rung_length: float):
+    """Two 10 m AXIS_A rails joined by two AXIS_B rungs; the second rail drifts."""
+
+    def run(run_id, run_length, direction):
+        return SimpleNamespace(id=run_id, length=run_length, direction=direction)
+
+    runs = (
+        run("a0", 10.0, (1.0, 0.0, 0.0)),
+        run("a1", rung_length, (1.0, 0.0, 0.0)),
+        run("b0", 2.0, (0.0, 1.0, 0.0)),
+        run("b1", 2.0, (0.0, 1.0, 0.0)),
+    )
+    ends = {"a0": ("n0", "n1"), "a1": ("n2", "n3"), "b0": ("n0", "n2"), "b1": ("n1", "n3")}
+    node_by_run_end = {}
+    for run_id, (start, end) in ends.items():
+        node_by_run_end[(run_id, "START")] = start
+        node_by_run_end[(run_id, "END")] = end
+    roles = {"a0": "AXIS_A", "a1": "AXIS_A", "b0": "AXIS_B", "b1": "AXIS_B"}
+    signs = {run_id: 1.0 for run_id in roles}
+    return runs, roles, signs, node_by_run_end
+
+
+def test_solve_absorbs_modelling_drift_relative_to_the_island_span() -> None:
+    from scaffold_core.layer_5_runtime.skeleton import _solve_axis
+
+    for rung_length, contradictory in ((10.005, False), (10.05, True)):
+        runs, roles, signs, node_by_run_end = _ladder(rung_length)
+        diagnostics: list[str] = []
+        solve = _solve_axis("AXIS_A", runs, roles, signs, node_by_run_end, diagnostics)
+        # 5 mm over 10 m is drift (1 mm per metre); 5 cm is a contradiction
+        assert bool(diagnostics) is contradictory, (rung_length, diagnostics)
+        assert bool(solve.coordinate_by_node) is not contradictory
+
+
+def test_rigid_frame_gives_an_axis_only_within_the_planar_tolerance_angle() -> None:
+    from math import cos, radians, sin
+
+    from scaffold_core.layer_5_runtime.skeleton import _frame_roles_and_signs
+
+    def run(run_id, degrees, run_length=1.0):
+        angle = radians(degrees)
+        return SimpleNamespace(id=run_id, length=run_length, direction=(cos(angle), sin(angle), 0.0))
+
+    runs = (run("seed", 0.0, 10.0), run("drift", 3.0), run("slope", 11.25), run("cross", 90.0))
+    line_of = {e.id: e.id for e in runs}
+    direction_of = {e.id: e.direction for e in runs}
+    roles, _signs = _frame_roles_and_signs(runs, runs, line_of, direction_of, (0.0, 0.0, 1.0), [])
+
+    # a 32-gon cap edge 11.25 degrees off no longer snaps to an axis
+    assert roles == {"seed": "AXIS_A", "drift": "AXIS_A", "slope": "OBLIQUE", "cross": "AXIS_B"}
+
+
 def test_warp_is_measured_at_the_patch_scale_not_by_one_short_edge() -> None:
     # buildings walls/f1352: a 12 x 8 m face with one vertex 1 cm off its plane
     # has a 2 cm edge tilted 63 degrees out of the plane; walls/f1411 is a
