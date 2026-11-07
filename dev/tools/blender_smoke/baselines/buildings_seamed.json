@@ -73,7 +73,7 @@
   "written_loops": 8
  },
  "walls": {
-  "axis_runs": 3529,
+  "axis_runs": 3533,
   "axis_violations": 0,
   "bipartition_conflicts": 0,
   "chains": 1961,
@@ -88,10 +88,10 @@
   "lines_not_straight": 2,
   "node_frame_mismatches": 0,
   "object": "walls",
-  "oblique_runs": 23,
+  "oblique_runs": 19,
   "opposite_side_families": 0,
   "patches": 612,
-  "patches_outside_frame": 2,
+  "patches_outside_frame": 1,
   "pinned": 2223,
   "pinned_loops": 3120,
   "pipeline_codes": {
@@ -105,12 +105,12 @@
   "rigid_islands": 8,
   "seam_mismatches": 0,
   "shells": 8,
-  "solve_diagnostics": 10,
+  "solve_diagnostics": 9,
   "unordered_island_rails": 1,
   "written_loops": 3120
  },
  "walls.003": {
-  "axis_runs": 3529,
+  "axis_runs": 3533,
   "axis_violations": 0,
   "bipartition_conflicts": 0,
   "chains": 1961,
@@ -125,10 +125,10 @@
   "lines_not_straight": 2,
   "node_frame_mismatches": 0,
   "object": "walls.003",
-  "oblique_runs": 23,
+  "oblique_runs": 19,
   "opposite_side_families": 0,
   "patches": 612,
-  "patches_outside_frame": 2,
+  "patches_outside_frame": 1,
   "pinned": 2223,
   "pinned_loops": 3120,
   "pipeline_codes": {
@@ -142,7 +142,7 @@
   "rigid_islands": 8,
   "seam_mismatches": 0,
   "shells": 8,
-  "solve_diagnostics": 10,
+  "solve_diagnostics": 9,
   "unordered_island_rails": 1,
   "written_loops": 3120
  },
@@ -441,14 +441,14 @@
   "written_loops": 24
  },
  "walls.012": {
-  "axis_runs": 9,
+  "axis_runs": 8,
   "axis_violations": 0,
   "bipartition_conflicts": 0,
   "chains": 1,
   "faces": 4,
   "families": 9,
   "family_max": 1,
-  "first_solve_diagnostic": "AXIS_A: 5 contradictory equations -> UNCONSTRAINED components",
+  "first_solve_diagnostic": "",
   "foreign_loops_changed": 0,
   "island_lines": 9,
   "island_rails": 0,
@@ -456,12 +456,12 @@
   "lines_not_straight": 0,
   "node_frame_mismatches": 0,
   "object": "walls.012",
-  "oblique_runs": 0,
+  "oblique_runs": 1,
   "opposite_side_families": 0,
   "patches": 1,
   "patches_outside_frame": 0,
-  "pinned": 0,
-  "pinned_loops": 0,
+  "pinned": 9,
+  "pinned_loops": 12,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 1
   },
@@ -469,11 +469,11 @@
   "rails": 9,
   "rails_consumable": 0,
   "residual_ok": true,
-  "rigid_islands": 0,
+  "rigid_islands": 1,
   "seam_mismatches": 0,
   "shells": 1,
-  "solve_diagnostics": 1,
+  "solve_diagnostics": 0,
   "unordered_island_rails": 0,
-  "written_loops": 0
+  "written_loops": 12
  }
 }

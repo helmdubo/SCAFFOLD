@@ -566,7 +566,8 @@ Open decisions, all owned by the user (plan "Decisions the user must
 approve", items 3 and 11; item 6 is applied as G0 v1.6):
 
 - Next level (plan decision 11), measured after Slice P on the 13 seamed
-  objects: 5 warped n-gons (28 OBLIQUE runs); curved runs inside Layer 3
+  objects: 3 warped n-gons after Slice R, all one hexagon folded around a
+  box corner (source mesh warp); curved runs inside Layer 3
   lines (OQ-11; 12 OBLIQUE runs); island assembly without self-overlap
   (walls.007); branch resolution for the 4 unordered island rails.
   Cross-island axis agreement has nothing to agree yet: no family spans

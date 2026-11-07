@@ -219,3 +219,9 @@ outside the frame 10 -> 5 (only warped n-gons folded around a corner
 remain), OBLIQUE runs 97 -> 65, pins 6926 -> 6957, Layer 5 diagnostics
 36 -> 31; invariants and rail/frame conflicts stay 0.
 
+After Slice R (2026-11) warp is measured at the patch scale, so a 2 cm
+edge tilted out of a 12 m face no longer warps it: patches outside the
+frame 5 -> 3 (one hexagon folded around a box corner, in three objects),
+OBLIQUE runs 65 -> 58, pins 6957 -> 6966, Layer 5 diagnostics 31 -> 28,
+rigid islands 61 of 62 (walls.012 gains its frame).
+
