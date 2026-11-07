@@ -1754,6 +1754,35 @@ walls.010), OBLIQUE runs 58 -> 102, island lines not straight in the frame
 now solve (the known limitation of Slice N); cylinder caps keep only their
 axis-parallel edges on axes, so a round cap stays round.
 
+## Slice T — jogs: runs that leave their axis by more than drift (DONE, 2026-11)
+
+Measurement after Slice S: the 5 remaining contradictions (walls, walls.003,
+walls.004, walls.007, walls.010) each come from one cross run 1.6 to 4.6
+degrees off its axis, inside the 5 degree snap angle, that moves its column
+in the rigid frame by 5 to 40 cm, more than the island's drift tolerance
+(walls.004/f14: 1.8 m run, 5 cm across, drift 8.7 mm). Snapped, it
+contradicts the rest of the column and the solve drops whole components.
+
+Rule (follows from the Slice S drift tolerance): in the rigid frame a run
+whose offset across its axis (length times the sine of its angle to the
+nearest axis) exceeds the island's drift (1 mm per metre of the frame
+extent) is a jog. It alone goes OBLIQUE; the other members of its line keep
+their axis, so the line keeps two straight halves instead of a contradiction.
+The diagnostic `island line jogs in the unfolded frame: <run> -> OBLIQUE`
+names it when its line keeps an axis; a line of such runs is simply
+OBLIQUE. A tried variant that degraded the whole line raised OBLIQUE runs
+to 148 and lost lines in walls.004.
+
+Tests: `test_a_run_that_leaves_its_axis_by_more_than_drift_is_a_jog_of_its_line`;
+`test_artist_walls_captures_keep_g5a_invariants` now asserts no
+contradictory equation. Mutations caught: no drift passed in, whole-line
+degradation, jog diagnostic on an oblique line.
+
+Results (Tier 3, baseline updated): contradictions 5 -> 0, island lines not
+straight in the frame 10 -> 0, jogs 17, pins 10104 -> 10176, OBLIQUE runs
+102 -> 113, Layer 5 diagnostics 18 -> 20 (17 jogs and the 3 folded
+hexagons); invariants stay 0.
+
 ## Decisions the user must approve before the relevant slice
 
 ```text
@@ -1797,7 +1826,8 @@ axis-parallel edges on axes, so a round cap stays round.
    - island lines taken from the Layer 3 cut;
    - branch resolution for the 4 unordered island rails;
    - 21 contradictory-equation diagnostics (unwrap level); after Slice S
-     (user-approved snap angle and drift tolerance) 5 remain.
+     (user-approved snap angle and drift tolerance) 5 remain; after Slice T
+     (jogs) none remain.
    Cross-island axis agreement has nothing to agree yet: no family spans
    two islands on those objects.
    CHOSEN by the user (2026-11-07) as Slice Q, "Layer 5 on rails":

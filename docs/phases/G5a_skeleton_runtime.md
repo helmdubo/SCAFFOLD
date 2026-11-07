@@ -125,7 +125,9 @@ skeleton.py:
   framed runs take AXIS_A / AXIS_B and their orientation sign from the
   unfolded direction (AXIS_A = longest island line, AXIS_B = root normal x
   AXIS_A, so islands are not mirrored); a line whose members disagree
-  degrades to OBLIQUE with a diagnostic;
+  degrades to OBLIQUE with a diagnostic; a run that leaves its axis by
+  more than the island's drift is a jog (plan Slice T): it alone goes
+  OBLIQUE and its line keeps its axis;
   an island without a rigid frame bipartitions its lines into axes by 3D
   perpendicularity at nodes, takes in-line run signs from its ordered
   island rails (plan Slice Q; a run on an unordered rail stays unsigned
@@ -230,4 +232,8 @@ After Slice S (2026-11) pins 6966 -> 10104, Layer 5 diagnostics 28 -> 18
 (contradictions 20 -> 5), OBLIQUE runs 58 -> 102 (runs tilted more than
 about 5 degrees in the frame), island lines not straight 5 -> 10;
 invariants stay 0.
+
+After Slice T (2026-11) jogs go OBLIQUE alone: contradictions 5 -> 0,
+island lines not straight 10 -> 0, 17 jogs, pins 10104 -> 10176, OBLIQUE
+runs 102 -> 113; invariants stay 0.
 
