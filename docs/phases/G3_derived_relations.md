@@ -79,7 +79,8 @@ Validation status:
 Deferred:
 
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
-- ScaffoldTrace / ScaffoldCircuit / ScaffoldRail
+- ScaffoldCircuit (ScaffoldTrace / ScaffoldRail: implemented v1 later, G0
+  DD-46/DD-47)
 - WorldOrientation
 - Layer 4 Feature Grammar
 - Layer 5 Runtime / Solve
@@ -104,9 +105,9 @@ Current terminology for the final boundary graph model:
 | `SURFACE_SLIDING_CONTINUATION_CANDIDATE` | Implemented conservative ScaffoldNodeIncidentEdgeRelationKind for curved/side-surface continuation evidence. |
 | `SideSurfaceContinuityEvidence` | Implemented v1 evidence-only same-side surface flow record over two existing ScaffoldEdge endpoint occurrences at one existing ScaffoldNode, gated by compatible AlignmentClass direction families. |
 | `SurfaceFlowCompatibilityEvidence` | Implemented v0 evidence-only cross-patch surface-flow family compatibility record over existing ScaffoldEdge endpoint occurrences or edge-pair occurrences across compatible patches. |
-| `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
+| `ScaffoldTrace` | Implemented v1 (G0 DD-46): ordered evidence view over ConnectedDirectionFamily members, by stations. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
-| `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
+| `ScaffoldRail` | Implemented v1 (G0 DD-47): direction-stable ScaffoldTrace usable as a conditional axis. |
 
 Endpoint samples, endpoint relations, LocalFaceFanGeometryFacts and ScaffoldNodes
 are evidence or derived relation records; they are not Layer 1 topology.
@@ -776,6 +777,10 @@ Consumption:
   SurfaceFlowCompatibilityEvidence.
 
 ## Future - ScaffoldTrace
+
+Status: ScaffoldTrace and ScaffoldRail are implemented as v1 evidence views
+(G0 DD-46/DD-47, plan Slices J and O). ScaffoldCircuit stays future. The
+design notes below are the original G3 outlook.
 
 `ScaffoldTrace` is a connected sequence of ScaffoldEdges through ScaffoldNodes.
 It may later be classified as:

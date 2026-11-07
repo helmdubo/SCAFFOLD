@@ -188,7 +188,7 @@ SideSurfaceContinuityEvidence v1 evidence-only same-side surface flow record wit
 SurfaceFlowCompatibilityEvidence v0 evidence-only cross-patch flow-family compatibility record
 ConnectedDirectionFamily v1 (G0 DD-43/DD-45) occurrence-aware geodesic families
 RunEndpointJunction v0 (G0 DD-44)
-ScaffoldTrace / ScaffoldRail v0 evidence views (plan Slice J; DD-46/DD-47 draft, not yet in G0)
+ScaffoldTrace / ScaffoldRail v1 evidence views: station order and island cut view (G0 DD-46/DD-47; plan Slices J, O)
 ```
 
 SHARED_CHAIN family transport crosses only straight single-run hinges
@@ -196,8 +196,13 @@ SHARED_CHAIN family transport crosses only straight single-run hinges
 in-patch segment; merges that would revisit a patch are blocked, so opposite
 sides of a patch never share a family (plan Slice L2). In-patch geodesic
 continuation depends on the junction angle alone, and node crossings record
-the hinge Chain through their node (plan Slice N, G0 v1.5). Layer 5 splits
-families into island lines at seams the island cuts. Known deferred gap: a run transported through a 90-degree
+the hinge Chain through their node (plan Slice N, G0 v1.5). A node crossing
+never folds back: after transport about the hinge its two runs leave the
+node in opposite directions (plan Slice O1, G0 v1.6). Layer 5 takes its
+island lines from the Layer 3 cut view of each family's rail by the island
+(plan Slices O, Q); an island without a rigid frame takes its in-line run
+signs from those rails. Known
+deferred gap: a run transported through a 90-degree
 corner ScaffoldNode may join an end patch's perimeter family; it is pinned by
 a strict xfail and waits for a future patch-normal filter. Do not add
 cap/wall patch semantics to fix it.
@@ -216,7 +221,7 @@ Deferred in G3:
 ```text
 ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
 ScaffoldCircuit
-ScaffoldRail loop opening from island cut context
+ScaffoldRail branch resolution
 WorldOrientation
 ```
 

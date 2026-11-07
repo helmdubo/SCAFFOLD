@@ -42,6 +42,7 @@ class SolveResult:
     patch_by_source_face: Mapping[str, str] = field(default_factory=dict)
     node_frame_mismatches: tuple[str, ...] = ()
     vertex_by_face_corner: Mapping[tuple[str, str], str] = field(default_factory=dict)
+    rail_frame_conflicts: tuple[str, ...] = ()
 
 
 def run_skeleton_solve(context: Any) -> SolveResult:
@@ -93,6 +94,11 @@ def run_skeleton_solve(context: Any) -> SolveResult:
             for node in skeleton.node_frame_mismatches
         ),
         vertex_by_face_corner=vertex_by_face_corner,
+        rail_frame_conflicts=tuple(
+            f"{skeleton.island_id}:{conflict}"
+            for skeleton in skeletons
+            for conflict in skeleton.rail_frame_conflicts
+        ),
     )
 
 

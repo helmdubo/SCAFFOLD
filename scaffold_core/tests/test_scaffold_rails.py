@@ -10,14 +10,23 @@ Rules:
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
+from scaffold_core.ids import SourceEdgeId
+from scaffold_core.layer_3_relations.scaffold_rails import (
+    MemberTraceEndpoints,
+    cut_scaffold_rail,
+    rail_member_endpoints,
+)
 from scaffold_core.pipeline.inspection import inspect_pipeline_context
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
+from scaffold_core.tests.fixtures.beveled_wall_corner import make_beveled_wall_corner_source
 from scaffold_core.tests.fixtures.cylinder_tube import (
     make_cylinder_tube_without_caps_with_two_seams_source,
 )
 from scaffold_core.tests.fixtures.extruded_cross import make_extruded_cross_source
 from scaffold_core.tests.fixtures.l_corridor_tunnel import make_l_corridor_tunnel_seamed_folds_source
+from scaffold_core.tests.fixtures.t_vertex_wall import make_t_vertex_wall_source
 from scaffold_core.tests.fixtures.tube_with_cap import make_tube_with_cap_source
 
 
@@ -99,6 +108,192 @@ def test_tube_with_cap_keeps_cap_and_side_rails_separate() -> None:
     assert len(_rails_with_member_fragment(relations, "patch:seed:f_cap:0:0")) == 4
 
 
+def test_fold_line_rail_is_one_station_of_both_hinge_uses() -> None:
+    """The two uses of a hinge cover the same edges: one station, not two members in a row."""
+
+    context = run_pass_1_relations(run_pass_0(make_beveled_wall_corner_source()))
+    relations = context.relation_snapshot
+    evidence_by_id = {item.id: item for item in relations.patch_chain_directional_evidence}
+
+    fold_rails = tuple(
+        rail
+        for rail in relations.scaffold_rails
+        if len(rail.ordered_member_directional_evidence_ids) == 2
+        and len({evidence_by_id[member].patch_id for member in rail.ordered_member_directional_evidence_ids}) == 2
+        and len({
+            frozenset(evidence_by_id[member].source_edge_ids)
+            for member in rail.ordered_member_directional_evidence_ids
+        }) == 1
+    )
+    assert len(fold_rails) == 2
+    for rail in fold_rails:
+        assert rail.is_consumable_by_g5a
+        assert rail.diagnostics == ()
+        assert sorted(rail.orientation_sign_by_member.values()) == [-1, 1]
+        assert rail.first_trace_node_id != rail.last_trace_node_id
+        (station,) = rail.ordered_station_member_ids
+        assert set(station) == set(rail.ordered_member_directional_evidence_ids)
+
+
+def test_rail_orders_hinge_stations_through_their_node() -> None:
+    """The T-vertex wall bottom is two hinges in a line: two stations linked at w1."""
+
+    context = run_pass_1_relations(run_pass_0(make_t_vertex_wall_source()))
+    relations = context.relation_snapshot
+    rail = _rail_with_member_fragment(relations, "patch:seed:f_wall:0:1:")
+    node_by_id = {node.id: node for node in relations.scaffold_nodes}
+    evidence_by_id = {item.id: item for item in relations.patch_chain_directional_evidence}
+
+    assert rail.is_consumable_by_g5a
+    assert rail.diagnostics == ()
+    node_sources = [node_by_id[node_id].source_vertex_ids for node_id in rail.ordered_trace_node_ids]
+    assert node_sources in ([("w0",), ("w1",), ("w2",)], [("w2",), ("w1",), ("w0",)])
+    members = rail.ordered_member_directional_evidence_ids
+    assert len(members) == 4
+    for first, second in (members[:2], members[2:]):
+        assert set(evidence_by_id[first].source_edge_ids) == set(evidence_by_id[second].source_edge_ids)
+        assert rail.orientation_sign_by_member[first] == -rail.orientation_sign_by_member[second]
+    wall_signs = {
+        rail.orientation_sign_by_member[member]
+        for member in members
+        if "f_wall" in str(evidence_by_id[member].patch_id)
+    }
+    assert len(wall_signs) == 1
+    # The rail names its stations, so a consumer never regroups hinge uses;
+    # each station occupies one step between two consecutive trace nodes.
+    assert [set(station) for station in rail.ordered_station_member_ids] == [
+        set(members[:2]),
+        set(members[2:]),
+    ]
+    trace = _trace_for_rail(relations, rail.id)
+    assert trace.ordered_station_member_ids == rail.ordered_station_member_ids
+    member_nodes = {
+        member.directional_evidence_id: {member.start_trace_node_id, member.end_trace_node_id}
+        for member in trace.members
+    }
+    for index, station in enumerate(rail.ordered_station_member_ids):
+        step = set(rail.ordered_trace_node_ids[index:index + 2])
+        assert all(member_nodes[member] == step for member in station)
+
+
+def test_cut_rail_opens_a_loop_only_where_the_cut_is() -> None:
+    context = run_pass_1_relations(run_pass_0(make_cylinder_tube_without_caps_with_two_seams_source()))
+    relations = context.relation_snapshot
+    endpoints = rail_member_endpoints(relations.run_endpoint_junctions)
+    ring_rail = next(rail for rail in relations.scaffold_rails if rail.is_closed_loop)
+    family = next(
+        family for family in relations.connected_direction_families if family.id == ring_rail.direction_family_id
+    )
+    members = family.member_directional_evidence_ids
+    seam_chains = sorted({str(adjacency.chain_id) for adjacency in relations.patch_adjacencies.values()})
+    assert len(seam_chains) == 2
+
+    (closed,) = cut_scaffold_rail(family, endpoints, members, seam_chains)
+    assert not closed.is_ordered
+    assert closed.diagnostics == ("closed_loop",)
+
+    (opened,) = cut_scaffold_rail(family, endpoints, members, seam_chains[:1])
+    assert opened.is_ordered
+    assert sorted(opened.ordered_member_directional_evidence_ids) == sorted(members)
+    assert [
+        member for station in opened.ordered_station_member_ids for member in station
+    ] == list(opened.ordered_member_directional_evidence_ids)
+    assert set(opened.orientation_sign_by_member.values()) <= {-1, 1}
+
+    halves = cut_scaffold_rail(family, endpoints, members, ())
+    patch_of = {item.id: item.patch_id for item in relations.patch_chain_directional_evidence}
+    assert len(halves) == 2
+    assert all(half.is_ordered for half in halves)
+    assert all(
+        len({patch_of[member] for member in half.ordered_member_directional_evidence_ids}) == 1
+        for half in halves
+    )
+
+
+def test_cut_rail_keeps_a_branch_unordered() -> None:
+    """A station with three links never picks a continuation (DD-47 draft branch policy)."""
+
+    family = _synthetic_family(
+        _node_crossing("m0", "m1", "n1"),
+        _node_crossing("m0", "m2", "n2"),
+        _node_crossing("m0", "m3", "n2"),
+    )
+    endpoints = {
+        "m0": MemberTraceEndpoints("n1", "n2"),
+        "m1": MemberTraceEndpoints("n0", "n1"),
+        "m2": MemberTraceEndpoints("n2", "n4"),
+        "m3": MemberTraceEndpoints("n2", "n5"),
+    }
+
+    (segment,) = cut_scaffold_rail(family, endpoints, family.member_directional_evidence_ids, _all_chains(family))
+    assert not segment.is_ordered
+    assert "branch:station:m0" in segment.diagnostics
+    assert "branch:trace_node:n2" in segment.diagnostics
+    assert set(segment.orientation_sign_by_member.values()) == {0}
+
+
+def test_cut_rail_lists_an_unordered_segment_by_station_id() -> None:
+    """A walked path whose member cannot be oriented lists stations by id, not walk order."""
+
+    family = _synthetic_family(_node_crossing("b", "a", "n1"), _node_crossing("a", "c", "n2"))
+    endpoints = {
+        "a": MemberTraceEndpoints("n9", "n2"),  # its link at n1 is not one of its ends
+        "b": MemberTraceEndpoints("n0", "n1"),
+        "c": MemberTraceEndpoints("n2", "n3"),
+    }
+
+    (segment,) = cut_scaffold_rail(family, endpoints, family.member_directional_evidence_ids, _all_chains(family))
+    assert not segment.is_ordered
+    assert segment.diagnostics == ("inconsistent_orientation:a",)
+    assert segment.ordered_station_member_ids == (("a",), ("b",), ("c",))
+
+
+def test_cut_rail_keeps_a_rail_that_returns_to_its_own_node_unordered() -> None:
+    """A path of stations that comes back to a node it passed is not a line."""
+
+    family = _synthetic_family(_node_crossing("a", "b", "n"), _node_crossing("b", "c", "m"))
+    endpoints = {
+        "a": MemberTraceEndpoints("x", "n"),
+        "b": MemberTraceEndpoints("n", "m"),
+        "c": MemberTraceEndpoints("m", "n"),
+    }
+
+    (segment,) = cut_scaffold_rail(family, endpoints, family.member_directional_evidence_ids, _all_chains(family))
+    assert not segment.is_ordered
+    assert segment.diagnostics == ("branch:trace_node:n",)
+
+
+def test_cut_rail_names_the_branch_where_a_cut_hinge_parts_its_uses() -> None:
+    """Cutting the T-vertex wall's right hinge leaves the floor and wall uses
+    of e_w12 as two stations, and both continue the left station at w1."""
+
+    context = run_pass_1_relations(run_pass_0(make_t_vertex_wall_source()))
+    relations = context.relation_snapshot
+    rail = _rail_with_member_fragment(relations, "patch:seed:f_wall:0:1:")
+    family = next(
+        family for family in relations.connected_direction_families if family.id == rail.direction_family_id
+    )
+    evidence_by_id = {item.id: item for item in relations.patch_chain_directional_evidence}
+    (cut_chain,) = {
+        str(crossing.shared_chain_id)
+        for crossing in family.crossing_records
+        if crossing.kind == "SHARED_CHAIN"
+        and SourceEdgeId("e_w12") in evidence_by_id[crossing.first_directional_evidence_id].source_edge_ids
+    }
+
+    (segment,) = cut_scaffold_rail(
+        family,
+        rail_member_endpoints(relations.run_endpoint_junctions),
+        family.member_directional_evidence_ids,
+        _all_chains(family) - {cut_chain},
+    )
+    assert not segment.is_ordered
+    assert len(segment.ordered_station_member_ids) == 3
+    assert [item for item in segment.diagnostics if item.startswith("branch:")] == [
+        "branch:trace_node:scaffold_node:source:w1"
+    ]
+
+
 def test_scaffold_rails_inspect_full_serializes_typed_records() -> None:
     context = run_pass_1_relations(run_pass_0(make_l_corridor_tunnel_seamed_folds_source()))
     relations = context.relation_snapshot
@@ -113,8 +308,39 @@ def test_scaffold_rails_inspect_full_serializes_typed_records() -> None:
 
     consumable = next(rail for rail in serialized["scaffold_rails"] if rail["is_consumable_by_g5a"])
     assert "ordered_member_directional_evidence_ids" in consumable
+    assert "ordered_station_member_ids" in consumable
+    assert all("ordered_station_member_ids" in trace for trace in serialized["scaffold_traces"])
     assert "orientation_sign_by_member" in consumable
     assert "crossing_records" in consumable
+
+
+def _node_crossing(first: str, second: str, node: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        kind="SCAFFOLD_NODE",
+        first_directional_evidence_id=first,
+        second_directional_evidence_id=second,
+        first_patch_id=f"patch:{first}",
+        second_patch_id=f"patch:{second}",
+        shared_chain_id=f"chain:{first}:{second}",
+        scaffold_node_id=node,
+        run_endpoint_junction_id=None,
+    )
+
+
+def _synthetic_family(*crossings: SimpleNamespace) -> SimpleNamespace:
+    members = sorted(
+        {crossing.first_directional_evidence_id for crossing in crossings}
+        | {crossing.second_directional_evidence_id for crossing in crossings}
+    )
+    return SimpleNamespace(
+        id="family:synthetic",
+        member_directional_evidence_ids=tuple(members),
+        crossing_records=crossings,
+    )
+
+
+def _all_chains(family) -> set[str]:
+    return {str(crossing.shared_chain_id) for crossing in family.crossing_records}
 
 
 def _family_patch_ids(relations, family_id: str) -> set[str]:

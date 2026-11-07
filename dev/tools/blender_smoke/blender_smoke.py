@@ -157,6 +157,12 @@ def _structure_metrics(solve, roles: Counter) -> dict:
     def count(prefix: str) -> int:
         return sum(1 for diagnostic in solve.diagnostics if diagnostic.startswith(prefix))
 
+    island_rails = [
+        segment
+        for skeleton in solve.skeletons
+        for segment in skeleton.rail_segments
+        if len(segment.ordered_member_directional_evidence_ids) > 1
+    ]
     return {
         "rigid_islands": sum(1 for skeleton in solve.skeletons if skeleton.frame == "UNFOLDED"),
         "island_lines": sum(len(set(skeleton.line_by_run.values())) for skeleton in solve.skeletons),
@@ -166,6 +172,10 @@ def _structure_metrics(solve, roles: Counter) -> dict:
         "lines_not_straight": count("island line not straight"),
         "patches_outside_frame": count("patch outside the rigid island frame"),
         "node_frame_mismatches": len(solve.node_frame_mismatches),
+        # plan Slice O: Layer 3 rails cut by each island, checked against the island lines and frame
+        "island_rails": len(island_rails),
+        "unordered_island_rails": sum(1 for segment in island_rails if not segment.is_ordered),
+        "rail_frame_conflicts": len(solve.rail_frame_conflicts),
     }
 
 

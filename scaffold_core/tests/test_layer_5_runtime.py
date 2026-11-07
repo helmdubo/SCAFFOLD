@@ -46,6 +46,7 @@ from scaffold_core.tests.fixtures.extruded_cross import make_extruded_cross_sour
 from scaffold_core.tests.fixtures.l_corridor_tunnel import (
     make_l_corridor_tunnel_seamed_folds_source,
 )
+from scaffold_core.tests.fixtures.reflex_corner import make_reflex_corner_walls_source
 from scaffold_core.tests.fixtures.t_vertex_wall import make_t_vertex_wall_source
 from scaffold_core.tests.fixtures.tube_with_cap import make_tube_with_cap_source
 
@@ -230,6 +231,30 @@ def test_artist_multiseam_cylinder_open_band_unwraps_to_an_exact_rectangle() -> 
     _assert_band_is_exact_rectangle(result, island_count=3, residual_limit=1e-6)
 
 
+def test_artist_multiseam_band_rims_open_into_ordered_island_rails() -> None:
+    # Each rim closes into a loop rail across the six strips; Layer 3 keeps it
+    # a closed, unordered loop. The band island leaves one seam cut, and the
+    # Layer 3 cut view opens each rim there into one ordered rail (plan Slice O).
+    context = run_pass_1_relations(run_pass_0(_load_capture("artist_cyl_multiseam.json")))
+    rims = {
+        frozenset(rail.ordered_member_directional_evidence_ids)
+        for rail in context.relation_snapshot.scaffold_rails
+        if rail.is_closed_loop
+    }
+    result = run_skeleton_solve(context)
+    island_rails = [
+        segment
+        for skeleton in result.skeletons
+        for segment in skeleton.rail_segments
+        if len(segment.ordered_member_directional_evidence_ids) > 1
+    ]
+
+    assert len(rims) == 2
+    assert {frozenset(segment.ordered_member_directional_evidence_ids) for segment in island_rails} == rims
+    assert all(segment.is_ordered for segment in island_rails)
+    assert result.rail_frame_conflicts == ()
+
+
 def test_capped_odd_strip_prism_band_unwraps_to_an_exact_rectangle() -> None:
     # Synthetic reproduction of the multiseam case: a capped 10-segment prism
     # cut into two 5-segment strips.
@@ -279,6 +304,15 @@ def test_artist_walls_captures_keep_g5a_invariants() -> None:
             for diagnostic in result.diagnostics
         ), name
         assert sum(1 for vertex in result.vertices if vertex.pinned) >= min_pinned, name
+        # Plan Slice O: Layer 3 orders every island rail of these walls, and
+        # each runs one way along its axis in the unfolded frame.
+        assert result.rail_frame_conflicts == (), name
+        assert all(
+            segment.is_ordered
+            for skeleton in result.skeletons
+            for segment in skeleton.rail_segments
+            if len(segment.ordered_member_directional_evidence_ids) > 1
+        ), name
 
 
 def test_fully_seamed_box_unfolds_as_one_consistent_island() -> None:
@@ -335,14 +369,18 @@ def test_t_vertex_wall_island_has_consistent_lines_and_axes() -> None:
     assert all(area > 0.0 for area in _pinned_face_areas(context, result))
 
 
-def test_warped_face_stays_outside_the_rigid_island_frame() -> None:
-    # A single warped n-gon has no rotation axis. It stays OBLIQUE with a
-    # diagnostic; the planar wall keeps the rigid frame and its axes.
+def _t_vertex_wall_with_warped_floor_a() -> SourceMeshSnapshot:
     source = make_t_vertex_wall_source()
     lifted = dict(source.vertices)
     corner = SourceVertexId("a0")
     lifted[corner] = MeshVertexRef(corner, (0.0, -1.0, 0.5))
-    result = _solve(replace(source, vertices=lifted))
+    return replace(source, vertices=lifted)
+
+
+def test_warped_face_stays_outside_the_rigid_island_frame() -> None:
+    # A single warped n-gon has no rotation axis. It stays OBLIQUE with a
+    # diagnostic; the planar wall keeps the rigid frame and its axes.
+    result = _solve(_t_vertex_wall_with_warped_floor_a())
 
     skeleton = result.skeletons[0]
     assert skeleton.frame == "UNFOLDED"
@@ -358,6 +396,79 @@ def test_warped_face_stays_outside_the_rigid_island_frame() -> None:
         if ":f_wall:" in run_id
     } == {"AXIS_A", "AXIS_B"}
     assert result.node_frame_mismatches == ()
+
+
+def test_rigid_seams_enter_the_island_tree_first() -> None:
+    # Plan Slice P: every seam of the T-vertex wall is one edge long, so the
+    # longest-seam-first tree used to reach the planar floor_b only through
+    # the warped floor_a, and both fell out of the rigid frame. The straight
+    # hinge e_w12 between the wall and floor_b is rigid and enters the tree
+    # first; the warped floor_a joins afterwards over one non-rigid seam.
+    result = _solve(_t_vertex_wall_with_warped_floor_a())
+    decisions = {decision.chain_id: decision for decision in result.assembly.decisions}
+    (skeleton,) = result.skeletons
+
+    assert len(result.assembly.islands) == 1
+    assert decisions["chain:e_w12"].accepted
+    assert [decisions[chain].accepted for chain in ("chain:e_a1", "chain:e_w01")].count(True) == 1
+    assert [d for d in skeleton.diagnostics if d.startswith("patch outside the rigid island frame")] == [
+        "patch outside the rigid island frame: patch:seed:f_floor_a -> OBLIQUE"
+    ]
+    floor_b_roles = {role for run_id, role in skeleton.axis_role_by_run.items() if ":f_floor_b:" in run_id}
+    assert floor_b_roles == {"AXIS_A", "AXIS_B"}
+    assert result.node_frame_mismatches == ()
+    assert result.rail_frame_conflicts == ()
+
+
+def test_rigid_seam_is_a_straight_hinge_or_coplanar_join_of_planar_unwarped_patches() -> None:
+    from scaffold_core.layer_5_runtime.islands import SeamRigidity, is_rigid_seam
+
+    rigidity = SeamRigidity(
+        planar_patch_ids=frozenset({"a", "b", "c", "warped"}),
+        warped_patch_ids=frozenset({"warped"}),
+        straight_chain_ids=frozenset({"hinge"}),
+        normal_by_patch={
+            "a": (0.0, 0.0, 1.0),
+            "b": (0.0, 0.0, 0.5),  # patch normals need not be unit length
+            "c": (0.0, 1.0, 0.0),
+            "warped": (0.0, 0.0, 1.0),
+            "curved": (0.0, 0.0, 1.0),
+        },
+    )
+
+    assert is_rigid_seam(rigidity, "hinge", "a", "c")  # straight hinge at any angle
+    assert is_rigid_seam(rigidity, "bent", "a", "b")  # coplanar join over a bent chain
+    assert not is_rigid_seam(rigidity, "bent", "a", "c")  # bent hinge, no rotation axis
+    assert not is_rigid_seam(rigidity, "hinge", "a", "warped")
+    assert not is_rigid_seam(rigidity, "hinge", "curved", "a")  # not planar
+
+
+def test_tree_edge_priority_takes_rigid_seams_first_then_the_longest_then_by_id() -> None:
+    from scaffold_core.layer_5_runtime.islands import SeamRigidity, _tree_edge_priority
+
+    rigidity = SeamRigidity(
+        planar_patch_ids=frozenset({"wall", "floor", "lid"}),
+        warped_patch_ids=frozenset({"lid"}),
+        straight_chain_ids=frozenset({"short", "short_b", "long", "to_lid"}),
+        normal_by_patch={"wall": (0.0, -1.0, 0.0), "floor": (0.0, 0.0, 1.0), "lid": (0.0, 0.0, 1.0)},
+    )
+    topology = SimpleNamespace(chains={
+        "short": SimpleNamespace(source_edge_ids=("e1",)),
+        "short_b": SimpleNamespace(source_edge_ids=("e5",)),
+        "long": SimpleNamespace(source_edge_ids=("e1", "e2", "e3")),
+        "to_lid": SimpleNamespace(source_edge_ids=("e1", "e2", "e3", "e4")),
+    })
+    seams = [
+        SimpleNamespace(id="a0", chain_id="to_lid", first_patch_id="wall", second_patch_id="lid"),
+        SimpleNamespace(id="a3", chain_id="short_b", first_patch_id="floor", second_patch_id="wall"),
+        SimpleNamespace(id="a1", chain_id="short", first_patch_id="wall", second_patch_id="floor"),
+        SimpleNamespace(id="a2", chain_id="long", first_patch_id="floor", second_patch_id="wall"),
+    ]
+
+    ordered = sorted(seams, key=lambda seam: _tree_edge_priority(seam, rigidity, topology))
+    # The longest seam reaches the warped lid, so it comes last; inside the
+    # rigid group the longer hinge comes first, and equal lengths go by id.
+    assert [seam.id for seam in ordered] == ["a2", "a1", "a3", "a0"]
 
 
 def test_curved_islands_keep_the_frame_free_derivation() -> None:
@@ -483,6 +594,198 @@ def test_island_line_whose_members_disagree_degrades_to_oblique() -> None:
     assert diagnostics == ["island line not straight in the unfolded frame: line:bent -> OBLIQUE"]
     assert signs["seed"] == 1.0  # AXIS_A follows the seed run itself
     assert signs["rung"] == -1.0  # AXIS_B = normal x AXIS_A points along -y
+
+
+def test_island_cut_opens_the_ring_rails_of_a_two_seam_tube() -> None:
+    # Layer 3 keeps each rim ring a closed loop rail: it has no start of its
+    # own. The island stitches one seam and cuts the other, so Layer 3 cuts
+    # the ring there and each rim becomes one ordered rail through both halves.
+    context = run_pass_1_relations(run_pass_0(make_cylinder_tube_without_caps_with_two_seams_source()))
+    ring_rails = [rail for rail in context.relation_snapshot.scaffold_rails if rail.is_closed_loop]
+    ring_members = {frozenset(rail.ordered_member_directional_evidence_ids) for rail in ring_rails}
+    result = run_skeleton_solve(context)
+    (skeleton,) = result.skeletons
+    opened = [
+        segment
+        for segment in skeleton.rail_segments
+        if frozenset(segment.ordered_member_directional_evidence_ids) in ring_members
+    ]
+
+    assert len(ring_rails) == 2
+    assert not any(rail.is_consumable_by_g5a for rail in ring_rails)
+    assert len(opened) == 2
+    assert all(segment.is_ordered for segment in opened)
+    assert result.rail_frame_conflicts == ()
+
+
+def test_reflex_corner_island_rails_agree_with_the_unfolded_frame() -> None:
+    # Wall A unfolds into the notch of wall B, so A's bottom lies on B's notch
+    # bottom pointing back (a fold-back). Layer 3 keeps them on separate lines
+    # (plan Slice O1); were they one rail, it would run against the frame.
+    source = make_reflex_corner_walls_source()
+    context = run_pass_1_relations(run_pass_0(source))
+    run_on = {
+        str(edge_id): evidence.id
+        for evidence in context.relation_snapshot.patch_chain_directional_evidence
+        for edge_id in evidence.source_edge_ids
+    }
+    result = run_skeleton_solve(context)
+    (skeleton,) = result.skeletons
+
+    assert skeleton.frame == "UNFOLDED"
+    assert result.rail_frame_conflicts == ()
+    assert skeleton.line_by_run[run_on["e_a_bottom"]] != skeleton.line_by_run[run_on["e_b_notch_bottom"]]
+    assert skeleton.line_by_run[run_on["e_a_top"]] == skeleton.line_by_run[run_on["e_b_top"]]
+
+
+def test_island_rail_conflicts_name_rails_against_the_frame_and_split_lines() -> None:
+    from scaffold_core.layer_3_relations.model import ScaffoldRailSegment
+    from scaffold_core.layer_5_runtime.skeleton import _island_rail_conflicts
+
+    def segment(*members, signs=None):
+        return ScaffoldRailSegment(
+            direction_family_id="family",
+            ordered_member_directional_evidence_ids=members,
+            ordered_station_member_ids=tuple((member,) for member in members),
+            ordered_trace_node_ids=(),
+            orientation_sign_by_member=signs or {member: 1 for member in members},
+            is_ordered=True,
+            diagnostics=(),
+        )
+
+    line_of = {"a": "line", "b": "line"}
+    roles = {"a": "AXIS_A", "b": "AXIS_A"}
+    along = {"a": 1.0, "b": 1.0}
+    against = {"a": 1.0, "b": -1.0}
+
+    assert _island_rail_conflicts((segment("a", "b"),), line_of, roles, along, True) == ()
+    assert _island_rail_conflicts((segment("a", "b"),), line_of, roles, against, True) == (
+        "island rail runs against the unfolded frame: line",
+    )
+    assert _island_rail_conflicts((segment("a", "b"),), line_of, roles, against, False) == ()
+    # A rail sign that flips with the frame sign still runs one way along the axis.
+    flipped = segment("a", "b", signs={"a": 1, "b": -1})
+    assert _island_rail_conflicts((flipped,), line_of, roles, against, True) == ()
+    assert _island_rail_conflicts((segment("a"), segment("b")), line_of, roles, along, True) == (
+        "island rail and island line disagree: line",
+    )
+
+
+def test_framed_island_reports_an_island_rail_against_its_frame(monkeypatch) -> None:
+    # Wiring of invariant 6: after Slice O1 no real rail runs against the
+    # frame, so one sign of every ordered island rail is flipped on its way
+    # out of the Layer 3 cut view; a framed island must report it.
+    import scaffold_core.layer_5_runtime.skeleton as skeleton_module
+
+    real_cut = skeleton_module.cut_scaffold_rail
+
+    def cut_with_one_sign_flipped(*args):
+        segments = []
+        for segment in real_cut(*args):
+            if segment.is_ordered and len(segment.ordered_member_directional_evidence_ids) > 1:
+                first = segment.ordered_member_directional_evidence_ids[0]
+                signs = dict(segment.orientation_sign_by_member)
+                signs[first] = -signs[first]
+                segment = replace(segment, orientation_sign_by_member=signs)
+            segments.append(segment)
+        return tuple(segments)
+
+    monkeypatch.setattr(skeleton_module, "cut_scaffold_rail", cut_with_one_sign_flipped)
+    result = _solve(make_l_corridor_tunnel_seamed_folds_source())
+
+    assert all(skeleton.frame == "UNFOLDED" for skeleton in result.skeletons)
+    assert any(
+        "island rail runs against the unfolded frame" in conflict for conflict in result.rail_frame_conflicts
+    )
+
+
+def test_frame_free_island_takes_lines_and_in_line_signs_from_its_rails(monkeypatch) -> None:
+    # Plan Slice Q: Layer 5 never orders a line itself. One sign of every
+    # ordered multi-run island rail is flipped on its way out of the Layer 3
+    # cut view; the frame-free island must follow the rail, while a
+    # head-to-tail walk of its own would ignore the flip.
+    import scaffold_core.layer_5_runtime.skeleton as skeleton_module
+
+    real_cut = skeleton_module.cut_scaffold_rail
+
+    def cut_with_one_sign_flipped(*args):
+        segments = []
+        for segment in real_cut(*args):
+            if segment.is_ordered and len(segment.ordered_member_directional_evidence_ids) > 1:
+                first = segment.ordered_member_directional_evidence_ids[0]
+                signs = dict(segment.orientation_sign_by_member)
+                signs[first] = -signs[first]
+                segment = replace(segment, orientation_sign_by_member=signs)
+            segments.append(segment)
+        return tuple(segments)
+
+    monkeypatch.setattr(skeleton_module, "cut_scaffold_rail", cut_with_one_sign_flipped)
+    result = _solve(make_cylinder_tube_without_caps_with_two_seams_source())
+    skeleton = result.skeletons[0]
+
+    assert skeleton.frame == "FRAME_FREE"
+    multi_run = [s for s in skeleton.rail_segments if len(s.ordered_member_directional_evidence_ids) > 1]
+    assert multi_run and all(segment.is_ordered for segment in multi_run)
+    for segment in skeleton.rail_segments:
+        members = segment.ordered_member_directional_evidence_ids
+        assert {skeleton.line_by_run[member] for member in members} == {
+            f"{segment.direction_family_id}@{min(members)}"
+        }
+        # Co-orientation between rails may flip a whole line, never one run.
+        assert len({
+            skeleton.orientation_by_run[member] * segment.orientation_sign_by_member[member]
+            for member in members
+        }) == 1
+
+
+def test_unordered_island_rail_stays_unsigned_in_a_frame_free_island(monkeypatch) -> None:
+    import scaffold_core.layer_5_runtime.skeleton as skeleton_module
+
+    baseline = _solve(make_cylinder_tube_without_caps_with_two_seams_source()).skeletons[0]
+    real_cut = skeleton_module.cut_scaffold_rail
+
+    def cut_with_multi_run_rails_unordered(*args):
+        return tuple(
+            replace(segment, is_ordered=False)
+            if len(segment.ordered_member_directional_evidence_ids) > 1 else segment
+            for segment in real_cut(*args)
+        )
+
+    monkeypatch.setattr(skeleton_module, "cut_scaffold_rail", cut_with_multi_run_rails_unordered)
+    skeleton = _solve(make_cylinder_tube_without_caps_with_two_seams_source()).skeletons[0]
+
+    unordered = [s for s in skeleton.rail_segments if not s.is_ordered]
+    assert unordered
+    for segment in unordered:
+        members = segment.ordered_member_directional_evidence_ids
+        assert f"unordered island rail: {skeleton.line_by_run[members[0]]} -> unsigned" in skeleton.diagnostics
+        assert not set(members) & set(skeleton.orientation_by_run)
+    equations = skeleton.axis_a.equation_count + skeleton.axis_b.equation_count
+    assert equations < baseline.axis_a.equation_count + baseline.axis_b.equation_count
+
+
+def test_unordered_single_run_rail_stays_unsigned_in_a_frame_free_island(monkeypatch) -> None:
+    # Before Slice Q such a run silently took sign +1 and wrote an equation.
+    import scaffold_core.layer_5_runtime.skeleton as skeleton_module
+
+    real_cut = skeleton_module.cut_scaffold_rail
+
+    def cut_with_single_run_rails_unordered(*args):
+        return tuple(
+            replace(segment, is_ordered=False)
+            if len(segment.ordered_member_directional_evidence_ids) == 1 else segment
+            for segment in real_cut(*args)
+        )
+
+    monkeypatch.setattr(skeleton_module, "cut_scaffold_rail", cut_with_single_run_rails_unordered)
+    skeleton = _solve(make_cylinder_tube_without_caps_with_two_seams_source()).skeletons[0]
+
+    singles = [s for s in skeleton.rail_segments if len(s.ordered_member_directional_evidence_ids) == 1]
+    assert singles
+    for segment in singles:
+        (member,) = segment.ordered_member_directional_evidence_ids
+        assert f"unordered island rail: {skeleton.line_by_run[member]} -> unsigned" in skeleton.diagnostics
+        assert member not in skeleton.orientation_by_run
 
 
 def test_node_frame_mismatch_names_a_node_whose_occurrences_sit_apart() -> None:

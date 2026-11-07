@@ -1393,6 +1393,9 @@ def _scaffold_trace_to_dict(trace) -> dict[str, object]:
         "ordered_member_directional_evidence_ids": list(
             trace.ordered_member_directional_evidence_ids
         ),
+        "ordered_station_member_ids": [
+            list(station) for station in trace.ordered_station_member_ids
+        ],
         "trace_node_ids": list(trace.trace_node_ids),
         "members": [
             _scaffold_trace_member_to_dict(member)
@@ -1447,6 +1450,9 @@ def _scaffold_rail_to_dict(rail) -> dict[str, object]:
         "ordered_member_directional_evidence_ids": list(
             rail.ordered_member_directional_evidence_ids
         ),
+        "ordered_station_member_ids": [
+            list(station) for station in rail.ordered_station_member_ids
+        ],
         "ordered_trace_node_ids": list(rail.ordered_trace_node_ids),
         "first_trace_node_id": rail.first_trace_node_id,
         "last_trace_node_id": rail.last_trace_node_id,

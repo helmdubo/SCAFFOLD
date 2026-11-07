@@ -13,7 +13,7 @@ Project: Scaffold
 Core package: scaffold_core/
 Current phase: G5a - Skeleton Runtime
 Architecture: immutable B-rep-inspired interpretation pipeline
-G0 contract: v1.5 (G0.md remains read-only for agents)
+G0 contract: v1.6 (G0.md remains read-only for agents)
 ```
 
 Scaffold Core currently contains Layers 0-3, the G5a Layer 5 runtime,
@@ -108,20 +108,25 @@ Implemented:
 - RunEndpointJunction v0
 - Layer 5 v0 skeleton runtime:
   - `islands.py` spanning-tree Level A island assembly;
-  - `skeleton.py` selection-wide AXIS_A / AXIS_B solve over island lines
-    (families split at seams the island cuts); axes and run orientation from
-    the rigid unfolded island frame when no island patch is curved (plan
-    Slice N), frame-free provisional derivation for curved islands;
+  - `skeleton.py` selection-wide AXIS_A / AXIS_B solve over island lines,
+    which are the pieces of the Layer 3 rail cut by the island (plan
+    Slices O, Q); axes and run orientation from the rigid unfolded island
+    frame when no island patch is curved (plan Slice N); an island without
+    one takes in-line run signs from its ordered island rails (plan
+    Slice Q); the rails are checked against the frame (plan Slice O);
   - `pins.py` run_skeleton_solve output model and invariants (axis-parallel,
-    SEAM_SELF length, node/frame agreement); pins are keyed by topology
-    vertex occurrence (DD-37), so both sides of a seam keep their own UV;
+    SEAM_SELF length, node/frame and rail/line/frame agreement); pins are
+    keyed by topology vertex occurrence (DD-37), so both sides of a seam keep
+    their own UV;
   - `uv_transfer.py` the only bpy write boundary; a loop takes only the pin
     of its own vertex occurrence in its own patch.
 - Debug add-on `Write UV (G5a)` button in
   `dev/tools/scaffold_graph_debug/`.
-- ScaffoldTrace / ScaffoldRail v0 Layer 3 evidence views
-  (`layer_3_relations/scaffold_rails.py`); closed loops stay non-consumable
-  until cut context opens them.
+- ScaffoldTrace / ScaffoldRail v1 Layer 3 evidence views
+  (`layer_3_relations/scaffold_rails.py`): ordered through hinge stations;
+  closed loops stay non-consumable globally, and the pure cut view
+  `cut_scaffold_rail` opens them only where a caller's structural cut
+  (an island) opens them.
 - Pipeline tooling: Chain -> PatchChain incidence index
   (`layer_3_relations/patch_chain_incidence.py`), per-pass stage timings in
   `PipelineContext.pass_timings` (reported by inspection), and a networkx
@@ -154,11 +159,39 @@ face corner's occurrence; the solve is unchanged. Tier 3: Cube pins 40 -> 42,
 and 706 borrowed loops on four walls objects are no longer written. A run end
 on a seam-cut mid-chain vertex stays unpinned with a diagnostic.
 
+Plan Slice O (ScaffoldRail over island lines): a node crossing no longer
+folds back over a patch that wraps around a corner node (O1, G3 repair; 75
+fold-backs on buildings -> 0). Rails are ordered through hinge stations:
+the two uses of one hinge Chain are one station, not two members in a row
+(O2; consumable rails 233 -> 4301 of 4821). The Layer 3 cut view orders a
+rail cut by a caller's cut, so a loop opens only where the island cuts it
+(O3). Layer 5 checks every island line against its island rail and the
+frame (O4): 2094 island rails with more than one run, 2090 ordered, 0
+conflicts. Tier 3 records `island_rails`, `unordered_island_rails` and
+`rail_frame_conflicts` (O5). The solve does not use rail order yet; pins,
+Layer 5 diagnostics and OBLIQUE runs are unchanged.
+
+Plan Slice P (rigid seams first): the island tree takes straight hinges
+and coplanar joins between planar, unwarped patches before the other
+accepted seams, so a planar patch no longer hangs off a warped n-gon when a
+path of rigid seams connects it to the frame root. The tree and the rigid
+frame share one predicate (`islands.is_rigid_seam`). On buildings, patches
+outside the frame go 10 -> 5 (only warped n-gons remain), OBLIQUE runs
+97 -> 65, pins 6926 -> 6957 and Layer 5 diagnostics 36 -> 31; four seams
+swap between stitched and cut.
+
+Plan Slice Q (Layer 5 on rails): island lines are the pieces of the Layer
+3 rail cut, and an island without a rigid frame takes its in-line run
+signs from its ordered island rails; a run on an unordered rail stays
+unsigned with a diagnostic. Layer 5's own family split and head-to-tail
+sign walk are gone, and so is the DD-47 provisional exception. Results
+are identical on all 101 islands of the buildings and in-repo captures.
+
 Not implemented:
 
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
 - ScaffoldCircuit
-- ScaffoldRail loop opening from island cut context
+- ScaffoldRail branch resolution
 - WorldOrientation
 - Layer 4 Feature Grammar
 - public API
@@ -212,15 +245,17 @@ ScaffoldGraph:
   ScaffoldEdges.
 
 ScaffoldTrace:
-  implemented v0 ordered evidence view over ConnectedDirectionFamily members
-  through ScaffoldNode / RunEndpointJunction atoms.
+  implemented v1 (G0 DD-46) ordered evidence view over ConnectedDirectionFamily
+  members through ScaffoldNode / RunEndpointJunction atoms, by stations: the
+  two uses of one hinge Chain are one step between two trace nodes.
 
 ScaffoldCircuit:
   future closed ScaffoldTrace.
 
 ScaffoldRail:
-  implemented v0 direction-stability view over a ScaffoldTrace; branches and
-  closed loops stay ambiguous and non-consumable by G5a.
+  implemented v1 (G0 DD-47) direction-stability view over a ScaffoldTrace;
+  branches and closed loops stay ambiguous and non-consumable by G5a; the
+  on-demand cut view orders the pieces of a consumer's cut (an island).
 
 ScaffoldContinuityComponent:
   implemented Layer 3 derived evidence view grouping existing ScaffoldEdges into
@@ -505,19 +540,20 @@ Still unresolved:
 - closed-loop wrap merge policy;
 - advanced corner detection;
 - local face-fan refinement policy;
-- ScaffoldCircuit and ScaffoldRail loop opening from island cut context.
+- ScaffoldCircuit and ScaffoldRail branch resolution.
 - lower-side cross-patch or same-chain lower-ring flow endpoint fallback.
 
 ---
 
 ## Next architecture decision
 
-Checkpoint 2026-11 (plan Slices L1, L2, M1, N and Task Card M2).
+Checkpoint 2026-11 (plan Slices L1, L2, M1, N, Task Card M2 and Slice O).
 ConnectedDirectionFamily transports SHARED_CHAIN only across straight
 single-run hinges, and a family visits each patch at most once (G0 v1.5
 DD-43). UV writes stay inside the solved faces, and each loop takes only the
 pin of its own vertex occurrence. Layer 5 works on island lines in the
-unfolded island frame. The
+unfolded island frame and checks them against the island rails that the
+Layer 3 cut view orders (Slice O). The
 Tier 3 Blender runner (`dev/tools/blender_smoke/`) and its
 `buildings_seamed.json` baseline cover 13 seamed artist objects and record
 structure metrics.
@@ -527,14 +563,17 @@ The user's goal for this stage is a consistent structure on the levels patch
 unwrap is only a test tool.
 
 Open decisions, all owned by the user (plan "Decisions the user must
-approve", items 3, 6 and 9):
+approve", items 3 and 11; item 6 is applied as G0 v1.6):
 
-- Next level to consolidate: cross-island axis agreement through shared
-  families; ScaffoldRail over island lines (loop opening by island cuts);
-  island assembly without self-overlap (walls.007); curved runs inside Layer
-  3 lines (OQ-11, walls.010 arch).
-- DD-46/DD-47 ScaffoldTrace/ScaffoldRail G0 approval (kept as a draft until
-  rails are reconciled with island lines).
+- Next level (plan decision 11), measured after Slice P on the 13 seamed
+  objects: 5 warped n-gons (28 OBLIQUE runs); curved runs inside Layer 3
+  lines (OQ-11; 12 OBLIQUE runs); island assembly without self-overlap
+  (walls.007); branch resolution for the 4 unordered island rails.
+  Cross-island axis agreement has nothing to agree yet: no family spans
+  two islands on those objects. Plan Slice Q (Layer 5 on rails) is DONE.
+- DD-46/DD-47 ScaffoldTrace/ScaffoldRail: approved by the user and applied
+  as G0 v1.6 (2026-11-06), together with the Slice O1 fold-back rule in
+  DD-43.
 - Unwrap-level items recorded in plan Slice N: per-component gauge and
   absolute residual tolerance (artist_cross_band end patches). The
   uv_transfer cross-patch fallback and the seam-side pin collapse are fixed

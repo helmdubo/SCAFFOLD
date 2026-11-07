@@ -1285,6 +1285,401 @@ loops are unchanged, and no loop gains a pin. Axis violations, seam
 mismatches, node/frame mismatches, opposite-side families and foreign loops
 stay 0.
 
+## Slice O — ScaffoldRail over island lines (DONE, 2026-11)
+
+User decisions (2026-11-06):
+
+```text
+- Approved: the whole slice. Rail stations and the island cut view in
+  Layer 3; rail checks in Layer 5; Tier 3 metrics.
+- Approved: fix the fold-back node crossing found while measuring, first, as
+  a G3 repair under Minimal Patch Protocol (Task Card O1).
+- G0: DD-46/DD-47 are decided after the slice. The user approved the final
+  text after the slice; it is applied as G0 v1.6 with the O1 rule in DD-43.
+```
+
+Starting point on the 13 seamed buildings objects (PR #21 head): only 233 of
+4762 rails were consumable. 4071 carried diagnostics, because rail v0 chained
+members through every crossing. A SHARED_CHAIN crossing joins the two uses of
+one hinge Chain, which cover the same source edges, so v0 put them one after
+the other. There was no node between them (4107 `non_node_crossing`), and
+3913 rails ended at the node where they began
+(`coincident_open_trace_endpoints`). Rings stayed closed loop rails with no
+way to open them at an island cut.
+
+### Task Card O1 — Node crossings never fold back (DONE, G3 repair)
+
+`direction_families._node_crossings` compared the transported run directions
+by absolute dot product. So it also accepted two runs that leave the node the
+same way after unfolding about the hinge. That happens where a patch wraps
+270 degrees around a corner node (walls.003 v142, hinge e2692): a wall's
+bottom and the neighbouring wall's notch bottom became one family, and a line
+through them doubled back. Repair: `_leaves_node_the_same_way` rejects the
+pair when the transported away-from-node directions point the same way. The
+run end at the node comes from the node vertex, not from the endpoint
+sample's role, which may follow the PatchChain traversal against the run
+direction (a first attempt that used the role broke the l-corridor length
+rails).
+
+- Fixture: `scaffold_core/tests/fixtures/reflex_corner.py` (an L-shaped wall
+  with a notch and a second wall hinged into it).
+- Test: `test_node_crossing_never_folds_back_over_a_reflex_patch_corner`; the
+  fixture also joined the opposite-sides sweep.
+- buildings: 75 fold-back node crossings -> 0; families 4762 -> 4821; island
+  lines 7606 -> 7646 (walls, walls.003, walls.010). Pins, Layer 5 diagnostics
+  and OBLIQUE runs are unchanged: both runs of a fold-back already took the
+  same axis in the frame.
+- The strict corner-node xfail stays xfailed. It is a real through
+  continuation, not a fold-back.
+
+### Task Card O2 — Rails ordered through hinge stations (DONE, Layer 3)
+
+`scaffold_rails.py` v1 (`scaffold_trace_rail_v1`):
+
+```text
+- Stations: members joined by SHARED_CHAIN crossings (the uses of one hinge).
+  Other crossings link two stations at their trace node, deduplicated by
+  (station, node). crossing_inside_station and non_node_crossing remain
+  diagnostics.
+- Branch records sit on stations (more than two links) and on trace nodes
+  touched by more than two stations, never on the two uses of one hinge. A
+  closed loop is a cycle of stations.
+- Order and signs: walk the stations from the smallest leaf. Each member's
+  sign comes from the trace nodes of the links before and after its station;
+  a single station orients its uses against its first member.
+- Stations are explicit: ScaffoldTrace, ScaffoldRail and the cut segments
+  carry ordered_station_member_ids; in a consumable rail or an ordered
+  segment station i is the step between trace nodes i and i + 1, so no
+  consumer regroups the uses of a hinge itself (added after the reviewer
+  gate). Branched, looped or unordered views list stations by station id.
+- Unchanged: one trace and one rail per family, the consumable rule, and the
+  coincident-endpoint and missing-member diagnostics. Branched and closed
+  rails keep family order with zero signs.
+- Dropped from v0: the multiple_crossings diagnostic (duplicate crossings
+  between two stations at one node merge into one link; at two nodes they
+  form a closed loop of two stations) and copying the family's member-level
+  branch_records into the rail (branches are counted on stations now).
+```
+
+Tests: `test_fold_line_rail_is_one_station_of_both_hinge_uses` (beveled
+corner) and `test_rail_orders_hinge_stations_through_their_node` (T-vertex
+wall: two stations linked at w1, each one step between consecutive trace
+nodes). All Slice J rail tests stay green.
+
+### Task Card O3 — Rail cut by a given structural cut (DONE, Layer 3)
+
+`cut_scaffold_rail(family, member_endpoints, member_ids, kept_chain_ids)`
+returns `ScaffoldRailSegment` values. It is a pure function and is not stored
+in `RelationSnapshot`.
+
+- A crossing survives when both of its members are kept and it either stays
+  inside one patch or passes a kept Chain.
+- Each connected piece is ordered through its stations, so a loop opens
+  exactly where the caller cut it.
+- A branch, or a loop the cut leaves closed, stays unordered with a
+  `branch:` or `closed_loop` diagnostic.
+
+Tests:
+
+- `test_cut_rail_opens_a_loop_only_where_the_cut_is` (two-seam tube): both
+  seams kept -> closed loop; one -> one ordered segment; none -> two ordered
+  halves.
+- `test_cut_rail_keeps_a_branch_unordered` (a station with three links).
+- `test_cut_rail_keeps_a_rail_that_returns_to_its_own_node_unordered` and
+  `test_cut_rail_names_the_branch_where_a_cut_hinge_parts_its_uses` (the
+  T-vertex wall with its right hinge cut): the trace-node branch rule. In
+  real data a link node is an endpoint of both stations, so this rule, not
+  the station rule, is the one that decides.
+
+### Task Card O4 — Layer 5 checks the island rails (DONE)
+
+`skeleton._island_rail_segments` cuts every family's rail by the island: its
+runs and `island.stitched_chain_ids`, the tree edges only, so non-tree seams
+stay cut. `_island_rail_conflicts` checks two things:
+
+- every island line with more than one run is exactly one segment;
+- in a framed island, rail sign times frame sign is constant over the axis
+  runs of an ordered segment.
+
+Outputs: `IslandSkeleton.rail_segments`, `IslandSkeleton.rail_frame_conflicts`
+and `SolveResult.rail_frame_conflicts`. The solve itself is unchanged; it does
+not consume rail order yet.
+
+Tests:
+
+- `test_island_cut_opens_the_ring_rails_of_a_two_seam_tube`
+- `test_artist_multiseam_band_rims_open_into_ordered_island_rails`: both rims
+  are closed loop rails across the six strips, and the band island orders each.
+- `test_reflex_corner_island_rails_agree_with_the_unfolded_frame`
+- `test_island_rail_conflicts_name_rails_against_the_frame_and_split_lines`
+- `test_framed_island_reports_an_island_rail_against_its_frame`: wiring of
+  the frame check; one sign per ordered island rail is flipped on its way
+  out of the cut view, since after O1 no real rail runs against the frame.
+- The artist walls invariant test now also requires zero conflicts and
+  ordered island rails.
+
+In a prototype run before O1, the rail/frame check found 29 rails running
+against the frame; O1 removed all of them.
+
+### Task Card O5 — Tier 3 island rail metrics (DONE)
+
+`blender_smoke` records `island_rails` (segments with more than one run),
+`unordered_island_rails` (table column `unord`) and `rail_frame_conflicts`.
+`buildings_seamed.json` was rewritten and confirmed identical on a rerun.
+
+| Metric, 13 seamed objects | PR #21 head | Slice O |
+|---|---|---|
+| fold-back node crossings | 75 | 0 |
+| families = rails | 4762 | 4821 |
+| consumable rails | 233 | 4301 |
+| rails with diagnostics | 4071 | 2 |
+| island lines | 7606 | 7646 |
+| island rails (more than one run) / ordered | - | 2094 / 2090 |
+| rail/frame conflicts | - | 0 |
+| pins / L5 diagnostics / OBLIQUE runs | 6926 / 36 / 97 | unchanged |
+
+Largest per-object gains in consumable rails: 61 -> 1515 (walls, walls.003),
+47 -> 783 (walls.009), 16 -> 307 (walls.010) and 8 -> 92 (walls.007). The 520
+non-consumable rails are:
+
+- 486 single-member rails;
+- 22 closed loops;
+- 10 branched rails;
+- 2 rails on Cube with coincident open endpoints: a rim cut by a SEAM_SELF
+  starts and ends at one ScaffoldNode. The island cut orders both.
+
+Axis violations, seam mismatches, node/frame mismatches, opposite-side
+families and foreign loops stay 0.
+
+Reviewer gate (independent agent): PASS WITH FIXES, nothing blocking. It
+confirmed that UVs, pins and diagnostics are identical before and after the
+slice on every fixture and capture. Of the mutations of O1-O4 logic it
+tried, only two survived the suite (the trace-node branch threshold and the
+frame check wiring); they are the second and third items below. Fixed
+before landing:
+
+```text
+- The rail did not name its stations, and the draft DD-46 sentence "a trace
+  never puts the two uses of one hinge one after the other" contradicted
+  the stored order. Stations are now explicit (O2 above), and DD-46 says
+  that the uses are listed together as one step.
+- The trace-node branch rule had no test (changing its threshold left the
+  suite green), and the station-rule test used an impossible input (a link
+  at a node that is not an endpoint of its station). Both rules now have
+  realistic tests (O3 above).
+- The frame check ran only in a unit test; a wiring test now covers it
+  (O4 above).
+- Plan notes: the v0 behaviours dropped by v1, and the pending G0 note for
+  the O1 rule (decision 6).
+```
+
+Each of the five matching mutations (both branch rules off, stations out of
+rail order, stations split into single members, the frame check unwired)
+is caught by exactly the new or updated tests. Re-review of the fixes:
+PASS. Stations are consistent on all 672 rails and traces and 771 island
+segments of the fixtures and captures. Its last notes were applied: tests
+for station order in an unordered segment and for the serialized trace
+stations, and the one-step-per-station guarantee is stated for consumable
+rails and ordered segments only.
+
+Structure signals and deferred items (inputs for later slices, not
+regressions):
+
+```text
+- 4 island rails stay unordered as branches (walls and walls.003 at v1544,
+  walls.009 at v869, walls.010 at v119): more than two stations of one
+  family meet at one node. Branch resolution is open (DD-47 draft, question 4).
+- Island lines and the Layer 3 cut apply the same rule twice. The check
+  proves they agree (0 disagreements); a later slice may take the island
+  lines from the cut directly.
+- The absolute transport check in _node_crossings still reads the tangent at
+  the endpoint sample's role. For a curved run this can be the far end. No
+  measured effect; the fold-back test already uses the node vertex.
+- Unchanged from Slice N: 5 island lines through curved runs (OQ-11),
+  10 patches outside the frame, the corner-node xfail, the unwrap-level
+  gauge and tolerance items.
+```
+
+## Slice P — Rigid seams first in the island tree (DONE, 2026-11)
+
+User decisions (2026-11-06):
+
+```text
+- Next slice after Slice O: patches outside the rigid island frame, starting
+  with a case analysis and a proposed rule.
+- Approved after the analysis: the rule "rigid seams first" in Layer 5
+  island assembly.
+```
+
+Case analysis (13 seamed buildings objects, after Slice O). 10 patches outside
+the rigid frame carried 60 of the 97 OBLIQUE runs:
+
+```text
+- 5 are warped n-gons: one face folded 90 degrees around a corner (walls
+  and walls.003 f1415 and f1352, walls.009 f715). They have no rigid
+  unfolding and stay outside the frame (28 OBLIQUE runs).
+- 5 are planar (walls and walls.003 f712; walls.009 f218, f664, f233). The
+  longest-seam-first tree reached them only through a warped n-gon, often
+  over its long L-shaped (bent) hinge. Each of them has a short straight
+  seam to a framed patch, and the tree had left that seam cut.
+```
+
+Rule: the island tree takes the rigid seams first, then the other accepted
+seams, longest first inside each group. A rigid seam is a straight hinge (the
+Layer 3 straight-hinge rule) or a coplanar join between two planar, unwarped
+patches.
+
+- The Level A gate and the seams it accepts are unchanged, so the islands
+  are the same; only which accepted seams become tree edges changes.
+- Semantic stitch preferences stay a Layer 4 placeholder.
+
+Implementation:
+
+- `layer_5_runtime/islands.py` now owns `SeamRigidity`, `seam_rigidity` and
+  `is_rigid_seam`. They hold patch planarity, warp and straight hinges, moved
+  from `skeleton.py`.
+- The island tree and the rigid frame (`skeleton._unfolded_frame`) use the
+  same predicate, so the tree never prefers a seam the frame cannot cross.
+- The frame rule itself is unchanged.
+
+Test: `test_rigid_seams_enter_the_island_tree_first`, on the T-vertex wall
+with a warped floor_a. Every seam there is one edge long, so floor_b used to
+hang off floor_a and both fell out of the frame. Now the straight hinge e_w12
+joins floor_b to the wall, floor_b enters the frame, and only floor_a stays
+outside. Each of these mutations is caught:
+
+- no rigid rank;
+- the rank reversed;
+- warp ignored;
+- the frame entering a warped child;
+- coplanar joins never rigid.
+
+Tier 3 (`buildings_seamed.json` rewritten and confirmed identical on a rerun):
+
+| Metric, 13 seamed objects | Slice O | Slice P |
+|---|---|---|
+| patches outside the frame | 10 | 5 |
+| OBLIQUE runs | 97 | 65 |
+| axis runs | 10117 | 10149 |
+| pins | 6926 | 6957 |
+| Layer 5 diagnostics | 36 | 31 |
+| written loops | 9597 | 9652 |
+| island lines / island rails | 7646 / 2094 | 7643 / 2097 |
+
+Changes by object:
+
+- walls, walls.003: outside 3 -> 2, OBLIQUE 31 -> 23, pins +8.
+- walls.009: outside 4 -> 1, OBLIQUE 29 -> 13, pins +15.
+
+Four accepted seams swap between stitched and cut, which adds one cut edge on
+each of walls, walls.003 and walls.009. Islands (62), rigid frames (60),
+unordered island rails (4) and lines not straight (5) are unchanged. Axis
+violations, seam mismatches, node/frame mismatches, rail/frame conflicts,
+opposite-side families and foreign loops stay 0. The in-repo captures do not
+change.
+
+Reviewer gate (independent agent, Slice P with G0 v1.6): PASS WITH FIXES,
+nothing blocking.
+
+- Fixed, G0 v1.6 wording:
+  - DD-33: traces and rails are separate views over direction families
+    and run-endpoint junctions, not over ScaffoldGraph;
+  - DD-46: a member's vertices are the occurrences of its endpoint
+    samples by sample role (PatchChain traversal, not trace direction);
+  - DD-47: a loop opens at a cut the rail builder does not own (island
+    assembly is Layer 5, not a lower layer);
+  - OQ-11: only circuit construction stays unresolved.
+- Fixed, docs: a planar patch joins the frame only over a path of rigid
+  seams to the frame root (G5a, handoff).
+- Fixed, tests: the sort key is now `islands._tree_edge_priority`.
+  - Unit tests cover `is_rigid_seam` (straight hinge, coplanar join with a
+    non-unit normal, bent hinge, a warped or non-planar patch on either
+    side) and the priority (rigid first with the warped patch second,
+    longest first, id tiebreak).
+  - 13 mutations, each caught.
+- W1: the DD-47 consumer rule forbids Layer 5 to rebuild rail signs by
+  local propagation, but islands without a rigid frame still run the
+  provisional frame-free derivation (`skeleton._orientation_signs`),
+  which does. User decision (2026-11-07): G0 v1.6 DD-47 records this as a
+  provisional exception; plan Slice Q removes it.
+- Re-review: PASS. One optional note: an island made only of warped
+  n-gons also has no rigid frame, so "(a curved island)" in the
+  exception is narrower than the code; the user-approved text is kept.
+
+Remaining after Slice P (inputs for later slices):
+
+```text
+- 5 warped n-gons (28 OBLIQUE runs): a face folded around a corner has no
+  rigid unfolding. Later options: user split marks (OQ-11) or a per-face
+  local frame.
+```
+
+## Slice Q — Layer 5 on rails (DONE, 2026-11)
+
+User decision (2026-11-07): next after Slice P, "Layer 5 on rails". The
+slice starts with a measurement and brings its rule for approval.
+
+Measurement (`scratchpad` probe over the island tree after Slice P):
+
+```text
+13 seamed buildings objects:
+- island lines 7643, Layer 3 cut segments 7643; every line, single-run
+  lines included, is exactly one segment; every run has a line.
+- 4 unordered segments (walls, walls.003, walls.009, walls.010), all in
+  islands with a rigid frame.
+- 2 islands without a rigid frame (Cube, walls.012), 13 lines, all with an
+  ordered segment whose sign agrees with the provisional sign.
+In-repo captures (scaffold_core/tests/data):
+- 532 lines = 532 segments, 0 unordered.
+- 3 islands without a rigid frame (artist_cross_band, artist_cyl32,
+  artist_cyl_multiseam), 24 lines; on one line of each the rail sign is the
+  whole-line opposite of the provisional sign, nowhere do they disagree
+  inside a line.
+```
+
+Rule (approved by the user, 2026-11-07):
+
+1. Island lines are the pieces of the Layer 3 rail cut by the island;
+   Layer 5's own family split (`skeleton._island_lines`) is removed. A line
+   id stays the family id plus the smallest member id of its piece.
+2. An island without a rigid frame takes its in-line run signs from its
+   ordered island rails; `skeleton._orientation_signs` (head-to-tail walk)
+   is removed. A run on an unordered island rail stays unsigned with the
+   diagnostic `unordered island rail: <line> -> unsigned` and adds no length
+   equation.
+3. The DD-47 provisional exception is removed (G0 v1.6, user-approved).
+
+Stays in Layer 5, because it is not rail order and rails do not supply it:
+the frame-free axis bipartition by local orthogonality and the
+co-orientation of parallel lines through their cross runs.
+
+Tests:
+
+- `test_frame_free_island_takes_lines_and_in_line_signs_from_its_rails`
+  (one rail sign flipped on the way out of the cut view; the island must
+  follow it, and every line is its segment);
+- `test_unordered_island_rail_stays_unsigned_in_a_frame_free_island`
+  (diagnostic, no sign, fewer equations).
+
+- `test_unordered_single_run_rail_stays_unsigned_in_a_frame_free_island`
+  (added after review: a single-run piece no longer takes a silent +1).
+
+Reviewer gate (independent agent): PASS. Notes fixed: G5a says an unsigned
+run keeps its axis role; a single-run unordered piece is tested. DD-47 now
+says that axis bipartition and cross-rail co-orientation stay with Layer 5
+(user-approved, 2026-11-07).
+
+Mutations: 7 of 8 caught. The survivor drops the "signed runs only" guard
+of the co-orientation flip. It is equivalent: an unsigned line never links,
+so it is never flipped.
+
+Results: solve output (frame, roles, final signs, lines, coordinates,
+diagnostics) is identical before and after on all 101 islands of the 13
+buildings captures and the in-repo captures. On the three in-repo
+frame-free islands where a rail runs opposite to the old walk, the
+co-orientation restores the same final signs. Tier 3: baseline identical
+(13 objects, 0 errors).
+
 ---
 
 ## Decisions the user must approve before the relevant slice
@@ -1300,18 +1695,41 @@ stay 0.
    G3 repair of DD-43 — APPROVED and DONE.
 5. Slice L: end-patch separation (box lids, corner-node gap) — DEFERRED by
    the user to a future patch-normal filter; no cap/wall semantics.
-6. Slice J: DD-46/DD-47 (ScaffoldTrace/ScaffoldRail) G0 amendment text is
-   implemented as v0 evidence but not yet approved into G0 — PENDING
-   (agent decision under user delegation, 2026-09: keep as draft until rails
-   are reconciled with Slice N island lines).
+6. Slice J/O: DD-46/DD-47 (ScaffoldTrace/ScaffoldRail v1) and the Slice O1
+   fold-back rule in DD-43 — APPROVED by the user after Slice O and APPLIED
+   as G0 v1.6 (2026-11-06). Background (loop and branch policy, fixtures,
+   answers to the open questions) stays in
+   docs/architecture/scaffold_rail_trace_contract_draft.md.
 7. Slice L2: G0 DD-43 fixture-expectation amendment (one rail per fold line;
    no patch revisit) — APPLIED to G0 v1.5 by the agent under explicit user
    delegation (2026-09).
 8. Slice N: Layer 5 island lines, axes and orientation in the island frame;
    Layer 3 DD-45 continuation and node-crossing provenance repairs —
    APPROVED and DONE.
-9. Next, open: which level to consolidate after patch -> line -> island
-   (cross-island axis agreement through shared families; ScaffoldRail over
-   island lines with loop opening by island cuts; island assembly without
-   self-overlap; curved runs inside Layer 3 lines, OQ-11) — PENDING.
+9. Next level after patch -> line -> island: ScaffoldRail over island lines
+   with loop opening by island cuts — CHOSEN by the user (2026-11-06) and
+   DONE as Slice O, including the O1 fold-back repair.
+10. Next after Slice O: patches outside the rigid island frame — CHOSEN by
+   the user (2026-11-06). The rule "rigid seams first" in the island tree
+   was APPROVED after the case analysis and is DONE as Slice P (outside
+   patches 10 -> 5, OBLIQUE runs 97 -> 65).
+11. Next, open (measured on the 13 seamed objects after Slice P):
+   - 5 warped n-gons (28 OBLIQUE runs);
+   - 12 OBLIQUE runs on 5 lines through curved runs (OQ-11);
+   - island assembly without self-overlap (walls.007);
+   - the solve consuming island rail order: 2 islands have no rigid frame
+     (Cube, walls.012); their provisional signs agree with the island
+     rails on both multi-run lines, and on all 6 in the in-repo artist
+     captures;
+   - island lines taken from the Layer 3 cut;
+   - branch resolution for the 4 unordered island rails;
+   - 21 contradictory-equation diagnostics (unwrap level).
+   Cross-island axis agreement has nothing to agree yet: no family spans
+   two islands on those objects.
+   CHOSEN by the user (2026-11-07) as Slice Q, "Layer 5 on rails":
+   island lines come from the Layer 3 rail cut, and islands without a
+   rigid frame take their in-line run signs from the ordered island
+   segments; branches and uncut loops degrade with a diagnostic. It
+   removes the DD-47 provisional exception. Rule APPROVED after the
+   measurement and DONE. The other items stay open.
 ```

@@ -6,6 +6,9 @@ Rules:
 - Would-be-interior vertices use raw Layer 2 angle sums; chain endpoints
   with remaining cut incidence are excluded (T-junction rule, G5a).
 - SEAM_SELF never stitches; non-tree seams stay cut.
+- Rigid seams enter the tree first (plan Slice P): a straight hinge or a
+  coplanar join between planar, unwarped patches, so the rigid island
+  frame reaches every patch it can; longest seam first in each group.
 - Read-only over lower layers; no UV or semantic roles here.
 """
 
@@ -15,7 +18,11 @@ from dataclasses import dataclass, field
 from math import pi
 from typing import Any, Mapping
 
+from scaffold_core.layer_2_geometry.measures import EPSILON, dot, length, normalize
+from scaffold_core.layer_3_relations.direction_families import SHARED_CHAIN_HINGE_MAX_RUNS
+
 STITCH_DEFECT_TOLERANCE = 1e-3
+PLANAR_PATCH_MIN_NORMAL_DOT = 0.996  # every face-fan normal within ~5 degrees of the patch normal
 
 
 @dataclass(frozen=True)
@@ -42,6 +49,58 @@ class IslandAssembly:
     island_by_patch_id: Mapping[str, str]
 
 
+@dataclass(frozen=True)
+class SeamRigidity:
+    """Which seams a rigid unfolding can cross (plan Slices N and P)."""
+
+    planar_patch_ids: frozenset[str]
+    warped_patch_ids: frozenset[str]
+    straight_chain_ids: frozenset[str]
+    normal_by_patch: Mapping[str, tuple[float, float, float]]
+
+
+def seam_rigidity(context: Any) -> SeamRigidity:
+    """Patch planarity, warp and straight hinges, shared by the island tree and frame."""
+
+    geometry = context.geometry_facts
+    evidence = context.relation_snapshot.patch_chain_directional_evidence
+    run_count_by_patch_chain: dict[str, int] = {}
+    for e in evidence:
+        run_count_by_patch_chain[str(e.patch_chain_id)] = run_count_by_patch_chain.get(str(e.patch_chain_id), 0) + 1
+    uses_by_chain: dict[str, list[str]] = {}
+    for pc in context.topology_snapshot.patch_chains.values():
+        uses_by_chain.setdefault(str(pc.chain_id), []).append(str(pc.id))
+    return SeamRigidity(
+        planar_patch_ids=frozenset(_planar_patch_ids(geometry)),
+        warped_patch_ids=frozenset(_warped_patch_ids(geometry, evidence)),
+        # The Layer 3 straight-hinge rule (plan Slice L1): every use of the
+        # Chain carries at most one directional run.
+        straight_chain_ids=frozenset(
+            chain_id
+            for chain_id, uses in uses_by_chain.items()
+            if all(run_count_by_patch_chain.get(use, 0) <= SHARED_CHAIN_HINGE_MAX_RUNS for use in uses)
+        ),
+        normal_by_patch={str(patch_id): facts.normal for patch_id, facts in geometry.patch_facts.items()},
+    )
+
+
+def is_rigid_seam(rigidity: SeamRigidity, chain_id: str, first_patch_id: str, second_patch_id: str) -> bool:
+    """A straight hinge, or a coplanar join, between two planar unwarped patches.
+
+    The rigid island frame crosses exactly these seams; a warped n-gon or a
+    bent hinge between non-coplanar patches has no rotation axis.
+    """
+
+    for patch_id in (first_patch_id, second_patch_id):
+        if patch_id in rigidity.warped_patch_ids or patch_id not in rigidity.planar_patch_ids:
+            return False
+    if chain_id in rigidity.straight_chain_ids:
+        return True
+    first_normal = normalize(rigidity.normal_by_patch[first_patch_id])
+    second_normal = normalize(rigidity.normal_by_patch[second_patch_id])
+    return dot(first_normal, second_normal) >= PLANAR_PATCH_MIN_NORMAL_DOT
+
+
 def build_islands(context: Any) -> IslandAssembly:
     """Assemble islands via a spanning tree of accepted stitches."""
 
@@ -66,11 +125,15 @@ def build_islands(context: Any) -> IslandAssembly:
         return item
 
     decisions: list[StitchDecision] = []
-    # LEVEL_B_PLACEHOLDER: tree-edge priority is longest-seam-first; the
-    # future Layer 4 grammar owns smarter stitch preferences.
+    rigidity = seam_rigidity(context)
+    # Tree-edge priority: rigid seams first (plan Slice P), so a planar patch
+    # joins through a hinge the rigid frame can cross whenever it has one,
+    # and warped n-gons or bent hinges only fill in what is left; longest
+    # seam first inside each group. LEVEL_B_PLACEHOLDER: semantic stitch
+    # preferences belong to the future Layer 4 grammar.
     adjacencies = sorted(
         relations.patch_adjacencies.values(),
-        key=lambda item: (-_chain_edge_count(topology, item.chain_id), str(item.id)),
+        key=lambda item: _tree_edge_priority(item, rigidity, topology),
     )
     for adjacency in adjacencies:
         chain_id = str(adjacency.chain_id)
@@ -116,6 +179,15 @@ def build_islands(context: Any) -> IslandAssembly:
     return IslandAssembly(tuple(islands), tuple(decisions), island_by_patch)
 
 
+def _tree_edge_priority(adjacency, rigidity: SeamRigidity, topology) -> tuple[bool, int, str]:
+    """Rigid seams first (plan Slice P), longest seam first inside each group, then by id."""
+
+    rigid = is_rigid_seam(
+        rigidity, str(adjacency.chain_id), str(adjacency.first_patch_id), str(adjacency.second_patch_id)
+    )
+    return (not rigid, -_chain_edge_count(topology, adjacency.chain_id), str(adjacency.id))
+
+
 def _gate(source, topology, chain_id, angle_by_source_vertex, cut_chains_by_vertex, border_vertices):
     chain = topology.chains[_key(topology.chains, chain_id)]
     interior, endpoints = _chain_vertex_split(source, chain)
@@ -134,6 +206,39 @@ def _gate(source, topology, chain_id, angle_by_source_vertex, cut_chains_by_vert
     if failing:
         return False, "angle defect exceeds stitch limit", failing
     return True, "all would-be interior vertices have near-zero defect", defects
+
+
+def _planar_patch_ids(geometry) -> set[str]:
+    """Patches without curvature: every face-fan normal stays close to the patch normal."""
+
+    worst: dict[str, float] = {}
+    for fan in geometry.local_face_fan_facts.values():
+        patch_id = str(fan.patch_id)
+        facts = geometry.patch_facts.get(fan.patch_id)
+        if facts is None or length(facts.normal) <= EPSILON or length(fan.normal) <= EPSILON:
+            worst[patch_id] = -1.0
+            continue
+        agreement = dot(normalize(fan.normal), normalize(facts.normal))
+        worst[patch_id] = min(worst.get(patch_id, 1.0), agreement)
+    return {patch_id for patch_id, agreement in worst.items() if agreement >= PLANAR_PATCH_MIN_NORMAL_DOT}
+
+
+def _warped_patch_ids(geometry, directional_evidence) -> set[str]:
+    """Patches with a boundary run outside the patch plane.
+
+    A single warped n-gon has only its own average normal as face-fan normal,
+    so the fan test cannot see the warp; its runs can.
+    """
+
+    max_out_of_plane = (1.0 - PLANAR_PATCH_MIN_NORMAL_DOT ** 2) ** 0.5
+    warped: set[str] = set()
+    for e in directional_evidence:
+        facts = geometry.patch_facts.get(e.patch_id)
+        if facts is None or length(facts.normal) <= EPSILON:
+            continue
+        if abs(dot(normalize(e.direction), normalize(facts.normal))) > max_out_of_plane:
+            warped.add(str(e.patch_id))
+    return warped
 
 
 def _chain_vertex_split(source, chain) -> tuple[tuple[str, ...], tuple[str, ...]]:

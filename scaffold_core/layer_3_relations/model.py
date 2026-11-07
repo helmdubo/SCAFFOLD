@@ -480,6 +480,11 @@ class ScaffoldTrace:
     direction_family_id: str
     member_directional_evidence_ids: tuple[str, ...]
     ordered_member_directional_evidence_ids: tuple[str, ...]
+    # The uses of one hinge Chain form one station. Stations follow the member
+    # order above; a branched or looped view (or an unordered segment) lists
+    # them by station id. In a consumable rail or an ordered segment, station i
+    # is the step between trace nodes i and i + 1.
+    ordered_station_member_ids: tuple[tuple[str, ...], ...]
     trace_node_ids: tuple[str, ...]
     members: tuple[ScaffoldTraceMember, ...]
     crossing_records: tuple[CrossingRecord, ...]
@@ -498,6 +503,11 @@ class ScaffoldRail:
     scaffold_trace_id: str
     direction_family_id: str
     ordered_member_directional_evidence_ids: tuple[str, ...]
+    # The uses of one hinge Chain form one station. Stations follow the member
+    # order above; a branched or looped view (or an unordered segment) lists
+    # them by station id. In a consumable rail or an ordered segment, station i
+    # is the step between trace nodes i and i + 1.
+    ordered_station_member_ids: tuple[tuple[str, ...], ...]
     ordered_trace_node_ids: tuple[str, ...]
     first_trace_node_id: str | None
     last_trace_node_id: str | None
@@ -510,6 +520,28 @@ class ScaffoldRail:
     diagnostics: tuple[str, ...]
     confidence: float
     evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
+class ScaffoldRailSegment:
+    """One piece of a ScaffoldRail under a caller-supplied structural cut.
+
+    Ordered only when its stations form a simple open path with a transported
+    sign for every member; a branch or a loop left closed by the cut stays
+    unordered with a diagnostic (DD-47 draft loop and branch policy).
+    """
+
+    direction_family_id: str
+    ordered_member_directional_evidence_ids: tuple[str, ...]
+    # The uses of one hinge Chain form one station. Stations follow the member
+    # order above; a branched or looped view (or an unordered segment) lists
+    # them by station id. In a consumable rail or an ordered segment, station i
+    # is the step between trace nodes i and i + 1.
+    ordered_station_member_ids: tuple[tuple[str, ...], ...]
+    ordered_trace_node_ids: tuple[str, ...]
+    orientation_sign_by_member: Mapping[str, int]
+    is_ordered: bool
+    diagnostics: tuple[str, ...]
 
 
 @dataclass(frozen=True)

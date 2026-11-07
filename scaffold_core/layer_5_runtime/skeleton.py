@@ -6,12 +6,17 @@ Rules:
 - Solve nodes are occurrence-level; cut seam sides stay split, stitched
   seam sides are unioned by shared source vertex.
 - One length equation per RUN connecting its OWN endpoints.
-- Island lines: a ConnectedDirectionFamily keeps only crossings that stay in
-  one patch or pass a hinge stitched in the island; a family that crosses a
-  cut seam splits into several island lines.
+- Island lines are the pieces of the Layer 3 rail cut by the island (its runs
+  and stitched hinges): a family that crosses a cut seam splits into several
+  island lines (plan Slice Q).
 - Axis roles and run orientation come from the island's unfolded frame
   (stitch-tree parallel transport) when every island patch is planar;
-  curved islands keep the provisional frame-free derivation. No world axes.
+  an island without one bipartitions its lines into axes by local
+  orthogonality and takes in-line run signs from its ordered island rails;
+  an unordered rail stays unsigned with a diagnostic. No world axes.
+- Island rails: Layer 3 cuts each family's ScaffoldRail by the island (its
+  runs and stitched hinges) and orders the pieces; Layer 5 checks them
+  against the unfolded frame and never orders a line itself.
 - Contradictions -> UNCONSTRAINED + diagnostics, never silent smearing.
 """
 
@@ -21,12 +26,12 @@ from dataclasses import dataclass, field
 from math import atan2, cos, sin
 from typing import Any, Mapping
 
-from scaffold_core.layer_2_geometry.measures import EPSILON, cross, dot, length, normalize
-from scaffold_core.layer_3_relations.direction_families import SHARED_CHAIN_HINGE_MAX_RUNS
-from scaffold_core.layer_5_runtime.islands import IslandAssembly
+from scaffold_core.layer_2_geometry.measures import EPSILON, cross, dot, normalize
+from scaffold_core.layer_3_relations.model import ScaffoldRailSegment
+from scaffold_core.layer_3_relations.scaffold_rails import cut_scaffold_rail, rail_member_endpoints
+from scaffold_core.layer_5_runtime.islands import IslandAssembly, SeamRigidity, is_rigid_seam, seam_rigidity
 
 AXIS_CLASS_MIN_COS = 0.92
-PLANAR_PATCH_MIN_NORMAL_DOT = 0.996  # every face-fan normal within ~5 degrees of the patch normal
 NODE_FRAME_TOLERANCE = 1e-6  # relative to the island extent
 RESIDUAL_TOLERANCE = 1e-5
 GAUGE_WEIGHT = 1e6
@@ -56,6 +61,8 @@ class IslandSkeleton:
     frame: str = FRAME_FREE
     node_frame_mismatches: tuple[str, ...] = ()
     vertex_by_run_end: Mapping[tuple[str, str], str] = field(default_factory=dict)
+    rail_segments: tuple[ScaffoldRailSegment, ...] = ()
+    rail_frame_conflicts: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -79,9 +86,9 @@ class _SelectionLookups:
     faces_of_edge: Mapping[str, frozenset]
     fan_faces: Mapping[tuple[str, str], frozenset]
     fan_vertices: Mapping[tuple[str, str], frozenset]
-    planar_patch_ids: frozenset
-    warped_patch_ids: frozenset
-    straight_chain_ids: frozenset
+    rigidity: SeamRigidity
+    family_by_member: Mapping[str, Any] = field(default_factory=dict)
+    rail_endpoints: Mapping[str, Any] = field(default_factory=dict)
 
 
 def build_island_skeletons(context: Any, assembly: IslandAssembly) -> tuple[IslandSkeleton, ...]:
@@ -111,12 +118,6 @@ def _selection_lookups(context: Any) -> _SelectionLookups:
             str(face_id) for face_id in fan.source_face_ids
         )
         fan_vertices.setdefault((str(fan.patch_id), str(fan.source_vertex_id)), set()).add(str(fan.vertex_id))
-    run_count_by_patch_chain: dict[str, int] = {}
-    for e in evidence:
-        run_count_by_patch_chain[str(e.patch_chain_id)] = run_count_by_patch_chain.get(str(e.patch_chain_id), 0) + 1
-    uses_by_chain: dict[str, list[str]] = {}
-    for pc in topology.patch_chains.values():
-        uses_by_chain.setdefault(str(pc.chain_id), []).append(str(pc.id))
     return _SelectionLookups(
         evidence_by_id={e.id: e for e in evidence},
         patch_chain_by_id={str(pc.id): pc for pc in topology.patch_chains.values()},
@@ -132,15 +133,13 @@ def _selection_lookups(context: Any) -> _SelectionLookups:
         faces_of_edge={edge_id: frozenset(faces) for edge_id, faces in faces_of_edge.items()},
         fan_faces={key: frozenset(faces) for key, faces in fan_faces.items()},
         fan_vertices={key: frozenset(vertices) for key, vertices in fan_vertices.items()},
-        planar_patch_ids=frozenset(_planar_patch_ids(geometry)),
-        warped_patch_ids=frozenset(_warped_patch_ids(geometry, evidence)),
-        # The Layer 3 straight-hinge rule (plan Slice L1): every use of the
-        # Chain carries at most one directional run.
-        straight_chain_ids=frozenset(
-            chain_id
-            for chain_id, uses in uses_by_chain.items()
-            if all(run_count_by_patch_chain.get(use, 0) <= SHARED_CHAIN_HINGE_MAX_RUNS for use in uses)
-        ),
+        rigidity=seam_rigidity(context),
+        family_by_member={
+            member: family
+            for family in relations.connected_direction_families
+            for member in family.member_directional_evidence_ids
+        },
+        rail_endpoints=rail_member_endpoints(relations.run_endpoint_junctions),
     )
 
 
@@ -153,7 +152,8 @@ def _island_skeleton(island, assembly, relations, geometry, lookups):
         diagnostics.append(
             f"run end on a seam-cut mid-chain vertex touches both seam sides: {run_id}:{role} -> unpinned"
         )
-    line_of = _island_lines(island, runs, relations)
+    rail_segments = _island_rail_segments(island, runs, lookups)
+    line_of = _lines_from_segments(rail_segments)
     frame = _unfolded_frame(island, assembly, geometry, lookups)
     if frame is None:
         axis_by_line = _bipartition_families(runs, line_of, node_by_run_end, diagnostics)
@@ -161,7 +161,7 @@ def _island_skeleton(island, assembly, relations, geometry, lookups):
             e.id: axis_by_line.get(line_of.get(e.id), "OBLIQUE")
             for e in runs
         }
-        signs = _orientation_signs(runs, line_of, node_by_run_end)
+        signs = _rail_signs(rail_segments, line_of, diagnostics)
         _co_orient_axis_families(runs, line_of, axis_by_line, signs, node_by_run_end, diagnostics)
         direction_of = {e.id: e.direction for e in runs}
         mismatches: tuple[str, ...] = ()
@@ -175,6 +175,7 @@ def _island_skeleton(island, assembly, relations, geometry, lookups):
             diagnostics.append(f"patch outside the rigid island frame: {patch_id} -> OBLIQUE")
         roles, signs = _frame_roles_and_signs(runs, framed, line_of, direction_of, frame.normal, diagnostics)
         mismatches = _node_frame_mismatches(frame, framed, node_by_run_end, lookups.position_of_source)
+    rail_conflicts = _island_rail_conflicts(rail_segments, line_of, roles, signs, frame is not None)
     axis_a = _solve_axis("AXIS_A", runs, roles, signs, node_by_run_end, diagnostics, direction_of)
     axis_b = _solve_axis("AXIS_B", runs, roles, signs, node_by_run_end, diagnostics, direction_of)
     return IslandSkeleton(
@@ -184,80 +185,111 @@ def _island_skeleton(island, assembly, relations, geometry, lookups):
         frame=FRAME_FREE if frame is None else UNFOLDED_FRAME,
         node_frame_mismatches=mismatches,
         vertex_by_run_end=vertex_by_run_end,
+        rail_segments=rail_segments,
+        rail_frame_conflicts=rail_conflicts,
     )
 
 
-def _island_lines(island, runs, relations) -> dict[str, str]:
-    """Split ConnectedDirectionFamilies into island lines.
+def _island_rail_segments(island, runs, lookups) -> tuple[ScaffoldRailSegment, ...]:
+    """Cut every family's ScaffoldRail by this island (DD-47 draft loop policy).
 
-    A family is one transported line on the surface. Inside an island only
-    crossings that stay in one patch or pass a hinge stitched in this island
-    keep it one straight line of the island layout, so a family that crosses a
-    cut seam splits. A line id is the family id plus the smallest member id of
-    its piece.
+    Layer 3 orders the pieces; the island only supplies the cut: its runs and
+    the hinges it stitches. A loop opens exactly where the island cuts it.
     """
 
-    run_ids = {e.id for e in runs}
-    stitched = set(island.stitched_chain_ids)
-    family_of: dict[str, str] = {}
-    parents: dict[str, str] = {}
-
-    def find(item: str) -> str:
-        while parents[item] != item:
-            parents[item] = parents[parents[item]]
-            item = parents[item]
-        return item
-
-    for family in relations.connected_direction_families:
-        for member in family.member_directional_evidence_ids:
-            if member in run_ids:
-                family_of[member] = family.id
-                parents[member] = member
-        for crossing in family.crossing_records:
-            first = crossing.first_directional_evidence_id
-            second = crossing.second_directional_evidence_id
-            if first not in run_ids or second not in run_ids:
-                continue
-            same_patch = crossing.first_patch_id == crossing.second_patch_id
-            if not same_patch and str(crossing.shared_chain_id) not in stitched:
-                continue
-            first_root, second_root = find(first), find(second)
-            if first_root != second_root:
-                parents[max(first_root, second_root)] = min(first_root, second_root)
-    return {run_id: f"{family_id}@{find(run_id)}" for run_id, family_id in family_of.items()}
-
-
-def _planar_patch_ids(geometry) -> set[str]:
-    """Patches without curvature: every face-fan normal stays close to the patch normal."""
-
-    worst: dict[str, float] = {}
-    for fan in geometry.local_face_fan_facts.values():
-        patch_id = str(fan.patch_id)
-        facts = geometry.patch_facts.get(fan.patch_id)
-        if facts is None or length(facts.normal) <= EPSILON or length(fan.normal) <= EPSILON:
-            worst[patch_id] = -1.0
+    family_by_id: dict[str, Any] = {}
+    run_ids_by_family: dict[str, set[str]] = {}
+    for e in runs:
+        family = lookups.family_by_member.get(e.id)
+        if family is None:
             continue
-        agreement = dot(normalize(fan.normal), normalize(facts.normal))
-        worst[patch_id] = min(worst.get(patch_id, 1.0), agreement)
-    return {patch_id for patch_id, agreement in worst.items() if agreement >= PLANAR_PATCH_MIN_NORMAL_DOT}
+        family_by_id[family.id] = family
+        run_ids_by_family.setdefault(family.id, set()).add(e.id)
+    segments = []
+    for family_id in sorted(run_ids_by_family):
+        segments.extend(cut_scaffold_rail(
+            family_by_id[family_id],
+            lookups.rail_endpoints,
+            run_ids_by_family[family_id],
+            island.stitched_chain_ids,
+        ))
+    return tuple(segments)
 
 
-def _warped_patch_ids(geometry, directional_evidence) -> set[str]:
-    """Patches with a boundary run outside the patch plane.
+def _lines_from_segments(segments) -> dict[str, str]:
+    """Island lines are the pieces of the island's rail cut (plan Slice Q).
 
-    A single warped n-gon has only its own average normal as face-fan normal,
-    so the fan test cannot see the warp; its runs can.
+    A line id is the family id plus the smallest member id of its piece.
     """
 
-    max_out_of_plane = (1.0 - PLANAR_PATCH_MIN_NORMAL_DOT ** 2) ** 0.5
-    warped: set[str] = set()
-    for e in directional_evidence:
-        facts = geometry.patch_facts.get(e.patch_id)
-        if facts is None or length(facts.normal) <= EPSILON:
+    line_of: dict[str, str] = {}
+    for segment in segments:
+        members = segment.ordered_member_directional_evidence_ids
+        line_id = f"{segment.direction_family_id}@{min(members)}"
+        for member in members:
+            line_of[member] = line_id
+    return line_of
+
+
+def _rail_signs(segments, line_of, diagnostics) -> dict[str, float]:
+    """In-line run signs of an island without a rigid frame (plan Slice Q).
+
+    Every ordered island rail supplies its transported signs; Layer 5 never
+    orders a line itself (G0 DD-47). A branched rail, or a loop the island
+    leaves closed, stays unsigned with a diagnostic, and its runs add no
+    length equations.
+    """
+
+    signs: dict[str, float] = {}
+    for segment in segments:
+        members = segment.ordered_member_directional_evidence_ids
+        if not segment.is_ordered:
+            diagnostics.append(f"unordered island rail: {line_of[members[0]]} -> unsigned")
             continue
-        if abs(dot(normalize(e.direction), normalize(facts.normal))) > max_out_of_plane:
-            warped.add(str(e.patch_id))
-    return warped
+        for member in members:
+            signs[member] = float(segment.orientation_sign_by_member[member])
+    return signs
+
+
+def _island_rail_conflicts(segments, line_of, roles, signs, framed: bool) -> tuple[str, ...]:
+    """Check the island rails against the island lines and the unfolded frame.
+
+    Island lines are the cut segments, so every line with more than one run is
+    exactly one rail segment (a guard). In a framed island an ordered
+    rail runs one way along its axis: the rail sign times the frame sign is the
+    same for every axis run of the line.
+    """
+
+    segment_index_by_member: dict[str, int] = {}
+    for index, segment in enumerate(segments):
+        for member in segment.ordered_member_directional_evidence_ids:
+            segment_index_by_member[member] = index
+    members_by_line: dict[str, set[str]] = {}
+    for run_id, line_id in line_of.items():
+        members_by_line.setdefault(line_id, set()).add(run_id)
+    conflicts: list[str] = []
+    for line_id, members in sorted(members_by_line.items()):
+        if len(members) < 2:
+            continue
+        indexes = {segment_index_by_member.get(member) for member in members}
+        if (
+            len(indexes) != 1
+            or None in indexes
+            or set(segments[next(iter(indexes))].ordered_member_directional_evidence_ids) != members
+        ):
+            conflicts.append(f"island rail and island line disagree: {line_id}")
+            continue
+        segment = segments[next(iter(indexes))]
+        if not framed or not segment.is_ordered:
+            continue
+        products = {
+            1 if segment.orientation_sign_by_member[member] * signs.get(member, 0) > 0 else -1
+            for member in members
+            if roles.get(member) in ("AXIS_A", "AXIS_B") and signs.get(member, 0) != 0
+        }
+        if len(products) > 1:
+            conflicts.append(f"island rail runs against the unfolded frame: {line_id}")
+    return tuple(conflicts)
 
 
 def _unfolded_frame(island, assembly, geometry, lookups) -> _IslandFrame | None:
@@ -266,18 +298,19 @@ def _unfolded_frame(island, assembly, geometry, lookups) -> _IslandFrame | None:
     Each stitched hinge rotates the child patch about the hinge Chain by the
     angle between the patch normals, so the child lands in its parent's plane
     (parallel transport along the island's spanning tree). The frame crosses
-    only rigid hinges into unwarped patches: a straight Chain (the Layer 3
-    straight-hinge rule), or a join of coplanar patches, which needs no
-    rotation. A warped n-gon or a bent hinge between non-coplanar patches has
-    no rotation axis; patches behind it stay outside the frame. An island with
-    a curved patch has no rigid frame and keeps the frame-free derivation.
+    only rigid seams (islands.is_rigid_seam, shared with the island tree):
+    a straight Chain (the Layer 3 straight-hinge rule), or a join of coplanar
+    patches, which needs no rotation. A warped n-gon or a bent hinge between
+    non-coplanar patches has no rotation axis; patches behind it stay outside
+    the frame. An island with a curved patch has no rigid frame and keeps the
+    frame-free derivation.
     """
 
     patch_ids = tuple(island.patch_ids)
-    if not all(patch_id in lookups.planar_patch_ids for patch_id in patch_ids):
+    rigidity = lookups.rigidity
+    if not all(patch_id in rigidity.planar_patch_ids for patch_id in patch_ids):
         return None
-    warped_patch_ids = lookups.warped_patch_ids
-    rigid_patch_ids = tuple(patch_id for patch_id in patch_ids if patch_id not in warped_patch_ids)
+    rigid_patch_ids = tuple(patch_id for patch_id in patch_ids if patch_id not in rigidity.warped_patch_ids)
     if not rigid_patch_ids:
         return None
     stitched = set(island.stitched_chain_ids)
@@ -295,17 +328,15 @@ def _unfolded_frame(island, assembly, geometry, lookups) -> _IslandFrame | None:
         parent = pending.pop(0)
         parent_normal = normalize(facts[parent].normal)
         for child, chain_id in sorted(tree.get(parent, ())):
-            if child in rotation or child in warped_patch_ids:
+            if child in rotation or not is_rigid_seam(rigidity, chain_id, parent, child):
                 continue
-            child_normal = normalize(facts[child].normal)
-            if chain_id in lookups.straight_chain_ids:
+            if chain_id in rigidity.straight_chain_ids:
+                child_normal = normalize(facts[child].normal)
                 axis = _chain_axis(geometry, chain_id)
                 angle = atan2(dot(axis, cross(child_normal, parent_normal)), dot(child_normal, parent_normal))
                 rotation[child] = _compose(rotation[parent], _rotation(axis, angle))
-            elif dot(child_normal, parent_normal) >= PLANAR_PATCH_MIN_NORMAL_DOT:
-                rotation[child] = rotation[parent]  # coplanar join over a bent Chain
             else:
-                continue
+                rotation[child] = rotation[parent]  # coplanar join over a bent Chain
             hinge = geometry.chain_facts[chain_id].segments[0].start_position
             parent_hinge = _rotate(rotation[parent], hinge)
             child_hinge = _rotate(rotation[child], hinge)
@@ -578,38 +609,6 @@ def _bipartition_families(runs, family_of, node_by_run_end, diagnostics):
     return axis_by_family
 
 
-def _orientation_signs(runs, family_of, node_by_run_end):
-    """Head-to-tail orientation along each family rail (frame-free)."""
-
-    signs: dict[str, float] = {}
-    runs_by_family: dict[str, list] = {}
-    for e in runs:
-        family_id = family_of.get(e.id)
-        if family_id is not None:
-            runs_by_family.setdefault(family_id, []).append(e)
-    for family_id, members in runs_by_family.items():
-        node_index: dict[str, list] = {}
-        for e in members:
-            for role in ("START", "END"):
-                node_index.setdefault(node_by_run_end[(e.id, role)], []).append((e, role))
-        for e in sorted(members, key=lambda item: item.id):
-            if e.id in signs:
-                continue
-            signs[e.id] = 1.0
-            queue = [e]
-            while queue:
-                current = queue.pop()
-                for role in ("START", "END"):
-                    node = node_by_run_end[(current.id, role)]
-                    for other, other_role in node_index.get(node, ()):
-                        if other.id in signs:
-                            continue
-                        same = role != other_role  # END meets START -> same direction
-                        signs[other.id] = signs[current.id] * (1.0 if same else -1.0)
-                        queue.append(other)
-    return signs
-
-
 def _components(runs, roles, role_name, node_by_run_end):
     parents: dict[str, str] = {}
 
@@ -656,13 +655,13 @@ def _co_orient_axis_families(runs, family_of, axis_by_family, signs, node_by_run
             for node in ends:
                 for other in runs_by_node.get(node, ()):
                     other_family = family_of.get(other.id)
-                    if axis_by_family.get(other_family) == axis:
+                    if axis_by_family.get(other_family) == axis and other.id in signs:
                         rail_hits.append((other_family, other))
                         break
             if len(rail_hits) == 2 and rail_hits[0][0] != rail_hits[1][0]:
                 (fam_a, run_a), (fam_b, run_b) = rail_hits
-                oriented_a = tuple(c * signs.get(run_a.id, 1.0) for c in run_a.direction)
-                oriented_b = tuple(c * signs.get(run_b.id, 1.0) for c in run_b.direction)
+                oriented_a = tuple(c * signs[run_a.id] for c in run_a.direction)
+                oriented_b = tuple(c * signs[run_b.id] for c in run_b.direction)
                 rel = 1.0 if dot(normalize(oriented_a), normalize(oriented_b)) >= 0.0 else -1.0
                 links.setdefault(fam_a, {})[fam_b] = rel
                 links.setdefault(fam_b, {})[fam_a] = rel
@@ -684,8 +683,8 @@ def _co_orient_axis_families(runs, family_of, axis_by_family, signs, node_by_run
         for e in runs:
             family_id = family_of.get(e.id)
             factor = flip.get(family_id)
-            if factor is not None and factor < 0.0:
-                signs[e.id] = -signs.get(e.id, 1.0)
+            if factor is not None and factor < 0.0 and e.id in signs:
+                signs[e.id] = -signs[e.id]
 
 
 def _solve_axis(axis_name, runs, roles, signs, node_by_run_end, diagnostics, direction_of=None):
@@ -701,13 +700,13 @@ def _solve_axis(axis_name, runs, roles, signs, node_by_run_end, diagnostics, dir
     component_of = _components(runs, roles, cross_role, node_by_run_end)
     equations = []
     for e in runs:
-        if roles.get(e.id) != own_role:
-            continue
+        if roles.get(e.id) != own_role or e.id not in signs:
+            continue  # an unsigned run (unordered island rail) adds no equation
         start = component_of.get(node_by_run_end[(e.id, "START")])
         end = component_of.get(node_by_run_end[(e.id, "END")])
         if start is None or end is None or start == end:
             continue
-        equations.append([start, end, signs.get(e.id, 1.0) * e.length, e.id, e])
+        equations.append([start, end, signs[e.id] * e.length, e.id, e])
     # Runs connecting the same two cross-components are mutually parallel
     # on a developable region: normalize their signs to the group's first
     # run so parallel columns/rails cannot contradict each other.
