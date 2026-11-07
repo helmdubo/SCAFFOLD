@@ -55,6 +55,7 @@ class IslandSkeleton:
     orientation_by_run: Mapping[str, float] = field(default_factory=dict)
     frame: str = FRAME_FREE
     node_frame_mismatches: tuple[str, ...] = ()
+    vertex_by_run_end: Mapping[tuple[str, str], str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,7 @@ class _SelectionLookups:
     vertices_of_edge: Mapping[str, frozenset]
     faces_of_edge: Mapping[str, frozenset]
     fan_faces: Mapping[tuple[str, str], frozenset]
+    fan_vertices: Mapping[tuple[str, str], frozenset]
     planar_patch_ids: frozenset
     warped_patch_ids: frozenset
     straight_chain_ids: frozenset
@@ -103,10 +105,12 @@ def _selection_lookups(context: Any) -> _SelectionLookups:
         for edge_id in face.edge_ids:
             faces_of_edge.setdefault(str(edge_id), set()).add(str(face_id))
     fan_faces: dict[tuple[str, str], set[str]] = {}
+    fan_vertices: dict[tuple[str, str], set[str]] = {}
     for fan in geometry.local_face_fan_facts.values():
         fan_faces.setdefault((str(fan.patch_id), str(fan.vertex_id)), set()).update(
             str(face_id) for face_id in fan.source_face_ids
         )
+        fan_vertices.setdefault((str(fan.patch_id), str(fan.source_vertex_id)), set()).add(str(fan.vertex_id))
     run_count_by_patch_chain: dict[str, int] = {}
     for e in evidence:
         run_count_by_patch_chain[str(e.patch_chain_id)] = run_count_by_patch_chain.get(str(e.patch_chain_id), 0) + 1
@@ -127,6 +131,7 @@ def _selection_lookups(context: Any) -> _SelectionLookups:
         },
         faces_of_edge={edge_id: frozenset(faces) for edge_id, faces in faces_of_edge.items()},
         fan_faces={key: frozenset(faces) for key, faces in fan_faces.items()},
+        fan_vertices={key: frozenset(vertices) for key, vertices in fan_vertices.items()},
         planar_patch_ids=frozenset(_planar_patch_ids(geometry)),
         warped_patch_ids=frozenset(_warped_patch_ids(geometry, evidence)),
         # The Layer 3 straight-hinge rule (plan Slice L1): every use of the
@@ -143,7 +148,11 @@ def _island_skeleton(island, assembly, relations, geometry, lookups):
     diagnostics: list[str] = []
     patch_ids = set(island.patch_ids)
     runs = tuple(e for e in lookups.evidence_by_id.values() if str(e.patch_id) in patch_ids)
-    node_by_run_end = _node_map(island, runs, relations, lookups)
+    node_by_run_end, vertex_by_run_end = _node_map(island, runs, relations, lookups)
+    for run_id, role in sorted(set(node_by_run_end) - set(vertex_by_run_end)):
+        diagnostics.append(
+            f"run end on a seam-cut mid-chain vertex touches both seam sides: {run_id}:{role} -> unpinned"
+        )
     line_of = _island_lines(island, runs, relations)
     frame = _unfolded_frame(island, assembly, geometry, lookups)
     if frame is None:
@@ -174,6 +183,7 @@ def _island_skeleton(island, assembly, relations, geometry, lookups):
         orientation_by_run=signs,
         frame=FRAME_FREE if frame is None else UNFOLDED_FRAME,
         node_frame_mismatches=mismatches,
+        vertex_by_run_end=vertex_by_run_end,
     )
 
 
@@ -395,11 +405,13 @@ def _node_map(island, runs, relations, lookups):
     closed rims therefore never collapse into contradiction cycles.
     Mid-chain nodes are (source, patch_chain)-scoped; stitched chains
     union both sides by source vertex.
+    Also returns each run end's own vertex occurrence, the pin identity.
     """
 
     patch_chain_by_id = lookups.patch_chain_by_id
     source_of_vertex = lookups.source_of_vertex
     raw: dict[tuple[str, str], str] = {}
+    vertex_by_run_end: dict[tuple[str, str], str] = {}
     for e in runs:
         pc = patch_chain_by_id[str(e.patch_chain_id)]
         forward = e.orientation_sign == 1
@@ -436,8 +448,22 @@ def _node_map(island, runs, relations, lookups):
             ("START", str(e.start_source_vertex_id), True),
             ("END", str(e.end_source_vertex_id), False),
         ):
+            # A chain end sits on the occurrence picked above. At a mid-chain
+            # vertex it is the occurrence whose face fan holds the faces on the
+            # run's own edges; a seam cutting the vertex puts both sides there.
+            if source_vertex in chain_end_sources:
+                occurrences = {_occurrence_for(source_vertex, prefer_start)}
+            else:
+                touching = _faces_at_run_end(e, source_vertex, lookups)
+                occurrences = {
+                    occurrence
+                    for occurrence in lookups.fan_vertices.get((str(e.patch_id), source_vertex), ())
+                    if lookups.fan_faces.get((str(e.patch_id), occurrence), frozenset()) & touching
+                }
+            if len(occurrences) == 1:
+                vertex_by_run_end[(e.id, role)] = str(next(iter(occurrences)))
             node = (
-                f"occ:{_occurrence_for(source_vertex, prefer_start)}:pc:{e.patch_chain_id}"
+                f"occ:{vertex_by_run_end[(e.id, role)]}:pc:{e.patch_chain_id}"
                 if source_vertex in chain_end_sources
                 else f"mid:{source_vertex}:pc:{e.patch_chain_id}"
             )
@@ -493,7 +519,7 @@ def _node_map(island, runs, relations, lookups):
             for node in nodes[1:]:
                 union(nodes[0], node)
 
-    return {key: find(node) for key, node in raw.items()}
+    return {key: find(node) for key, node in raw.items()}, vertex_by_run_end
 
 
 def _faces_at_run_end(e, source_vertex: str, lookups) -> frozenset:

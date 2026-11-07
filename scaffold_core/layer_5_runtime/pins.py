@@ -27,6 +27,7 @@ class PinnedVertex:
     patch_id: str
     uv: tuple[float, float]
     pinned: bool
+    vertex_id: str  # own topology occurrence (DD-37): seam sides differ
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,7 @@ class SolveResult:
     diagnostics: tuple[str, ...]
     patch_by_source_face: Mapping[str, str] = field(default_factory=dict)
     node_frame_mismatches: tuple[str, ...] = ()
+    vertex_by_face_corner: Mapping[tuple[str, str], str] = field(default_factory=dict)
 
 
 def run_skeleton_solve(context: Any) -> SolveResult:
@@ -69,6 +71,13 @@ def run_skeleton_solve(context: Any) -> SolveResult:
         for patch_id, patch in context.topology_snapshot.patches.items()
         for face_id in patch.source_face_ids
     }
+    # (face, source vertex) -> the corner's own occurrence, from the Layer 2
+    # patch-side face fans: each seam side has its own fan.
+    vertex_by_face_corner = {
+        (str(face_id), str(fan.source_vertex_id)): str(fan.vertex_id)
+        for fan in context.geometry_facts.local_face_fan_facts.values()
+        for face_id in fan.source_face_ids
+    }
     return SolveResult(
         assembly=assembly,
         patch_by_source_face=patch_by_source_face,
@@ -83,6 +92,7 @@ def run_skeleton_solve(context: Any) -> SolveResult:
             for skeleton in skeletons
             for node in skeleton.node_frame_mismatches
         ),
+        vertex_by_face_corner=vertex_by_face_corner,
     )
 
 
@@ -100,18 +110,20 @@ def _island_vertices(skeleton, evidence_by_id, offset_u):
     min_u = min((uv[0] for uv in uv_by_node.values()), default=0.0)
     for (evidence_id, role), node in skeleton.node_by_run_end.items():
         uv = uv_by_node.get(node)
-        if uv is None:
+        vertex_id = skeleton.vertex_by_run_end.get((evidence_id, role))
+        if uv is None or vertex_id is None:
             continue
         evidence = evidence_by_id[evidence_id]
         source_vertex = str(evidence.start_source_vertex_id if role == "START" else evidence.end_source_vertex_id)
         shifted = (uv[0] - min_u + offset_u, uv[1])
-        # Keyed per patch view so seam-duplicated occurrences keep both UVs.
-        vertices[(source_vertex, str(evidence.patch_id))] = PinnedVertex(
+        # Keyed per vertex occurrence so both sides of a seam keep their own UV.
+        vertices[(vertex_id, str(evidence.patch_id))] = PinnedVertex(
             source_vertex_id=source_vertex,
             island_id=skeleton.island_id,
             patch_id=str(evidence.patch_id),
             uv=shifted,
             pinned=True,
+            vertex_id=vertex_id,
         )
     for evidence_id, role_name in skeleton.axis_role_by_run.items():
         if role_name not in ("AXIS_A", "AXIS_B"):
