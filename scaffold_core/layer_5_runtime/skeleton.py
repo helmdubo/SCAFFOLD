@@ -184,7 +184,10 @@ def _island_skeleton(island, assembly, relations, geometry, lookups):
         })
         for patch_id in sorted(patch_ids - set(frame.rotation_by_patch)):
             diagnostics.append(f"patch outside the rigid island frame: {patch_id} -> OBLIQUE")
-        roles, signs = _frame_roles_and_signs(runs, framed, line_of, direction_of, frame.normal, diagnostics)
+        drift = RESIDUAL_TOLERANCE_PER_SPAN * _frame_extent(frame, framed, lookups.position_of_source)
+        roles, signs = _frame_roles_and_signs(
+            runs, framed, line_of, direction_of, frame.normal, diagnostics, drift
+        )
         mismatches = _node_frame_mismatches(frame, framed, node_by_run_end, lookups.position_of_source)
     rail_conflicts = _island_rail_conflicts(rail_segments, line_of, roles, signs, frame is not None)
     axis_a = _solve_axis("AXIS_A", runs, roles, signs, node_by_run_end, diagnostics, direction_of)
@@ -356,7 +359,7 @@ def _unfolded_frame(island, assembly, geometry, lookups) -> _IslandFrame | None:
     return _IslandFrame(rotation, offset, normalize(facts[root].normal))
 
 
-def _frame_roles_and_signs(runs, framed, line_of, direction_of, normal, diagnostics):
+def _frame_roles_and_signs(runs, framed, line_of, direction_of, normal, diagnostics, drift=None):
     """Island-line axis roles and run orientation in the unfolded frame.
 
     AXIS_A follows the longest island line; AXIS_B = normal x AXIS_A keeps the
@@ -385,10 +388,13 @@ def _frame_roles_and_signs(runs, framed, line_of, direction_of, normal, diagnost
     for line_id in sorted(runs_by_line):
         members = runs_by_line[line_id]
         member_roles = set()
+        jogs = []
         for e in members:
             direction = normalize(direction_of[e.id])
             along_a, along_b = dot(direction, axis_a), dot(direction, axis_b)
-            if abs(along_a) >= AXIS_CLASS_MIN_COS:
+            if drift is not None and e.length * min(abs(along_a), abs(along_b)) > drift:
+                jogs.append(e)  # a jog: it leaves its axis by more than drift
+            elif abs(along_a) >= AXIS_CLASS_MIN_COS:
                 member_roles.add("AXIS_A")
                 signs[e.id] = 1.0 if along_a > 0.0 else -1.0
             elif abs(along_b) >= AXIS_CLASS_MIN_COS:
@@ -398,12 +404,33 @@ def _frame_roles_and_signs(runs, framed, line_of, direction_of, normal, diagnost
                 member_roles.add("OBLIQUE")
         if len(member_roles) == 1:
             role = next(iter(member_roles))
+        elif not member_roles:
+            role = "OBLIQUE"  # every member leaves its axis: an oblique line
         else:
             role = "OBLIQUE"
             diagnostics.append(f"island line not straight in the unfolded frame: {line_id} -> OBLIQUE")
         for e in members:
             roles[e.id] = role
+        for e in jogs:
+            if role != "OBLIQUE":
+                diagnostics.append(f"island line jogs in the unfolded frame: {e.id} -> OBLIQUE")
+            roles[e.id] = "OBLIQUE"
     return roles, signs
+
+
+def _frame_extent(frame, runs, position_of_source) -> float:
+    """Largest coordinate range of the framed run ends in the unfolded frame."""
+
+    points = []
+    for e in runs:
+        rotation = frame.rotation_by_patch[str(e.patch_id)]
+        offset = frame.offset_by_patch[str(e.patch_id)]
+        for source_vertex in (e.start_source_vertex_id, e.end_source_vertex_id):
+            rotated = _rotate(rotation, position_of_source[str(source_vertex)])
+            points.append(tuple(rotated[i] + offset[i] for i in range(3)))
+    if not points:
+        return 0.0
+    return max(max(point[i] for point in points) - min(point[i] for point in points) for i in range(3))
 
 
 def _node_frame_mismatches(frame, runs, node_by_run_end, position_of_source) -> tuple[str, ...]:

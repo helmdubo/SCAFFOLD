@@ -304,6 +304,10 @@ def test_artist_walls_captures_keep_g5a_invariants() -> None:
             for diagnostic in result.diagnostics
         ), name
         assert sum(1 for vertex in result.vertices if vertex.pinned) >= min_pinned, name
+        # Plan Slices S and T: drift is absorbed and a run that leaves its axis
+        # by more than drift is a jog, so no equation contradicts (walls_004
+        # dropped 16 before; its f14 and f15 cross runs are the jogs).
+        assert not any("contradictory" in diagnostic for diagnostic in result.diagnostics), name
         # Plan Slice O: Layer 3 orders every island rail of these walls, and
         # each runs one way along its axis in the unfolded frame.
         assert result.rail_frame_conflicts == (), name
@@ -448,6 +452,31 @@ def test_rigid_frame_gives_an_axis_only_within_the_planar_tolerance_angle() -> N
 
     # a 32-gon cap edge 11.25 degrees off no longer snaps to an axis
     assert roles == {"seed": "AXIS_A", "drift": "AXIS_A", "slope": "OBLIQUE", "cross": "AXIS_B"}
+
+
+def test_a_run_that_leaves_its_axis_by_more_than_drift_is_a_jog_of_its_line() -> None:
+    # buildings walls.004/f14: a 1.8 m cross run 1.6 degrees off its axis moves
+    # its column by 5 cm, more than the island's drift (1 mm per metre); snapped,
+    # it contradicted the whole column. It alone goes OBLIQUE, its line stays.
+    from math import cos, radians, sin
+
+    from scaffold_core.layer_5_runtime.skeleton import _frame_roles_and_signs
+
+    def run(run_id, degrees, run_length):
+        angle = radians(degrees)
+        return SimpleNamespace(id=run_id, length=run_length, direction=(cos(angle), sin(angle), 0.0))
+
+    runs = (run("seed", 0.0, 10.0), run("straight", 0.2, 2.0), run("jog", 1.6, 1.8), run("lone", 3.0, 4.0))
+    line_of = {"seed": "line", "straight": "line", "jog": "line", "lone": "lone"}
+    direction_of = {e.id: e.direction for e in runs}
+    diagnostics: list[str] = []
+    roles, _signs = _frame_roles_and_signs(
+        runs, runs, line_of, direction_of, (0.0, 0.0, 1.0), diagnostics, drift=0.0087
+    )
+
+    assert roles == {"seed": "AXIS_A", "straight": "AXIS_A", "jog": "OBLIQUE", "lone": "OBLIQUE"}
+    # a line made only of such runs is simply oblique, with no jog diagnostic
+    assert diagnostics == ["island line jogs in the unfolded frame: jog -> OBLIQUE"]
 
 
 def test_warp_is_measured_at_the_patch_scale_not_by_one_short_edge() -> None:

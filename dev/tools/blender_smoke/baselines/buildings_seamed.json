@@ -73,7 +73,7 @@
   "written_loops": 8
  },
  "walls": {
-  "axis_runs": 3513,
+  "axis_runs": 3512,
   "axis_violations": 0,
   "bipartition_conflicts": 0,
   "chains": 1961,
@@ -85,15 +85,15 @@
   "island_lines": 2658,
   "island_rails": 735,
   "islands": 8,
-  "lines_not_straight": 4,
+  "lines_not_straight": 0,
   "node_frame_mismatches": 0,
   "object": "walls",
-  "oblique_runs": 39,
+  "oblique_runs": 40,
   "opposite_side_families": 0,
   "patches": 612,
   "patches_outside_frame": 1,
-  "pinned": 3529,
-  "pinned_loops": 4848,
+  "pinned": 3538,
+  "pinned_loops": 4863,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 489,
    "TOPOLOGY_CHAIN_SHARED": 1472
@@ -105,12 +105,12 @@
   "rigid_islands": 8,
   "seam_mismatches": 0,
   "shells": 8,
-  "solve_diagnostics": 6,
+  "solve_diagnostics": 7,
   "unordered_island_rails": 1,
-  "written_loops": 4848
+  "written_loops": 4863
  },
  "walls.003": {
-  "axis_runs": 3513,
+  "axis_runs": 3512,
   "axis_violations": 0,
   "bipartition_conflicts": 0,
   "chains": 1961,
@@ -122,15 +122,15 @@
   "island_lines": 2658,
   "island_rails": 735,
   "islands": 8,
-  "lines_not_straight": 4,
+  "lines_not_straight": 0,
   "node_frame_mismatches": 0,
   "object": "walls.003",
-  "oblique_runs": 39,
+  "oblique_runs": 40,
   "opposite_side_families": 0,
   "patches": 612,
   "patches_outside_frame": 1,
-  "pinned": 3529,
-  "pinned_loops": 4843,
+  "pinned": 3538,
+  "pinned_loops": 4858,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 489,
    "TOPOLOGY_CHAIN_SHARED": 1472
@@ -142,19 +142,19 @@
   "rigid_islands": 8,
   "seam_mismatches": 0,
   "shells": 8,
-  "solve_diagnostics": 6,
+  "solve_diagnostics": 7,
   "unordered_island_rails": 1,
-  "written_loops": 4843
+  "written_loops": 4858
  },
  "walls.004": {
-  "axis_runs": 224,
+  "axis_runs": 222,
   "axis_violations": 0,
   "bipartition_conflicts": 0,
   "chains": 94,
   "faces": 55,
   "families": 140,
   "family_max": 5,
-  "first_solve_diagnostic": "AXIS_A: 16 contradictory equations -> UNCONSTRAINED components",
+  "first_solve_diagnostic": "island line jogs in the unfolded frame: patch_chain_directional_evidence:patch_chain:patch:seed:f14:0:0:0 -> OBLIQUE",
   "foreign_loops_changed": 0,
   "island_lines": 147,
   "island_rails": 59,
@@ -162,12 +162,12 @@
   "lines_not_straight": 0,
   "node_frame_mismatches": 0,
   "object": "walls.004",
-  "oblique_runs": 0,
+  "oblique_runs": 2,
   "opposite_side_families": 0,
   "patches": 55,
   "patches_outside_frame": 0,
-  "pinned": 188,
-  "pinned_loops": 188,
+  "pinned": 224,
+  "pinned_loops": 224,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 62,
    "TOPOLOGY_CHAIN_SHARED": 32
@@ -175,13 +175,13 @@
   "rail_frame_conflicts": 0,
   "rails": 140,
   "rails_consumable": 64,
-  "residual_ok": false,
+  "residual_ok": true,
   "rigid_islands": 27,
   "seam_mismatches": 0,
   "shells": 27,
-  "solve_diagnostics": 1,
+  "solve_diagnostics": 2,
   "unordered_island_rails": 0,
-  "written_loops": 188
+  "written_loops": 224
  },
  "walls.005": {
   "axis_runs": 52,
@@ -258,14 +258,14 @@
   "written_loops": 20
  },
  "walls.007": {
-  "axis_runs": 201,
+  "axis_runs": 200,
   "axis_violations": 0,
   "bipartition_conflicts": 0,
   "chains": 109,
   "faces": 81,
   "families": 98,
   "family_max": 4,
-  "first_solve_diagnostic": "AXIS_A: 3 contradictory equations -> UNCONSTRAINED components",
+  "first_solve_diagnostic": "",
   "foreign_loops_changed": 0,
   "island_lines": 163,
   "island_rails": 37,
@@ -273,12 +273,12 @@
   "lines_not_straight": 0,
   "node_frame_mismatches": 0,
   "object": "walls.007",
-  "oblique_runs": 0,
+  "oblique_runs": 1,
   "opposite_side_families": 0,
   "patches": 32,
   "patches_outside_frame": 0,
-  "pinned": 196,
-  "pinned_loops": 269,
+  "pinned": 201,
+  "pinned_loops": 280,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 25,
    "TOPOLOGY_CHAIN_SHARED": 84
@@ -286,13 +286,13 @@
   "rail_frame_conflicts": 0,
   "rails": 98,
   "rails_consumable": 92,
-  "residual_ok": false,
+  "residual_ok": true,
   "rigid_islands": 1,
   "seam_mismatches": 0,
   "shells": 1,
-  "solve_diagnostics": 1,
+  "solve_diagnostics": 0,
   "unordered_island_rails": 0,
-  "written_loops": 269
+  "written_loops": 280
  },
  "walls.008": {
   "axis_runs": 12,
@@ -331,7 +331,7 @@
   "written_loops": 12
  },
  "walls.009": {
-  "axis_runs": 1803,
+  "axis_runs": 1804,
   "axis_violations": 0,
   "bipartition_conflicts": 0,
   "chains": 1014,
@@ -343,15 +343,15 @@
   "island_lines": 1366,
   "island_rails": 367,
   "islands": 3,
-  "lines_not_straight": 1,
+  "lines_not_straight": 0,
   "node_frame_mismatches": 0,
   "object": "walls.009",
-  "oblique_runs": 16,
+  "oblique_runs": 15,
   "opposite_side_families": 0,
   "patches": 310,
   "patches_outside_frame": 1,
-  "pinned": 1812,
-  "pinned_loops": 2408,
+  "pinned": 1813,
+  "pinned_loops": 2411,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 270,
    "TOPOLOGY_CHAIN_SHARED": 744
@@ -365,30 +365,30 @@
   "shells": 3,
   "solve_diagnostics": 2,
   "unordered_island_rails": 1,
-  "written_loops": 2408
+  "written_loops": 2411
  },
  "walls.010": {
-  "axis_runs": 704,
+  "axis_runs": 697,
   "axis_violations": 0,
   "bipartition_conflicts": 0,
   "chains": 385,
   "faces": 312,
   "families": 347,
   "family_max": 10,
-  "first_solve_diagnostic": "island line not straight in the unfolded frame: connected_direction_family:12@patch_chain_directional_evidence:patch_cha",
+  "first_solve_diagnostic": "island line jogs in the unfolded frame: patch_chain_directional_evidence:patch_chain:patch:seed:f90:1:0:0 -> OBLIQUE",
   "foreign_loops_changed": 0,
   "island_lines": 536,
   "island_rails": 142,
   "islands": 3,
-  "lines_not_straight": 1,
+  "lines_not_straight": 0,
   "node_frame_mismatches": 0,
   "object": "walls.010",
-  "oblique_runs": 4,
+  "oblique_runs": 11,
   "opposite_side_families": 0,
   "patches": 122,
   "patches_outside_frame": 0,
-  "pinned": 692,
-  "pinned_loops": 1018,
+  "pinned": 704,
+  "pinned_loops": 1039,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 90,
    "TOPOLOGY_CHAIN_SHARED": 295
@@ -402,7 +402,7 @@
   "shells": 3,
   "solve_diagnostics": 2,
   "unordered_island_rails": 1,
-  "written_loops": 1018
+  "written_loops": 1039
  },
  "walls.011": {
   "axis_runs": 12,
