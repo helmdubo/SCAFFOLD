@@ -23,7 +23,7 @@ from typing import Mapping
 
 from scaffold_core.core.diagnostics import Diagnostic, DiagnosticSeverity
 from scaffold_core.core.evidence import Evidence
-from scaffold_core.ids import ChainId, PatchChainId, PatchId, VertexId
+from scaffold_core.ids import ChainId, PatchChainId, PatchId, SourceVertexId, VertexId
 from scaffold_core.layer_1_topology.model import SurfaceModel
 from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot, Vector3
 from scaffold_core.layer_2_geometry.measures import EPSILON, add, cross, dot, length, normalize, scale
@@ -202,9 +202,7 @@ def _in_patch_geodesic_crossings(
                     continue
                 if not _can_attempt_in_patch_geodesic(
                     first,
-                    first_role,
                     second,
-                    second_role,
                     self_seam_chain_ids,
                 ):
                     continue
@@ -251,16 +249,16 @@ def _in_patch_geodesic_crossings(
 
 def _can_attempt_in_patch_geodesic(
     first: PatchChainDirectionalEvidence,
-    first_role: PatchChainEndpointRole,
     second: PatchChainDirectionalEvidence,
-    second_role: PatchChainEndpointRole,
     self_seam_chain_ids: set[ChainId],
 ) -> bool:
+    """Endpoint roles are not compared: runs of different Chains keep their own
+    source-edge orientation, so two collinear runs may both end at the junction.
+    DD-45 decides by the in-patch angle alone."""
+
     if first.id == second.id:
         return False
     if first.patch_id != second.patch_id or first.loop_id != second.loop_id:
-        return False
-    if first_role is second_role:
         return False
     return first.parent_chain_id not in self_seam_chain_ids and second.parent_chain_id not in self_seam_chain_ids
 
@@ -271,15 +269,22 @@ def _pair_endpoint_vertex_ids(
     first_role: PatchChainEndpointRole,
     second_id: str,
     second_role: PatchChainEndpointRole,
-    fallback_vertex_ids: tuple[VertexId, ...],
+    junction_vertex_ids: tuple[VertexId, ...],
 ) -> tuple[VertexId, ...]:
+    """Occurrences of both runs at the junction.
+
+    A run carries samples in its own orientation and in its PatchChain loop
+    orientation, so a role alone can name the far end of the run. Only samples
+    at the junction count; the far-end angle must not veto DD-45 continuation.
+    """
+
     vertex_ids = tuple(
         sample.vertex_id
         for evidence_id, role in ((first_id, first_role), (second_id, second_role))
         for sample in samples_by_evidence_id.get(evidence_id, ())
-        if sample.endpoint_role is role
+        if sample.endpoint_role is role and sample.vertex_id in junction_vertex_ids
     )
-    return tuple(sorted(set(vertex_ids), key=str)) or fallback_vertex_ids
+    return tuple(sorted(set(vertex_ids), key=str)) or junction_vertex_ids
 
 
 def _local_face_fans_by_patch_vertex(geometry: GeometryFactSnapshot):
@@ -518,13 +523,14 @@ def _node_crossings(
     sample_evidence_ids_by_sample_id: Mapping[str, tuple[str, ...]],
     evidence_by_id: Mapping[str, PatchChainDirectionalEvidence],
     edge_by_patch_chain_id: Mapping[PatchChainId, ScaffoldEdge],
-    adjacency_by_patch_pair: Mapping[frozenset[PatchId], PatchAdjacency],
+    adjacency_by_patch_pair: Mapping[frozenset[PatchId], tuple[PatchAdjacency, ...]],
     self_seam_chain_ids: set[ChainId],
 ) -> tuple[_CrossingCandidate, ...]:
-    node_ids = {node.id for node in scaffold_nodes}
+    node_by_id = {node.id: node for node in scaffold_nodes}
     candidates: list[_CrossingCandidate] = []
     for relation in sorted(scaffold_node_incident_edge_relations, key=lambda item: item.id):
-        if relation.scaffold_node_id not in node_ids:
+        node = node_by_id.get(relation.scaffold_node_id)
+        if node is None:
             continue
         if relation.kind in {
             ScaffoldNodeIncidentEdgeRelationKind.MISSING_ENDPOINT_EVIDENCE,
@@ -557,7 +563,11 @@ def _node_crossings(
                 axis = (0.0, 0.0, 0.0)
                 signed_dihedral = 0.0
                 if first.patch_id != second.patch_id:
-                    adjacency = adjacency_by_patch_pair.get(frozenset((first.patch_id, second.patch_id)))
+                    adjacency = _adjacency_through_node(
+                        adjacency_by_patch_pair.get(frozenset((first.patch_id, second.patch_id)), ()),
+                        node.source_vertex_ids,
+                        geometry,
+                    )
                     if adjacency is None:
                         continue
                     axis = _transport_axis(geometry, adjacency.chain_id, ())
@@ -672,11 +682,35 @@ def _sample_segment_index(sample: PatchChainEndpointSample) -> int | None:
 
 def _adjacency_by_patch_pair(
     patch_adjacencies: Mapping[str, PatchAdjacency],
-) -> dict[frozenset[PatchId], PatchAdjacency]:
-    return {
-        frozenset((adjacency.first_patch_id, adjacency.second_patch_id)): adjacency
-        for adjacency in patch_adjacencies.values()
-    }
+) -> dict[frozenset[PatchId], tuple[PatchAdjacency, ...]]:
+    adjacencies: dict[frozenset[PatchId], list[PatchAdjacency]] = {}
+    for adjacency in patch_adjacencies.values():
+        adjacencies.setdefault(frozenset((adjacency.first_patch_id, adjacency.second_patch_id)), []).append(adjacency)
+    return {pair: tuple(items) for pair, items in adjacencies.items()}
+
+
+def _adjacency_through_node(
+    adjacencies: tuple[PatchAdjacency, ...],
+    node_source_vertex_ids: tuple[SourceVertexId, ...],
+    geometry: GeometryFactSnapshot,
+) -> PatchAdjacency | None:
+    """Return the hinge between two patches that passes through the node.
+
+    Two patches may share several Chains (the two seams of a split tube). The
+    crossing provenance and transport axis must name the hinge at this node,
+    not an arbitrary Chain of the patch pair. Without a hinge through the node
+    there is no transport axis, so there is no crossing.
+    """
+
+    for adjacency in adjacencies:
+        chain_facts = geometry.chain_facts.get(adjacency.chain_id)
+        if chain_facts is not None and any(
+            vertex_id in node_source_vertex_ids
+            for segment in chain_facts.segments
+            for vertex_id in (segment.start_source_vertex_id, segment.end_source_vertex_id)
+        ):
+            return adjacency
+    return None
 
 
 def _transport_axis(

@@ -146,10 +146,11 @@ bl_info = {
 
 ## Run tests
 
-From repository root:
+From repository root (collects `scaffold_core/tests` and the pure debug-overlay
+tests in `dev/tools/scaffold_graph_debug`):
 
 ```bash
-pytest scaffold_core/tests
+python -m pytest
 ```
 
 The first architectural tests to keep green are:

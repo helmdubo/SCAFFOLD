@@ -39,6 +39,7 @@ class SolveResult:
     seam_length_mismatches: tuple[str, ...]
     diagnostics: tuple[str, ...]
     patch_by_source_face: Mapping[str, str] = field(default_factory=dict)
+    node_frame_mismatches: tuple[str, ...] = ()
 
 
 def run_skeleton_solve(context: Any) -> SolveResult:
@@ -77,6 +78,11 @@ def run_skeleton_solve(context: Any) -> SolveResult:
         axis_parallel_violations=tuple(violations),
         seam_length_mismatches=tuple(seam_mismatches),
         diagnostics=tuple(diagnostics),
+        node_frame_mismatches=tuple(
+            f"{skeleton.island_id}:{node}"
+            for skeleton in skeletons
+            for node in skeleton.node_frame_mismatches
+        ),
     )
 
 

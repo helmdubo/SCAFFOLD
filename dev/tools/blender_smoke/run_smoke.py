@@ -30,12 +30,19 @@ TABLE_COLUMNS = (
     ("family_max", 10),
     ("opposite_side_families", 3),
     ("islands", 7),
+    ("rigid_islands", 5),
     ("pinned", 6),
+    ("oblique_runs", 5),
     ("solve_diagnostics", 4),
     ("residual_max", 8),
     ("ms", 6),
 )
-COLUMN_TITLES = {"opposite_side_families": "opp", "solve_diagnostics": "diag"}
+COLUMN_TITLES = {
+    "opposite_side_families": "opp",
+    "rigid_islands": "rigid",
+    "oblique_runs": "obliq",
+    "solve_diagnostics": "diag",
+}
 
 
 def main() -> int:
@@ -99,6 +106,7 @@ def _parse_args() -> argparse.Namespace:
 def _find_blender(explicit: str) -> str:
     candidates = [explicit, os.environ.get("SCAFFOLD_BLENDER", "")]
     candidates += sorted(glob.glob("/opt/blender/*/blender"), reverse=True)
+    candidates += sorted(glob.glob("C:/Program Files/Blender Foundation/Blender */blender.exe"), reverse=True)
     candidates.append(shutil.which("blender") or "")
     for candidate in candidates:
         if candidate and Path(candidate).is_file():

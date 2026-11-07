@@ -86,8 +86,15 @@ def test_beveled_corner_has_horizontal_spine_and_vertical_ribs() -> None:
     assert _has_patch_fragments(spine, ("f_wall_a", "f_chamfer", "f_wall_b"))
 
     parallel_rails = _rails(payload, "PARALLEL")
-    assert len(parallel_rails) == 2
-    assert all(rail["length"] > 0.9 for rail in parallel_rails)
+    assert len(parallel_rails) == 1
+    assert parallel_rails[0]["length"] > 1.9
+    assert _has_patch_fragments(parallel_rails[0], ("f_wall_a", "f_chamfer", "f_wall_b"))
+
+    # One vertical rib per fold line and outer edge (Slice L2): the chamfer's
+    # opposite sides never share a family, so no rib spans both fold lines.
+    ribs = _rails(payload, "RIB")
+    assert len(ribs) == 4
+    assert all(0.9 < rail["length"] < 1.1 for rail in ribs)
 
     seam_ribs = [
         rail

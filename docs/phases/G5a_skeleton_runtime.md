@@ -48,7 +48,10 @@ uv_transfer.py - the ONLY bpy write boundary (G5 rule): writes UVs+pins
 2. lstsq residual ~0 on developable grids; nonzero residual must be
    accompanied by UNCONSTRAINED diagnostics, never silent smearing;
 3. SEAM_SELF sides equal length in UV (band closure invariant);
-4. degradation always carries diagnostics naming entities.
+4. degradation always carries diagnostics naming entities;
+5. node/frame agreement (plan Slice N): in an island with a rigid unfolded
+   frame, the occurrences unioned into one solve node coincide in that
+   frame (node_frame_mismatches is a validation output).
 ```
 
 ## Non-goals in G5a
@@ -81,14 +84,31 @@ skeleton.py:
   selection-wide skeleton solve over ScaffoldNode UNION
   RunEndpointJunction atoms;
   one length equation per directional run endpoint pair;
-  island-local AXIS_A / AXIS_B roles are derived from
-  ConnectedDirectionFamily v1 in the unfolded island frame;
+  island lines (plan Slice N): a ConnectedDirectionFamily keeps only
+  crossings inside one patch or through a hinge stitched in the island,
+  so a family that crosses a cut seam splits into several lines;
+  rigid unfolded frame when no island patch is curved: each patch is
+  rotated into the root plane along the stitch tree (rotation about the
+  hinge Chain); the frame crosses only straight hinges (the Layer 3
+  straight-hinge rule) or joins of coplanar patches (no rotation), warped
+  n-gons and patches behind a bent hinge stay outside (OBLIQUE with a
+  diagnostic);
+  chain ends of a closed rim cut by a SEAM_SELF are matched to their own
+  seam side through the face fan of the run's end edge;
+  framed runs take AXIS_A / AXIS_B and their orientation sign from the
+  unfolded direction (AXIS_A = longest island line, AXIS_B = root normal x
+  AXIS_A, so islands are not mirrored); a line whose members disagree
+  degrades to OBLIQUE with a diagnostic;
+  curved islands keep the provisional frame-free derivation (3D
+  perpendicularity at nodes, head-to-tail and co-orientation signs) over
+  island lines;
   contradictions are excluded as UNCONSTRAINED with diagnostics.
 
 pins.py:
   run_skeleton_solve() orchestrates islands -> skeleton -> pinned UVs;
   per-patch pins preserve duplicated seam occurrences;
-  axis-parallel and SEAM_SELF length checks are validation outputs.
+  axis-parallel, SEAM_SELF length and node/frame checks are validation
+  outputs.
 
 uv_transfer.py:
   writes UV coordinates and pin flags only, and only on faces of the solved
@@ -123,9 +143,13 @@ Expected currently validated behavior:
 Known limitation:
 
 ```text
-artist_cross_band currently degrades partially with diagnostics instead of
-silently smearing. This is an accepted G5a diagnostic case, not a green
-quality target yet.
+artist_cross_band: the side band solves with aligned columns (before Slice N
+its bottom row was silently mirrored: the closed rim's ends sat on the wrong
+seam sides, residual 5e-15, zero diagnostics). The two planar end patches
+still degrade with diagnostics: they close their loops only to 0.004 while
+RESIDUAL_TOLERANCE is an absolute 1e-5, so every equation is dropped as
+contradictory; exact orientation from the frame does not change that.
+Tolerance policy belongs to the later unwrap stage.
 
 artist_cyl_multiseam is RESOLVED (plan Slice L1). The collapse was a Layer 3
 ConnectedDirectionFamily leak through curved shared chains that welded the
@@ -142,7 +166,9 @@ Draft contract: `docs/architecture/scaffold_rail_trace_contract_draft.md`.
 the 13 seamed objects of the artist file; the baseline lives in
 `dev/tools/blender_smoke/baselines/buildings_seamed.json`. All objects keep
 zero axis-parallel violations, zero seam-length mismatches, zero opposite-side
-family glue and zero loops changed outside the solved faces. Remaining
-degradation on the walls meshes is "axis bipartition conflict -> OBLIQUE"
-(see plan, next candidate after Slice L2).
+family glue, zero loops changed outside the solved faces and zero node/frame
+mismatches. After Slice N 60 of 62 islands have a rigid unfolded frame (the
+frame-free bipartition no longer runs there), 97 of 10214 runs stay OBLIQUE,
+and the remaining structure signals are 5 island lines through curved runs
+and 10 patches outside a rigid frame (warped n-gons folded around a corner).
 

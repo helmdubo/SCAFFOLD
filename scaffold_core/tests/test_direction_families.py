@@ -40,6 +40,7 @@ from scaffold_core.tests.fixtures.extruded_cross import make_extruded_cross_sour
 from scaffold_core.tests.fixtures.l_corridor_tunnel import make_l_corridor_tunnel_seamed_folds_source
 from scaffold_core.tests.fixtures.l_corridor_tunnel import make_l_corridor_tunnel_single_patch_source
 from scaffold_core.tests.fixtures.single_patch import make_single_quad_source
+from scaffold_core.tests.fixtures.t_vertex_wall import make_t_vertex_wall_source
 from scaffold_core.tests.fixtures.tube_with_cap import make_tube_with_cap_source
 
 
@@ -353,6 +354,83 @@ def test_fully_seamed_capped_box_never_joins_opposite_wall_sides() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("flip_left", "flip_right"),
+    ((False, False), (False, True), (True, False), (True, True)),
+)
+def test_straight_side_split_by_t_vertex_is_one_family_for_any_edge_order(
+    flip_left: bool,
+    flip_right: bool,
+) -> None:
+    # DD-45: two runs continue in the owning patch view iff the in-patch angle
+    # at their junction is pi. A straight wall bottom split by a T-vertex into
+    # two Chains is one line whatever vertex order its source edges carry.
+    context = run_pass_1_relations(run_pass_0(make_t_vertex_wall_source(flip_left, flip_right)))
+    relations = context.relation_snapshot
+
+    wall_bottom = tuple(
+        evidence
+        for evidence in relations.patch_chain_directional_evidence
+        if str(evidence.patch_id).endswith("f_wall")
+        and abs(evidence.direction[2]) < 1e-9
+        and evidence.length < 1.5
+    )
+    assert len(wall_bottom) == 2
+    families = {
+        family.id
+        for family in relations.connected_direction_families
+        for evidence in wall_bottom
+        if evidence.id in family.member_directional_evidence_ids
+    }
+    assert len(families) == 1
+    assert _opposite_side_diagnostics(relations) == ()
+
+
+def test_scaffold_node_crossings_name_the_hinge_through_their_node() -> None:
+    # Both side patches of a two-seam tube share two seam Chains. A node
+    # crossing must record the seam that passes through its node, not an
+    # arbitrary Chain of the patch pair (plan D2 review note 4).
+    context = run_pass_1_relations(run_pass_0(make_cylinder_tube_without_caps_with_two_seams_source()))
+    relations = context.relation_snapshot
+    node_by_id = {node.id: node for node in relations.scaffold_nodes}
+    crossings = tuple(
+        record
+        for family in relations.connected_direction_families
+        for record in family.crossing_records
+        if record.kind == "SCAFFOLD_NODE" and record.first_patch_id != record.second_patch_id
+    )
+
+    assert crossings
+    for record in crossings:
+        segments = context.geometry_facts.chain_facts[record.shared_chain_id].segments
+        chain_vertices = {
+            vertex_id
+            for segment in segments
+            for vertex_id in (segment.start_source_vertex_id, segment.end_source_vertex_id)
+        }
+        assert set(node_by_id[record.scaffold_node_id].source_vertex_ids) & chain_vertices
+
+
+def test_node_crossing_needs_a_hinge_through_its_node() -> None:
+    from scaffold_core.layer_3_relations.direction_families import _adjacency_through_node
+
+    context = run_pass_1_relations(run_pass_0(make_cylinder_tube_without_caps_with_two_seams_source()))
+    geometry = context.geometry_facts
+    first, second = sorted(context.relation_snapshot.patch_adjacencies.values(), key=lambda item: item.id)
+
+    def hinge_vertices(adjacency):
+        return {
+            vertex_id
+            for segment in geometry.chain_facts[adjacency.chain_id].segments
+            for vertex_id in (segment.start_source_vertex_id, segment.end_source_vertex_id)
+        }
+
+    assert {first.first_patch_id, first.second_patch_id} == {second.first_patch_id, second.second_patch_id}
+    on_second_only = sorted(hinge_vertices(second) - hinge_vertices(first))[0]
+    assert _adjacency_through_node((first, second), (on_second_only,), geometry) == second
+    assert _adjacency_through_node((first, second), (SourceVertexId("not_on_a_hinge"),), geometry) is None
+
+
 def test_no_family_spans_opposite_patch_sides_on_any_fixture() -> None:
     sources = (
         make_l_corridor_tunnel_seamed_folds_source(),
@@ -364,6 +442,8 @@ def test_no_family_spans_opposite_patch_sides_on_any_fixture() -> None:
         make_capped_decagon_prism_odd_strips_source(),
         make_capped_hex_prism_uneven_strips_source(),
         make_capped_square_prism_all_seams_source(),
+        make_t_vertex_wall_source(),
+        make_t_vertex_wall_source(True, False),
         _load_artist_cross_band_source(),
         _load_artist_cyl32_source(),
         _load_source_snapshot("artist_cyl_multiseam.json"),
