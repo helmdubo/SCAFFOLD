@@ -27,6 +27,10 @@ islands.py   - island assembly: spanning tree of stitch decisions.
   or a coplanar join between planar, unwarped patches; the same
   predicate, is_rigid_seam, decides what the rigid frame crosses), then
   the other accepted seams; longest first inside each group.
+  Overlap gate (plan Slice U): a rigid stitch between two rigid parts
+  stays cut when the smaller part, unfolded about the seam, would lie
+  over the larger one; a non-rigid seam between two rigid parts stays
+  cut; islands.unfold_rotation is the one unfolding for gate and frame.
 
 skeleton.py  - selection-wide solve:
   nodes = ScaffoldNode UNION RunEndpointJunction (rail atoms);
@@ -99,7 +103,9 @@ islands.py:
   SEAM_SELF always splits and non-tree seams stay cut;
   rigid seams enter the tree first (plan Slice P), so a planar patch
   with a path of rigid seams to the frame root joins the frame
-  instead of hanging off a warped n-gon.
+  instead of hanging off a warped n-gon;
+  the overlap gate (plan Slice U) keeps every rigid island free of
+  overlap between its patches.
 
 skeleton.py:
   selection-wide skeleton solve over ScaffoldNode UNION
@@ -236,4 +242,8 @@ invariants stay 0.
 After Slice T (2026-11) jogs go OBLIQUE alone: contradictions 5 -> 0,
 island lines not straight 10 -> 0, 17 jogs, pins 10104 -> 10176, OBLIQUE
 runs 102 -> 113; invariants stay 0.
+
+After Slice U (2026-11) islands 62 -> 355 (354 framed), pins 10176 ->
+10112, OBLIQUE runs 113 -> 194, Layer 5 diagnostics 20 -> 28,
+contradictions 0; no island overlaps itself between patches.
 

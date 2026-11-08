@@ -436,6 +436,22 @@ def test_solve_absorbs_modelling_drift_relative_to_the_island_span() -> None:
         assert bool(solve.coordinate_by_node) is not contradictory
 
 
+def test_framed_solve_uses_the_frame_drift_shared_with_the_jog_check() -> None:
+    # plan Slice U: a long thin island (buildings walls.010, 8.5 x 0.5 m) lets
+    # a 4.6 mm offset pass the jog check; the solve must absorb the same drift
+    # instead of its much smaller span along the short axis.
+    from scaffold_core.layer_5_runtime.skeleton import _solve_axis
+
+    runs, roles, signs, node_by_run_end = _ladder(10.05)
+    own_span: list[str] = []
+    _solve_axis("AXIS_A", runs, roles, signs, node_by_run_end, own_span)
+    frame_drift: list[str] = []
+    solve = _solve_axis("AXIS_A", runs, roles, signs, node_by_run_end, frame_drift, drift=0.1)
+
+    assert own_span and not frame_drift
+    assert solve.coordinate_by_node
+
+
 def test_rigid_frame_gives_an_axis_only_within_the_planar_tolerance_angle() -> None:
     from math import cos, radians, sin
 
@@ -477,6 +493,43 @@ def test_a_run_that_leaves_its_axis_by_more_than_drift_is_a_jog_of_its_line() ->
     assert roles == {"seed": "AXIS_A", "straight": "AXIS_A", "jog": "OBLIQUE", "lone": "OBLIQUE"}
     # a line made only of such runs is simply oblique, with no jog diagnostic
     assert diagnostics == ["island line jogs in the unfolded frame: jog -> OBLIQUE"]
+
+
+def test_niche_reveals_that_would_overlap_the_wall_stay_cut() -> None:
+    # buildings walls.006: a wall with a niche. Unfolded about the opening,
+    # the reveals f1 and f2 fall into the same opening and f3 onto the wall
+    # (plan Slice U). The gate keeps f2 on the wall and cuts f1 off with f3;
+    # every seam that would join the two parts stays cut.
+    result = _solve(_load_capture("artist_walls_006.json"))
+
+    assert sorted(island.patch_ids for island in result.assembly.islands) == [
+        ("patch:seed:f0", "patch:seed:f2"),
+        ("patch:seed:f1", "patch:seed:f3"),
+    ]
+    refused = [d for d in result.assembly.decisions if d.reason == "would overlap the island"]
+    assert sorted(d.chain_id for d in refused) == ["chain:e15", "chain:e16", "chain:e4"]
+    assert all(skeleton.frame == "UNFOLDED" for skeleton in result.skeletons)
+    assert result.diagnostics == ()
+
+
+def test_overlap_gate_triangulates_concave_faces_and_ignores_touching_triangles() -> None:
+    from scaffold_core.layer_5_runtime.islands import _ear_clip, _triangles_overlap
+
+    # a U-shaped face: its notch (around x=1.5, y=1.5) stays empty
+    u_shape = [(0.0, 0.0), (3.0, 0.0), (3.0, 1.0), (1.0, 1.0), (1.0, 2.0), (3.0, 2.0), (3.0, 3.0), (0.0, 3.0)]
+    triangles = [tuple(u_shape[i] for i in triangle) for triangle in _ear_clip(u_shape)]
+    area = sum(
+        abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) / 2.0 for a, b, c in triangles
+    )
+    assert abs(area - 7.0) < 1e-9
+    notch = ((1.4, 1.4), (1.6, 1.4), (1.5, 1.6))
+    assert not any(_triangles_overlap(triangle, notch, 1e-9) for triangle in triangles)
+
+    square_a = ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0))
+    neighbour = ((1.0, 0.0), (2.0, 0.0), (1.0, 1.0))  # shares an edge
+    inside = ((0.6, 0.2), (0.9, 0.2), (0.9, 0.5))
+    assert not _triangles_overlap(square_a, neighbour, 1e-9)
+    assert _triangles_overlap(square_a, inside, 1e-9)
 
 
 def test_warp_is_measured_at_the_patch_scale_not_by_one_short_edge() -> None:
@@ -656,22 +709,23 @@ def test_bent_hinge_between_nearly_coplanar_patches_joins_without_rotation() -> 
     assert result.node_frame_mismatches == ()
 
 
-def test_bent_hinge_between_tilted_patches_stays_outside_the_frame() -> None:
+def test_bent_hinge_between_tilted_patches_stays_cut_between_two_rigid_islands() -> None:
     # The corner quad tilts 5.7 degrees away from the panel yet stays within
     # the planarity tolerance; an L-shaped hinge has no rotation axis, so the
-    # quad must not be rotated about the chord of the L.
+    # quad must not be rotated about the chord of the L. Since plan Slice U
+    # the seam stays cut (the frame cannot cross between two rigid parts), so
+    # the quad keeps its own rigid frame instead of hanging outside one.
     result = _solve(make_bent_hinge_panels_source(corner_lift=0.14))
 
-    skeleton = result.skeletons[0]
-    assert skeleton.frame == "UNFOLDED"
-    assert skeleton.diagnostics == (
-        "patch outside the rigid island frame: patch:seed:f_corner -> OBLIQUE",
-    )
-    assert all(
-        role == "OBLIQUE"
-        for run_id, role in skeleton.axis_role_by_run.items()
-        if ":f_corner:" in run_id
-    )
+    (decision,) = result.assembly.decisions
+    assert not decision.accepted
+    assert decision.reason == "frame cannot cross between rigid parts"
+    assert sorted(island.patch_ids for island in result.assembly.islands) == [
+        ("patch:seed:f_corner",),
+        ("patch:seed:f_panel_a",),
+    ]
+    assert all(skeleton.frame == "UNFOLDED" for skeleton in result.skeletons)
+    assert not any(diagnostic.startswith("patch outside") for diagnostic in result.diagnostics)
     assert result.node_frame_mismatches == ()
 
 
