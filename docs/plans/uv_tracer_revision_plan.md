@@ -1783,6 +1783,56 @@ straight in the frame 10 -> 0, jogs 17, pins 10104 -> 10176, OBLIQUE runs
 102 -> 113, Layer 5 diagnostics 18 -> 20 (17 jogs and the 3 folded
 hexagons); invariants stay 0.
 
+## Slice U — island assembly without self-overlap (DONE, 2026-11, user-approved)
+
+Measurement after Slice T (13 seamed buildings objects plus in-repo captures):
+the rigid unfolding of 9 of 61 framed islands lies over itself. In the main
+walls island (582 patches) 2406 patch pairs overlap. The Level A gate checks
+developability only; niche and ledge reveals unfold about their opening into
+the same opening and onto the wall (artist_walls_006: reveals f1 and f2 into
+one opening, f3 onto the wall). Each hinge unfolds correctly, the overlap is
+global.
+
+Rule (option "gate + frame", chosen by the user 2026-11-08):
+
+1. Overlap gate: each island part with a rigid frame keeps its patches'
+   placement and face triangles (ear clipping, so a concave n-gon keeps its
+   notch empty). A rigid stitch between two rigid parts unfolds the smaller
+   part about the seam into the larger part's plane and stays cut ("would
+   overlap the island") when a triangle overlaps; touching does not count.
+2. A non-rigid seam between two rigid parts stays cut ("frame cannot cross
+   between rigid parts"); otherwise the part behind it hangs outside the
+   frame. A part without rigid patches (curved, warped) joins freely.
+3. One unfolding for the gate and the frame: `islands.unfold_rotation`
+   (the rotation math moved from skeleton.py to islands.py).
+4. In a rigid frame the solve takes the same drift as the jog check (1 mm
+   per metre of the frame extent). Small islands made by the gate exposed
+   the difference: a long thin island (walls.010, 8.5 x 0.5 m) let a 4.6 mm
+   jog pass the check while the solve measured drift along the 0.5 m axis.
+
+Options measured (islands / pins / OBLIQUE / patches outside the frame):
+before 62 / 10176 / 113 / 3; gate only 352 / 9995 / 258 / 15; gate + frame
+355 / 10058 / 194 / 3, then 10112 pins with the shared drift. A tried axis
+seed by coverage did not help (the oblique small islands are real slanted
+parts, such as a 6 m sloped beam with small square details).
+
+Tests: `test_niche_reveals_that_would_overlap_the_wall_stay_cut`,
+`test_overlap_gate_triangulates_concave_faces_and_ignores_touching_triangles`,
+`test_framed_solve_uses_the_frame_drift_shared_with_the_jog_check`;
+`test_bent_hinge_between_tilted_patches_stays_cut_between_two_rigid_islands`
+replaces the old outside-the-frame expectation. Mutations caught: no
+overlap check, non-rigid join between rigid parts, fan triangulation,
+touching counted as overlap, drift ignored by the solve. The call-site
+wiring of the shared drift is guarded by the Tier 3 baseline (without it 3
+contradictions return).
+
+Results (Tier 3, baseline updated): islands 62 -> 355 (354 framed), pins
+10176 -> 10112, OBLIQUE runs 113 -> 194, Layer 5 diagnostics 20 -> 28 (25
+jogs, 3 folded hexagons), contradictions 0; overlap between patches of one
+island 0 (one patch, walls/f302, overlaps itself inside its own faces);
+invariants stay 0. Cross-island axis agreement now matters: 2470 of 4821
+families span more than one island (none did before).
+
 ## Decisions the user must approve before the relevant slice
 
 ```text
@@ -1818,7 +1868,8 @@ hexagons); invariants stay 0.
    - 5 warped n-gons (28 OBLIQUE runs); after Slice R (bug fix) 3 remain,
      all one hexagon folded around a box corner (source mesh warp);
    - 12 OBLIQUE runs on 5 lines through curved runs (OQ-11);
-   - island assembly without self-overlap (walls.007);
+   - island assembly without self-overlap (walls.007); DONE as Slice U
+     (overlap gate, user-approved);
    - the solve consuming island rail order: 2 islands have no rigid frame
      (Cube, walls.012); their provisional signs agree with the island
      rails on both multi-run lines, and on all 6 in the in-repo artist

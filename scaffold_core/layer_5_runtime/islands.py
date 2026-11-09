@@ -9,20 +9,24 @@ Rules:
 - Rigid seams enter the tree first (plan Slice P): a straight hinge or a
   coplanar join between planar, unwarped patches, so the rigid island
   frame reaches every patch it can; longest seam first in each group.
+- Overlap gate (plan Slice U): a rigid stitch stays cut when the unfolded
+  part would lie over the island; a non-rigid seam between two rigid parts
+  stays cut, because the frame cannot cross it.
 - Read-only over lower layers; no UV or semantic roles here.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from math import pi
+from math import atan2, cos, pi, sin
 from typing import Any, Mapping
 
-from scaffold_core.layer_2_geometry.measures import EPSILON, dot, length, normalize
+from scaffold_core.layer_2_geometry.measures import EPSILON, cross, dot, length, normalize
 from scaffold_core.layer_3_relations.direction_families import SHARED_CHAIN_HINGE_MAX_RUNS
 
 STITCH_DEFECT_TOLERANCE = 1e-3
 PLANAR_PATCH_MIN_NORMAL_DOT = 0.996  # every face-fan normal within ~5 degrees of the patch normal
+OVERLAP_TOLERANCE = 1e-6  # relative to the selection extent; shared edges only touch
 
 
 @dataclass(frozen=True)
@@ -101,6 +105,23 @@ def is_rigid_seam(rigidity: SeamRigidity, chain_id: str, first_patch_id: str, se
     return dot(first_normal, second_normal) >= PLANAR_PATCH_MIN_NORMAL_DOT
 
 
+def unfold_rotation(rigidity: SeamRigidity, geometry, chain_id: str, parent_id: str, child_id: str, parent_rotation):
+    """Rotation that lays the child patch into its parent's unfolded plane.
+
+    A straight hinge rotates the child about the hinge Chain by the angle
+    between the patch normals; a coplanar join needs no rotation. Shared by
+    the overlap gate and the rigid island frame, so both see one layout.
+    """
+
+    if chain_id not in rigidity.straight_chain_ids:
+        return parent_rotation
+    child_normal = normalize(rigidity.normal_by_patch[child_id])
+    parent_normal = normalize(rigidity.normal_by_patch[parent_id])
+    axis = chain_axis(geometry, chain_id)
+    angle = atan2(dot(axis, cross(child_normal, parent_normal)), dot(child_normal, parent_normal))
+    return compose(parent_rotation, rotation_about(axis, angle))
+
+
 def build_islands(context: Any) -> IslandAssembly:
     """Assemble islands via a spanning tree of accepted stitches."""
 
@@ -126,6 +147,8 @@ def build_islands(context: Any) -> IslandAssembly:
 
     decisions: list[StitchDecision] = []
     rigidity = seam_rigidity(context)
+    placements = _initial_placements(context, rigidity)
+    overlap_tolerance = OVERLAP_TOLERANCE * _selection_extent(source)
     # Tree-edge priority: rigid seams first (plan Slice P), so a planar patch
     # joins through a hinge the rigid frame can cross whenever it has one,
     # and warped n-gons or bent hinges only fill in what is left; longest
@@ -151,7 +174,16 @@ def build_islands(context: Any) -> IslandAssembly:
             border_vertices,
         )
         if accepted and find(first) != find(second):
-            parents[max(find(first), find(second))] = min(find(first), find(second))
+            joined, placement, refusal = _join_placements(
+                placements[find(first)], placements[find(second)],
+                chain_id, first, second, rigidity, context.geometry_facts, overlap_tolerance,
+            )
+            if not joined:
+                decisions.append(StitchDecision(chain_id, first, second, False, refusal, defects))
+                continue
+            root = min(find(first), find(second))
+            parents[max(find(first), find(second))] = root
+            placements[root] = placement
             decisions.append(StitchDecision(chain_id, first, second, True, reason, defects))
         elif accepted:
             decisions.append(StitchDecision(chain_id, first, second, False, "non-tree seam stays cut", defects))
@@ -303,3 +335,231 @@ def _key(mapping, wanted: str):
         if str(key) == wanted:
             return key
     raise KeyError(wanted)
+
+
+# Overlap gate (plan Slice U). Each island part with a rigid frame keeps its
+# patches' placement (world -> part frame) and its face triangles in that
+# frame. A part without rigid patches has no placement.
+
+
+@dataclass
+class _Placement:
+    rotation_by_patch: dict
+    offset_by_patch: dict
+    normal: tuple
+    triangles: list
+
+
+def _initial_placements(context, rigidity: SeamRigidity) -> dict:
+    source = context.source_snapshot
+    position = {str(vertex_id): vertex.position for vertex_id, vertex in source.vertices.items()}
+    placements: dict = {}
+    for patch_id, patch in context.topology_snapshot.patches.items():
+        key = str(patch_id)
+        if key not in rigidity.planar_patch_ids or key in rigidity.warped_patch_ids:
+            placements[key] = None
+            continue
+        normal = normalize(rigidity.normal_by_patch[key])
+        u, v = _plane_basis(normal)
+        triangles = []
+        for face_id in patch.source_face_ids:
+            points = [position[str(vertex_id)] for vertex_id in source.faces[face_id].vertex_ids]
+            for i0, i1, i2 in _ear_clip([(dot(point, u), dot(point, v)) for point in points]):
+                triangles.append((points[i0], points[i1], points[i2]))
+        placements[key] = _Placement({key: identity()}, {key: (0.0, 0.0, 0.0)}, normal, triangles)
+    return placements
+
+
+def _join_placements(first_part, second_part, chain_id, first, second, rigidity, geometry, tolerance):
+    """(joined, placement of the joined part, refusal reason).
+
+    A part without rigid patches joins freely and the joined part keeps the
+    other side's placement. Two rigid parts join only over a rigid seam, and
+    only when the smaller part, unfolded about the seam, does not lie over
+    the larger one.
+    """
+
+    if first_part is None or second_part is None:
+        return True, first_part if second_part is None else second_part, ""
+    if not is_rigid_seam(rigidity, chain_id, first, second):
+        return False, None, "frame cannot cross between rigid parts"
+    if len(second_part.triangles) > len(first_part.triangles):
+        first_part, second_part, first, second = second_part, first_part, second, first
+    child_rotation = unfold_rotation(
+        rigidity, geometry, chain_id, first, second, first_part.rotation_by_patch[first]
+    )
+    turn = compose(child_rotation, _transpose(second_part.rotation_by_patch[second]))
+    hinge = geometry.chain_facts[chain_id].segments[0].start_position
+    target = _place(first_part.rotation_by_patch[first], first_part.offset_by_patch[first], hinge)
+    moved = rotate(turn, _place(second_part.rotation_by_patch[second], second_part.offset_by_patch[second], hinge))
+    shift = tuple(target[i] - moved[i] for i in range(3))
+    moved_triangles = [
+        tuple(_place(turn, shift, point) for point in triangle) for triangle in second_part.triangles
+    ]
+    if _overlaps(first_part, moved_triangles, tolerance):
+        return False, None, "would overlap the island"
+    for patch_id, patch_rotation in second_part.rotation_by_patch.items():
+        first_part.rotation_by_patch[patch_id] = compose(turn, patch_rotation)
+        first_part.offset_by_patch[patch_id] = _place(turn, shift, second_part.offset_by_patch[patch_id])
+    first_part.triangles.extend(moved_triangles)
+    return True, first_part, ""
+
+
+def _overlaps(part: _Placement, moved_triangles, tolerance) -> bool:
+    u, v = _plane_basis(part.normal)
+
+    def flat(triangle):
+        return tuple((dot(point, u), dot(point, v)) for point in triangle)
+
+    moved = [flat(triangle) for triangle in moved_triangles]
+    if not moved:
+        return False
+    low = tuple(min(point[i] for triangle in moved for point in triangle) - tolerance for i in range(2))
+    high = tuple(max(point[i] for triangle in moved for point in triangle) + tolerance for i in range(2))
+    placed = []
+    for triangle in part.triangles:
+        flat_triangle = flat(triangle)
+        if all(
+            max(point[i] for point in flat_triangle) >= low[i] and min(point[i] for point in flat_triangle) <= high[i]
+            for i in range(2)
+        ):
+            placed.append(flat_triangle)
+    if not placed:
+        return False
+    cell = max(high[0] - low[0], high[1] - low[1]) / 32.0 or 1.0
+
+    def cells(triangle):
+        xs = [int((point[0] - low[0]) // cell) for point in triangle]
+        ys = [int((point[1] - low[1]) // cell) for point in triangle]
+        return [(x, y) for x in range(min(xs), max(xs) + 1) for y in range(min(ys), max(ys) + 1)]
+
+    grid: dict = {}
+    for index, triangle in enumerate(placed):
+        for key in cells(triangle):
+            grid.setdefault(key, []).append(index)
+    for triangle in moved:
+        seen: set = set()
+        for key in cells(triangle):
+            for index in grid.get(key, ()):
+                if index not in seen:
+                    seen.add(index)
+                    if _triangles_overlap(placed[index], triangle, tolerance):
+                        return True
+    return False
+
+
+def _triangles_overlap(first, second, tolerance) -> bool:
+    """Separating-axis test; triangles that only touch do not overlap."""
+
+    for triangle, other in ((first, second), (second, first)):
+        for i in range(3):
+            start, end = triangle[i], triangle[(i + 1) % 3]
+            nx, ny = end[1] - start[1], start[0] - end[0]
+            size = (nx * nx + ny * ny) ** 0.5
+            if size <= EPSILON:
+                return False
+            own = [(nx * x + ny * y) / size for x, y in triangle]
+            theirs = [(nx * x + ny * y) / size for x, y in other]
+            if max(own) <= min(theirs) + tolerance or max(theirs) <= min(own) + tolerance:
+                return False
+    return True
+
+
+def _ear_clip(points) -> list[tuple[int, int, int]]:
+    """Triangles of a simple polygon (a concave n-gon keeps its notch empty)."""
+
+    count = len(points)
+    if count < 3:
+        return []
+    signed_area = sum(
+        points[i][0] * points[(i + 1) % count][1] - points[(i + 1) % count][0] * points[i][1]
+        for i in range(count)
+    )
+    remaining = list(range(count)) if signed_area > 0.0 else list(range(count))[::-1]
+
+    def turn(a, b, c):
+        return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+
+    triangles = []
+    while len(remaining) > 3:
+        for k in range(len(remaining)):
+            i0, i1, i2 = remaining[k - 1], remaining[k], remaining[(k + 1) % len(remaining)]
+            a, b, c = points[i0], points[i1], points[i2]
+            if turn(a, b, c) <= EPSILON * EPSILON:
+                continue
+            if any(
+                turn(a, b, points[j]) > 0.0 and turn(b, c, points[j]) > 0.0 and turn(c, a, points[j]) > 0.0
+                for j in remaining
+                if j not in (i0, i1, i2)
+            ):
+                continue
+            triangles.append((i0, i1, i2))
+            remaining.pop(k)
+            break
+        else:  # degenerate rest: close it as a fan
+            break
+    triangles.extend((remaining[0], remaining[i], remaining[i + 1]) for i in range(1, len(remaining) - 1))
+    return triangles
+
+
+def _selection_extent(source) -> float:
+    points = [vertex.position for vertex in source.vertices.values()]
+    if not points:
+        return 1.0
+    return max(max(point[i] for point in points) - min(point[i] for point in points) for i in range(3)) or 1.0
+
+
+def _plane_basis(normal):
+    u = normalize(cross(normal, (1.0, 0.0, 0.0) if abs(normal[0]) < 0.9 else (0.0, 1.0, 0.0)))
+    return u, cross(normal, u)
+
+
+def _place(matrix, offset, point):
+    rotated = rotate(matrix, point)
+    return (rotated[0] + offset[0], rotated[1] + offset[1], rotated[2] + offset[2])
+
+
+def _transpose(matrix):
+    return tuple(tuple(matrix[j][i] for j in range(3)) for i in range(3))
+
+
+# Rigid rotations, shared with the skeleton's unfolded frame.
+
+
+def chain_axis(geometry, chain_id):
+    facts = geometry.chain_facts.get(chain_id)
+    if facts is None:
+        return (0.0, 0.0, 1.0)
+    if facts.chord_length > EPSILON:
+        return normalize(facts.chord_direction)
+    for segment in facts.segments:
+        if segment.length > EPSILON:
+            return normalize(segment.direction)
+    return (0.0, 0.0, 1.0)
+
+
+def identity():
+    return ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+
+
+def rotation_about(axis, angle):
+    x, y, z = normalize(axis)
+    c, s, t = cos(angle), sin(angle), 1.0 - cos(angle)
+    return (
+        (t * x * x + c, t * x * y - s * z, t * x * z + s * y),
+        (t * x * y + s * z, t * y * y + c, t * y * z - s * x),
+        (t * x * z - s * y, t * y * z + s * x, t * z * z + c),
+    )
+
+
+def compose(a, b):
+    return tuple(
+        tuple(sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3))
+        for i in range(3)
+    )
+
+
+def rotate(matrix, vector):
+    if matrix is None:
+        return vector
+    return tuple(sum(matrix[i][k] * vector[k] for k in range(3)) for i in range(3))

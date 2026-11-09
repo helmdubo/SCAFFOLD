@@ -569,9 +569,12 @@ approve", items 3 and 11; item 6 is applied as G0 v1.6):
   objects: 3 warped n-gons after Slice R, all one hexagon folded around a
   box corner (source mesh warp); curved runs inside Layer 3
   lines (OQ-11; 12 OBLIQUE runs); island assembly without self-overlap
-  (walls.007); branch resolution for the 4 unordered island rails.
-  Cross-island axis agreement has nothing to agree yet: no family spans
-  two islands on those objects. Plan Slice Q (Layer 5 on rails) is DONE.
+  (walls.007), DONE as plan Slice U (overlap gate: islands 62 -> 355, no
+  overlap between patches of an island); branch resolution for the 4
+  unordered island rails.
+  Cross-island axis agreement: before Slice U no family spanned two
+  islands; after it 2470 of 4821 families do, so it is now an open item.
+  Plan Slice Q (Layer 5 on rails) is DONE.
 - DD-46/DD-47 ScaffoldTrace/ScaffoldRail: approved by the user and applied
   as G0 v1.6 (2026-11-06), together with the Slice O1 fold-back rule in
   DD-43.

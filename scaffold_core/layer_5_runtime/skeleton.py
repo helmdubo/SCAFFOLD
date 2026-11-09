@@ -23,7 +23,6 @@ Rules:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from math import atan2, cos, sin
 from typing import Any, Mapping
 
 from scaffold_core.layer_2_geometry.measures import EPSILON, cross, dot, normalize
@@ -33,8 +32,14 @@ from scaffold_core.layer_5_runtime.islands import (
     PLANAR_PATCH_MIN_NORMAL_DOT,
     IslandAssembly,
     SeamRigidity,
+    chain_axis,
+    compose,
+    identity,
     is_rigid_seam,
+    rotate,
+    rotation_about,
     seam_rigidity,
+    unfold_rotation,
 )
 
 # A run takes an axis in the rigid unfolded frame only within the planar
@@ -176,6 +181,7 @@ def _island_skeleton(island, assembly, relations, geometry, lookups):
         _co_orient_axis_families(runs, line_of, axis_by_line, signs, node_by_run_end, diagnostics)
         direction_of = {e.id: e.direction for e in runs}
         mismatches: tuple[str, ...] = ()
+        drift = None  # no frame: the solve measures drift along each axis
     else:
         framed = tuple(e for e in runs if str(e.patch_id) in frame.rotation_by_patch)
         direction_of = {e.id: e.direction for e in runs}
@@ -190,8 +196,8 @@ def _island_skeleton(island, assembly, relations, geometry, lookups):
         )
         mismatches = _node_frame_mismatches(frame, framed, node_by_run_end, lookups.position_of_source)
     rail_conflicts = _island_rail_conflicts(rail_segments, line_of, roles, signs, frame is not None)
-    axis_a = _solve_axis("AXIS_A", runs, roles, signs, node_by_run_end, diagnostics, direction_of)
-    axis_b = _solve_axis("AXIS_B", runs, roles, signs, node_by_run_end, diagnostics, direction_of)
+    axis_a = _solve_axis("AXIS_A", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift)
+    axis_b = _solve_axis("AXIS_B", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift)
     return IslandSkeleton(
         island.id, node_by_run_end, roles, axis_a, axis_b, tuple(diagnostics),
         line_by_run=line_of,
@@ -340,17 +346,10 @@ def _unfolded_frame(island, assembly, geometry, lookups) -> _IslandFrame | None:
     pending = [root]
     while pending:
         parent = pending.pop(0)
-        parent_normal = normalize(facts[parent].normal)
         for child, chain_id in sorted(tree.get(parent, ())):
             if child in rotation or not is_rigid_seam(rigidity, chain_id, parent, child):
                 continue
-            if chain_id in rigidity.straight_chain_ids:
-                child_normal = normalize(facts[child].normal)
-                axis = _chain_axis(geometry, chain_id)
-                angle = atan2(dot(axis, cross(child_normal, parent_normal)), dot(child_normal, parent_normal))
-                rotation[child] = _compose(rotation[parent], _rotation(axis, angle))
-            else:
-                rotation[child] = rotation[parent]  # coplanar join over a bent Chain
+            rotation[child] = unfold_rotation(rigidity, geometry, chain_id, parent, child, rotation[parent])
             hinge = geometry.chain_facts[chain_id].segments[0].start_position
             parent_hinge = _rotate(rotation[parent], hinge)
             child_hinge = _rotate(rotation[child], hinge)
@@ -725,7 +724,7 @@ def _co_orient_axis_families(runs, family_of, axis_by_family, signs, node_by_run
                 signs[e.id] = -signs[e.id]
 
 
-def _solve_axis(axis_name, runs, roles, signs, node_by_run_end, diagnostics, direction_of=None):
+def _solve_axis(axis_name, runs, roles, signs, node_by_run_end, diagnostics, direction_of=None, drift=None):
     """P7 semantics: the A coordinate lives on COLUMN components (nodes
     connected by AXIS_B runs share one A value) and is constrained by
     AXIS_A run lengths; symmetric for B on ROW components.
@@ -767,8 +766,11 @@ def _solve_axis(axis_name, runs, roles, signs, node_by_run_end, diagnostics, dir
     if not equations:
         return AxisSolve(axis_name, {}, 0.0, (), 0)
     coords, residuals = _lstsq(equations)
-    span = max(coords.values()) - min(coords.values()) if coords else 0.0
-    tolerance = max(RESIDUAL_TOLERANCE, RESIDUAL_TOLERANCE_PER_SPAN * span)
+    if drift is None:
+        span = max(coords.values()) - min(coords.values()) if coords else 0.0
+        drift = RESIDUAL_TOLERANCE_PER_SPAN * span
+    # In a rigid frame the jog check and the solve share one drift (plan Slice U).
+    tolerance = max(RESIDUAL_TOLERANCE, drift)
     bad = [i for i, r in enumerate(residuals) if abs(r) > tolerance]
     unconstrained: tuple[int, ...] = ()
     if bad:
@@ -836,40 +838,8 @@ def _solve_dense(matrix, vector):
     return [a[i][n] for i in range(n)]
 
 
-def _chain_axis(geometry, chain_id):
-    facts = geometry.chain_facts.get(chain_id)
-    if facts is None:
-        return (0.0, 0.0, 1.0)
-    if facts.chord_length > EPSILON:
-        return normalize(facts.chord_direction)
-    for segment in facts.segments:
-        if segment.length > EPSILON:
-            return normalize(segment.direction)
-    return (0.0, 0.0, 1.0)
-
-
-def _identity():
-    return ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
-
-
-def _rotation(axis, angle):
-    x, y, z = normalize(axis)
-    c, s, t = cos(angle), sin(angle), 1.0 - cos(angle)
-    return (
-        (t * x * x + c, t * x * y - s * z, t * x * z + s * y),
-        (t * x * y + s * z, t * y * y + c, t * y * z - s * x),
-        (t * x * z - s * y, t * y * z + s * x, t * z * z + c),
-    )
-
-
-def _compose(a, b):
-    return tuple(
-        tuple(sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3))
-        for i in range(3)
-    )
-
-
-def _rotate(matrix, vector):
-    if matrix is None:
-        return vector
-    return tuple(sum(matrix[i][k] * vector[k] for k in range(3)) for i in range(3))
+_chain_axis = chain_axis
+_identity = identity
+_rotation = rotation_about
+_compose = compose
+_rotate = rotate
