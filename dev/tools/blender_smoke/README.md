@@ -49,6 +49,9 @@ Full JSON reports go to `dev/tools/blender_smoke/reports/` (git-ignored).
 - For iteration, dump captures once with `--capture-dir` and replay them in
   pure Python; do not relaunch Blender per experiment.
 - Commit only small, representative captures to `scaffold_core/tests/data/`.
+- `probes/` holds capture replays for measuring open items:
+  `probes/cross_island.py DIR` (families across islands) and
+  `probes/diag_census.py DIR` (island diagnostics, OBLIQUE runs).
 
 ## Metrics per object
 
