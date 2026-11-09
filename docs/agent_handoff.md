@@ -589,6 +589,26 @@ approve", items 3 and 11; item 6 is applied as G0 v1.6):
 - Corner-node gap (strict xfail): deferred to a future patch-normal filter;
   do not add cap/wall semantics.
 
+### Session handoff (2026-11-10)
+
+Slices R, S, T and U are merged into main (PRs #24-#27); nothing is pending
+in review. Tier 3 on the 13 seamed buildings objects after Slice U: islands
+355 (354 framed), pins 10112, OBLIQUE 194, Layer 5 diagnostics 28 (25 jogs,
+3 folded hexagons), contradictions 0, lines not straight 0, overlap between
+patches of an island 0 (walls/f302 overlaps only itself), invariants 0,
+4 unordered island rails. Tests: 338 passed, 4 skipped, 1 xfailed.
+
+Measurement probes for the next item live in
+`dev/tools/blender_smoke/probes/` (see the README there). After Slice U,
+`cross_island.py` reports 2470 of 4821 families in more than one island and
+1199 of them with both AXIS_A and AXIS_B; axis labels are local to each
+island frame, so the first step of cross-island agreement is to define what
+agreement means across frames before counting defects.
+
+Candidate next slices, the choice is the user's: cross-island axis agreement
+(recommended), branch resolution for the 4 unordered island rails, curved
+runs inside lines (OQ-11).
+
 Grease Pencil rendering consumes the pipeline inspection overlay payload instead
 of duplicating core graph logic. Do not import Blender into Scaffold Core.
 
