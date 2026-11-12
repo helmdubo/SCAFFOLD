@@ -23,6 +23,7 @@ from scaffold_core.layer_3_relations.model import PatchChainShapeKind, RelationS
 from scaffold_core.layer_3_relations.patch_chain_incidence import (
     build_chain_patch_chain_incidence_index,
 )
+from scaffold_core.layer_4_features.model import FeatureInstanceStatus, FeatureSnapshot
 from scaffold_core.pipeline.context import PipelineContext
 
 
@@ -40,6 +41,8 @@ def inspect_pipeline_context(context: PipelineContext, detail: str = "compact") 
         report["geometry"] = geometry_summary_to_dict(context.geometry_facts, detail=detail)
     if context.relation_snapshot is not None:
         report["relations"] = relation_summary_to_dict(context.relation_snapshot, detail=detail)
+    if context.feature_snapshot is not None:
+        report["features"] = feature_summary_to_dict(context.feature_snapshot)
     if (
         detail == "full"
         and context.topology_snapshot is not None
@@ -68,6 +71,35 @@ def inspect_pipeline_context(context: PipelineContext, detail: str = "compact") 
         ]
     report["diagnostics"] = _diagnostics_to_list(context)
     return report
+
+
+def feature_summary_to_dict(features: FeatureSnapshot) -> InspectionDict:
+    """Pass 2 counts: candidates, accepted and suppressed instances by reason, constraints."""
+
+    suppressed: dict[str, int] = {}
+    for instance in features.instances:
+        if instance.suppression_reason is not None:
+            key = instance.suppression_reason.value
+            suppressed[key] = suppressed.get(key, 0) + 1
+    return {
+        "options": {"straighten_strips": features.options.straighten_strips},
+        "candidate_count": len(features.candidates),
+        "accepted_count": sum(
+            1 for instance in features.instances if instance.status is FeatureInstanceStatus.ACCEPTED
+        ),
+        "suppressed_by_reason": dict(sorted(suppressed.items())),
+        "constraint_count": len(features.constraints),
+        "constraints": [
+            {
+                "id": constraint.id,
+                "kind": constraint.kind.value,
+                "patch_id": str(constraint.patch_id),
+                "patch_chain_ids": [str(pc_id) for pc_id in constraint.patch_chain_ids],
+                "target_lengths": list(constraint.target_lengths),
+            }
+            for constraint in features.constraints
+        ],
+    }
 
 
 def topology_tree_to_dict(

@@ -256,3 +256,9 @@ After Slice X (2026-11) a frame-free island takes its axes from right
 corners on the patch surface: the buildings baseline is identical (one
 frame-free island, unchanged); on the in-repo captures bipartition
 conflicts 11 -> 0 and pins 725 -> 753.
+
+After Slice Y (2026-11) an island that is one patch with a STRAIGHT_STRIP
+FeatureConstraint (Layer 4, user option `straighten_strips`) takes the
+strip layout instead of the rigid frame or the frame-free branch: frame
+value STRIP, opposite uses on one axis with equal length. With the option
+off nothing changes; the buildings baseline is identical.

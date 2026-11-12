@@ -24,6 +24,8 @@ docs/context_map.yaml
 
 ```text
 G5a - Skeleton Runtime (docs/phases/G5a_skeleton_runtime.md)
+G4a - Layer 4 v0, the strip feature only (docs/phases/G4a_strip_feature.md),
+opened by the user in autonomous mode (plan decision 14).
 G3 relation contracts remain frozen per G0; relation changes still
 follow G3 rules below.
 ```
@@ -36,6 +38,7 @@ scaffold_core/layer_0_source/
 scaffold_core/layer_1_topology/
 scaffold_core/layer_2_geometry/
 scaffold_core/layer_3_relations/
+scaffold_core/layer_4_features/
 scaffold_core/layer_5_runtime/
 scaffold_core/pipeline/
 scaffold_core/tests/
@@ -44,12 +47,13 @@ scaffold_core/tests/
 Forbidden during G5a:
 
 ```text
-scaffold_core/layer_4_features/
 scaffold_core/api/
 scaffold_core/ui/
 ```
 
-Layer 5 may consume Layers 0-3 read-only. bpy is allowed ONLY in
+Layer 4 holds the strip feature only (G0 DD-50); a second feature kind needs
+the user's approval. Layer 5 may consume Layers 0-4 read-only and reads Layer 4
+only through FeatureConstraint. bpy is allowed ONLY in
 scaffold_core/layer_5_runtime/uv_transfer.py (the G5 write boundary).
 
 Do not create future-phase directories.
@@ -89,6 +93,8 @@ Before coding, read only the routed docs needed for the task.
 | G3 derived relations | `docs/phases/G3_derived_relations.md` + `G0.md` |
 | Chain shape / line or curve per patch side | `docs/architecture/chain_shape_contract_draft.md` + `G0.md` DD-48 |
 | G5a skeleton runtime / UV write | `docs/phases/G5a_skeleton_runtime.md` + `docs/agent_rules/blender_boundaries.md` |
+| Layer 4 strip feature / FeatureConstraint | `docs/phases/G4a_strip_feature.md` + `G0.md` DD-50 |
+| CFTUV reference scene / parity scoreboard | `dev/tools/cftuv_parity/README.md` |
 | Patch segmentation / shell detection | `docs/architecture/segmentation_shell_policy.md` |
 | Source mesh snapshot | `docs/layers/layer_0_source.md` |
 | Import rule / new file | `docs/agent_rules/import_boundaries.md` |
@@ -194,6 +200,7 @@ RunEndpointJunction v0 (G0 DD-44)
 ScaffoldTrace / ScaffoldRail v1 evidence views: station order and island cut view (G0 DD-46/DD-47; plan Slices J, O)
 PatchChainShapeRelation v0 (G0 DD-48; plan Slice W Stages A, B) per-side chain shape: surface line, surface curve or unresolved; one reader, the per-use chord shortcut of directional runs (G0 DD-30)
 RunCornerRelation v0 (G0 DD-49; plan Slice X) evidence: STRAIGHT / RIGHT / OTHER corner between two run ends on one patch surface; read by the Layer 5 frame-free axis bipartition
+Layer 4 v0 (G0 DD-50; plan Slice Y): strip feature candidates, instances and the STRAIGHT_STRIP constraint behind the user option straighten_strips (off by default)
 ```
 
 SHARED_CHAIN family transport crosses only straight single-run hinges

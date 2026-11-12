@@ -2090,6 +2090,75 @@ A face-by-face rigid unfolding was measured and not built: of the non-planar
 reference patches only the two arch rims unfold without contradiction, and
 Slice X already gives them their axes.
 
+## Slice Y — Layer 4 v0: the strip feature (DONE, 2026-11)
+
+Autonomous mode (decision 14, which allows opening Layer 4). The reference
+lays the arch front face and the column body as straight rectangles (CFTUV
+Straighten Strips). Neither is developable, so no fact of the surface makes
+them straight: it is a choice of parametrization, and G0 routes such choices
+through Layer 4 and a FeatureConstraint.
+
+Measurement before the rule (`strip_probe.py`, 2509 patches of the
+reference, buildings and in-repo sets): "one loop of four uses, an island by
+itself, a bent opposite pair, not already a rectangle" matches the arch
+front face and the column body and nothing else.
+
+Implementation: `scaffold_core/layer_4_features/` (candidates, instances,
+the STRAIGHT_STRIP constraint), `run_pass_2_features`, the strip layout in
+`skeleton.py` (frame value STRIP, `_solve_axis` takes a per-run length).
+Option `straighten_strips`, off by default; tool switches in parity.py, the
+smoke runner (`--straighten-strips`) and the debug add-on. G0 v1.10 DD-50,
+phase doc `docs/phases/G4a_strip_feature.md`, AGENTS phase amended.
+
+Results, parity scoreboard with the option on for Arc and collumn:
+
+| Mesh | recall after X | after Y | pin coverage after X | after Y |
+|---|---|---|---|---|
+| Arc | 67% | 96% | 60% | 85% |
+| collumn | 0% | 51% | 0% | 54% |
+| building_walls | 97% | 97% | 90% | 90% |
+| Main_wall | 54% | 54% | 58% | 58% |
+
+Arch front face: a 2.90 x 0.44 rectangle, 29 pins, residual 9e-16. Column
+body: 6.54 x 2.88, 68 pins. With the option off, and with the default Pass 2,
+all 25 captures hash identically to HEAD. Tier 3 on buildings: baseline
+identical. Tests 420 -> 451.
+
+With the option on, 6 more instances are ACCEPTED but sit in larger islands
+(the column's flat back face, one patch of building_walls, 4 one-face arch
+soffits of the buildings walls): the constraint is not applied and the island
+gets a diagnostic.
+
+A copy of the reference scene with Scaffold's result in a second UV layer is
+written by `dev/tools/cftuv_parity/write_scaffold_layer.py`. Looking at it
+showed what the scoreboard does not measure:
+
+```text
+- Main_wall: Scaffold's pins are geometrically inconsistent and Blender's
+  unwrap is badly distorted around them. The axis solve fixes the gauge of
+  one connected group of equations only; nodes of other groups get arbitrary
+  coordinates and are still pinned. A correctness defect of Layer 5.
+- collumn body: the long sides bow inward, because a run of several
+  segments pins only its two ends (CFTUV pins every vertex of a frame chain).
+- an island without pins comes out of Blender's unwrap at an arbitrary
+  scale; the comparison tool has to restore its density.
+```
+
+Reviewer gate (independent agent): PASS WITH FIXES, nothing blocking. The
+option-off identity was re-checked by hashes on 25 captures against an export
+of HEAD: zero differences, also with the default Pass 2. Both intended
+rectangles close, are not mirrored and pin only their own patch. 16 own
+mutations: 11 caught, 5 survived and are covered now.
+
+- Fixed, rule: "bent" means the Chain is more than 1% longer than its chord.
+  Before, any vertex off the line counted, and a flat wall with an arched
+  top was accepted (building_walls f240, f249).
+- Fixed, Layer 5: a constraint is applied only when its four uses close the
+  loop in the given order. A reversed order gave a mirrored rectangle and a
+  swapped one a collapsed island, both without a diagnostic.
+- Fixed, tests: the one-loop rule, "exactly one piece", a side without runs,
+  frozen Layer 4 records.
+
 ## Decisions the user must approve before the relevant slice
 
 ```text

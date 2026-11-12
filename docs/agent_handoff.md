@@ -11,9 +11,9 @@ Read this after `AGENTS.md` and before changing code.
 ```text
 Project: Scaffold
 Core package: scaffold_core/
-Current phase: G5a - Skeleton Runtime
+Current phase: G5a - Skeleton Runtime, plus G4a (Layer 4 v0, strip feature)
 Architecture: immutable B-rep-inspired interpretation pipeline
-G0 contract: v1.9 (G0.md remains read-only for agents)
+G0 contract: v1.10 (G0.md remains read-only for agents)
 ```
 
 Scaffold Core currently contains Layers 0-3, the G5a Layer 5 runtime,
@@ -643,12 +643,24 @@ from Layer 3 `RunCornerRelation` RIGHT corners on a patch's own surface, no
 longer from 3D perpendicularity at nodes. It repaired the arch regression of
 Stage B (arch pins 39 -> 67, conflicts 11 -> 0).
 
+Slice Y (G0 v1.10 DD-50, `docs/phases/G4a_strip_feature.md`): Layer 4 v0
+with one feature, STRIP. With the user option `straighten_strips` a
+four-sided patch that is an island by itself is laid as a rectangle
+through a STRAIGHT_STRIP FeatureConstraint; Layer 5 only applies the
+constraint. Off by default; with it off nothing changes.
+
 Parity scoreboard: `dev/tools/cftuv_parity/` (reference UVs, captures,
-`parity.py`, README). Line recall after Slice X: Arc 67%, building_walls
-97%, collumn 0%, Main_wall 54%. The plan section "Reference scene and the
-parity scoreboard" says what each gap is. Next subject: a strip feature
-(Layer 4, opening allowed by decision 14) for the arch front face and the
-column body; Main_wall (slit seams inside a patch) is left for last.
+`parity.py`, README). Line recall after Slice Y: Arc 96%, building_walls
+97%, collumn 51%, Main_wall 54%. `write_scaffold_layer.py` writes
+Scaffold's result into a second UV layer of a copy of the reference scene
+(the user's copy: `E:\temp\buildings3_3_scaffold.blend`).
+
+Open, found by LOOKING at that copy, not by the scoreboard: (1) the axis
+solve pins nodes from equation groups that are not connected to the gauge
+group, with arbitrary coordinates (Main_wall is badly distorted); (2) a
+multi-segment run pins only its ends, so long sides bow (column body);
+(3) the scoreboard needs a measure of pin position agreement. Main_wall
+also needs work on slit seams inside a patch.
 
 Parked: Slice V (seam turns, island orientation) on the local branch
 `claude/slice-v-seam-turns`, commit 99db1a4, on the user's machine and not
