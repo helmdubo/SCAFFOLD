@@ -27,11 +27,13 @@ CUT_RAIL_LAYER_NAME = "ScaffoldGraph_CutRails"
 SEAM_VERDICT_LAYER_NAME = "ScaffoldGraph_SeamVerdicts"
 JUNCTION_V2_LAYER_NAME = "ScaffoldGraph_JunctionsV2"
 BRANCH_LAYER_NAME = "ScaffoldGraph_Branches"
+CHAIN_SHAPE_LAYER_NAME = "ScaffoldGraph_ChainShape"
 FAMILY_MATERIAL_PREFIX = "ScaffoldGraphV2_Family_"
 RAIL_MATERIAL_PREFIX = "ScaffoldGraphV2_Rail_"
 SEAM_MATERIAL_PREFIX = "ScaffoldGraphV2_Seam_"
 JUNCTION_MATERIAL_PREFIX = "ScaffoldGraphV2_Junction_"
 BRANCH_MATERIAL_NAME = "ScaffoldGraphV2_Branch_Material"
+CHAIN_SHAPE_MATERIAL_PREFIX = "ScaffoldGraphV2_ChainShape_"
 FAMILY_WIDTH = 9
 SPINE_WIDTH = 9
 PARALLEL_WIDTH = 5
@@ -39,6 +41,7 @@ RIB_WIDTH = 4
 SEAM_WIDTH = 6
 JUNCTION_WIDTH = 5
 BRANCH_WIDTH = 7
+CHAIN_SHAPE_WIDTH = 6
 
 
 def render_overlay_v2(
@@ -51,6 +54,7 @@ def render_overlay_v2(
     show_seam_verdicts: bool,
     show_junctions: bool,
     show_branch_points: bool,
+    show_chain_shape: bool = True,
 ) -> dict[str, Any]:
     gp_object = _get_or_create_grease_pencil_object(source_object)
     gp_data = gp_object.data
@@ -61,6 +65,7 @@ def render_overlay_v2(
     seam_frame = _ensure_frame(_ensure_layer(gp_data, SEAM_VERDICT_LAYER_NAME, show_seam_verdicts))
     junction_frame = _ensure_frame(_ensure_layer(gp_data, JUNCTION_V2_LAYER_NAME, show_junctions))
     branch_frame = _ensure_frame(_ensure_layer(gp_data, BRANCH_LAYER_NAME, show_branch_points))
+    chain_shape_frame = _ensure_frame(_ensure_layer(gp_data, CHAIN_SHAPE_LAYER_NAME, show_chain_shape))
     _clear_v2_material_slots(gp_data)
 
     family_strokes = _draw_family_runs(
@@ -78,6 +83,7 @@ def render_overlay_v2(
     seam_strokes = _draw_seam_verdicts(gp_data, seam_frame, payload.get("seam_verdicts", ()))
     junction_markers = _draw_junctions(gp_data, junction_frame, payload.get("junction_glyphs", ()))
     branch_markers = _draw_branches(gp_data, branch_frame, payload.get("branch_glyphs", ()))
+    chain_shape_strokes = _draw_chain_shape(gp_data, chain_shape_frame, payload.get("chain_shape_pieces", ()))
     counts = payload.get("counts", {})
     return {
         "grease_pencil_object": gp_object.name,
@@ -88,6 +94,7 @@ def render_overlay_v2(
         "seam_verdict_layer": SEAM_VERDICT_LAYER_NAME,
         "junction_layer": JUNCTION_V2_LAYER_NAME,
         "branch_layer": BRANCH_LAYER_NAME,
+        "chain_shape_layer": CHAIN_SHAPE_LAYER_NAME,
         "family_run_segment_count": int(counts.get("family_run_segment_count", 0)),
         "rail_count": int(counts.get("rail_count", 0)),
         "rail_polyline_count": int(counts.get("rail_polyline_count", 0)),
@@ -101,6 +108,10 @@ def render_overlay_v2(
         "cut_seam_count": int(counts.get("cut_seam_count", 0)),
         "junction_glyph_count": int(counts.get("junction_glyph_count", 0)),
         "branch_glyph_count": int(counts.get("branch_glyph_count", 0)),
+        "chain_shape_piece_count": int(counts.get("chain_shape_piece_count", 0)),
+        "chain_shape_surface_line_count": int(counts.get("chain_shape_surface_line_count", 0)),
+        "chain_shape_surface_curve_count": int(counts.get("chain_shape_surface_curve_count", 0)),
+        "chain_shape_unresolved_count": int(counts.get("chain_shape_unresolved_count", 0)),
         "family_stroke_count": family_strokes,
         "spine_stroke_count": spine_strokes,
         "rib_stroke_count": rib_strokes,
@@ -108,6 +119,7 @@ def render_overlay_v2(
         "seam_stroke_count": seam_strokes,
         "junction_marker_count": junction_markers,
         "branch_marker_count": branch_markers,
+        "chain_shape_stroke_count": chain_shape_strokes,
     }
 
 
@@ -209,6 +221,15 @@ def _draw_branches(gp_data: Any, frame: Any, glyphs: Sequence[dict[str, Any]]) -
     return count
 
 
+def _draw_chain_shape(gp_data: Any, frame: Any, pieces: Sequence[dict[str, Any]]) -> int:
+    count = 0
+    for piece in pieces:
+        material_index = _material(gp_data, CHAIN_SHAPE_MATERIAL_PREFIX, piece.get("kind", ""), piece.get("color"))
+        if _add_polyline(frame, piece.get("polyline", ()), material_index, CHAIN_SHAPE_WIDTH):
+            count += 1
+    return count
+
+
 def _material(gp_data: Any, prefix: str, key: object, color: object) -> int:
     rgba = color if isinstance(color, Sequence) and len(color) == 4 else (0.6, 0.6, 0.6, 1.0)
     return _ensure_material(
@@ -245,6 +266,7 @@ def _is_v2_material_name(material_name: str) -> bool:
             RAIL_MATERIAL_PREFIX,
             SEAM_MATERIAL_PREFIX,
             JUNCTION_MATERIAL_PREFIX,
+            CHAIN_SHAPE_MATERIAL_PREFIX,
         )
     )
 
@@ -308,6 +330,7 @@ def apply_v2_layer_visibility(
     show_seam_verdicts: bool,
     show_junctions: bool,
     show_branch_points: bool,
+    show_chain_shape: bool = True,
 ) -> None:
     obj = bpy.data.objects.get(overlay_object_name(source_name))
     if not is_graph_debug_object(obj):
@@ -319,6 +342,7 @@ def apply_v2_layer_visibility(
         (SEAM_VERDICT_LAYER_NAME, show_seam_verdicts),
         (JUNCTION_V2_LAYER_NAME, show_junctions),
         (BRANCH_LAYER_NAME, show_branch_points),
+        (CHAIN_SHAPE_LAYER_NAME, show_chain_shape),
     ):
         layer = _find_layer(obj.data, layer_name)
         if layer is not None and hasattr(layer, "hide"):

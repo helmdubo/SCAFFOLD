@@ -56,6 +56,7 @@ G2 may introduce:
 - `ChainGeometryFacts`
 - `VertexGeometryFacts`
 - `LocalFaceFanGeometryFacts`
+- `PatchChainGeometryFacts`
 - `GeometryFactSnapshot`
 
 G2a facts:
@@ -100,6 +101,22 @@ G2b acceptance:
 3. Chain shape hints remain raw geometry facts.
 4. Sawtooth-straight classification does not derive roles, alignment,
    world orientation, feature facts, pin facts or UV facts.
+
+G2c facts (G0 DD-48, plan Slice W Stage A):
+
+```text
+Chain:
+  plane normal (none for a collinear chain)
+  largest vertex distance from that plane
+  largest vertex distance from the chord
+
+PatchChain (one side of a Chain):
+  side face of every chain segment in the use's own patch, and its normal
+  tilt range between the chain plane and those normals
+```
+
+These stay raw measurements. Whether a piece is a line or a curve on a
+surface is a Layer 3 relation (PatchChainShapeRelation).
 
 ## Must Not Contain
 

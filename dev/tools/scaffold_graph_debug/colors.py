@@ -15,6 +15,12 @@ SEWABLE_SEAM_COLOR = (0.15, 0.9, 0.28, 1.0)
 CUT_SEAM_COLOR = (1.0, 0.08, 0.08, 1.0)
 SCAFFOLD_NODE_COLOR = (1.0, 0.95, 0.22, 1.0)
 RUN_ENDPOINT_JUNCTION_COLOR = (0.95, 0.35, 1.0, 1.0)
+# Chain Shape layer: the meaning is the kind, so the colors are fixed by kind.
+CHAIN_SHAPE_COLORS = {
+    "SURFACE_LINE": (0.2, 0.95, 0.55, 1.0),
+    "SURFACE_CURVE": (0.35, 0.4, 1.0, 1.0),
+    "UNRESOLVED": (1.0, 0.5, 0.0, 1.0),
+}
 
 
 def stable_color(identifier: str, *, saturation: float = 0.7, value: float = 0.95) -> tuple[float, float, float, float]:

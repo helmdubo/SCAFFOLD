@@ -14,7 +14,7 @@ from math import pi
 
 from scaffold_core.core.diagnostics import Diagnostic, DiagnosticSeverity
 
-from scaffold_core.ids import PatchId, SourceEdgeId, SourceFaceId, SourceVertexId, VertexId
+from scaffold_core.ids import ChainId, PatchChainId, PatchId, SourceEdgeId, SourceFaceId, SourceVertexId, VertexId
 from scaffold_core.layer_0_source.marks import SourceMarkKind
 from scaffold_core.layer_0_source.snapshot import SourceMeshSnapshot
 from scaffold_core.layer_1_topology.model import Chain, Patch, SurfaceModel, Vertex
@@ -23,6 +23,7 @@ from scaffold_core.layer_2_geometry.facts import (
     ChainSegmentGeometryFacts,
     ChainShapeHint,
     GeometryFactSnapshot,
+    PatchChainGeometryFacts,
     PatchGeometryFacts,
     Vector3,
     LocalFaceFanGeometryFacts,
@@ -35,7 +36,11 @@ from scaffold_core.layer_2_geometry.measures import (
     average,
     dot,
     length,
+    max_line_distance,
+    max_plane_distance,
     normalize,
+    plane_tilt,
+    polyline_plane_normal,
     scale,
     subtract,
     triangle_area_normal_centroid,
@@ -75,12 +80,135 @@ def build_geometry_facts(
         for vertex in topology.vertices.values()
     }
     local_face_fan_facts = _build_local_face_fan_geometry_facts(source, topology)
+    patch_chain_facts = _build_patch_chain_geometry_facts(source, topology, chain_facts)
     return GeometryFactSnapshot(
         patch_facts=patch_facts,
         chain_facts=chain_facts,
         vertex_facts=vertex_facts,
         local_face_fan_facts=local_face_fan_facts,
+        patch_chain_facts=patch_chain_facts,
         diagnostics=tuple(diagnostics),
+    )
+
+
+def _build_patch_chain_geometry_facts(
+    source: SourceMeshSnapshot,
+    topology: SurfaceModel,
+    chain_facts: dict[ChainId, ChainGeometryFacts],
+) -> dict[PatchChainId, PatchChainGeometryFacts]:
+    face_to_patch_id = {
+        source_face_id: patch.id
+        for patch in topology.patches.values()
+        for source_face_id in patch.source_face_ids
+    }
+    edge_incidence = _selected_edge_incidence(source, tuple(face_to_patch_id))
+    face_normals: dict[SourceFaceId, Vector3] = {}
+    facts: dict[PatchChainId, PatchChainGeometryFacts] = {}
+    for patch_chain in topology.patch_chains.values():
+        chain = topology.chains.get(patch_chain.chain_id)
+        chain_fact = chain_facts.get(patch_chain.chain_id)
+        if chain is None or chain_fact is None:
+            continue
+        use_follows_segments = (
+            _segments_follow_chain(topology, chain, chain_fact) == (patch_chain.orientation_sign == 1)
+        )
+        side_face_ids: list[SourceFaceId | None] = []
+        side_normals: list[Vector3 | None] = []
+        for segment in chain_fact.segments:
+            side_face_id = _side_face_id(
+                source,
+                segment,
+                patch_chain.patch_id,
+                edge_incidence.get(segment.source_edge_id, ()),
+                face_to_patch_id,
+                use_follows_segments,
+            )
+            side_face_ids.append(side_face_id)
+            if side_face_id is None:
+                side_normals.append(None)
+                continue
+            if side_face_id not in face_normals:
+                face_normals[side_face_id] = _face_fan_area_normal(source, (side_face_id,))[1]
+            normal = face_normals[side_face_id]
+            side_normals.append(normal if length(normal) > EPSILON else None)
+        tilts = (
+            tuple(
+                tilt
+                for normal in side_normals
+                if normal is not None
+                for tilt in (plane_tilt(chain_fact.plane_normal, normal),)
+                if tilt is not None
+            )
+            if chain_fact.plane_normal is not None
+            else ()
+        )
+        facts[patch_chain.id] = PatchChainGeometryFacts(
+            patch_chain_id=patch_chain.id,
+            chain_id=patch_chain.chain_id,
+            patch_id=patch_chain.patch_id,
+            tilt_min=min(tilts) if tilts else None,
+            tilt_max=max(tilts) if tilts else None,
+            segment_side_face_ids=tuple(side_face_ids),
+            segment_side_normals=tuple(side_normals),
+        )
+    return facts
+
+
+def _segments_follow_chain(
+    topology: SurfaceModel,
+    chain: Chain,
+    chain_fact: ChainGeometryFacts,
+) -> bool:
+    """Whether the measured segment order runs from the Chain start to its end."""
+
+    if not chain_fact.source_vertex_run or chain.start_vertex_id == chain.end_vertex_id:
+        return True
+    start_vertex = topology.vertices.get(chain.start_vertex_id)
+    if start_vertex is None:
+        return True
+    return chain_fact.source_vertex_run[0] in start_vertex.source_vertex_ids
+
+
+def _side_face_id(
+    source: SourceMeshSnapshot,
+    segment: ChainSegmentGeometryFacts,
+    patch_id: PatchId,
+    incident_face_ids: tuple[SourceFaceId, ...],
+    face_to_patch_id: dict[SourceFaceId, PatchId],
+    use_follows_segment: bool,
+) -> SourceFaceId | None:
+    candidates = tuple(
+        source_face_id
+        for source_face_id in incident_face_ids
+        if face_to_patch_id.get(source_face_id) == patch_id
+    )
+    if len(candidates) == 1:
+        return candidates[0]
+    # Both sides of the edge lie in this patch (a seam inside the patch): the
+    # face on this side winds the edge in the direction this use runs.
+    if use_follows_segment:
+        first, second = segment.start_source_vertex_id, segment.end_source_vertex_id
+    else:
+        first, second = segment.end_source_vertex_id, segment.start_source_vertex_id
+    winding = tuple(
+        source_face_id
+        for source_face_id in candidates
+        if _face_winds(source, source_face_id, first, second)
+    )
+    return winding[0] if len(winding) == 1 else None
+
+
+def _face_winds(
+    source: SourceMeshSnapshot,
+    source_face_id: SourceFaceId,
+    first: SourceVertexId,
+    second: SourceVertexId,
+) -> bool:
+    vertex_ids = source.faces[source_face_id].vertex_ids
+    count = len(vertex_ids)
+    return any(
+        vertex_ids[index] == first and vertex_ids[(index + 1) % count] == second
+        for index in range(count)
     )
 
 
@@ -189,6 +317,9 @@ def _build_chain_geometry_facts(
             )
         )
 
+    points = _chain_vertex_points(segments)
+    plane_normal = polyline_plane_normal(points) if len(points) >= 3 else None
+
     return ChainGeometryFacts(
         chain_id=chain.id,
         length=length_total,
@@ -199,7 +330,23 @@ def _build_chain_geometry_facts(
         shape_hint=shape_hint,
         source_vertex_run=source_vertex_run,
         segments=segments,
+        plane_normal=plane_normal,
+        plane_deviation=max_plane_distance(_distinct_closed_points(points), plane_normal),
+        chord_deviation=max_line_distance(points, start_point, end_point),
     )
+
+
+def _chain_vertex_points(segments: tuple[ChainSegmentGeometryFacts, ...]) -> tuple[Vector3, ...]:
+    if not segments:
+        return ()
+    return (segments[0].start_position,) + tuple(segment.end_position for segment in segments)
+
+
+def _distinct_closed_points(points: tuple[Vector3, ...]) -> tuple[Vector3, ...]:
+    # A closed chain repeats its first vertex at the end; count it once.
+    if len(points) > 1 and length(subtract(points[-1], points[0])) <= EPSILON:
+        return points[:-1]
+    return points
 
 
 def _source_vertex_run_for_chain(

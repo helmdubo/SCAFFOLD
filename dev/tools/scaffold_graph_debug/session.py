@@ -76,8 +76,20 @@ def _format_summary(report: dict[str, Any]) -> str:
         f"sew:{report['sewable_seam_count']} "
         f"cut:{report['cut_seam_count']} "
         f"junctions:{report['junction_glyph_count']} "
-        f"branches:{report['branch_glyph_count']}"
+        f"branches:{report['branch_glyph_count']} "
+        f"shape line:{report.get('chain_shape_surface_line_count', 0)} "
+        f"curve:{report.get('chain_shape_surface_curve_count', 0)} "
+        f"unresolved:{report.get('chain_shape_unresolved_count', 0)}"
     )
+
+
+def _print_unresolved_chain_shapes(overlay: dict[str, Any]) -> None:
+    for piece in overlay.get("chain_shape_pieces", ()):
+        if piece.get("kind") != "UNRESOLVED":
+            continue
+        messages = piece.get("diagnostics") or ["no core diagnostic attached"]
+        for message in messages:
+            print(f"[scaffold overlay] chain shape UNRESOLVED {piece.get('id')}: {message}")
 
 
 def _write_pair_check_text_block(source_object_name: str, report: str) -> None:
@@ -127,7 +139,9 @@ def show_or_refresh(context: Any) -> tuple[dict[str, Any], str]:
         show_seam_verdicts=bool(settings.show_seam_verdicts),
         show_junctions=bool(settings.show_junctions),
         show_branch_points=bool(settings.show_branch_points),
+        show_chain_shape=bool(settings.show_chain_shape),
     )
+    _print_unresolved_chain_shapes(overlay)
 
     gp_object = bpy.data.objects.get(overlay_object_name(source_object.name))
     if is_graph_debug_object(gp_object):
@@ -181,6 +195,7 @@ def refresh_visibility(context: Any) -> None:
             show_seam_verdicts=bool(settings.show_seam_verdicts),
             show_junctions=bool(settings.show_junctions),
             show_branch_points=bool(settings.show_branch_points),
+            show_chain_shape=bool(settings.show_chain_shape),
         )
 
 

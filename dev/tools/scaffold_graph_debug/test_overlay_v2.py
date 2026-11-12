@@ -266,6 +266,73 @@ def test_seam_verdicts_match_level_a_expectations() -> None:
     assert all(verdict["line_style"] == "DASHED" for verdict in tube_verdicts)
 
 
+def test_artist_arch_bevel_chain_shape_pieces_per_patch_side() -> None:
+    context, payload = _context_payload(load_source_snapshot("scaffold_core/tests/data/artist_arch_bevel.json"))
+    records = context.relation_snapshot.patch_chain_shape_relations
+    pieces = payload["chain_shape_pieces"]
+    assert len(pieces) == len(records) > 0
+    assert payload["counts"]["chain_shape_undrawn_count"] == 0
+    for kind in ("SURFACE_LINE", "SURFACE_CURVE", "UNRESOLVED"):
+        assert payload["counts"][f"chain_shape_{kind.lower()}_count"] == sum(
+            record.kind.value == kind for record in records
+        )
+    assert all(len(piece["polyline"]) == piece["segment_count"] + 1 for piece in pieces)
+    assert len({tuple(piece["color"]) for piece in pieces}) == len({piece["kind"] for piece in pieces})
+
+    front_curves = sorted(
+        (piece for piece in pieces if piece["patch_id"] == "patch:seed:f16" and piece["kind"] == "SURFACE_CURVE"),
+        key=lambda piece: -piece["segment_count"],
+    )
+    assert [piece["segment_count"] for piece in front_curves] == [16, 11]
+    front_lines = [
+        piece for piece in pieces if piece["patch_id"] == "patch:seed:f16" and piece["kind"] == "SURFACE_LINE"
+    ]
+    assert len(front_lines) == 2
+    assert all(piece["surface_turn_max_deg"] > 5.0 for piece in front_curves)
+
+    for front, rim_patch_id in zip(front_curves, ("patch:seed:f0", "patch:seed:f85")):
+        rim_sides = [
+            piece
+            for piece in pieces
+            if piece["patch_id"] == rim_patch_id and piece["chain_id"] == front["chain_id"]
+        ]
+        assert len(rim_sides) == 1
+        rim = rim_sides[0]
+        assert rim["kind"] == "SURFACE_LINE"
+        assert rim["kind"] != front["kind"]
+        assert rim["segment_count"] == front["segment_count"]
+        assert rim["surface_turn_max_deg"] < 0.01
+        assert not rim["unoffset"] and not front["unoffset"]
+        assert len(rim["polyline"]) == len(front["polyline"])
+        distances = [
+            _distance(first, second)
+            for first, second in zip(rim["polyline"], front["polyline"])
+        ]
+        assert all(distance > 1e-6 for distance in distances)
+        assert max(distances) < 0.1
+
+
+def test_self_seam_chain_shape_pieces_get_one_polyline_per_side() -> None:
+    from scaffold_core.tests.fixtures.cylinder_tube import (
+        make_cylinder_tube_without_caps_with_one_seam_source,
+    )
+
+    payload = _payload(make_cylinder_tube_without_caps_with_one_seam_source)
+    seam_sides = [piece for piece in payload["chain_shape_pieces"] if piece["chain_id"] == "chain:e_v0"]
+    assert len(seam_sides) == 2
+    assert len({piece["patch_chain_id"] for piece in seam_sides}) == 2
+    assert not any(piece["unoffset"] for piece in seam_sides)
+    first, second = sorted(seam_sides, key=lambda piece: piece["patch_chain_id"])
+    # Both sides of the seam lie in one patch: the second side flips its offset.
+    first_points = sorted(first["polyline"], key=lambda point: point[2])
+    second_points = sorted(second["polyline"], key=lambda point: point[2])
+    assert all(_distance(a, b) > 1e-6 for a, b in zip(first_points, second_points))
+
+
+def _distance(first, second) -> float:
+    return sum((float(first[index]) - float(second[index])) ** 2 for index in range(3)) ** 0.5
+
+
 def _rails(payload, role: str):
     return [rail for rail in payload["rails"] if rail["role"] == role]
 

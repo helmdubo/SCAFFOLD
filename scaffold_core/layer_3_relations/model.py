@@ -579,6 +579,45 @@ class ScaffoldContinuityComponent:
     evidence: tuple[Evidence, ...] = ()
 
 
+class PatchChainShapeKind(str, Enum):
+    """Shape of one PatchChain piece on its own patch surface (evidence only)."""
+
+    SURFACE_LINE = "SURFACE_LINE"
+    SURFACE_CURVE = "SURFACE_CURVE"
+    UNRESOLVED = "UNRESOLVED"
+
+
+@dataclass(frozen=True)
+class PatchChainShapeRelation:
+    """Evidence-only shape record for one piece of one PatchChain use.
+
+    A piece is a maximal part of the Chain between surface corners on this
+    side. Nothing consumes this record yet; it does not create, split, merge
+    or re-identify runs, families, rails, junctions or Layer 1 entities.
+    segment_indices and the start/end source vertex ids follow the Chain's
+    segment order (rotated to the use's start for a closed chain), not the
+    use's direction.
+    """
+
+    id: str
+    patch_chain_id: PatchChainId
+    chain_id: ChainId
+    patch_id: PatchId
+    kind: PatchChainShapeKind
+    segment_indices: tuple[int, ...]
+    start_source_vertex_id: SourceVertexId
+    end_source_vertex_id: SourceVertexId
+    length: float
+    surface_turn_max: float
+    surface_turning_total: float
+    tilt_min: float | None
+    tilt_max: float | None
+    is_planar: bool
+    law_error_max: float
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
 @dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
@@ -603,4 +642,5 @@ class RelationSnapshot:
     scaffold_rails: tuple[ScaffoldRail, ...] = ()
     alignment_classes: tuple[AlignmentClass, ...] = ()
     patch_axes: Mapping[PatchId, PatchAxes] = field(default_factory=dict)
+    patch_chain_shape_relations: tuple[PatchChainShapeRelation, ...] = ()
     diagnostics: tuple[Diagnostic, ...] = ()

@@ -29,7 +29,8 @@ producing pinned UVs) before any further evidence kinds are added.
 1. **Evidence moratorium.** Do not add new Layer 3 evidence record types or
    relation kinds. New distinctions must wait until the tracer (Slice E)
    shows they are consumed. Exception: ConnectedDirectionFamily v0 (Slice D),
-   which is explicitly planned here.
+   which is explicitly planned here. Second exception, approved by the user
+   (2026-11-13): PatchChainShapeRelation v0 (Slice W).
 2. **Fixtures over blend files.** Contracts must be expressed against
    in-repo synthetic fixtures, never against local `.blend` exploratory
    files (no new Cube.001-style references in DD text).
@@ -1833,6 +1834,102 @@ island 0 (one patch, walls/f302, overlaps itself inside its own faces);
 invariants stay 0. Cross-island axis agreement now matters: 2470 of 4821
 families span more than one island (none did before).
 
+## Slice W — chain shape per patch side (Stage A DONE, 2026-11)
+
+Origin (user review, 2026-11-13): an arch with bevels
+(`Decor_Roof_Left_lod00.003`) compared with the CFTUV result. CFTUV
+structures all five patches; Scaffold solved one. CFTUV judges a boundary
+chain as a whole and per patch: a chain that lies in a plane and bends only
+along the patch normal is an axis chain for that patch. The user's direction:
+fix the layers below UV first; Layer 5 is not the priority while they cannot
+describe shape.
+
+Contract and measurements: `docs/architecture/chain_shape_contract_draft.md`
+(approved by the user, 2026-11-13). G0 v1.7 DD-48.
+
+Measurement (probes `chain_shape_probe*.py`, now
+`dev/tools/blender_smoke/probes/chain_shape.py`):
+
+```text
+- every non-straight chain on properly seamed meshes is planar (0.00%);
+- tilt of the chain plane against its patch faces: buildings 40 edges at
+  0-10 degrees and 1001 at 80-90, none between; a ring on a cone 41-44;
+- surface turn = 3D turn x sin(tilt): median error 0.00, p95 <= 0.15, max
+  about 1 degree; larger only on warped single-face patches;
+- surface turns at interior chain vertices (13 buildings, 7 in-repo
+  captures, the arch, walls.001 and pCylinder of buildings3_3) cluster at
+  0-3 (1560), 6-30 (238) and 80-100 (743) degrees, with 12 at 3-6, 46
+  between 30 and 80 and 18 above 100: corner threshold 42, between a
+  regular 9-gon (40) and an 8-gon (45);
+- the one-run chord shortcut on a non-straight chain: 12 sides on buildings,
+  all stepped in the surface, all 12 end as Layer 5 defects (10 of 25 jogs,
+  2 OBLIQUE).
+```
+
+Stage A (this slice, no behaviour change):
+
+- Layer 2: `ChainGeometryFacts.plane_normal`, `plane_deviation`,
+  `chord_deviation`; `PatchChainGeometryFacts` per use (side face and normal
+  per chain segment, tilt range).
+- Layer 3: `PatchChainShapeRelation` v0 per use and piece
+  (`layer_3_relations/patch_chain_shape.py`): SURFACE_LINE, SURFACE_CURVE or
+  UNRESOLVED; diagnostics `PATCH_CHAIN_SHAPE_LAW_MISMATCH` and
+  `PATCH_CHAIN_SHAPE_OCCURRENCE_UNRESOLVED`.
+- Inspection counts, Tier 3 metrics `shape_lines`, `shape_curves`,
+  `shape_unresolved`, `shape_law_mismatches`, a debug overlay layer
+  `ScaffoldGraph_ChainShape`.
+- Fixtures: `artist_arch_bevel.json` (the user's arch),
+  `fixtures/chain_shape_surfaces.py` (cone or cylinder band with a cap,
+  stepped seam, warped pentagon).
+
+Results (replay of captures; existing outputs hash identically before and
+after on 25 captures: 13 buildings, 4 of buildings3_3, 8 in-repo; the
+reviewer re-checked 21 of them against an export of HEAD, byte-identical):
+
+| Set | lines | curves | unresolved | multi-segment lines, one family / split |
+|---|---|---|---|---|
+| 13 buildings | 10192 | 11 | 3 | 468 / 0 |
+| 8 in-repo captures | 579 | 20 | 0 | 50 / 0 |
+
+The 3 unresolved pieces on buildings are the single-face patches with a 1 cm
+sliver vertex (walls f1352, walls.003 f1348, walls.012 f0). Arch: each arc is
+one SURFACE_LINE on its rim side and one SURFACE_CURVE on the front face; the
+foot chain is one SURFACE_LINE for the front face and five cornered pieces
+for the foot cap. Tier 3 baseline: four new fields per object and the new
+diagnostic code on three objects; nothing else moved. Shape builder cost on
+walls: 0.07 s of 4.4 s.
+
+Tests: the suite goes from 338 to 375 passed. Mutations caught: corner
+threshold at 20, 40 and 60 degrees, line tolerance replaced or zeroed, tilt
+from the other side's faces, law check skipped, pieces not cut at corners,
+and the reviewer's 15.
+
+Reviewer gate (independent agent): PASS WITH FIXES, nothing blocking.
+
+- Fixed, code: a closed Chain is read from the use's own start vertex (a
+  use that starts elsewhere was one UNRESOLVED piece: artist_cross_band
+  f1); the corner threshold moved from 40 to 42 degrees, off the exact
+  turn of a regular 9-gon; the record's segment order is documented.
+- Fixed, tests: 7 surviving mutations (a vertex with several face fans,
+  is_planar, the signed turning total, a closed spatial chain, the
+  overlay's SEAM_SELF sides) are now caught.
+- Fixed, docs: DD-48 and the contract draft say what the code does (the
+  law check runs at interior vertices of a piece, not at corners; a
+  spatial piece still gets a kind and only records is_planar); the turn
+  histogram names its set.
+
+Later stages, each its own slice and approval:
+
+```text
+B  chord shortcut per side. User decision (2026-11-13): one run only for a
+   side where the chain is a surface line. Expected on buildings: 10 jogs
+   and 2 OBLIQUE runs become corner-split runs. Amends DD-30.
+C  a surface curve record instead of N single-run families. Amends DD-45,
+   closes the curved-chain part of OQ-11.
+D  a multi-segment surface line as one run with stations; placement of
+   curves; band recognition (Layer 4).
+```
+
 ## Decisions the user must approve before the relevant slice
 
 ```text
@@ -1887,4 +1984,13 @@ families span more than one island (none did before).
    segments; branches and uncut loops degrade with a diagnostic. It
    removes the DD-47 provisional exception. Rule APPROVED after the
    measurement and DONE. The other items stay open.
+12. Next after Slice U, chosen by the user (2026-11-13): chain shape per
+   patch side (Slice W). Stage A (facts and evidence, no behaviour change)
+   APPROVED and DONE with G0 v1.7 DD-48. Stage B rule APPROVED ("one run
+   only for a side where the chain is a surface line"), not implemented.
+   Stages C and D are not approved yet.
+13. Slice V (seam turns and island orientation, rule "longest seam first"
+   APPROVED 2026-11-10) is implemented and PARKED by the user on the local
+   branch claude/slice-v-seam-turns (commit 99db1a4, not pushed): plan,
+   handoff and phase docs and the reviewer gate are still missing.
 ```

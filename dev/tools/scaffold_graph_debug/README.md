@@ -14,7 +14,7 @@ In Blender Python Console:
 
 ```python
 import sys
-sys.path.insert(0, r"D:\_mimirhead\website\SCAFFOLD\dev\tools")
+sys.path.insert(0, r"<repo>\dev\tools")
 import scaffold_graph_debug
 scaffold_graph_debug.register()
 ```
@@ -32,7 +32,7 @@ Rebuild Overlay
 SCAFFOLD JSON
 Write UV (G5a)
 Close Graph
-Family Colors / Spines / Ribs / Seam Verdicts (also CutRails) / Junctions / Branches visibility
+Family Colors / Spines / Ribs / Seam Verdicts (also CutRails) / Junctions / Branches / Chain Shape visibility
 ```
 
 `Rebuild Overlay` hides the source mesh while the overlay is active. `Close Graph`
@@ -111,6 +111,7 @@ ScaffoldGraph_CutRails
 ScaffoldGraph_SeamVerdicts
 ScaffoldGraph_JunctionsV2
 ScaffoldGraph_Branches
+ScaffoldGraph_ChainShape
 ```
 
 | Layer | Meaning |
@@ -122,6 +123,7 @@ ScaffoldGraph_Branches
 | ScaffoldGraph_SeamVerdicts | Level A stitch verdicts for shared seam chains. |
 | ScaffoldGraph_JunctionsV2 | Node atoms: every ScaffoldNode and every RunEndpointJunction. |
 | ScaffoldGraph_Branches | Explicit branch markers where the debug rail graph has valence > 2. |
+| ScaffoldGraph_ChainShape | Core `PatchChainShapeRelation` pieces: how each boundary chain is judged on each patch side, colored by kind. |
 
 Rails are debug-side views over core `ConnectedDirectionFamily v1`, rebuilt on
 each overlay refresh. In-patch geodesic continuation, occurrence-aware
@@ -154,8 +156,20 @@ Branches shows explicit yellow branch markers at junctions where more than two
 run ends meet in the debug rail graph. The overlay marks the ambiguity and does
 not choose a path through it.
 
+Chain Shape draws one line per piece of each PatchChain use (a piece is the
+part of the chain between surface corners on that patch side), using the same
+per-side offset as the rail layers. Two parallel lines along one shared chain
+are its two sides, one per patch, and each side can be judged differently.
+Green (mint) means the piece is a straight line on that patch's surface
+(`SURFACE_LINE`), even when it is bent in 3D, for example an arch edge seen
+from the flat rim strip. Blue means a curve on that surface (`SURFACE_CURVE`),
+for example the same arch edge seen from the flat front face. Orange means
+`UNRESOLVED`; Rebuild prints a `[scaffold overlay] chain shape UNRESOLVED`
+line with the core diagnostic for each such piece in the system console. The
+panel summary shows `shape line/curve/unresolved` counts.
+
 Colors are stable across rebuilds. They are derived from ids, never from true
-random numbers.
+random numbers. Chain Shape colors are fixed by kind, not by id.
 
 ## Canonical Artist Example
 
