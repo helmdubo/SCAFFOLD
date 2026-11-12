@@ -20,6 +20,7 @@ from scaffold_core.layer_3_relations.chain_refinement import (
     build_patch_chain_directional_evidence,
     build_chain_directional_runs,
 )
+from scaffold_core.layer_3_relations.patch_chain_shape import build_patch_chain_shape_relations
 from scaffold_core.pipeline.inspection import inspect_pipeline_context
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_boundary_loop_source
@@ -48,9 +49,10 @@ def test_shared_closed_loop_builds_patch_local_patch_chain_directional_evidences
     source = make_closed_shared_boundary_loop_source()
     topology = build_topology_snapshot(source)
     geometry = build_geometry_facts(source, topology)
-    directional_runs = build_chain_directional_runs(topology, geometry)
+    shape_relations, _ = build_patch_chain_shape_relations(topology, geometry)
+    directional_runs = build_chain_directional_runs(topology, geometry, shape_relations)
 
-    directional_evidence_items = build_patch_chain_directional_evidence(topology, directional_runs)
+    directional_evidence_items = build_patch_chain_directional_evidence(topology, directional_runs, shape_relations)
 
     assert len(directional_runs) == 4
     assert len(topology.patch_chains) == 2

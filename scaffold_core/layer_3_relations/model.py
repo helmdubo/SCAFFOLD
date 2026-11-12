@@ -592,8 +592,9 @@ class PatchChainShapeRelation:
     """Evidence-only shape record for one piece of one PatchChain use.
 
     A piece is a maximal part of the Chain between surface corners on this
-    side. Nothing consumes this record yet; it does not create, split, merge
-    or re-identify runs, families, rails, junctions or Layer 1 entities.
+    side. Its one reader is the per-use chord shortcut of ChainDirectionalRuns
+    (chain shape Stage B); it does not itself create, split, merge or
+    re-identify runs, families, rails, junctions or Layer 1 entities.
     segment_indices and the start/end source vertex ids follow the Chain's
     segment order (rotated to the use's start for a closed chain), not the
     use's direction.

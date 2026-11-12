@@ -1834,7 +1834,7 @@ island 0 (one patch, walls/f302, overlaps itself inside its own faces);
 invariants stay 0. Cross-island axis agreement now matters: 2470 of 4821
 families span more than one island (none did before).
 
-## Slice W — chain shape per patch side (Stage A DONE, 2026-11)
+## Slice W — chain shape per patch side (Stages A and B DONE, 2026-11)
 
 Origin (user review, 2026-11-13): an arch with bevels
 (`Decor_Roof_Left_lod00.003`) compared with the CFTUV result. CFTUV
@@ -1918,12 +1918,74 @@ Reviewer gate (independent agent): PASS WITH FIXES, nothing blocking.
   spatial piece still gets a kind and only records is_planar); the turn
   histogram names its set.
 
-Later stages, each its own slice and approval:
+### Stage B — the chord shortcut per patch side (DONE, 2026-11)
+
+Rule (user-approved, option i): a zigzag Chain keeps its one chord-directed
+run only for a PatchChain use where the whole Chain is one SURFACE_LINE
+piece; every other use gets the split runs. G0 v1.8 DD-30.
+
+Implementation: `chain_refinement.py` decides per use from the shape
+relations, which are now built before the runs and have this one reader. A
+kept chord run keeps its id; split runs beside a kept chord run are
+`directional_run:{chain}:split:{i}`.
+
+Results (capture replays, before -> after):
+
+| | 13 buildings | 8 in-repo captures |
+|---|---|---|
+| directional runs | 6068 -> 6094 | 585 -> 595 |
+| families | 4821 -> 4847 | 490 -> 498 |
+| pins | 10112 -> 10138 | 743 -> 725 |
+| OBLIQUE runs | 194 -> 188 | 162 -> 172 |
+| island diagnostics | 28 -> 18 | 18 -> 13 |
+| jogs | 25 -> 15 | 2 -> 2 |
+
+Islands, contradictions (0), unordered island rails and the four invariants
+are unchanged. Affected on buildings: 7 distinct border chains (walls f331,
+f424, f438, f748, f1215; walls.010 f76, f90), 12 with the walls.003
+duplicates. Their 12 chord runs became 38 runs, 32 of them on an axis. Six
+stay OBLIQUE without a diagnostic: three diagonal 0.32 m segments 18 degrees
+off axis, and three 8.4 m segments 0.57 degrees off axis (inside the snap
+angle, past the drift).
+
+DD-43's straight-hinge rule loses nothing on real captures: no shared Chain
+there gets several runs on both uses. On the synthetic stepped seam each step
+is now two single-patch families instead of one two-use station.
+
+Known Layer 5 regression on the arch (`artist_arch_bevel.json`): pins 57 ->
+39, OBLIQUE 44 -> 54. Layer 3 is more faithful there (the foot chain is one
+line for the front face and five cornered runs for the foot caps; the
+SHARED_CHAIN crossing that joined front and cap is gone), but all three arch
+islands are frame-free, and the axis bipartition now leaves one rim arc
+OBLIQUE. The frame-free branch is the subject of the next slices.
+
+Tier 3: walls, walls.003 and walls.010 change (diagnostics 11 -> 7, 11 -> 7,
+2 -> 0; pins +11, +11, +4); the other ten objects are identical. Tests: 375
+-> 394 passed.
+
+Reviewer gate (independent agent): PASS WITH FIXES, nothing blocking. The
+reviewer replayed 21 captures against an export of HEAD: directional evidence
+changed on exactly 14 uses (the 12 on buildings and the two arch foot caps);
+every other use is identical in id, run, direction, length and segments.
+
+- Fixed, tests: the early return for a Chain whose split is one run was not
+  pinned; a test now covers a straight Chain with a side that is not one
+  surface line.
+- Found, existed before, not fixed in this stage:
+  1. the frame-free axis bipartition links lines by raw 3D perpendicularity
+     even across a fold between two patches, and an OBLIQUE line keeps
+     propagating. This is the mechanism of the arch regression. A trial with
+     edges only between runs of one patch gave the arch 74 pins and 32
+     OBLIQUE runs and left the cylinder captures unchanged;
+  2. the AXIS_A seed breaks ties by line id, which holds the family number
+     as text, so renumbering families can turn an untouched island by 180
+     degrees (walls.003 island:84);
+  3. the runs of a Chain are ordered by id as text, so a Chain with 11 or
+     more runs has evidence indices out of run order.
+
+Later stages:
 
 ```text
-B  chord shortcut per side. User decision (2026-11-13): one run only for a
-   side where the chain is a surface line. Expected on buildings: 10 jogs
-   and 2 OBLIQUE runs become corner-split runs. Amends DD-30.
 C  a surface curve record instead of N single-run families. Amends DD-45,
    closes the curved-chain part of OQ-11.
 D  a multi-segment surface line as one run with stations; placement of
@@ -1987,10 +2049,20 @@ D  a multi-segment surface line as one run with stations; placement of
 12. Next after Slice U, chosen by the user (2026-11-13): chain shape per
    patch side (Slice W). Stage A (facts and evidence, no behaviour change)
    APPROVED and DONE with G0 v1.7 DD-48. Stage B rule APPROVED ("one run
-   only for a side where the chain is a surface line"), not implemented.
-   Stages C and D are not approved yet.
+   only for a side where the chain is a surface line") and DONE (G0 v1.8
+   DD-30). Stages C and D: see decision 14.
 13. Slice V (seam turns and island orientation, rule "longest seam first"
    APPROVED 2026-11-10) is implemented and PARKED by the user on the local
    branch claude/slice-v-seam-turns (commit 99db1a4, not pushed): plan,
    handoff and phase docs and the reviewer gate are still missing.
+14. Autonomous mode (user, 2026-11-13). Goal: a result structurally similar
+   to the CFTUV reference scene (Arc, building_walls, collumn, Main_wall of
+   buildings3_3.blend; Arc and collumn were unwrapped with Straighten
+   Strips). Similar structures, not positions or coordinates. The agent may
+   merge its own slices after tests, Tier 3 and the reviewer gate; may amend
+   G0 and Layer 5, with the wording shown in the PR; may open Layer 4 and a
+   world-orientation filter if a similar result needs them, with the phase
+   amendment in AGENTS.md. The user's view of that filter: a post-filter of
+   user options (what is up, which way a trim runs, which patches stitch
+   into one quilt), never an input of Layers 1-3.
 ```

@@ -13,7 +13,7 @@ Project: Scaffold
 Core package: scaffold_core/
 Current phase: G5a - Skeleton Runtime
 Architecture: immutable B-rep-inspired interpretation pipeline
-G0 contract: v1.7 (G0.md remains read-only for agents)
+G0 contract: v1.8 (G0.md remains read-only for agents)
 ```
 
 Scaffold Core currently contains Layers 0-3, the G5a Layer 5 runtime,
@@ -130,7 +130,8 @@ Implemented:
 - PatchChainShapeRelation v0 (`layer_3_relations/patch_chain_shape.py`,
   G0 DD-48): per PatchChain use, each piece between surface corners is a
   surface line, a surface curve or unresolved, from Layer 2 chain plane
-  and per-side facts. Evidence only; nothing reads it yet.
+  and per-side facts. One reader: directional runs take the chord
+  shortcut of a zigzag Chain per use (Stage B, G0 DD-30).
 - Pipeline tooling: Chain -> PatchChain incidence index
   (`layer_3_relations/patch_chain_incidence.py`), per-pass stage timings in
   `PipelineContext.pass_timings` (reported by inspection), and a networkx
@@ -620,13 +621,24 @@ follow them, because their results were visible only as Tier 3 numbers. His
 direction now: layers below UV first; every slice must end with something
 he can look at in Blender.
 
-Done in this change (plan Slice W, Stage A): chain shape facts in Layer 2,
-`PatchChainShapeRelation` v0 in Layer 3 (G0 v1.7 DD-48, evidence only, no
-behaviour change) and the debug overlay layer `ScaffoldGraph_ChainShape`.
-Contract and stages: `docs/architecture/chain_shape_contract_draft.md`.
+Done (plan Slice W): Stage A, merged as PR #29: chain shape facts in Layer
+2, `PatchChainShapeRelation` v0 in Layer 3 (G0 DD-48) and the debug overlay
+layer `ScaffoldGraph_ChainShape`. Stage B: a zigzag Chain is one chord run
+only for a use where it is one surface line (G0 v1.8 DD-30); on buildings
+jogs 25 -> 15. Contract and stages:
+`docs/architecture/chain_shape_contract_draft.md`.
 
-Next, each its own approval: Stage B (chord shortcut per side; the rule is
-approved), then Stage C (curve record).
+Autonomous mode since 2026-11-13 (plan decision 14): the goal is a result
+structurally similar to the CFTUV reference scene (Arc, building_walls,
+collumn, Main_wall); the agent merges its own slices after tests, Tier 3
+and the reviewer gate, and may amend G0, Layer 5 and open Layer 4 when a
+similar result needs it. The user comes back only to check, so every
+slice must leave something he can look at.
+
+Known weak spot: an island with a curved patch has no rigid frame and goes
+through the frame-free branch of `skeleton.py`. On the arch Stage B made
+Layer 3 more faithful and Layer 5 worse (pins 57 -> 39): the axis
+bipartition there is fragile. This branch is the next subject.
 
 Parked: Slice V (seam turns, island orientation) on the local branch
 `claude/slice-v-seam-turns`, commit 99db1a4, on the user's machine and not

@@ -24,6 +24,7 @@ from scaffold_core.layer_2_geometry.facts import (
 )
 from scaffold_core.layer_3_relations.build import build_relation_snapshot
 from scaffold_core.layer_3_relations.chain_refinement import build_chain_directional_runs
+from scaffold_core.layer_3_relations.patch_chain_shape import build_patch_chain_shape_relations
 from scaffold_core.pipeline.inspection import inspect_pipeline_context
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.chain_shape_geometry import make_chain_shape_source_and_topology
@@ -52,7 +53,8 @@ def test_straight_multi_segment_chain_produces_one_directional_run() -> None:
     source, topology = make_chain_shape_source_and_topology()
     geometry = build_geometry_facts(source, topology)
 
-    runs = build_chain_directional_runs(topology, geometry)
+    shape_relations, _ = build_patch_chain_shape_relations(topology, geometry)
+    runs = build_chain_directional_runs(topology, geometry, shape_relations)
     straight_run = next(run for run in runs if run.parent_chain_id == ChainId("chain:straight"))
 
     assert straight_run.source_edge_ids == (SourceEdgeId("e0"), SourceEdgeId("e1"))
@@ -103,7 +105,7 @@ def test_perpendicular_segments_split_into_two_directional_runs() -> None:
         )
     )
 
-    runs = build_chain_directional_runs(topology, geometry)
+    runs = build_chain_directional_runs(topology, geometry, ())
 
     assert len(runs) == 2
     assert [run.source_edge_ids for run in runs] == [
@@ -121,7 +123,7 @@ def test_collinear_unknown_segments_merge_into_one_directional_run() -> None:
         )
     )
 
-    runs = build_chain_directional_runs(topology, geometry)
+    runs = build_chain_directional_runs(topology, geometry, ())
 
     assert len(runs) == 1
     assert runs[0].source_edge_ids == (SourceEdgeId("e0"), SourceEdgeId("e1"))
