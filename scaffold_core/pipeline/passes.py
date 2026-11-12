@@ -10,6 +10,7 @@ Rules:
 
 from __future__ import annotations
 
+from dataclasses import replace
 from time import perf_counter
 
 from scaffold_core.core.diagnostics import Diagnostic, DiagnosticReport, DiagnosticSeverity
@@ -18,6 +19,8 @@ from scaffold_core.layer_1_topology.build import build_topology_snapshot
 from scaffold_core.layer_1_topology.invariants import validate_topology
 from scaffold_core.layer_2_geometry.build import build_geometry_facts
 from scaffold_core.layer_3_relations.build import build_relation_snapshot
+from scaffold_core.layer_4_features.build import build_feature_snapshot
+from scaffold_core.layer_4_features.model import FeatureOptions
 from scaffold_core.pipeline.context import PassTiming, PipelineContext
 
 
@@ -91,4 +94,27 @@ def run_pass_1_relations(context: PipelineContext) -> PipelineContext:
         diagnostics=context.diagnostics.extend(relation_snapshot.diagnostics),
         pass_timings=context.pass_timings
         + (PassTiming("pass_1.relation_snapshot", relations_seconds),),
+    )
+
+
+def run_pass_2_features(context: PipelineContext, options: FeatureOptions = FeatureOptions()) -> PipelineContext:
+    """Run Pass 2 feature recognition after Pass 1; Layer 3 is read, never written."""
+
+    if context.topology_snapshot is None or context.geometry_facts is None or context.relation_snapshot is None:
+        raise ValueError("Pass 2 requires topology_snapshot, geometry_facts and relation_snapshot.")
+
+    features_started = perf_counter()
+    feature_snapshot = build_feature_snapshot(
+        context.topology_snapshot,
+        context.geometry_facts,
+        context.relation_snapshot,
+        options,
+    )
+    features_seconds = perf_counter() - features_started
+
+    return replace(
+        context,
+        feature_snapshot=feature_snapshot,
+        diagnostics=context.diagnostics.extend(feature_snapshot.diagnostics),
+        pass_timings=context.pass_timings + (PassTiming("pass_2.feature_snapshot", features_seconds),),
     )

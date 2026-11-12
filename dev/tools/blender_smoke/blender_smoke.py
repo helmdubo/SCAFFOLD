@@ -28,8 +28,9 @@ if str(REPO_ROOT) not in sys.path:
 import bpy  # noqa: E402 - executed by Blender only
 
 from scaffold_core.layer_0_source.blender_io import read_source_mesh_from_blender  # noqa: E402
+from scaffold_core.layer_4_features.model import FeatureOptions  # noqa: E402
 from scaffold_core.layer_5_runtime.pins import run_skeleton_solve  # noqa: E402
-from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations  # noqa: E402
+from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations, run_pass_2_features  # noqa: E402
 
 
 RESIDUAL_OK_LIMIT = 1.0e-4
@@ -64,6 +65,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--selection", choices=("file", "all"), default="file")
     parser.add_argument("--write-uv", action="store_true", help="exercise the UV write boundary")
     parser.add_argument("--capture-dir", default="", help="dump SourceMeshSnapshot JSON per object")
+    parser.add_argument("--straighten-strips", action="store_true", help="run Pass 2 with straighten_strips")
     parser.add_argument("--out", required=True)
     return parser.parse_args(argv)
 
@@ -86,9 +88,14 @@ def _run_object(obj, args: argparse.Namespace) -> dict:
         if args.capture_dir:
             _dump_capture(source, Path(args.capture_dir) / f"{obj.name}.json")
         context = run_pass_1_relations(run_pass_0(source))
+        if args.straighten_strips:
+            context = run_pass_2_features(context, FeatureOptions(straighten_strips=True))
         record.update(_pipeline_metrics(source, context))
         solve = run_skeleton_solve(context)
         record.update(_solve_metrics(solve))
+        if args.straighten_strips:
+            # Layer 4 STRAIGHT_STRIP constraints applied as strip islands (absent without the flag)
+            record["strip_islands"] = sum(1 for skeleton in solve.skeletons if skeleton.frame == "STRIP")
         if args.write_uv:
             record.update(_write_uv_metrics(obj, solve, source, args.selection))
     except Exception as error:  # report, never abort the batch

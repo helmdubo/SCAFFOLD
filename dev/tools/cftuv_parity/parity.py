@@ -7,7 +7,8 @@ Pure Python, no Blender. From the repository root:
 Inputs live in dev/tools/cftuv_parity/reference/: <name>.capture.json (the
 SourceMeshSnapshot of the object) and <name>.uv.json (reference UVs written by
 extract_reference.py). Scaffold is replayed from the capture
-(run_pass_0 -> run_pass_1_relations -> run_skeleton_solve). The common frame is
+(run_pass_0 -> run_pass_1_relations -> run_pass_2_features -> run_skeleton_solve),
+with straighten_strips as in STRAIGHTEN_STRIPS. The common frame is
 Scaffold's own PatchChain uses: one side of one Chain in one Patch. The tool
 defines no Scaffold relation; it only reads pipeline output.
 
@@ -68,6 +69,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 REFERENCE_DIR = Path(__file__).resolve().parent / "reference"
 OBJECTS = ("Arc", "building_walls", "collumn", "Main_wall")
+# The CFTUV "Straighten Strips" option each reference was made with; Scaffold
+# replays Pass 2 with the same FeatureOptions.straighten_strips.
+STRAIGHTEN_STRIPS = {"Arc": True, "building_walls": False, "collumn": True, "Main_wall": False}
 
 STRAIGHT_TOL = 0.01  # max point-to-chord distance over UV length
 AXIS_TOL_DEG = 1.0
@@ -209,13 +213,17 @@ def score_uses(uses) -> Scores:
 # ---------------------------------------------------------- pipeline reading
 
 
-def _replay(capture: Path):
+def _replay(capture: Path, straighten_strips: bool = False):
     sys.path.insert(0, str(REPO_ROOT))
     from dev.tools.scaffold_graph_debug.snapshot_io import load_source_snapshot
+    from scaffold_core.layer_4_features.model import FeatureOptions
     from scaffold_core.layer_5_runtime.pins import run_skeleton_solve
-    from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
+    from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations, run_pass_2_features
 
-    context = run_pass_1_relations(run_pass_0(load_source_snapshot(capture)))
+    context = run_pass_2_features(
+        run_pass_1_relations(run_pass_0(load_source_snapshot(capture))),
+        FeatureOptions(straighten_strips=straighten_strips),
+    )
     return context, run_skeleton_solve(context)
 
 
@@ -430,11 +438,13 @@ def top_gaps(uses, context, solve, count=3):
 
 def evaluate(name):
     reference = json.loads((REFERENCE_DIR / f"{name}.uv.json").read_text())
-    context, solve = _replay(REFERENCE_DIR / f"{name}.capture.json")
+    straighten = STRAIGHTEN_STRIPS.get(name, False)
+    context, solve = _replay(REFERENCE_DIR / f"{name}.capture.json", straighten)
     uses, unread, scale = build_uses(context, solve, reference)
     scores = score_uses(uses)
     return {
         "object": name,
+        "straighten_strips": straighten,
         "patches_total": len(context.topology_snapshot.patches),
         "uses": len(uses),
         "unread_uses": unread,
@@ -460,8 +470,9 @@ def _table_row(name, r):
     islands = f"{i['ref_islands']}/{i['sc_islands']}"
     split = f"{i['ref_split']}/{i['sc_merged']}"
     scale = "" if r["scale"] is None else format(r["scale"], ".3f")
+    strips = {True: "on", False: "off"}.get(r.get("straighten_strips"), "")
     return (
-        f"{name:14s} {_pct(s['line_recall'])}  {_pct(s['false_lines'])}  {_pct(s['pin_cov'])}  {_pct(s['pin_extra'])}"
+        f"{name:14s} {strips:>6s} {_pct(s['line_recall'])}  {_pct(s['false_lines'])}  {_pct(s['pin_cov'])}  {_pct(s['pin_extra'])}"
         f"  {_pct(s['axis_agree'])}  {structured:>20s}  {islands:>8s}  {split:>7s}  {scale}"
     )
 
@@ -487,7 +498,7 @@ def main(argv=None) -> None:
     args = parser.parse_args(argv)
     results = [evaluate(name) for name in (args.object or OBJECTS)]
     print(
-        "object         recall  false  pincov  pinext  axisagr  structd ref/sc/both  isl r/s  spl/mrg  scale"
+        "object         strips recall  false  pincov  pinext  axisagr  structd ref/sc/both  isl r/s  spl/mrg  scale"
     )
     for r in results:
         print(_table_row(r["object"], r))

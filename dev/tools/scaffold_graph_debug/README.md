@@ -30,7 +30,7 @@ Controls:
 ```text
 Rebuild Overlay
 SCAFFOLD JSON
-Write UV (G5a)
+Write UV (G5a) / Straighten Strips (Pass 2 option for Write UV, default off)
 Close Graph
 Family Colors / Spines / Ribs / Seam Verdicts (also CutRails) / Junctions / Branches / Chain Shape visibility
 ```
@@ -70,7 +70,7 @@ mesh object means all faces of that object are exported.
 `Write UV (G5a)` runs the Layer 5 v0 runtime:
 
 ```text
-Pass 0 / Pass 1 -> build_islands -> build_island_skeletons -> run_skeleton_solve
+Pass 0 / Pass 1 / Pass 2 (Straighten Strips toggle) -> build_islands -> build_island_skeletons -> run_skeleton_solve
 -> uv_transfer.write_pinned_uvs
 ```
 

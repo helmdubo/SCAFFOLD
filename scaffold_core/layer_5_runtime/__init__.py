@@ -3,6 +3,7 @@ Layer: 5 - Runtime
 
 Rules:
 - Consume Layers 0-3 snapshots read-only; never mutate them.
+- Consume Layer 4 only through FeatureConstraints (G0 DD-26).
 - No stored H/V, WALL/FLOOR/SLOPE or world-axis roles; axis roles are
   recomputed per run from ConnectedDirectionFamily data.
 - bpy is allowed only in uv_transfer (the G5 write boundary).

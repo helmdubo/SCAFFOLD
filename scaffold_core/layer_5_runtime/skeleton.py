@@ -15,6 +15,11 @@ Rules:
   corners of its patch surfaces (Layer 3 RunCornerRelation) and takes
   in-line run signs from its ordered island rails;
   an unordered rail stays unsigned with a diagnostic. No world axes.
+- A Layer 4 STRAIGHT_STRIP FeatureConstraint (the only feature channel,
+  G0 DD-26) lays an island of exactly its one patch as a rectangle: the
+  constraint's loop order gives axes and signs, its target lengths scale the
+  runs. A constraint on a patch that shares its island is not applied and
+  the island gets a diagnostic. Layer 5 recognises no strips itself.
 - Island rails: Layer 3 cuts each family's ScaffoldRail by the island (its
   runs and stitched hinges) and orders the pieces; Layer 5 checks them
   against the unfolded frame and never orders a line itself.
@@ -29,6 +34,7 @@ from typing import Any, Mapping
 from scaffold_core.layer_2_geometry.measures import EPSILON, cross, dot, normalize
 from scaffold_core.layer_3_relations.model import RunCornerKind, ScaffoldRailSegment
 from scaffold_core.layer_3_relations.scaffold_rails import cut_scaffold_rail, rail_member_endpoints
+from scaffold_core.layer_4_features.model import FeatureConstraintKind
 from scaffold_core.layer_5_runtime.islands import (
     PLANAR_PATCH_MIN_NORMAL_DOT,
     IslandAssembly,
@@ -54,6 +60,8 @@ RESIDUAL_TOLERANCE_PER_SPAN = 1e-3
 GAUGE_WEIGHT = 1e6
 UNFOLDED_FRAME = "UNFOLDED"
 FRAME_FREE = "FRAME_FREE"
+STRIP_LAYOUT = "STRIP"  # an applied STRAIGHT_STRIP FeatureConstraint
+_STRIP_AXIS_UNIT = {"AXIS_A": (1.0, 0.0, 0.0), "AXIS_B": (0.0, 1.0, 0.0)}
 
 
 @dataclass(frozen=True)
@@ -112,10 +120,43 @@ def build_island_skeletons(context: Any, assembly: IslandAssembly) -> tuple[Isla
     relations = context.relation_snapshot
     geometry = context.geometry_facts
     lookups = _selection_lookups(context)
+    strip_by_island, strip_notes_by_island = _strip_constraints_by_island(context, assembly)
     skeletons = []
     for island in assembly.islands:
-        skeletons.append(_island_skeleton(island, assembly, relations, geometry, lookups))
+        skeletons.append(_island_skeleton(
+            island, assembly, relations, geometry, lookups,
+            strip_by_island.get(island.id), strip_notes_by_island.get(island.id, ()),
+        ))
     return tuple(skeletons)
+
+
+def _strip_constraints_by_island(context: Any, assembly: IslandAssembly):
+    """STRAIGHT_STRIP constraints that apply, and notes for those that do not.
+
+    A constraint applies only to an island made of its one patch; otherwise
+    the island gets a diagnostic naming the patch (never silently dropped).
+    """
+
+    features = getattr(context, "feature_snapshot", None)
+    if features is None:
+        return {}, {}
+    island_by_id = {island.id: island for island in assembly.islands}
+    applied: dict[str, Any] = {}
+    notes: dict[str, list[str]] = {}
+    for constraint in features.constraints:
+        if constraint.kind is not FeatureConstraintKind.STRAIGHT_STRIP:
+            continue
+        patch_id = str(constraint.patch_id)
+        island_id = assembly.island_by_patch_id.get(patch_id)
+        if island_id is None:
+            continue
+        if tuple(island_by_id[island_id].patch_ids) == (patch_id,):
+            applied[island_id] = constraint
+        else:
+            notes.setdefault(island_id, []).append(
+                f"strip constraint not applied, patch shares its island: {patch_id}"
+            )
+    return applied, {island_id: tuple(messages) for island_id, messages in notes.items()}
 
 
 def _selection_lookups(context: Any) -> _SelectionLookups:
@@ -160,8 +201,8 @@ def _selection_lookups(context: Any) -> _SelectionLookups:
     )
 
 
-def _island_skeleton(island, assembly, relations, geometry, lookups):
-    diagnostics: list[str] = []
+def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None, strip_notes=()):
+    diagnostics: list[str] = list(strip_notes)
     patch_ids = set(island.patch_ids)
     runs = tuple(e for e in lookups.evidence_by_id.values() if str(e.patch_id) in patch_ids)
     node_by_run_end, vertex_by_run_end = _node_map(island, runs, relations, lookups)
@@ -171,8 +212,14 @@ def _island_skeleton(island, assembly, relations, geometry, lookups):
         )
     rail_segments = _island_rail_segments(island, runs, lookups)
     line_of = _lines_from_segments(rail_segments)
-    frame = _unfolded_frame(island, assembly, geometry, lookups)
-    if frame is None:
+    strip_layout = None if strip is None else _strip_layout(strip, runs, node_by_run_end, diagnostics)
+    frame = None if strip_layout is not None else _unfolded_frame(island, assembly, geometry, lookups)
+    length_of = None
+    if strip_layout is not None:
+        roles, signs, direction_of, length_of = strip_layout
+        mismatches = ()
+        drift = None  # no frame: the solve measures drift along each axis
+    elif frame is None:
         axis_by_line = _bipartition_families(runs, line_of, relations.run_corner_relations, diagnostics)
         roles = {
             e.id: axis_by_line.get(line_of.get(e.id), "OBLIQUE")
@@ -196,19 +243,93 @@ def _island_skeleton(island, assembly, relations, geometry, lookups):
             runs, framed, line_of, direction_of, frame.normal, diagnostics, drift
         )
         mismatches = _node_frame_mismatches(frame, framed, node_by_run_end, lookups.position_of_source)
-    rail_conflicts = _island_rail_conflicts(rail_segments, line_of, roles, signs, frame is not None)
-    axis_a = _solve_axis("AXIS_A", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift)
-    axis_b = _solve_axis("AXIS_B", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift)
+    # A strip island takes its axes from the constraint, not from its lines:
+    # the rail/line check does not apply to it.
+    rail_conflicts = (
+        () if strip_layout is not None
+        else _island_rail_conflicts(rail_segments, line_of, roles, signs, frame is not None)
+    )
+    axis_a = _solve_axis(
+        "AXIS_A", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift, length_of
+    )
+    axis_b = _solve_axis(
+        "AXIS_B", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift, length_of
+    )
+    if strip_layout is not None:
+        layout = STRIP_LAYOUT
+    else:
+        layout = FRAME_FREE if frame is None else UNFOLDED_FRAME
     return IslandSkeleton(
         island.id, node_by_run_end, roles, axis_a, axis_b, tuple(diagnostics),
         line_by_run=line_of,
         orientation_by_run=signs,
-        frame=FRAME_FREE if frame is None else UNFOLDED_FRAME,
+        frame=layout,
         node_frame_mismatches=mismatches,
         vertex_by_run_end=vertex_by_run_end,
         rail_segments=rail_segments,
         rail_frame_conflicts=rail_conflicts,
     )
+
+
+def _strip_layout(strip, runs, node_by_run_end, diagnostics):
+    """Axis roles, signs, directions and run lengths of a STRAIGHT_STRIP island.
+
+    The constraint lists the four uses in loop order. Uses at positions 0 and
+    2 share one axis, 1 and 3 the other; the pair with the longer target is
+    AXIS_A. Runs follow the loop direction, so walking the loop from the first
+    AXIS_A use gives +A, +B, -A, -B and the rectangle closes unmirrored. Each
+    run's length is scaled by target / use length, so opposite sides come out
+    equal. Returns None, with a diagnostic, when a use has no runs or the
+    uses do not close the loop in the stated order (the END node of use i is
+    the START node of use i+1); the island then keeps its normal layout.
+    """
+
+    runs_by_use: dict[str, list] = {}
+    for e in runs:
+        runs_by_use.setdefault(str(e.patch_chain_id), []).append(e)
+    uses = [str(pc_id) for pc_id in strip.patch_chain_ids]
+    if len(uses) != 4 or any(sum(e.length for e in runs_by_use.get(use, ())) <= EPSILON for use in uses):
+        diagnostics.append(f"strip constraint not applied, a side has no runs: {strip.patch_id}")
+        return None
+    if not _strip_uses_close(uses, runs_by_use, node_by_run_end):
+        diagnostics.append(f"strip constraint not applied, its uses do not close the loop: {strip.patch_id}")
+        return None
+    first_a = 0 if strip.target_lengths[0] >= strip.target_lengths[1] else 1
+    roles = {e.id: "OBLIQUE" for e in runs}
+    signs: dict[str, float] = {}
+    direction_of = {e.id: e.direction for e in runs}
+    length_of: dict[str, float] = {}
+    for position, use in enumerate(uses):
+        step = (position - first_a) % 4
+        role = "AXIS_A" if step % 2 == 0 else "AXIS_B"
+        sign = 1.0 if step < 2 else -1.0
+        use_runs = runs_by_use[use]
+        scale = strip.target_lengths[position % 2] / sum(e.length for e in use_runs)
+        for e in use_runs:
+            roles[e.id] = role
+            signs[e.id] = sign
+            length_of[e.id] = e.length * scale
+            direction_of[e.id] = tuple(sign * c for c in _STRIP_AXIS_UNIT[role])
+    return roles, signs, direction_of, length_of
+
+
+def _strip_uses_close(uses, runs_by_use, node_by_run_end) -> bool:
+    """The uses, in the constraint's order, chain END -> START around the loop.
+
+    A use's runs follow the loop direction, so its start node is the one
+    run START that no run of the use ends on, and its end node vice versa.
+    """
+
+    ends_of_use = []
+    for use in uses:
+        starts = [node_by_run_end[(e.id, "START")] for e in runs_by_use[use]]
+        ends = [node_by_run_end[(e.id, "END")] for e in runs_by_use[use]]
+        open_starts = [node for node in starts if node not in ends]
+        open_ends = [node for node in ends if node not in starts]
+        if len(open_starts) != 1 or len(open_ends) != 1:
+            return False
+        ends_of_use.append((open_starts[0], open_ends[0]))
+    return all(ends_of_use[i][1] == ends_of_use[(i + 1) % len(uses)][0] for i in range(len(uses)))
 
 
 def _island_rail_segments(island, runs, lookups) -> tuple[ScaffoldRailSegment, ...]:
@@ -730,12 +851,15 @@ def _co_orient_axis_families(runs, family_of, axis_by_family, signs, node_by_run
                 signs[e.id] = -signs[e.id]
 
 
-def _solve_axis(axis_name, runs, roles, signs, node_by_run_end, diagnostics, direction_of=None, drift=None):
+def _solve_axis(
+    axis_name, runs, roles, signs, node_by_run_end, diagnostics, direction_of=None, drift=None, length_of=None
+):
     """P7 semantics: the A coordinate lives on COLUMN components (nodes
     connected by AXIS_B runs share one A value) and is constrained by
     AXIS_A run lengths; symmetric for B on ROW components.
 
     direction_of supplies run directions in the island frame when one exists.
+    length_of overrides run lengths (a strip island's scaled lengths).
     """
 
     own_role = "AXIS_A" if axis_name == "AXIS_A" else "AXIS_B"
@@ -749,7 +873,8 @@ def _solve_axis(axis_name, runs, roles, signs, node_by_run_end, diagnostics, dir
         end = component_of.get(node_by_run_end[(e.id, "END")])
         if start is None or end is None or start == end:
             continue
-        equations.append([start, end, signs[e.id] * e.length, e.id, e])
+        run_length = e.length if length_of is None else length_of[e.id]
+        equations.append([start, end, signs[e.id] * run_length, e.id, e])
     # Runs connecting the same two cross-components are mutually parallel
     # on a developable region: normalize their signs to the group's first
     # run so parallel columns/rails cannot contradict each other.

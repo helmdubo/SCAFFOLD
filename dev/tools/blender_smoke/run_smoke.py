@@ -64,6 +64,8 @@ def main() -> int:
         command.append("--write-uv")
     if args.capture_dir:
         command += ["--capture-dir", args.capture_dir]
+    if args.straighten_strips:
+        command.append("--straighten-strips")
 
     completed = subprocess.run(command, capture_output=True, text=True, timeout=args.timeout)
     records = [
@@ -97,6 +99,9 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--selection", choices=("file", "all"), default="file")
     parser.add_argument("--write-uv", action="store_true", help="also exercise the UV write boundary")
     parser.add_argument("--capture-dir", default="", help="dump SourceMeshSnapshot JSON per object")
+    parser.add_argument(
+        "--straighten-strips", action="store_true", help="run Pass 2 with straighten_strips (adds strip_islands)"
+    )
     parser.add_argument("--baseline", default="", help="compare stable fields with this JSON baseline")
     parser.add_argument("--update-baseline", action="store_true", help="rewrite --baseline from this run")
     parser.add_argument("--blender", default="", help="Blender executable (else $SCAFFOLD_BLENDER)")

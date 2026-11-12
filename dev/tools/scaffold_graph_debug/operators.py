@@ -36,6 +36,7 @@ class SCAFFOLDGRAPH_Settings(bpy.types.PropertyGroup):
     show_junctions: BoolProperty(name="Junctions", default=True)
     show_branch_points: BoolProperty(name="Branches", default=True)
     show_chain_shape: BoolProperty(name="Chain Shape", default=True)
+    straighten_strips: BoolProperty(name="Straighten Strips", default=False)
     source_hide_viewport: BoolProperty(name="Stored Viewport Hidden", default=False)
     source_hide_set: BoolProperty(name="Stored Object Hidden", default=False)
 
@@ -191,15 +192,19 @@ class SCAFFOLDGRAPH_OT_WriteUV(bpy.types.Operator):
 
             _add_repo_root_to_path()
             from scaffold_core.layer_0_source.blender_io import read_source_mesh_from_blender
+            from scaffold_core.layer_4_features.model import FeatureOptions
             from scaffold_core.layer_5_runtime.pins import run_skeleton_solve
             from scaffold_core.layer_5_runtime.uv_transfer import write_pinned_uvs
-            from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
+            from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations, run_pass_2_features
 
             source = read_source_mesh_from_blender(context)
             if not source.selected_face_ids:
                 self.report({"ERROR"}, "Select faces before writing UVs")
                 return {"CANCELLED"}
-            result = run_skeleton_solve(run_pass_1_relations(run_pass_0(source)))
+            options = FeatureOptions(
+                straighten_strips=bool(context.scene.scaffold_graph_debug_settings.straighten_strips)
+            )
+            result = run_skeleton_solve(run_pass_2_features(run_pass_1_relations(run_pass_0(source)), options))
             report = write_pinned_uvs(context, result)
             summary = (
                 f"islands:{len(result.assembly.islands)} "
@@ -249,7 +254,9 @@ class SCAFFOLDGRAPH_PT_Panel(bpy.types.Panel):
         row.prop(settings, "show_branch_points", toggle=True)
         row = col.row(align=True)
         row.prop(settings, "show_chain_shape", toggle=True)
-        layout.operator("scaffold_graph_debug.write_uv_g5a", icon="UV")
+        row = layout.row(align=True)
+        row.operator("scaffold_graph_debug.write_uv_g5a", icon="UV")
+        row.prop(settings, "straighten_strips", toggle=True)
 
         if settings.source_object:
             col.label(text=f"Source: {settings.source_object}")

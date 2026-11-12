@@ -33,6 +33,9 @@ information, not scored.
 Arc and collumn references were made with CFTUV "Straighten Strips" on: curved
 strips are laid as straight rectangles with stretch, so their stretch differs
 from 1 by design. building_walls and Main_wall were made without it.
+Scaffold replays each object with the same option (Pass 2
+`FeatureOptions.straighten_strips`); the mapping is `STRAIGHTEN_STRIPS` in
+`parity.py`, and the table prints it per object (`strips on/off`).
 
 Main_wall's seams are mostly open slits (they do not close regions), so
 Scaffold builds 2 patches there and the reference is one connected UV island

@@ -29,6 +29,11 @@ FORBIDDEN_MODULE_NAMES = {
     "registry",
 }
 
+# Opened by the project owner ahead of the docs/context_map.yaml amendment
+# (docs/plans/uv_tracer_revision_plan.md, decision 14): Layer 4 v0, the strip
+# feature. Layer 4 imports Layers 0-3 only; Layer 5 may import Layer 4.
+OPENED_AHEAD_OF_CONTEXT_MAP = {"scaffold_core/layer_4_features"}
+
 
 def _read_context_map_lines() -> list[str]:
     return CONTEXT_MAP_PATH.read_text(encoding="utf-8").splitlines()
@@ -83,7 +88,11 @@ def _list_items_under_section(section: str, subsection: str | None = None) -> tu
 
 def _phase_forbidden_dirs() -> tuple[Path, ...]:
     phase = _current_phase()
-    return tuple(REPO_ROOT / item for item in _list_items_under_section("phase_forbidden_dirs", phase))
+    return tuple(
+        REPO_ROOT / item
+        for item in _list_items_under_section("phase_forbidden_dirs", phase)
+        if item not in OPENED_AHEAD_OF_CONTEXT_MAP
+    )
 
 
 def _layer_by_package() -> dict[str, int]:
@@ -174,4 +183,33 @@ def test_model_files_stay_pure() -> None:
         for imported in _import_roots(path):
             if any(fragment in imported for fragment in forbidden_fragments):
                 violations.append(f"{path.relative_to(PACKAGE_ROOT)} imports {imported}")
+    assert not violations
+
+
+def _imports_of_package(package: str) -> list[tuple[Path, str]]:
+    return [
+        (path, imported)
+        for path in _source_files()
+        if package in _module_parts_from_file(path)
+        for imported in _import_roots(path)
+    ]
+
+
+def test_layer_4_imports_nothing_from_layer_5() -> None:
+    violations = [
+        f"{path.relative_to(PACKAGE_ROOT)} imports {imported}"
+        for path, imported in _imports_of_package("layer_4_features")
+        if "layer_5_runtime" in imported.split(".")
+    ]
+    assert (PACKAGE_ROOT / "layer_4_features").is_dir()
+    assert not violations
+
+
+def test_layers_0_to_3_import_nothing_from_layer_4() -> None:
+    violations = [
+        f"{path.relative_to(PACKAGE_ROOT)} imports {imported}"
+        for package in ("core", "layer_0_source", "layer_1_topology", "layer_2_geometry", "layer_3_relations")
+        for path, imported in _imports_of_package(package)
+        if "layer_4_features" in imported.split(".")
+    ]
     assert not violations
