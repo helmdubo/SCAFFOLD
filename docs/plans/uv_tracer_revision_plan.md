@@ -1992,6 +1992,104 @@ D  a multi-segment surface line as one run with stations; placement of
    curves; band recognition (Layer 4).
 ```
 
+## Slice X — right corners decide the axes of frame-free islands (DONE, 2026-11)
+
+Autonomous mode (decision 14). Origin: the Stage B reviewer traced the arch
+regression to `skeleton._bipartition_families`. In an island without a rigid
+frame it called two lines orthogonal when two of their runs met at a solve
+node with raw 3D |dot| <= 0.4, even across a fold between two patches, and a
+line made OBLIQUE by a conflict kept propagating an axis.
+
+Rule: Layer 3 `RunCornerRelation` v0 (G0 v1.9 DD-49) records the corner
+between two run ends on one patch surface, from the same pairing and angle
+as DD-45: STRAIGHT, RIGHT (90 or 270 degrees) or OTHER. Layer 5 links two
+island lines only through a RIGHT corner between two runs of the island; an
+OBLIQUE line passes no axis on.
+
+Results (capture replays, before -> after; all 508 framed islands identical):
+
+| Set | frame-free islands | pins | frame-free axis runs | bipartition conflicts |
+|---|---|---|---|---|
+| 8 in-repo captures | 6 | 725 -> 753 | 215 -> 230 | 11 -> 0 |
+| 13 buildings | 1 | 10138 -> 10138 | 22 -> 22 | 0 -> 0 |
+| 4 reference meshes | 6 | 3614 -> 3634 | 92 -> 103 | 11 -> 0 |
+
+Arch: island 0 (rim + foot cap) axis length 4.58 -> 8.37 of 9.69, pins 5 ->
+37; island 1 5.49 -> 6.04 of 7.26; both rim arcs share one axis and the end
+chains take the other. Tier 3 on buildings: baseline identical. Tests 400
+-> 420.
+
+Losses, checked by the reviewer against the reference:
+
+- arch islands 0 and 1 each lose one CORRECT axis line on the flat foot cap
+  (f123:0:2 and f125:0:2, 0.9 m of reference axis length). Its right corner
+  links it only to a short run that bevel jogs separate from the seeded
+  line, so that group of lines is never reached. Known gap: parallel lines
+  split by a jog inside one patch have no relation yet;
+- arch island 2 loses one run of a curved chain at a 99.4 degree corner, and
+  collumn loses alternating axes along a chain the reference lays as one
+  line (8 pins). Both were wrong before.
+
+Reviewer gate (independent agent): PASS, nothing blocking. All 25 captures
+replayed against an export of HEAD: every Layer 3 field that existed is
+identical, so the refactor of the in-patch pairing changed no family; every
+framed island is identical. 9 own mutations, 8 caught, 1 equivalent.
+
+Found, existed before, not fixed in this slice:
+
+1. `_co_orient_axis_families` still compares raw 3D directions and emits
+   false "rail co-orientation conflict" diagnostics across a fold (signs and
+   UVs stayed correct in the reviewer's case);
+2. the stop "an OBLIQUE line passes no axis on" depends on the order of the
+   walk: a line degraded after it was popped keeps the axes it handed out;
+3. at a pinch vertex (one loop visits a vertex twice) no corner is recorded.
+
+## Reference scene and the parity scoreboard (2026-11)
+
+The user's reference: four production meshes unwrapped by CFTUV with good
+results (`buildings3_3.blend`: Arc, building_walls, collumn, Main_wall; Arc
+and collumn with Straighten Strips on). Goal (decision 14): similar
+structures, not coordinates.
+
+`dev/tools/cftuv_parity/` holds the reference UVs and captures and
+`parity.py`, which replays Scaffold without Blender and scores structure
+per PatchChain use: line recall (reference straight axis lines that Scaffold
+also has), false lines, pin coverage, relative axis agreement inside a
+patch, structured patches. Island orientation, island composition and
+packing are not scored.
+
+| Mesh | recall after W-B | after X | pin coverage after W-B | after X |
+|---|---|---|---|---|
+| Arc | 29% | 67% | 30% | 60% |
+| building_walls | 97% | 97% | 90% | 90% |
+| collumn | 0% | 0% | 6% | 0% |
+| Main_wall | 54% | 54% | 58% | 58% |
+
+What the gaps are:
+
+```text
+Arc             the front face (69 faces) is a flat ring with bevels; the
+                reference lays it as a straight strip (Straighten Strips).
+                It is not developable; it needs a strip feature (Layer 4).
+collumn         a profiled half column. The reference lays its body
+                (352 faces, not developable) and its flat back face as
+                rectangles: arcs on one axis, profile chains on the other.
+                Strip feature again; the back face also needs a zigzag
+                profile chain taken as a line (CFTUV's frame tolerance).
+building_walls  remaining misses are a few single-face patches with jogs
+                and pins along multi-segment chains (Scaffold pins run
+                ends only).
+Main_wall       2219 triangles, 2 patches: 491 of its 803 seam edges lie on
+                the mesh border and the interior seams are slits with dead
+                ends. Both patches are not developable. The reference itself
+                is weakly structured there (292 pinned loops). Needs work on
+                slit seams inside a patch; left for last.
+```
+
+A face-by-face rigid unfolding was measured and not built: of the non-planar
+reference patches only the two arch rims unfold without contradiction, and
+Slice X already gives them their axes.
+
 ## Decisions the user must approve before the relevant slice
 
 ```text

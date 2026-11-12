@@ -237,6 +237,9 @@ def test_inspection_default_output_is_compact() -> None:
             "SURFACE_CURVE": 0,
             "UNRESOLVED": 0,
         },
+        # Top square: four right corners; box rim: four straight run joins.
+        "run_corner_relation_count": 8,
+        "run_corner_kind_counts": {"STRAIGHT": 4, "RIGHT": 4, "OTHER": 0},
     }
 
 

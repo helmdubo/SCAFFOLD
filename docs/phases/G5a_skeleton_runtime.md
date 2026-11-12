@@ -134,8 +134,9 @@ skeleton.py:
   degrades to OBLIQUE with a diagnostic; a run that leaves its axis by
   more than the island's drift is a jog (plan Slice T): it alone goes
   OBLIQUE and its line keeps its axis;
-  an island without a rigid frame bipartitions its lines into axes by 3D
-  perpendicularity at nodes, takes in-line run signs from its ordered
+  an island without a rigid frame bipartitions its lines into axes by the
+  right corners of its patch surfaces (Layer 3 RunCornerRelation, plan
+  Slice X), takes in-line run signs from its ordered
   island rails (plan Slice Q; a run on an unordered rail stays unsigned
   with a diagnostic and adds no length equation, but keeps its axis role,
   so it still joins its end nodes for the other axis) and co-orients
@@ -247,3 +248,11 @@ After Slice U (2026-11) islands 62 -> 355 (354 framed), pins 10176 ->
 10112, OBLIQUE runs 113 -> 194, Layer 5 diagnostics 20 -> 28,
 contradictions 0; no island overlaps itself between patches.
 
+After Slice W Stage B (2026-11) a zigzag Chain is one chord run only for a
+side where it is a surface line: on the 13 buildings objects jogs 25 -> 15,
+Layer 5 diagnostics 28 -> 18, pins 10112 -> 10138, OBLIQUE runs 194 -> 188.
+
+After Slice X (2026-11) a frame-free island takes its axes from right
+corners on the patch surface: the buildings baseline is identical (one
+frame-free island, unchanged); on the in-repo captures bipartition
+conflicts 11 -> 0 and pins 725 -> 753.
