@@ -13,7 +13,7 @@ Project: Scaffold
 Core package: scaffold_core/
 Current phase: G5a - Skeleton Runtime
 Architecture: immutable B-rep-inspired interpretation pipeline
-G0 contract: v1.8 (G0.md remains read-only for agents)
+G0 contract: v1.9 (G0.md remains read-only for agents)
 ```
 
 Scaffold Core currently contains Layers 0-3, the G5a Layer 5 runtime,
@@ -132,6 +132,9 @@ Implemented:
   surface line, a surface curve or unresolved, from Layer 2 chain plane
   and per-side facts. One reader: directional runs take the chord
   shortcut of a zigzag Chain per use (Stage B, G0 DD-30).
+- RunCornerRelation v0 (`layer_3_relations/run_corners.py`, G0 DD-49): the
+  corner between two run ends on one patch surface, STRAIGHT, RIGHT or
+  OTHER; the Layer 5 frame-free axis bipartition reads the RIGHT corners.
 - Pipeline tooling: Chain -> PatchChain incidence index
   (`layer_3_relations/patch_chain_incidence.py`), per-pass stage timings in
   `PipelineContext.pass_timings` (reported by inspection), and a networkx
@@ -635,10 +638,17 @@ and the reviewer gate, and may amend G0, Layer 5 and open Layer 4 when a
 similar result needs it. The user comes back only to check, so every
 slice must leave something he can look at.
 
-Known weak spot: an island with a curved patch has no rigid frame and goes
-through the frame-free branch of `skeleton.py`. On the arch Stage B made
-Layer 3 more faithful and Layer 5 worse (pins 57 -> 39): the axis
-bipartition there is fragile. This branch is the next subject.
+Slice X (G0 v1.9 DD-49): in an island without a rigid frame the axes come
+from Layer 3 `RunCornerRelation` RIGHT corners on a patch's own surface, no
+longer from 3D perpendicularity at nodes. It repaired the arch regression of
+Stage B (arch pins 39 -> 67, conflicts 11 -> 0).
+
+Parity scoreboard: `dev/tools/cftuv_parity/` (reference UVs, captures,
+`parity.py`, README). Line recall after Slice X: Arc 67%, building_walls
+97%, collumn 0%, Main_wall 54%. The plan section "Reference scene and the
+parity scoreboard" says what each gap is. Next subject: a strip feature
+(Layer 4, opening allowed by decision 14) for the arch front face and the
+column body; Main_wall (slit seams inside a patch) is left for last.
 
 Parked: Slice V (seam turns, island orientation) on the local branch
 `claude/slice-v-seam-turns`, commit 99db1a4, on the user's machine and not

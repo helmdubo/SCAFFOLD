@@ -109,6 +109,7 @@ Current terminology for the final boundary graph model:
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Implemented v1 (G0 DD-47): direction-stable ScaffoldTrace usable as a conditional axis. |
 | `PatchChainShapeRelation` | Implemented v0 (G0 DD-48): per PatchChain use, each piece between surface corners is a surface line, a surface curve or unresolved. One reader: the per-use chord shortcut of directional runs (DD-30). |
+| `RunCornerRelation` | Implemented v0 (G0 DD-49): the corner between two run ends on one patch surface, STRAIGHT, RIGHT or OTHER. Read by the Layer 5 frame-free axis bipartition. |
 
 Endpoint samples, endpoint relations, LocalFaceFanGeometryFacts and ScaffoldNodes
 are evidence or derived relation records; they are not Layer 1 topology.
@@ -853,3 +854,12 @@ chord shortcut of directional runs (Stage B, G0 DD-30): a zigzag Chain is
 one run only for a use where it is one surface line. Contract and later
 stages:
 `docs/architecture/chain_shape_contract_draft.md`.
+
+## RunCornerRelation v0
+
+Implemented (G0 DD-49, plan Slice X). One record per pair of run ends that
+meet at one junction in one patch-use view at the same vertex occurrence,
+with the patch's interior angle there: STRAIGHT (the IN_PATCH_GEODESIC
+case), RIGHT (90 or 270 degrees) or OTHER. It shares its pairing and its
+angle source with DD-45. Evidence only; Layer 5 reads the RIGHT corners to
+split the lines of a frame-free island into two axes.

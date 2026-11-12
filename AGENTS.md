@@ -193,6 +193,7 @@ ConnectedDirectionFamily v1 (G0 DD-43/DD-45) occurrence-aware geodesic families
 RunEndpointJunction v0 (G0 DD-44)
 ScaffoldTrace / ScaffoldRail v1 evidence views: station order and island cut view (G0 DD-46/DD-47; plan Slices J, O)
 PatchChainShapeRelation v0 (G0 DD-48; plan Slice W Stages A, B) per-side chain shape: surface line, surface curve or unresolved; one reader, the per-use chord shortcut of directional runs (G0 DD-30)
+RunCornerRelation v0 (G0 DD-49; plan Slice X) evidence: STRAIGHT / RIGHT / OTHER corner between two run ends on one patch surface; read by the Layer 5 frame-free axis bipartition
 ```
 
 SHARED_CHAIN family transport crosses only straight single-run hinges

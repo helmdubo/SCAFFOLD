@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections import Counter
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -25,6 +26,7 @@ from scaffold_core.layer_0_source.snapshot import (
     MeshVertexRef,
     SourceMeshSnapshot,
 )
+from scaffold_core.layer_3_relations.model import RunCornerKind
 from scaffold_core.layer_5_runtime.islands import IslandAssembly
 from scaffold_core.layer_5_runtime.pins import PinnedVertex, SolveResult, run_skeleton_solve
 from scaffold_core.layer_5_runtime.uv_transfer import write_pinned_uvs
@@ -47,6 +49,10 @@ from scaffold_core.tests.fixtures.l_corridor_tunnel import (
     make_l_corridor_tunnel_seamed_folds_source,
 )
 from scaffold_core.tests.fixtures.reflex_corner import make_reflex_corner_walls_source
+from scaffold_core.tests.fixtures.run_corner_sheets import (
+    make_folded_l_sheet_source,
+    make_folded_sheet_source,
+)
 from scaffold_core.tests.fixtures.t_vertex_wall import make_t_vertex_wall_source
 from scaffold_core.tests.fixtures.tube_with_cap import make_tube_with_cap_source
 
@@ -945,6 +951,135 @@ def test_unordered_single_run_rail_stays_unsigned_in_a_frame_free_island(monkeyp
         (member,) = segment.ordered_member_directional_evidence_ids
         assert f"unordered island rail: {skeleton.line_by_run[member]} -> unsigned" in skeleton.diagnostics
         assert member not in skeleton.orientation_by_run
+
+
+def _frame_free_roles_by_edge(source) -> dict[tuple[str, str], str]:
+    """Axis role of every run of a one-island frame-free solve, by its source vertices."""
+
+    context = run_pass_1_relations(run_pass_0(source))
+    evidence = {e.id: e for e in context.relation_snapshot.patch_chain_directional_evidence}
+    (skeleton,) = run_skeleton_solve(context).skeletons
+    assert skeleton.frame == "FRAME_FREE"
+    assert not [d for d in skeleton.diagnostics if "bipartition" in d]
+    return {
+        (str(evidence[run_id].start_source_vertex_id), str(evidence[run_id].end_source_vertex_id)): role
+        for run_id, role in skeleton.axis_role_by_run.items()
+    }
+
+
+def test_frame_free_axes_ignore_3d_perpendicular_runs_that_are_no_right_corner() -> None:
+    # Folded sheet: b-p (floor) and p-w (wall) are perpendicular in 3D but
+    # meet at 135 degrees on the patch; they must not be linked. a-b and b-p
+    # meet at a true right corner of the patch and are linked.
+    roles = _frame_free_roles_by_edge(make_folded_sheet_source())
+
+    assert roles[("w", "q")] == roles[("q", "a")] == "AXIS_A"  # one straight surface line, the seed
+    assert roles[("a", "b")] == "AXIS_B"
+    assert roles[("b", "p")] == "AXIS_A"
+    assert roles[("p", "w")] == "OBLIQUE"
+
+
+def test_frame_free_reflex_right_corner_links_like_a_convex_one() -> None:
+    # The notch edge e-f is tied to the island only by the 270-degree corner at e.
+    roles = _frame_free_roles_by_edge(make_folded_l_sheet_source())
+
+    assert roles[("a", "c")] == roles[("c", "c_up")] == "AXIS_A"
+    assert roles[("d_up", "d")] == roles[("d", "e")] == "AXIS_A"
+    assert roles[("c_up", "d_up")] == roles[("g", "a")] == "AXIS_B"
+    assert roles[("e", "f")] == "AXIS_B"
+    assert roles[("f", "g")] == "OBLIQUE"
+
+
+def _corner(first: str, second: str, kind=RunCornerKind.RIGHT):
+    return SimpleNamespace(kind=kind, first_directional_evidence_id=first, second_directional_evidence_id=second)
+
+
+def test_oblique_line_from_a_bipartition_conflict_passes_no_axis_on() -> None:
+    from scaffold_core.layer_5_runtime.skeleton import _bipartition_families
+
+    lengths = {"x": 5.0, "y": 2.0, "z": 2.0, "w": 1.0, "v": 1.0}
+    runs = tuple(SimpleNamespace(id=f"run_{line}", length=length) for line, length in lengths.items())
+    line_of = {f"run_{line}": line for line in lengths}
+    # x-y, x-z, y-z is an odd cycle: y becomes OBLIQUE. v hangs on y alone.
+    corners = (
+        _corner("run_x", "run_y"),
+        _corner("run_x", "run_z"),
+        _corner("run_y", "run_z"),
+        _corner("run_z", "run_w"),
+        _corner("run_y", "run_v"),
+        _corner("run_x", "run_w", RunCornerKind.STRAIGHT),  # never an edge
+    )
+    diagnostics: list[str] = []
+
+    axis = _bipartition_families(runs, line_of, corners, diagnostics)
+
+    assert axis == {"x": "AXIS_A", "y": "OBLIQUE", "z": "AXIS_B", "w": "AXIS_A"}
+    assert diagnostics == ["axis bipartition conflict: y -> OBLIQUE"]
+
+
+def test_bipartition_links_only_runs_of_this_island() -> None:
+    from scaffold_core.layer_5_runtime.skeleton import _bipartition_families
+
+    runs = (SimpleNamespace(id="run_x", length=2.0), SimpleNamespace(id="run_y", length=1.0))
+    # line_of may name an outside run's line, but its corner is not this island's.
+    line_of = {"run_x": "x", "run_y": "y", "outside": "y"}
+
+    axis = _bipartition_families(runs, line_of, (_corner("run_x", "outside"),), [])
+
+    assert axis == {"x": "AXIS_A"}
+
+
+def _skeleton_by_island(result):
+    return {skeleton.island_id: skeleton for skeleton in result.skeletons}
+
+
+def test_arch_rim_arcs_share_one_axis_and_end_chains_the_other() -> None:
+    # Before right corners, raw 3D perpendicularity across the rim/cap fold
+    # made odd cycles and a whole rim arc went OBLIQUE.
+    context = run_pass_1_relations(run_pass_0(_load_capture("artist_arch_bevel.json")))
+    evidence = {e.id: e for e in context.relation_snapshot.patch_chain_directional_evidence}
+    result = run_skeleton_solve(context)
+    skeletons = _skeleton_by_island(result)
+
+    for island_id, rim_patch in (("island:0", "patch:seed:f0"), ("island:1", "patch:seed:f85")):
+        skeleton = skeletons[island_id]
+        assert skeleton.frame == "FRAME_FREE"
+        assert not [d for d in skeleton.diagnostics if "bipartition" in d]
+        members_by_line: dict[str, int] = Counter(skeleton.line_by_run.values())
+        arc_roles, end_roles = set(), set()
+        arc_lines = set()
+        for run_id, role in skeleton.axis_role_by_run.items():
+            if str(evidence[run_id].patch_id) != rim_patch:
+                continue
+            line = skeleton.line_by_run[run_id]
+            if members_by_line[line] > 1:
+                arc_roles.add(role)
+                arc_lines.add(line)
+            else:
+                end_roles.add(role)
+        assert len(arc_lines) == 2  # the two rim arcs
+        assert len(arc_roles) == len(end_roles) == 1
+        assert arc_roles | end_roles == {"AXIS_A", "AXIS_B"}
+    pins = Counter(vertex.island_id for vertex in result.vertices)
+    assert (pins["island:0"], pins["island:1"], pins["island:2"]) == (37, 27, 3)
+
+
+@pytest.mark.parametrize(
+    ("capture", "island_id", "pin_count"),
+    [
+        ("artist_cyl32.json", "island:0", 68),
+        ("artist_cyl_multiseam.json", "island:0", 76),
+        ("artist_cross_band.json", "island:1", 22),
+    ],
+)
+def test_frame_free_band_islands_keep_every_run_on_an_axis(capture, island_id, pin_count) -> None:
+    result = _solve(_load_capture(capture))
+    skeleton = _skeleton_by_island(result)[island_id]
+
+    assert skeleton.frame == "FRAME_FREE"
+    assert set(skeleton.axis_role_by_run.values()) == {"AXIS_A", "AXIS_B"}
+    assert not [d for d in skeleton.diagnostics if "bipartition" in d]
+    assert sum(1 for vertex in result.vertices if vertex.island_id == island_id) == pin_count
 
 
 def test_node_frame_mismatch_names_a_node_whose_occurrences_sit_apart() -> None:

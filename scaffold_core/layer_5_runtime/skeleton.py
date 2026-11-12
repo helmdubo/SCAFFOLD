@@ -11,8 +11,9 @@ Rules:
   island lines (plan Slice Q).
 - Axis roles and run orientation come from the island's unfolded frame
   (stitch-tree parallel transport) when every island patch is planar;
-  an island without one bipartitions its lines into axes by local
-  orthogonality and takes in-line run signs from its ordered island rails;
+  an island without one bipartitions its lines into axes by the right
+  corners of its patch surfaces (Layer 3 RunCornerRelation) and takes
+  in-line run signs from its ordered island rails;
   an unordered rail stays unsigned with a diagnostic. No world axes.
 - Island rails: Layer 3 cuts each family's ScaffoldRail by the island (its
   runs and stitched hinges) and orders the pieces; Layer 5 checks them
@@ -26,7 +27,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from scaffold_core.layer_2_geometry.measures import EPSILON, cross, dot, normalize
-from scaffold_core.layer_3_relations.model import ScaffoldRailSegment
+from scaffold_core.layer_3_relations.model import RunCornerKind, ScaffoldRailSegment
 from scaffold_core.layer_3_relations.scaffold_rails import cut_scaffold_rail, rail_member_endpoints
 from scaffold_core.layer_5_runtime.islands import (
     PLANAR_PATCH_MIN_NORMAL_DOT,
@@ -172,7 +173,7 @@ def _island_skeleton(island, assembly, relations, geometry, lookups):
     line_of = _lines_from_segments(rail_segments)
     frame = _unfolded_frame(island, assembly, geometry, lookups)
     if frame is None:
-        axis_by_line = _bipartition_families(runs, line_of, node_by_run_end, diagnostics)
+        axis_by_line = _bipartition_families(runs, line_of, relations.run_corner_relations, diagnostics)
         roles = {
             e.id: axis_by_line.get(line_of.get(e.id), "OBLIQUE")
             for e in runs
@@ -600,41 +601,46 @@ def _faces_at_run_end(e, source_vertex: str, lookups) -> frozenset:
     return frozenset(faces)
 
 
-def _bipartition_families(runs, family_of, node_by_run_end, diagnostics):
-    """Axis classes via local orthogonality at shared junctions (frame-free).
+def _bipartition_families(runs, family_of, run_corner_relations, diagnostics):
+    """Axis classes via right corners on the patch surface (frame-free).
 
-    Provisional derivation for curved islands, which have no rigid unfolded
-    frame. The seed (longest) family is AXIS_A; families meeting it
-    orthogonally at a junction are AXIS_B, and so on by BFS. Contradictions
-    degrade the family to OBLIQUE with a diagnostic - never silently forced.
+    Derivation for curved islands, which have no rigid unfolded frame. Two
+    island lines are orthogonal iff two of their runs, both in this island,
+    meet at a Layer 3 RunCornerRelation of kind RIGHT: a right corner of one
+    patch's own surface (convex or reflex). The seed (longest) line is AXIS_A;
+    lines meeting it at a right corner are AXIS_B, and so on by BFS.
+    Contradictions degrade the line to OBLIQUE with a diagnostic - never
+    silently forced - and an OBLIQUE line passes no axis to its neighbours.
     """
 
     length_by_family: dict[str, float] = {}
-    runs_by_node: dict[str, list] = {}
     for e in runs:
         family_id = family_of.get(e.id)
         if family_id is None:
             continue
         length_by_family[family_id] = length_by_family.get(family_id, 0.0) + e.length
-        for role in ("START", "END"):
-            runs_by_node.setdefault(node_by_run_end[(e.id, role)], []).append(e)
     if not length_by_family:
         return {}
+    island_run_ids = {e.id for e in runs}
     edges: dict[str, set[str]] = {}
-    for node_runs in runs_by_node.values():
-        for i, first in enumerate(node_runs):
-            for second in node_runs[i + 1:]:
-                fam_a, fam_b = family_of.get(first.id), family_of.get(second.id)
-                if fam_a is None or fam_b is None or fam_a == fam_b:
-                    continue
-                if abs(dot(normalize(first.direction), normalize(second.direction))) <= 0.4:
-                    edges.setdefault(fam_a, set()).add(fam_b)
-                    edges.setdefault(fam_b, set()).add(fam_a)
+    for corner in run_corner_relations:
+        if corner.kind is not RunCornerKind.RIGHT:
+            continue
+        first_id, second_id = corner.first_directional_evidence_id, corner.second_directional_evidence_id
+        if first_id not in island_run_ids or second_id not in island_run_ids:
+            continue
+        fam_a, fam_b = family_of.get(first_id), family_of.get(second_id)
+        if fam_a is None or fam_b is None or fam_a == fam_b:
+            continue
+        edges.setdefault(fam_a, set()).add(fam_b)
+        edges.setdefault(fam_b, set()).add(fam_a)
     seed = sorted(length_by_family, key=lambda fid: (-length_by_family[fid], fid))[0]
     axis_by_family: dict[str, str] = {seed: "AXIS_A"}
     pending = [seed]
     while pending:
         current = pending.pop()
+        if axis_by_family[current] == "OBLIQUE":
+            continue
         opposite = "AXIS_B" if axis_by_family[current] == "AXIS_A" else "AXIS_A"
         for neighbor in sorted(edges.get(current, ())):
             if neighbor not in axis_by_family:

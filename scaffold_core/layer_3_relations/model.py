@@ -619,6 +619,39 @@ class PatchChainShapeRelation:
     evidence: tuple[Evidence, ...] = ()
 
 
+class RunCornerKind(str, Enum):
+    """Interior angle class of two run ends meeting in one patch (evidence only)."""
+
+    STRAIGHT = "STRAIGHT"
+    RIGHT = "RIGHT"
+    OTHER = "OTHER"
+
+
+@dataclass(frozen=True)
+class RunCornerRelation:
+    """Evidence-only corner between two directional-run ends in one patch-use view.
+
+    The pair is one that DD-45 in-patch continuation considers at a
+    RunEndpointJunction: same patch and loop, the same vertex occurrence.
+    interior_angle_sum is the patch's own face-fan angle at that occurrence
+    (the DD-45 data). STRAIGHT pairs are exactly the IN_PATCH_GEODESIC
+    crossings. It creates no family, crossing, rail or node.
+    """
+
+    id: str
+    kind: RunCornerKind
+    run_endpoint_junction_id: str
+    patch_id: PatchId
+    vertex_ids: tuple[VertexId, ...]
+    first_directional_evidence_id: str
+    first_endpoint_role: PatchChainEndpointRole
+    second_directional_evidence_id: str
+    second_endpoint_role: PatchChainEndpointRole
+    interior_angle_sum: float
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
 @dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
@@ -633,6 +666,7 @@ class RelationSnapshot:
     scaffold_graph: ScaffoldGraph | None = None
     scaffold_junctions: tuple[ScaffoldJunction, ...] = ()
     run_endpoint_junctions: tuple[RunEndpointJunction, ...] = ()
+    run_corner_relations: tuple[RunCornerRelation, ...] = ()
     side_surface_continuity_evidence: tuple[SideSurfaceContinuityEvidence, ...] = ()
     surface_flow_compatibility_evidence: tuple[SurfaceFlowCompatibilityEvidence, ...] = ()
     scaffold_node_incident_edge_relations: tuple[ScaffoldNodeIncidentEdgeRelation, ...] = ()

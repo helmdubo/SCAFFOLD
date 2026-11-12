@@ -19,7 +19,7 @@ from scaffold_core.layer_1_topology.invariants import validate_topology
 from scaffold_core.layer_1_topology.model import PatchChain, SurfaceModel
 from scaffold_core.layer_1_topology.queries import patch_chain_vertices
 from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot, Vector3
-from scaffold_core.layer_3_relations.model import PatchChainShapeKind, RelationSnapshot
+from scaffold_core.layer_3_relations.model import PatchChainShapeKind, RelationSnapshot, RunCornerKind
 from scaffold_core.layer_3_relations.patch_chain_incidence import (
     build_chain_patch_chain_incidence_index,
 )
@@ -195,6 +195,8 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         "patch_axes_count": len(relations.patch_axes),
         "patch_chain_shape_relation_count": len(relations.patch_chain_shape_relations),
         "patch_chain_shape_kind_counts": _patch_chain_shape_kind_counts(relations),
+        "run_corner_relation_count": len(relations.run_corner_relations),
+        "run_corner_kind_counts": _run_corner_kind_counts(relations),
     }
     if detail != "full":
         return summary
@@ -390,6 +392,13 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
 def _patch_chain_shape_kind_counts(relations: RelationSnapshot) -> dict[str, int]:
     counts = {kind.value: 0 for kind in PatchChainShapeKind}
     for relation in relations.patch_chain_shape_relations:
+        counts[relation.kind.value] += 1
+    return counts
+
+
+def _run_corner_kind_counts(relations: RelationSnapshot) -> dict[str, int]:
+    counts = {kind.value: 0 for kind in RunCornerKind}
+    for relation in relations.run_corner_relations:
         counts[relation.kind.value] += 1
     return counts
 

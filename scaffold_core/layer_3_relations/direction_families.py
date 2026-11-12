@@ -78,28 +78,13 @@ def build_connected_direction_families(
 ) -> tuple[ConnectedDirectionFamily, ...]:
     """Build DD-43/DD-45 connectivity-propagated direction-family evidence."""
 
-    seeds = tuple(
-        sorted(
-            (
-                item
-                for item in directional_evidence_items
-                if item.confidence > 0.0 and length(item.direction) > EPSILON
-            ),
-            key=lambda item: item.id,
-        )
+    seeds, evidence_by_id, evidence_by_patch_chain, sample_evidence_ids_by_sample_id, samples_by_evidence_id = (
+        _seed_lookups(directional_evidence_items, endpoint_samples)
     )
     if not seeds:
         return ()
 
-    evidence_by_id = {item.id: item for item in seeds}
-    evidence_by_patch_chain = _evidence_by_patch_chain(seeds)
-    sample_evidence_ids_by_sample_id = _sample_evidence_ids_by_sample_id(
-        endpoint_samples,
-        evidence_by_id,
-        evidence_by_patch_chain,
-    )
     sample_by_id = {sample.id: sample for sample in endpoint_samples}
-    samples_by_evidence_id = _samples_by_evidence_id(endpoint_samples, sample_evidence_ids_by_sample_id)
     edge_by_patch_chain_id = {edge.patch_chain_id: edge for edge in scaffold_edges}
     adjacency_by_patch_pair = _adjacency_by_patch_pair(patch_adjacencies)
     self_seam_chain_ids = _self_seam_chain_ids(topology)
@@ -180,15 +165,80 @@ def build_connected_direction_families(
     return tuple(families)
 
 
-def _in_patch_geodesic_crossings(
+@dataclass(frozen=True)
+class InPatchRunEndPair:
+    """Two run ends at one junction in one patch-use view, with the patch's angle there."""
+
+    junction: RunEndpointJunction
+    first: PatchChainDirectionalEvidence
+    first_role: PatchChainEndpointRole
+    second: PatchChainDirectionalEvidence
+    second_role: PatchChainEndpointRole
+    vertex_ids: tuple[VertexId, ...]
+    angle: float
+
+
+def in_patch_run_end_pairs(
+    geometry: GeometryFactSnapshot,
+    directional_evidence_items: tuple[PatchChainDirectionalEvidence, ...],
+    endpoint_samples: tuple[PatchChainEndpointSample, ...],
+    run_endpoint_junctions: tuple[RunEndpointJunction, ...],
+) -> tuple[InPatchRunEndPair, ...]:
+    """The run-end pairs of DD-45 in-patch continuation, with a usable angle.
+
+    Same junction, patch and loop, and the same angle source; vertex_ids are
+    the occurrences the two run ends sit on. The SEAM_SELF veto is a continuation rule (a rim never continues
+    through its seam), not part of the pairing, so it is not applied here:
+    a seam side meets its rim at a corner of the patch like any other chain.
+    """
+
+    _seeds, evidence_by_id, _by_patch_chain, _sample_ids, samples_by_evidence_id = _seed_lookups(
+        directional_evidence_items,
+        endpoint_samples,
+    )
+    return _in_patch_run_end_pairs(
+        geometry,
+        run_endpoint_junctions,
+        evidence_by_id,
+        samples_by_evidence_id,
+        set(),
+    )
+
+
+def _seed_lookups(
+    directional_evidence_items: tuple[PatchChainDirectionalEvidence, ...],
+    endpoint_samples: tuple[PatchChainEndpointSample, ...],
+):
+    seeds = tuple(
+        sorted(
+            (
+                item
+                for item in directional_evidence_items
+                if item.confidence > 0.0 and length(item.direction) > EPSILON
+            ),
+            key=lambda item: item.id,
+        )
+    )
+    evidence_by_id = {item.id: item for item in seeds}
+    evidence_by_patch_chain = _evidence_by_patch_chain(seeds)
+    sample_evidence_ids_by_sample_id = _sample_evidence_ids_by_sample_id(
+        endpoint_samples,
+        evidence_by_id,
+        evidence_by_patch_chain,
+    )
+    samples_by_evidence_id = _samples_by_evidence_id(endpoint_samples, sample_evidence_ids_by_sample_id)
+    return seeds, evidence_by_id, evidence_by_patch_chain, sample_evidence_ids_by_sample_id, samples_by_evidence_id
+
+
+def _in_patch_run_end_pairs(
     geometry: GeometryFactSnapshot,
     run_endpoint_junctions: tuple[RunEndpointJunction, ...],
     evidence_by_id: Mapping[str, PatchChainDirectionalEvidence],
     samples_by_evidence_id: Mapping[str, tuple[PatchChainEndpointSample, ...]],
     self_seam_chain_ids: set[ChainId],
-) -> tuple[_CrossingCandidate, ...]:
+) -> tuple[InPatchRunEndPair, ...]:
     local_face_fans = _local_face_fans_by_patch_vertex(geometry)
-    candidates: list[_CrossingCandidate] = []
+    pairs: list[InPatchRunEndPair] = []
     for junction in sorted(run_endpoint_junctions, key=lambda item: item.id):
         occurrences = tuple(junction.incident_run_endpoint_occurrences)
         for first_index, first_occurrence in enumerate(occurrences):
@@ -206,44 +256,71 @@ def _in_patch_geodesic_crossings(
                     self_seam_chain_ids,
                 ):
                     continue
-                angle = _patch_occurrence_angle(
-                    local_face_fans,
-                    first.patch_id,
-                    _pair_endpoint_vertex_ids(
-                        samples_by_evidence_id,
-                        first.id,
-                        first_role,
-                        second.id,
-                        second_role,
-                        junction.topology_vertex_ids,
-                    ),
+                vertex_ids = _pair_endpoint_vertex_ids(
+                    samples_by_evidence_id,
+                    first.id,
+                    first_role,
+                    second.id,
+                    second_role,
+                    junction.topology_vertex_ids,
                 )
-                if angle is None or abs(angle - pi) > GEODESIC_STRAIGHT_TOLERANCE:
+                angle = _patch_occurrence_angle(local_face_fans, first.patch_id, vertex_ids)
+                if angle is None:
                     continue
-                confidence = min(first.confidence, second.confidence, junction.confidence)
-                candidates.append(_CrossingCandidate(
-                    first_directional_evidence_id=first.id,
-                    second_directional_evidence_id=second.id,
-                    record=CrossingRecord(
-                        kind="IN_PATCH_GEODESIC",
-                        scaffold_node_id=junction.anchor_scaffold_node_id,
-                        shared_chain_id=None,
-                        patch_adjacency_id=None,
-                        first_directional_evidence_id=first.id,
-                        second_directional_evidence_id=second.id,
-                        first_patch_chain_id=first.patch_chain_id,
-                        second_patch_chain_id=second.patch_chain_id,
-                        first_patch_id=first.patch_id,
-                        second_patch_id=second.patch_id,
-                        signed_dihedral_radians=0.0,
-                        transported_direction_dot=1.0,
-                        transported_normal_dot=None,
-                        confidence=confidence,
-                        measured_angle_radians=angle,
-                        run_endpoint_junction_id=junction.id,
-                    ),
-                    confidence=confidence,
+                pairs.append(InPatchRunEndPair(
+                    junction=junction,
+                    first=first,
+                    first_role=first_role,
+                    second=second,
+                    second_role=second_role,
+                    vertex_ids=vertex_ids,
+                    angle=angle,
                 ))
+    return tuple(pairs)
+
+
+def _in_patch_geodesic_crossings(
+    geometry: GeometryFactSnapshot,
+    run_endpoint_junctions: tuple[RunEndpointJunction, ...],
+    evidence_by_id: Mapping[str, PatchChainDirectionalEvidence],
+    samples_by_evidence_id: Mapping[str, tuple[PatchChainEndpointSample, ...]],
+    self_seam_chain_ids: set[ChainId],
+) -> tuple[_CrossingCandidate, ...]:
+    candidates: list[_CrossingCandidate] = []
+    for pair in _in_patch_run_end_pairs(
+        geometry,
+        run_endpoint_junctions,
+        evidence_by_id,
+        samples_by_evidence_id,
+        self_seam_chain_ids,
+    ):
+        junction, first, second, angle = pair.junction, pair.first, pair.second, pair.angle
+        if abs(angle - pi) > GEODESIC_STRAIGHT_TOLERANCE:
+            continue
+        confidence = min(first.confidence, second.confidence, junction.confidence)
+        candidates.append(_CrossingCandidate(
+            first_directional_evidence_id=first.id,
+            second_directional_evidence_id=second.id,
+            record=CrossingRecord(
+                kind="IN_PATCH_GEODESIC",
+                scaffold_node_id=junction.anchor_scaffold_node_id,
+                shared_chain_id=None,
+                patch_adjacency_id=None,
+                first_directional_evidence_id=first.id,
+                second_directional_evidence_id=second.id,
+                first_patch_chain_id=first.patch_chain_id,
+                second_patch_chain_id=second.patch_chain_id,
+                first_patch_id=first.patch_id,
+                second_patch_id=second.patch_id,
+                signed_dihedral_radians=0.0,
+                transported_direction_dot=1.0,
+                transported_normal_dot=None,
+                confidence=confidence,
+                measured_angle_radians=angle,
+                run_endpoint_junction_id=junction.id,
+            ),
+            confidence=confidence,
+        ))
     return tuple(_deduplicate_crossings(candidates))
 
 
