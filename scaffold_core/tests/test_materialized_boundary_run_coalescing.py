@@ -19,6 +19,7 @@ from scaffold_core.layer_1_topology.model import PatchChain
 from scaffold_core.layer_1_topology.queries import patch_chains_for_chain
 from scaffold_core.layer_2_geometry.build import build_geometry_facts
 from scaffold_core.layer_3_relations.chain_refinement import build_chain_directional_runs
+from scaffold_core.layer_3_relations.patch_chain_shape import build_patch_chain_shape_relations
 from scaffold_core.tests.fixtures.cylinder_tube import (
     make_cylinder_tube_without_caps_with_one_seam_source,
     make_segmented_cylinder_tube_without_caps_with_one_seam_source,
@@ -142,7 +143,8 @@ def test_chain_directional_runs_still_split_turning_border_rings_downstream() ->
     topology = build_topology_snapshot(source)
     geometry = build_geometry_facts(source, topology)
 
-    runs = build_chain_directional_runs(topology, geometry)
+    shape_relations, _ = build_patch_chain_shape_relations(topology, geometry)
+    runs = build_chain_directional_runs(topology, geometry, shape_relations)
     bottom_runs = tuple(
         run
         for run in runs

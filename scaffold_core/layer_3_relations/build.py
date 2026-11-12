@@ -73,10 +73,17 @@ def build_relation_snapshot(
         patch_adjacencies[adjacency.id] = adjacency
 
     patch_chain_vertex_incidence = build_patch_chain_vertex_incidence_index(topology)
-    chain_directional_runs = build_chain_directional_runs(topology, geometry)
+    # Shape evidence has one reader: the per-use chord shortcut of the runs
+    # (chain shape Stage B). Nothing else reads it.
+    patch_chain_shape_relations, patch_chain_shape_diagnostics = build_patch_chain_shape_relations(
+        topology,
+        geometry,
+    )
+    chain_directional_runs = build_chain_directional_runs(topology, geometry, patch_chain_shape_relations)
     patch_chain_directional_evidence = build_patch_chain_directional_evidence(
         topology,
         chain_directional_runs,
+        patch_chain_shape_relations,
     )
     loop_corners = build_loop_corners(topology)
     patch_chain_endpoint_samples = build_patch_chain_endpoint_samples(
@@ -140,11 +147,6 @@ def build_relation_snapshot(
         connected_direction_families,
         patch_chain_directional_evidence,
         run_endpoint_junctions,
-    )
-    # Evidence only: built last, read by nothing above (chain shape Stage A).
-    patch_chain_shape_relations, patch_chain_shape_diagnostics = build_patch_chain_shape_relations(
-        topology,
-        geometry,
     )
     return RelationSnapshot(
         patch_adjacencies=patch_adjacencies,

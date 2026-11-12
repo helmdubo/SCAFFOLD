@@ -1,9 +1,9 @@
 # Chain shape and surface relation contract (draft)
 
-Status: approved by the user (2026-11-13). Stage A is implemented (plan
-Slice W, G0 v1.7 DD-48). Stages B, C and D are not implemented; each needs
-its own approval, and the G0 changes listed at the end for them are not
-applied.
+Status: approved by the user (2026-11-13). Stages A and B are implemented
+(plan Slice W; G0 v1.7 DD-48, G0 v1.8 DD-30). Rule 1 was decided as option
+(i). Stages C and D are not implemented, and the G0 changes listed at the
+end for them are not applied.
 
 As implemented in Stage A (this narrows the contract text below where they
 differ):

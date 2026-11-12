@@ -192,7 +192,7 @@ SurfaceFlowCompatibilityEvidence v0 evidence-only cross-patch flow-family compat
 ConnectedDirectionFamily v1 (G0 DD-43/DD-45) occurrence-aware geodesic families
 RunEndpointJunction v0 (G0 DD-44)
 ScaffoldTrace / ScaffoldRail v1 evidence views: station order and island cut view (G0 DD-46/DD-47; plan Slices J, O)
-PatchChainShapeRelation v0 (G0 DD-48; plan Slice W Stage A) evidence-only per-side chain shape: surface line, surface curve or unresolved
+PatchChainShapeRelation v0 (G0 DD-48; plan Slice W Stages A, B) per-side chain shape: surface line, surface curve or unresolved; one reader, the per-use chord shortcut of directional runs (G0 DD-30)
 ```
 
 SHARED_CHAIN family transport crosses only straight single-run hinges
@@ -211,11 +211,11 @@ corner ScaffoldNode may join an end patch's perimeter family; it is pinned by
 a strict xfail and waits for a future patch-normal filter. Do not add
 cap/wall patch semantics to fix it.
 
-PatchChainShapeRelation v0 is evidence only: nothing in Layer 3 or Layer 5
-reads it, and it must not create, split or merge runs, families or rails.
-Building runs per side, taking the chord shortcut per side and a curve
-record are later stages of `docs/architecture/chain_shape_contract_draft.md`;
-each needs its own user approval.
+PatchChainShapeRelation v0 has one reader: directional runs take the chord
+shortcut of a zigzag Chain per PatchChain use, only where the whole Chain is
+one surface line on that side (plan Slice W Stage B, G0 DD-30). Nothing else
+in Layer 3 or Layer 5 reads it. A curve record and a multi-segment line as
+one run are later stages of `docs/architecture/chain_shape_contract_draft.md`.
 
 Approved tracer spike home (consumer tooling, outside scaffold_core):
 

@@ -108,7 +108,7 @@ Current terminology for the final boundary graph model:
 | `ScaffoldTrace` | Implemented v1 (G0 DD-46): ordered evidence view over ConnectedDirectionFamily members, by stations. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Implemented v1 (G0 DD-47): direction-stable ScaffoldTrace usable as a conditional axis. |
-| `PatchChainShapeRelation` | Implemented v0 (G0 DD-48): per PatchChain use, each piece between surface corners is a surface line, a surface curve or unresolved. Evidence only. |
+| `PatchChainShapeRelation` | Implemented v0 (G0 DD-48): per PatchChain use, each piece between surface corners is a surface line, a surface curve or unresolved. One reader: the per-use chord shortcut of directional runs (DD-30). |
 
 Endpoint samples, endpoint relations, LocalFaceFanGeometryFacts and ScaffoldNodes
 are evidence or derived relation records; they are not Layer 1 topology.
@@ -848,7 +848,8 @@ G3a is acceptable when:
 Implemented (G0 DD-48, plan Slice W Stage A). Per PatchChain use, each piece
 between surface corners is a SURFACE_LINE, a SURFACE_CURVE or UNRESOLVED,
 judged on that use's own patch surface from Layer 2 face-fan angle sums, and
-cross-checked against the chain plane tilt. Evidence only: it does not
-create, split or merge runs, families, rails or junctions, and nothing in
-Layer 3 or Layer 5 reads it. Contract and later stages:
+cross-checked against the chain plane tilt. Its one reader is the per-use
+chord shortcut of directional runs (Stage B, G0 DD-30): a zigzag Chain is
+one run only for a use where it is one surface line. Contract and later
+stages:
 `docs/architecture/chain_shape_contract_draft.md`.

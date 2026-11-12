@@ -139,6 +139,56 @@ def make_stepped_seam_source(stepped: bool = True) -> SourceMeshSnapshot:
     )
 
 
+def make_folded_strip_with_cap_source() -> SourceMeshSnapshot:
+    """Return a strip folded like a bevel profile, with a flat cap on its end.
+
+    The profile (0,0,0)-(1,0,0)-(1,0,1)-(2,0,1) is swept along +y to y = 2:
+    three strip faces, one patch. At y = 0 a flat hexagonal cap closes the
+    profile down to z = -1. The profile edges at y = 0 are seams, so the cross
+    chain is shared by the strip (it bends in depth there) and the cap (it
+    steps by right angles in the cap plane).
+    """
+
+    profile = ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (2.0, 1.0))
+    vertices: dict[SourceVertexId, MeshVertexRef] = {}
+    edges: dict[SourceEdgeId, MeshEdgeRef] = {}
+    faces: dict[SourceFaceId, MeshFaceRef] = {}
+
+    def add_vertex(name: str, position: tuple[float, float, float]) -> SourceVertexId:
+        vertex_id = SourceVertexId(name)
+        vertices[vertex_id] = MeshVertexRef(vertex_id, position)
+        return vertex_id
+
+    def add_face(name: str, corners: tuple[SourceVertexId, ...]) -> None:
+        edge_ids = []
+        for first, second in zip(corners, corners[1:] + corners[:1]):
+            low, high = sorted((first, second))
+            edge_id = SourceEdgeId(f"e_{low}_{high}")
+            edges[edge_id] = MeshEdgeRef(edge_id, (low, high))
+            edge_ids.append(edge_id)
+        face_id = SourceFaceId(name)
+        faces[face_id] = MeshFaceRef(face_id, corners, tuple(edge_ids))
+
+    near = tuple(add_vertex(f"p{index}_0", (x, 0.0, z)) for index, (x, z) in enumerate(profile))
+    far = tuple(add_vertex(f"p{index}_2", (x, 2.0, z)) for index, (x, z) in enumerate(profile))
+    cap_low_right = add_vertex("c_low_right", (2.0, 0.0, -1.0))
+    cap_low_left = add_vertex("c_low_left", (0.0, 0.0, -1.0))
+    for index in range(len(profile) - 1):
+        add_face(f"f_strip{index}", (near[index], near[index + 1], far[index + 1], far[index]))
+    add_face("f_cap", (cap_low_left, cap_low_right) + tuple(reversed(near)))
+    seam_edges = tuple(
+        SourceEdgeId(f"e_{min(first, second)}_{max(first, second)}") for first, second in zip(near, near[1:])
+    )
+    return SourceMeshSnapshot(
+        id=SourceMeshId("folded_strip_with_cap"),
+        vertices=vertices,
+        edges=edges,
+        faces=faces,
+        selected_face_ids=tuple(faces),
+        marks=tuple(SourceMark(kind=SourceMarkKind.SEAM, target_id=edge_id) for edge_id in seam_edges),
+    )
+
+
 def make_single_pentagon_source(lift: float = 0.5) -> SourceMeshSnapshot:
     """Return one pentagon face whose border chain passes (0,0)-(1,0)-(2,0,lift).
 

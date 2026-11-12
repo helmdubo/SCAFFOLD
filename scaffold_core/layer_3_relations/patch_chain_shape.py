@@ -4,7 +4,8 @@ Layer: 3 - Relations
 Rules:
 - Build evidence-only PatchChainShapeRelation records per PatchChain use and piece.
 - Judge a piece on its own patch side only: no world axis, no H/V, no patch types.
-- Preserve every run, family, rail, junction, node and Layer 1 identity; nothing reads these records yet.
+- Preserve every run, family, rail, junction, node and Layer 1 identity; the one reader of these
+  records is the per-use chord shortcut in chain_refinement (chain shape Stage B).
 - Report a disagreement between the face angle sum and the turn law as a diagnostic, never as a silent choice.
 """
 

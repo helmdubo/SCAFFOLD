@@ -2,7 +2,7 @@
 Layer: tests
 
 Rules:
-- PatchChainShapeRelation evidence tests only (chain shape Stage A).
+- PatchChainShapeRelation evidence tests only (chain shape Stage A; its one reader is Stage B).
 - Every "not one line" case is paired with a "still one line" case.
 - Tests may import Scaffold Core but must not define production logic.
 """
@@ -35,6 +35,7 @@ from scaffold_core.layer_2_geometry.facts import (
     PatchChainGeometryFacts,
 )
 from scaffold_core.layer_3_relations import build as relations_build
+from scaffold_core.layer_3_relations import chain_refinement
 from scaffold_core.layer_3_relations.model import PatchChainShapeKind
 from scaffold_core.layer_3_relations.patch_chain_shape import (
     LAW_MISMATCH_CODE,
@@ -522,7 +523,11 @@ def _without_shape(relations):
     )
 
 
-def test_shape_relation_changes_no_other_relation_and_no_solve(monkeypatch) -> None:
+def test_shape_relation_changes_other_relations_only_through_the_chord_shortcut(monkeypatch) -> None:
+    # Stage B flipped this Stage A test: the per-use chord shortcut of the runs
+    # is now the one reader. With that decision fixed to the old shortcut,
+    # removing the shape records must change nothing else.
+    monkeypatch.setattr(chain_refinement, "_use_keeps_chord_run", lambda pieces, chord_run: True)
     sources = [_load_capture(path.name) for path in sorted(DATA.glob("*.json"))] + _canonical_sources()
     assert len(sources) >= 17
     with_shape = []
@@ -538,7 +543,8 @@ def test_shape_relation_changes_no_other_relation_and_no_solve(monkeypatch) -> N
         assert solve == run_skeleton_solve(context)
 
 
-def test_nothing_outside_the_relation_build_reads_the_shape_relation() -> None:
+def test_the_chord_shortcut_is_the_only_reader_of_the_shape_relation() -> None:
+    # Stage B flipped this Stage A test: chain_refinement is now the one reader.
     root = Path(__file__).resolve().parents[1]
     readers = []
     for path in list((root / "layer_3_relations").glob("*.py")) + list((root / "layer_5_runtime").glob("*.py")):
@@ -547,4 +553,4 @@ def test_nothing_outside_the_relation_build_reads_the_shape_relation() -> None:
         text = path.read_text(encoding="utf-8")
         if "patch_chain_shape" in text or "PatchChainShape" in text:
             readers.append(path.name)
-    assert readers == []
+    assert readers == ["chain_refinement.py"]
