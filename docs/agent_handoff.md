@@ -13,7 +13,7 @@ Project: Scaffold
 Core package: scaffold_core/
 Current phase: G5a - Skeleton Runtime
 Architecture: immutable B-rep-inspired interpretation pipeline
-G0 contract: v1.6 (G0.md remains read-only for agents)
+G0 contract: v1.7 (G0.md remains read-only for agents)
 ```
 
 Scaffold Core currently contains Layers 0-3, the G5a Layer 5 runtime,
@@ -127,6 +127,10 @@ Implemented:
   closed loops stay non-consumable globally, and the pure cut view
   `cut_scaffold_rail` opens them only where a caller's structural cut
   (an island) opens them.
+- PatchChainShapeRelation v0 (`layer_3_relations/patch_chain_shape.py`,
+  G0 DD-48): per PatchChain use, each piece between surface corners is a
+  surface line, a surface curve or unresolved, from Layer 2 chain plane
+  and per-side facts. Evidence only; nothing reads it yet.
 - Pipeline tooling: Chain -> PatchChain incidence index
   (`layer_3_relations/patch_chain_incidence.py`), per-pass stage timings in
   `PipelineContext.pass_timings` (reported by inspection), and a networkx
@@ -608,6 +612,45 @@ agreement means across frames before counting defects.
 Candidate next slices, the choice is the user's: cross-island axis agreement
 (recommended), branch resolution for the 4 unordered island rails, curved
 runs inside lines (OQ-11).
+
+### Session handoff (2026-11-13)
+
+The user stopped the run of autonomous Layer 5 slices: he could no longer
+follow them, because their results were visible only as Tier 3 numbers. His
+direction now: layers below UV first; every slice must end with something
+he can look at in Blender.
+
+Done in this change (plan Slice W, Stage A): chain shape facts in Layer 2,
+`PatchChainShapeRelation` v0 in Layer 3 (G0 v1.7 DD-48, evidence only, no
+behaviour change) and the debug overlay layer `ScaffoldGraph_ChainShape`.
+Contract and stages: `docs/architecture/chain_shape_contract_draft.md`.
+
+Next, each its own approval: Stage B (chord shortcut per side; the rule is
+approved), then Stage C (curve record).
+
+Parked: Slice V (seam turns, island orientation) on the local branch
+`claude/slice-v-seam-turns`, commit 99db1a4, on the user's machine and not
+pushed. It lacks docs and the reviewer gate. Measured: seams with the hinge
+on one axis in both islands 597 -> 776 of 2246.
+
+Findings to keep:
+
+- The arch `Decor_Roof_Left_lod00.003` (`E:\temp\buildings3_3.blend`,
+  capture `artist_arch_bevel.json`): CFTUV structures all 5 patches,
+  Scaffold solved 1. The front face is a flat ring: its arcs are curves on
+  that surface and lines on the rims. Without Straighten Strips CFTUV pins
+  one V chain there and Blender's unwrap does the rest (user statement).
+- The CFTUV add-on installed in the user's Blender 4.3 is not the copy in
+  `dev/tools/CFTUV`: it has no `solve_skeleton.py` (P7 global solve). The
+  algorithm cards in `docs/migration/` describe the repo copy.
+- Branch rails: the 4 unordered island rails are forks (a line along a
+  stitched hinge that parts into two continuations); two of the three
+  distinct cases are an unwelded corner. Any ordering rule needs a DD-46 or
+  DD-47 amendment and changes no solve today. Left as is.
+- OBLIQUE on buildings (104 distinct of 194): about 29 real slants, 27 from
+  the AXIS_A seed choice in four islands, 7 stepped chains (Stage B), 40
+  small drift. No gradual arcs on those meshes; arches appear in decor
+  meshes such as the one above.
 
 Grease Pencil rendering consumes the pipeline inspection overlay payload instead
 of duplicating core graph logic. Do not import Blender into Scaffold Core.

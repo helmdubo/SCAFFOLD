@@ -14,7 +14,7 @@ from enum import Enum
 from typing import Mapping
 
 from scaffold_core.core.diagnostics import Diagnostic
-from scaffold_core.ids import ChainId, PatchId, SourceEdgeId, SourceFaceId, SourceVertexId, VertexId
+from scaffold_core.ids import ChainId, PatchChainId, PatchId, SourceEdgeId, SourceFaceId, SourceVertexId, VertexId
 
 
 Vector3 = tuple[float, float, float]
@@ -61,6 +61,29 @@ class ChainGeometryFacts:
     shape_hint: ChainShapeHint = ChainShapeHint.UNKNOWN
     source_vertex_run: tuple[SourceVertexId, ...] = ()
     segments: tuple[ChainSegmentGeometryFacts, ...] = ()
+    # Plane the chain's vertices lie in; None when they are collinear.
+    plane_normal: Vector3 | None = None
+    # Largest vertex distance from that plane through the vertex mean.
+    plane_deviation: float = 0.0
+    # Largest vertex distance from the chord line.
+    chord_deviation: float = 0.0
+
+
+@dataclass(frozen=True)
+class PatchChainGeometryFacts:
+    """Per-side measurement of a Chain on one PatchChain's own patch faces."""
+
+    patch_chain_id: PatchChainId
+    chain_id: ChainId
+    patch_id: PatchId
+    # asin(|dot(chain plane normal, side face normal)|) over the chain edges;
+    # None when the chain has no plane or no side face is known.
+    tilt_min: float | None = None
+    tilt_max: float | None = None
+    # Per chain segment, in segment order: the source face of this patch on
+    # this side of the edge, and its unit normal; None when not determinable.
+    segment_side_face_ids: tuple[SourceFaceId | None, ...] = ()
+    segment_side_normals: tuple[Vector3 | None, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -92,4 +115,5 @@ class GeometryFactSnapshot:
     chain_facts: Mapping[ChainId, ChainGeometryFacts] = field(default_factory=dict)
     vertex_facts: Mapping[VertexId, VertexGeometryFacts] = field(default_factory=dict)
     local_face_fan_facts: Mapping[str, LocalFaceFanGeometryFacts] = field(default_factory=dict)
+    patch_chain_facts: Mapping[PatchChainId, PatchChainGeometryFacts] = field(default_factory=dict)
     diagnostics: tuple[Diagnostic, ...] = ()

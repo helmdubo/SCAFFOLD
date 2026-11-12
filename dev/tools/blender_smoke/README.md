@@ -50,8 +50,9 @@ Full JSON reports go to `dev/tools/blender_smoke/reports/` (git-ignored).
   pure Python; do not relaunch Blender per experiment.
 - Commit only small, representative captures to `scaffold_core/tests/data/`.
 - `probes/` holds capture replays for measuring open items:
-  `probes/cross_island.py DIR` (families across islands) and
-  `probes/diag_census.py DIR` (island diagnostics, OBLIQUE runs).
+  `probes/cross_island.py DIR` (families across islands),
+  `probes/diag_census.py DIR` (island diagnostics, OBLIQUE runs) and
+  `probes/chain_shape.py DIR` (PatchChain shape pieces, law mismatches).
 
 ## Metrics per object
 
@@ -90,6 +91,16 @@ island (`cut_scaffold_rail`) against the island lines and the frame:
 island_rails                         island rail segments with two or more runs
 unordered_island_rails               of those, segments left unordered (branch or uncut loop)
 rail_frame_conflicts                 rails that split an island line or run against the frame (must be 0)
+```
+
+Chain shape metrics (Stage A) count the evidence-only PatchChainShapeRelation
+pieces, each PatchChain cut at its surface corners and judged on its own side:
+
+```text
+shape_lines                          SURFACE_LINE pieces (straight on their own surface)
+shape_curves                         SURFACE_CURVE pieces (planar pieces that turn in the surface)
+shape_unresolved                     UNRESOLVED pieces (no single face fan, or a law mismatch)
+shape_law_mismatches                 PATCH_CHAIN_SHAPE_LAW_MISMATCH diagnostics (warped faces)
 ```
 
 ## Why not a Blender MCP add-on

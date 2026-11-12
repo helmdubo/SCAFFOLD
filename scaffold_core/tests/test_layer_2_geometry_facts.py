@@ -44,9 +44,15 @@ from scaffold_core.layer_1_topology.model import (
 from scaffold_core.layer_2_geometry.build import build_geometry_facts
 from scaffold_core.layer_2_geometry.facts import ChainShapeHint
 from scaffold_core.pipeline.inspection import geometry_summary_to_dict
+from scaffold_core.tests.fixtures.capped_prism import make_capped_decagon_prism_odd_strips_source
 from scaffold_core.tests.fixtures.chain_shape_geometry import make_chain_shape_source_and_topology
+from scaffold_core.tests.fixtures.chain_shape_surfaces import (
+    make_cone_frustum_band_source,
+    make_single_pentagon_source,
+)
 from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_boundary_loop_source
 from scaffold_core.tests.fixtures.cylinder_tube import (
+    make_cylinder_tube_without_caps_with_one_seam_source,
     make_segmented_cylinder_tube_without_caps_with_one_seam_source,
 )
 from scaffold_core.tests.fixtures.degenerate_geometry import make_degenerate_triangle_source
@@ -257,6 +263,122 @@ def test_full_geometry_inspection_includes_vertex_angle_facts() -> None:
     assert isclose(vertex["interior_angle_sum"], 2.0 * pi)
     assert isclose(vertex["angle_defect"], 0.0, abs_tol=1.0e-9)
     assert vertex["is_boundary"] is False
+
+
+def test_straight_chain_has_no_plane_and_no_chord_deviation() -> None:
+    source, topology = make_chain_shape_source_and_topology()
+
+    straight = build_geometry_facts(source, topology).chain_facts[ChainId("chain:straight")]
+
+    assert straight.plane_normal is None
+    assert straight.plane_deviation == 0.0
+    assert isclose(straight.chord_deviation, 0.0, abs_tol=1.0e-12)
+
+
+def test_planar_zigzag_chain_measures_plane_and_chord_deviation() -> None:
+    source, topology = make_chain_shape_source_and_topology()
+
+    zigzag = build_geometry_facts(source, topology).chain_facts[ChainId("chain:sawtooth")]
+
+    # Turns alternate sign; each cross product is flipped to agree with the largest.
+    assert zigzag.plane_normal is not None
+    assert isclose(abs(zigzag.plane_normal[2]), 1.0)
+    assert isclose(zigzag.plane_deviation, 0.0, abs_tol=1.0e-12)
+    assert isclose(zigzag.chord_deviation, 0.25)
+
+
+def test_planar_arc_chain_lies_in_its_plane() -> None:
+    source = make_cone_frustum_band_source()
+    topology = build_topology_snapshot(source)
+
+    facts = build_geometry_facts(source, topology)
+
+    ring = next(
+        chain_fact
+        for chain_fact in facts.chain_facts.values()
+        if len(chain_fact.segments) == 16 and "e_t" in str(chain_fact.chain_id)
+    )
+    assert ring.plane_normal is not None
+    assert isclose(abs(ring.plane_normal[2]), 1.0)
+    assert isclose(ring.plane_deviation, 0.0, abs_tol=1.0e-9)
+    # A closed ring has no chord: the deviation is measured from its start, the diameter.
+    assert isclose(ring.chord_deviation, 2.0, rel_tol=1.0e-6)
+
+
+def test_spatial_chain_reports_plane_deviation() -> None:
+    source = make_single_pentagon_source(lift=0.5)
+    topology = build_topology_snapshot(source)
+
+    (border,) = build_geometry_facts(source, topology).chain_facts.values()
+
+    assert border.plane_normal is not None
+    assert border.plane_deviation > 0.05
+    # A closed chain counts its first vertex once: deviation from the mean of the five corners.
+    corners = [vertex.position for vertex in source.vertices.values()]
+    center = tuple(sum(point[axis] for point in corners) / len(corners) for axis in range(3))
+    expected = max(
+        abs(sum((point[axis] - center[axis]) * border.plane_normal[axis] for axis in range(3)))
+        for point in corners
+    )
+    assert isclose(border.plane_deviation, expected, rel_tol=1.0e-9)
+
+    flat_source = make_single_pentagon_source(lift=0.0)
+    (flat_border,) = build_geometry_facts(flat_source, build_topology_snapshot(flat_source)).chain_facts.values()
+    assert isclose(flat_border.plane_deviation, 0.0, abs_tol=1.0e-12)
+
+
+def test_tilt_is_measured_per_side_of_one_chain() -> None:
+    source = make_capped_decagon_prism_odd_strips_source()
+    topology = build_topology_snapshot(source)
+
+    facts = build_geometry_facts(source, topology)
+
+    rim = ChainId("chain:e_t4:e_t3:e_t2:e_t1:e_t0")
+    sides = {
+        str(use.patch_id): facts.patch_chain_facts[use.id]
+        for use in topology.patch_chains.values()
+        if use.chain_id == rim
+    }
+    side = sides["patch:seed:f0"]
+    cap = sides["patch:seed:f_cap_top"]
+    # The side band normal lies in the rim plane: the rim bends in depth there.
+    assert isclose(side.tilt_min, 0.0, abs_tol=1.0e-9)
+    assert isclose(side.tilt_max, 0.0, abs_tol=1.0e-9)
+    # The cap is the rim plane itself.
+    assert isclose(cap.tilt_min, pi / 2.0, abs_tol=1.0e-6)
+    assert isclose(cap.tilt_max, pi / 2.0, abs_tol=1.0e-6)
+    assert all(face_id is not None for face_id in side.segment_side_face_ids)
+    assert set(cap.segment_side_face_ids) == {SourceFaceId("f_cap_top")}
+
+
+def test_cone_ring_tilt_is_strictly_between_zero_and_right_angle() -> None:
+    source = make_cone_frustum_band_source()
+    topology = build_topology_snapshot(source)
+
+    facts = build_geometry_facts(source, topology)
+
+    tilts = [
+        (side.tilt_min, side.tilt_max)
+        for side in facts.patch_chain_facts.values()
+        if side.tilt_min is not None
+    ]
+    assert len(tilts) == 2
+    for tilt_min, tilt_max in tilts:
+        assert 0.7 < tilt_min <= tilt_max < 0.8  # about 44.4 degrees on the 45-degree band
+
+
+def test_seam_self_chain_takes_the_side_face_of_each_use() -> None:
+    source = make_cylinder_tube_without_caps_with_one_seam_source()
+    topology = build_topology_snapshot(source)
+
+    facts = build_geometry_facts(source, topology)
+
+    seam_uses = [use for use in topology.patch_chains.values() if str(use.chain_id) == "chain:e_v0"]
+    assert len(seam_uses) == 2
+    side_faces = [facts.patch_chain_facts[use.id].segment_side_face_ids for use in seam_uses]
+    assert {face_ids[0] for face_ids in side_faces} == {SourceFaceId("f0"), SourceFaceId("f3")}
+    # A straight seam has no plane, so no tilt.
+    assert all(facts.patch_chain_facts[use.id].tilt_min is None for use in seam_uses)
 
 
 def _topology_with_vertices(

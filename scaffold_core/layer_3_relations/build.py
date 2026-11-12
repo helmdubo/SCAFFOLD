@@ -36,6 +36,7 @@ from scaffold_core.layer_3_relations.patch_chain_endpoint_relations import (
     build_patch_chain_endpoint_relations,
 )
 from scaffold_core.layer_3_relations.patch_chain_endpoint_samples import build_patch_chain_endpoint_samples
+from scaffold_core.layer_3_relations.patch_chain_shape import build_patch_chain_shape_relations
 from scaffold_core.layer_3_relations.run_endpoint_junctions import build_run_endpoint_junctions
 from scaffold_core.layer_3_relations.scaffold_continuity import build_scaffold_continuity_components
 from scaffold_core.layer_3_relations.scaffold_graph import build_scaffold_graph
@@ -140,6 +141,11 @@ def build_relation_snapshot(
         patch_chain_directional_evidence,
         run_endpoint_junctions,
     )
+    # Evidence only: built last, read by nothing above (chain shape Stage A).
+    patch_chain_shape_relations, patch_chain_shape_diagnostics = build_patch_chain_shape_relations(
+        topology,
+        geometry,
+    )
     return RelationSnapshot(
         patch_adjacencies=patch_adjacencies,
         chain_continuations=build_chain_continuations(topology, patch_chain_vertex_incidence),
@@ -163,11 +169,12 @@ def build_relation_snapshot(
         scaffold_rails=scaffold_rails,
         alignment_classes=alignment_classes,
         patch_axes=patch_axes,
+        patch_chain_shape_relations=patch_chain_shape_relations,
         diagnostics=connected_direction_family_diagnostics(
             connected_direction_families,
             patch_chain_directional_evidence,
             geometry,
-        ),
+        ) + patch_chain_shape_diagnostics,
     )
 
 

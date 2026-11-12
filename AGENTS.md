@@ -87,6 +87,7 @@ Before coding, read only the routed docs needed for the task.
 | G1 topology work | `docs/phases/G1_topology_snapshot.md` + `docs/layers/layer_1_topology.md` + `docs/architecture/segmentation_shell_policy.md` |
 | G2 geometry facts | `docs/phases/G2_geometry_facts.md` + `G0.md` |
 | G3 derived relations | `docs/phases/G3_derived_relations.md` + `G0.md` |
+| Chain shape / line or curve per patch side | `docs/architecture/chain_shape_contract_draft.md` + `G0.md` DD-48 |
 | G5a skeleton runtime / UV write | `docs/phases/G5a_skeleton_runtime.md` + `docs/agent_rules/blender_boundaries.md` |
 | Patch segmentation / shell detection | `docs/architecture/segmentation_shell_policy.md` |
 | Source mesh snapshot | `docs/layers/layer_0_source.md` |
@@ -132,6 +133,8 @@ length
 chord direction
 vertex position
 degenerate geometry diagnostics
+chain plane, deviation from it and from the chord
+per-side side faces and tilt of a chain plane against its own patch
 ```
 
 Forbidden in Layer 2:
@@ -189,6 +192,7 @@ SurfaceFlowCompatibilityEvidence v0 evidence-only cross-patch flow-family compat
 ConnectedDirectionFamily v1 (G0 DD-43/DD-45) occurrence-aware geodesic families
 RunEndpointJunction v0 (G0 DD-44)
 ScaffoldTrace / ScaffoldRail v1 evidence views: station order and island cut view (G0 DD-46/DD-47; plan Slices J, O)
+PatchChainShapeRelation v0 (G0 DD-48; plan Slice W Stage A) evidence-only per-side chain shape: surface line, surface curve or unresolved
 ```
 
 SHARED_CHAIN family transport crosses only straight single-run hinges
@@ -206,6 +210,12 @@ deferred gap: a run transported through a 90-degree
 corner ScaffoldNode may join an end patch's perimeter family; it is pinned by
 a strict xfail and waits for a future patch-normal filter. Do not add
 cap/wall patch semantics to fix it.
+
+PatchChainShapeRelation v0 is evidence only: nothing in Layer 3 or Layer 5
+reads it, and it must not create, split or merge runs, families or rails.
+Building runs per side, taking the chord shortcut per side and a curve
+record are later stages of `docs/architecture/chain_shape_contract_draft.md`;
+each needs its own user approval.
 
 Approved tracer spike home (consumer tooling, outside scaffold_core):
 

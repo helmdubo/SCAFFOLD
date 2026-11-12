@@ -35,6 +35,7 @@ class SCAFFOLDGRAPH_Settings(bpy.types.PropertyGroup):
     show_seam_verdicts: BoolProperty(name="Seam Verdicts", default=True)
     show_junctions: BoolProperty(name="Junctions", default=True)
     show_branch_points: BoolProperty(name="Branches", default=True)
+    show_chain_shape: BoolProperty(name="Chain Shape", default=True)
     source_hide_viewport: BoolProperty(name="Stored Viewport Hidden", default=False)
     source_hide_set: BoolProperty(name="Stored Object Hidden", default=False)
 
@@ -246,6 +247,8 @@ class SCAFFOLDGRAPH_PT_Panel(bpy.types.Panel):
         row.prop(settings, "show_seam_verdicts", toggle=True)
         row.prop(settings, "show_junctions", toggle=True)
         row.prop(settings, "show_branch_points", toggle=True)
+        row = col.row(align=True)
+        row.prop(settings, "show_chain_shape", toggle=True)
         layout.operator("scaffold_graph_debug.write_uv_g5a", icon="UV")
 
         if settings.source_object:

@@ -207,6 +207,7 @@ def test_inspection_default_output_is_compact() -> None:
         "vertex_count": 8,
         "local_face_fan_count": 12,
         "local_face_fan_count": 12,
+        "patch_chain_fact_count": 2,
     }
     assert report["relations"] == {
         "patch_adjacency_count": 1,
@@ -229,6 +230,13 @@ def test_inspection_default_output_is_compact() -> None:
         "scaffold_rail_count": 5,
         "alignment_class_count": 2,
         "patch_axes_count": 2,
+        # The top square is cut at its four corners; the box rim is one line.
+        "patch_chain_shape_relation_count": 5,
+        "patch_chain_shape_kind_counts": {
+            "SURFACE_LINE": 5,
+            "SURFACE_CURVE": 0,
+            "UNRESOLVED": 0,
+        },
     }
 
 

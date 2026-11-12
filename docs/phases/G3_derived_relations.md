@@ -108,6 +108,7 @@ Current terminology for the final boundary graph model:
 | `ScaffoldTrace` | Implemented v1 (G0 DD-46): ordered evidence view over ConnectedDirectionFamily members, by stations. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Implemented v1 (G0 DD-47): direction-stable ScaffoldTrace usable as a conditional axis. |
+| `PatchChainShapeRelation` | Implemented v0 (G0 DD-48): per PatchChain use, each piece between surface corners is a surface line, a surface curve or unresolved. Evidence only. |
 
 Endpoint samples, endpoint relations, LocalFaceFanGeometryFacts and ScaffoldNodes
 are evidence or derived relation records; they are not Layer 1 topology.
@@ -841,3 +842,13 @@ G3a is acceptable when:
 7. Layer 3 does not import Layer 4, Layer 5, API, UI or Blender modules.
 8. Layer 3 stores no H/V, WALL/FLOOR/SLOPE, Feature, runtime, UV, or solve roles.
 9. G3a relation builder does not use `WORLD_UP`.
+
+## PatchChainShapeRelation v0
+
+Implemented (G0 DD-48, plan Slice W Stage A). Per PatchChain use, each piece
+between surface corners is a SURFACE_LINE, a SURFACE_CURVE or UNRESOLVED,
+judged on that use's own patch surface from Layer 2 face-fan angle sums, and
+cross-checked against the chain plane tilt. Evidence only: it does not
+create, split or merge runs, families, rails or junctions, and nothing in
+Layer 3 or Layer 5 reads it. Contract and later stages:
+`docs/architecture/chain_shape_contract_draft.md`.

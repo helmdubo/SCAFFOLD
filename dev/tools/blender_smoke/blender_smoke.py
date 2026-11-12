@@ -122,7 +122,13 @@ def _pipeline_metrics(source, context) -> dict:
     relations = context.relation_snapshot
     family_sizes = [len(family.member_directional_evidence_ids) for family in relations.connected_direction_families]
     codes = Counter(diagnostic.code for diagnostic in context.diagnostics.diagnostics)
+    shapes = Counter(relation.kind.value for relation in relations.patch_chain_shape_relations)
     return {
+        # chain shape Stage A: PatchChain pieces per kind on their own side (evidence only)
+        "shape_lines": shapes.get("SURFACE_LINE", 0),
+        "shape_curves": shapes.get("SURFACE_CURVE", 0),
+        "shape_unresolved": shapes.get("UNRESOLVED", 0),
+        "shape_law_mismatches": codes.get("PATCH_CHAIN_SHAPE_LAW_MISMATCH", 0),
         "faces": len(source.selected_face_ids) or len(source.faces),
         "shells": len(topology.shells),
         "patches": len(topology.patches),

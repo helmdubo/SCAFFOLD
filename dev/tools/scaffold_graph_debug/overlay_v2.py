@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import math
+from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 from .colors import (
     BRANCH_COLOR,
+    CHAIN_SHAPE_COLORS,
     CUT_SEAM_COLOR,
     NEUTRAL_GRAY,
     RUN_ENDPOINT_JUNCTION_COLOR,
@@ -13,10 +17,31 @@ from .colors import (
     SEWABLE_SEAM_COLOR,
     stable_color,
 )
-from .rail_assembly import RailAssembly, RailView, RunSegmentView, build_rail_assembly
+from .rail_assembly import (
+    RailAssembly,
+    RailView,
+    RunSegmentView,
+    _self_seam_chain_ids,
+    build_rail_assembly,
+)
+from .rail_offsets import offset_segment_polyline, self_seam_flip_keys
 from .seam_verdicts import ANGLE_DEFECT_TOLERANCE, SeamVerdict, build_seam_verdicts
 
 GEODESIC_STRAIGHT_TOLERANCE_FALLBACK = 0.1
+CHAIN_SHAPE_KINDS = ("SURFACE_LINE", "SURFACE_CURVE", "UNRESOLVED")
+
+
+@dataclass(frozen=True)
+class ChainShapePieceView:
+    """One PatchChainShapeRelation piece in the shape the rail offset rule reads."""
+
+    id: str
+    directional_evidence_id: str
+    patch_id: str
+    patch_chain_id: str
+    parent_chain_id: str
+    source_edge_ids: tuple[str, ...]
+    polyline: tuple[tuple[float, float, float], ...]
 
 
 def build_overlay_v2_payload(context: Any) -> dict[str, Any]:
@@ -29,6 +54,12 @@ def build_overlay_v2_payload(context: Any) -> dict[str, Any]:
         raise RuntimeError("Overlay v2 requires topology, geometry and relation snapshots.")
     assembly = build_rail_assembly(topology, geometry, relations, context.source_snapshot)
     seam_verdicts = build_seam_verdicts(topology, geometry, relations)
+    chain_shape_pieces = _chain_shape_pieces(topology, geometry, relations, context.source_snapshot)
+    counts = _counts(assembly, seam_verdicts)
+    counts.update(_chain_shape_counts(chain_shape_pieces))
+    counts["chain_shape_undrawn_count"] = (
+        len(getattr(relations, "patch_chain_shape_relations", ())) - len(chain_shape_pieces)
+    )
     return {
         "version": 2,
         "family_run_segments": [_run_segment_to_dict(segment) for segment in assembly.run_segments],
@@ -36,7 +67,8 @@ def build_overlay_v2_payload(context: Any) -> dict[str, Any]:
         "seam_verdicts": [_seam_verdict_to_dict(verdict) for verdict in seam_verdicts],
         "junction_glyphs": [_junction_glyph_to_dict(glyph) for glyph in assembly.junction_glyphs],
         "branch_glyphs": [_junction_glyph_to_dict(glyph) for glyph in assembly.branch_glyphs],
-        "counts": _counts(assembly, seam_verdicts),
+        "chain_shape_pieces": chain_shape_pieces,
+        "counts": counts,
         "rail_contract_inputs": list(assembly.rail_contract_inputs),
         "angle_defect_tolerance": ANGLE_DEFECT_TOLERANCE,
         "geodesic_straight_tolerance": _geodesic_straight_tolerance(),
@@ -146,6 +178,92 @@ def _junction_glyph_to_dict(glyph) -> dict[str, Any]:
         "size_step": glyph.size_step,
         "color": list(color),
     }
+
+
+def _chain_shape_pieces(topology: Any, geometry: Any, relations: Any, source: Any) -> list[dict[str, Any]]:
+    """One payload item per core PatchChainShapeRelation, offset to its own patch side."""
+
+    records = sorted(getattr(relations, "patch_chain_shape_relations", ()), key=lambda item: item.id)
+    views = {
+        record.id: view
+        for record in records
+        for view in (_chain_shape_piece_view(geometry, record),)
+        if view is not None
+    }
+    self_seam_chain_ids = _self_seam_chain_ids(relations)
+    flip_keys = self_seam_flip_keys(
+        (SimpleNamespace(directional_evidence_ids=tuple(views)),),
+        views,
+        self_seam_chain_ids,
+    )
+    messages_by_record_id: dict[str, list[str]] = {}
+    for diagnostic in getattr(relations, "diagnostics", ()):
+        for entity_id in diagnostic.entity_ids:
+            if entity_id in views:
+                messages_by_record_id.setdefault(entity_id, []).append(diagnostic.message)
+    pieces = []
+    for record in records:
+        view = views.get(record.id)
+        if view is None:
+            continue
+        polyline, offset_record = offset_segment_polyline(
+            topology,
+            source,
+            view,
+            flip=(view.parent_chain_id, view.patch_id, view.patch_chain_id) in flip_keys,
+            self_seam_chain_ids=self_seam_chain_ids,
+        )
+        kind = record.kind.value
+        pieces.append({
+            "id": record.id,
+            "kind": kind,
+            "patch_id": view.patch_id,
+            "patch_chain_id": view.patch_chain_id,
+            "chain_id": view.parent_chain_id,
+            "polyline": [list(point) for point in polyline],
+            "color": list(CHAIN_SHAPE_COLORS.get(kind, NEUTRAL_GRAY)),
+            "length": float(record.length),
+            "segment_count": len(record.segment_indices),
+            "surface_turn_max_deg": math.degrees(record.surface_turn_max),
+            "tilt_range_deg": (
+                [math.degrees(record.tilt_min), math.degrees(record.tilt_max)]
+                if record.tilt_min is not None and record.tilt_max is not None
+                else None
+            ),
+            "unoffset": bool(offset_record["unoffset"]),
+            "diagnostics": messages_by_record_id.get(record.id, []),
+        })
+    return pieces
+
+
+def _chain_shape_piece_view(geometry: Any, record: Any) -> ChainShapePieceView | None:
+    chain_facts = geometry.chain_facts.get(record.chain_id)
+    if chain_facts is None:
+        return None
+    segments_by_index = {segment.segment_index: segment for segment in chain_facts.segments}
+    segments = [segments_by_index[index] for index in record.segment_indices if index in segments_by_index]
+    if not segments or len(segments) != len(record.segment_indices):
+        return None
+    points = [segments[0].start_position]
+    points.extend(segment.end_position for segment in segments)
+    return ChainShapePieceView(
+        id=record.id,
+        directional_evidence_id=record.id,
+        patch_id=str(record.patch_id),
+        patch_chain_id=str(record.patch_chain_id),
+        parent_chain_id=str(record.chain_id),
+        source_edge_ids=tuple(str(segment.source_edge_id) for segment in segments),
+        polyline=tuple(tuple(float(value) for value in point) for point in points),
+    )
+
+
+def _chain_shape_counts(pieces: list[dict[str, Any]]) -> dict[str, int]:
+    counts = {
+        f"chain_shape_{kind.lower()}_count": sum(piece["kind"] == kind for piece in pieces)
+        for kind in CHAIN_SHAPE_KINDS
+    }
+    counts["chain_shape_piece_count"] = len(pieces)
+    return counts
 
 
 def _counts(assembly: RailAssembly, seam_verdicts: tuple[SeamVerdict, ...]) -> dict[str, int]:

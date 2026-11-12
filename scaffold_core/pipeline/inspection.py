@@ -19,7 +19,7 @@ from scaffold_core.layer_1_topology.invariants import validate_topology
 from scaffold_core.layer_1_topology.model import PatchChain, SurfaceModel
 from scaffold_core.layer_1_topology.queries import patch_chain_vertices
 from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot, Vector3
-from scaffold_core.layer_3_relations.model import RelationSnapshot
+from scaffold_core.layer_3_relations.model import PatchChainShapeKind, RelationSnapshot
 from scaffold_core.layer_3_relations.patch_chain_incidence import (
     build_chain_patch_chain_incidence_index,
 )
@@ -101,6 +101,7 @@ def geometry_summary_to_dict(geometry: GeometryFactSnapshot, detail: str = "comp
         "chain_count": len(geometry.chain_facts),
         "vertex_count": len(geometry.vertex_facts),
         "local_face_fan_count": len(geometry.local_face_fan_facts),
+        "patch_chain_fact_count": len(geometry.patch_chain_facts),
     }
     if detail != "full":
         return summary
@@ -120,6 +121,9 @@ def geometry_summary_to_dict(geometry: GeometryFactSnapshot, detail: str = "comp
                 "length": facts.length,
                 "chord_length": facts.chord_length,
                 "shape_hint": str(facts.shape_hint.value),
+                "plane_normal": list(facts.plane_normal) if facts.plane_normal is not None else None,
+                "plane_deviation": facts.plane_deviation,
+                "chord_deviation": facts.chord_deviation,
                 "is_closed": facts.chord_length <= DIRECTION_STABLE_EPSILON,
                 "is_direction_stable": (
                     facts.shape_hint.value != "UNKNOWN"
@@ -189,10 +193,16 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         "scaffold_rail_count": len(relations.scaffold_rails),
         "alignment_class_count": len(relations.alignment_classes),
         "patch_axes_count": len(relations.patch_axes),
+        "patch_chain_shape_relation_count": len(relations.patch_chain_shape_relations),
+        "patch_chain_shape_kind_counts": _patch_chain_shape_kind_counts(relations),
     }
     if detail != "full":
         return summary
     summary.update({
+        "patch_chain_shape_relations": [
+            _patch_chain_shape_relation_to_dict(relation)
+            for relation in sorted(relations.patch_chain_shape_relations, key=lambda item: item.id)
+        ],
         "patch_adjacencies": [
             {
                 "id": adjacency.id,
@@ -375,6 +385,34 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         ],
     })
     return summary
+
+
+def _patch_chain_shape_kind_counts(relations: RelationSnapshot) -> dict[str, int]:
+    counts = {kind.value: 0 for kind in PatchChainShapeKind}
+    for relation in relations.patch_chain_shape_relations:
+        counts[relation.kind.value] += 1
+    return counts
+
+
+def _patch_chain_shape_relation_to_dict(relation) -> dict[str, object]:
+    return {
+        "id": relation.id,
+        "patch_chain_id": str(relation.patch_chain_id),
+        "chain_id": str(relation.chain_id),
+        "patch_id": str(relation.patch_id),
+        "kind": relation.kind.value,
+        "segment_indices": list(relation.segment_indices),
+        "start_source_vertex_id": str(relation.start_source_vertex_id),
+        "end_source_vertex_id": str(relation.end_source_vertex_id),
+        "length": relation.length,
+        "surface_turn_max": relation.surface_turn_max,
+        "surface_turning_total": relation.surface_turning_total,
+        "tilt_min": relation.tilt_min,
+        "tilt_max": relation.tilt_max,
+        "is_planar": relation.is_planar,
+        "law_error_max": relation.law_error_max,
+        "confidence": relation.confidence,
+    }
 
 
 def scaffold_graph_to_node_link_dict(
