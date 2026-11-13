@@ -42,7 +42,7 @@ Works with legacy Grease Pencil (Blender 4.1 / 4.2) and Grease Pencil v3
 Analyze             toggle: build the overlay and hide the mesh / remove it and restore the mesh
 Rebuild             rerun the pipeline and redraw every layer
 Straighten Strips   Pass 2 option; applies on the next Rebuild (and on Write UV)
-Structure / Skeleton / Patches: sides and types / Layer 3 (detail)
+Structure / Skeleton / Patches: sides and types / Layer 3 (detail) / Ladders
                     collapsible groups, one eye toggle per layer, legend underneath
 Write UV (G5a)      unchanged
 SCAFFOLD JSON       unchanged
@@ -77,8 +77,10 @@ press Rebuild.
 After each rebuild a compact report is printed to the system console and
 written to the Text datablock `Scaffold_Debug_Report__<object>`: per island its
 id, frame kind, patch count, number of lines and pins; stitch decisions counted
-by reason; patch types; the number of chain strokes without an axis role; the
-number of solver diagnostics.
+by reason; patch types; ladder patches (of them closed, with two readings);
+faces by source face mark when the mesh has Blender's Face Strength
+attribute; the number of chain strokes without an axis role; the number of
+solver diagnostics.
 
 ## Layers
 
@@ -120,6 +122,17 @@ Group Layer 3 (detail), collapsed by default:
 | --- | --- | --- |
 | Family Colors | `Scaffold_L3_Families` | each run in the colour of its ConnectedDirectionFamily (grey without one) |
 | Junctions | `Scaffold_L3_Junctions` | ScaffoldNode as a 3D `+`, RunEndpointJunction as a 3D `*`; yellow when more than two run ends meet |
+
+Group Ladders, collapsed by default (Layer 3 `PatchQuadLadderRelation`, the
+first reading of each all-quad ladder patch; a patch may have a second
+reading, counted in the report):
+
+| Toggle | GP layer | Draws |
+| --- | --- | --- |
+| Ladder rails | `Scaffold_Ladder_Rails` | rail A pink, rail B lime, beside their edges on the patch's own faces like Chains |
+| Ladder ends | `Scaffold_Ladder_Ends` | the two end profile lines of an open ladder, violet; a closed ring has none |
+| Ladder columns | `Scaffold_Ladder_Columns` | thin grey profile lines between consecutive columns, on the surface at the Chains' lift |
+| Source face mark | `Scaffold_Source_Face_Strength` | fill by the raw Blender Face Strength of each face (Layer 0): red = weak, blue = medium, grey = strong; unmarked faces and meshes without the attribute draw nothing |
 
 Defaults: Patches, Boundary, Holes, Chains, Lines, Nodes and Seams are on;
 everything else is off. Island fills compete with Patches; turning an Islands

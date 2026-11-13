@@ -12,6 +12,7 @@ from __future__ import annotations
 from math import atan2
 
 from scaffold_core.ids import ChainId
+from scaffold_core.layer_0_source.snapshot import SourceMeshSnapshot
 from scaffold_core.layer_1_topology.model import PatchChain, SurfaceModel
 from scaffold_core.layer_1_topology.queries import patch_chain_vertices
 from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot, Vector3
@@ -37,6 +38,7 @@ from scaffold_core.layer_3_relations.patch_chain_endpoint_relations import (
 )
 from scaffold_core.layer_3_relations.patch_chain_endpoint_samples import build_patch_chain_endpoint_samples
 from scaffold_core.layer_3_relations.patch_chain_shape import build_patch_chain_shape_relations
+from scaffold_core.layer_3_relations.quad_ladders import build_patch_quad_ladder_relations
 from scaffold_core.layer_3_relations.run_corners import (
     build_run_bridged_corner_relations,
     build_run_corner_relations,
@@ -56,8 +58,9 @@ ANGLE_TOLERANCE_RADIANS = 1.0e-6
 def build_relation_snapshot(
     topology: SurfaceModel,
     geometry: GeometryFactSnapshot,
+    source: SourceMeshSnapshot | None = None,
 ) -> RelationSnapshot:
-    """Build G3a derived relations."""
+    """Build G3a derived relations; the quad ladder readings need the source faces."""
 
     chain_patch_chain_incidence = build_chain_patch_chain_incidence_index(topology)
     patch_adjacencies: dict[str, PatchAdjacency] = {}
@@ -185,6 +188,8 @@ def build_relation_snapshot(
         alignment_classes=alignment_classes,
         patch_axes=patch_axes,
         patch_chain_shape_relations=patch_chain_shape_relations,
+        # Pure topology; nothing in Layers 3-5 reads it yet (Slice AE-1).
+        patch_quad_ladder_relations=build_patch_quad_ladder_relations(topology, source),
         diagnostics=connected_direction_family_diagnostics(
             connected_direction_families,
             patch_chain_directional_evidence,

@@ -18,7 +18,7 @@ from scaffold_core.ids import (
     SourceMeshId,
     SourceVertexId,
 )
-from scaffold_core.layer_0_source.marks import SourceMark
+from scaffold_core.layer_0_source.marks import SourceFaceStrength, SourceMark
 
 
 @dataclass(frozen=True)
@@ -35,9 +35,16 @@ class MeshEdgeRef:
 
 @dataclass(frozen=True)
 class MeshFaceRef:
+    """One source face; edge_ids[i] joins vertex_ids[i] and vertex_ids[i + 1].
+
+    face_strength is the raw Blender Face Strength mark of the face, None when
+    the mesh has no such attribute or the stored value is none of the three.
+    """
+
     id: SourceFaceId
     vertex_ids: tuple[SourceVertexId, ...]
     edge_ids: tuple[SourceEdgeId, ...]
+    face_strength: SourceFaceStrength | None = None
 
 
 @dataclass(frozen=True)

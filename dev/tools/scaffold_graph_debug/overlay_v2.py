@@ -39,7 +39,8 @@ GROUP_STRUCTURE = "Structure"
 GROUP_SKELETON = "Skeleton"
 GROUP_PATCHES = "Patches: sides and types"
 GROUP_LAYER3 = "Layer 3 (detail)"
-GROUPS = (GROUP_STRUCTURE, GROUP_SKELETON, GROUP_PATCHES, GROUP_LAYER3)
+GROUP_LADDERS = "Ladders"
+GROUPS = (GROUP_STRUCTURE, GROUP_SKELETON, GROUP_PATCHES, GROUP_LAYER3, GROUP_LADDERS)
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,10 @@ LAYER_SPECS = (
     LayerSpec("show_types_other", "Scaffold_Types_Other", "Types: other", GROUP_PATCHES, False),
     LayerSpec("show_families", "Scaffold_L3_Families", "Family Colors", GROUP_LAYER3, False),
     LayerSpec("show_junctions", "Scaffold_L3_Junctions", "Junctions", GROUP_LAYER3, False),
+    LayerSpec("show_ladder_rails", "Scaffold_Ladder_Rails", "Ladder rails", GROUP_LADDERS, False),
+    LayerSpec("show_ladder_ends", "Scaffold_Ladder_Ends", "Ladder ends", GROUP_LADDERS, False),
+    LayerSpec("show_ladder_columns", "Scaffold_Ladder_Columns", "Ladder columns", GROUP_LADDERS, False),
+    LayerSpec("show_face_strength", "Scaffold_Source_Face_Strength", "Source face mark", GROUP_LADDERS, False),
 )
 LAYER_BY_PROP = {spec.prop: spec.layer for spec in LAYER_SPECS}
 
@@ -107,6 +112,14 @@ LEGENDS = {
         "Family Colors: Layer 3 direction family per run",
         "Junctions: + ScaffoldNode, * run-endpoint junction",
         "  yellow = branch (valence > 2)",
+    ),
+    GROUP_LADDERS: (
+        "Layer 3 quad ladder, first reading of each patch",
+        "Ladder rails: pink = rail A, lime = rail B",
+        "Ladder ends: violet (none on a closed ring)",
+        "Ladder columns: thin grey lines between columns",
+        "Source face mark: Blender Face Strength,",
+        "  red = weak, blue = medium, grey = strong",
     ),
 }
 
@@ -176,6 +189,17 @@ PATCH_TYPE_BY_REASON = {
     "already a rectangle": "RECTANGLE",
     "no bent opposite pair": "FOUR_SIDED",
 }
+LADDER_RAIL_COLORS = {"A": (0.95, 0.25, 0.6, 1.0), "B": (0.5, 0.95, 0.15, 1.0)}
+LADDER_END_COLOR = (0.6, 0.3, 1.0, 1.0)
+LADDER_COLUMN_COLOR = (0.8, 0.8, 0.8, 0.9)
+LADDER_RAIL_WIDTH = 6
+LADDER_COLUMN_WIDTH = 2
+FACE_STRENGTH_KINDS = ("WEAK", "MEDIUM", "STRONG")
+FACE_STRENGTH_COLORS = {
+    "WEAK": (0.95, 0.3, 0.3, 1.0),
+    "MEDIUM": (0.3, 0.7, 1.0, 1.0),
+    "STRONG": (0.55, 0.55, 0.55, 1.0),
+}
 PATCH_TYPE_NAMES = {
     "STRIP": "strip",
     "STRIP_OFF": "strip (option off, would straighten)",
@@ -234,6 +258,11 @@ def build_debug_payload(context: Any, solve: Any, *, object_name: str = "") -> d
         layers[PATCH_TYPE_LAYERS[type_name]] = items
     layers["Scaffold_L3_Families"] = _family_items(relations, run_offsets)
     layers["Scaffold_L3_Junctions"] = _junction_items(look, relations)
+    rails, ends, columns = _ladder_items(look, relations)
+    layers["Scaffold_Ladder_Rails"] = rails
+    layers["Scaffold_Ladder_Ends"] = ends
+    layers["Scaffold_Ladder_Columns"] = columns
+    layers["Scaffold_Source_Face_Strength"] = _face_strength_items(look)
 
     labels = _labels(look, role_by_run)
     counts = {
@@ -249,6 +278,10 @@ def build_debug_payload(context: Any, solve: Any, *, object_name: str = "") -> d
         "labels": labels,
         "chain_shape_pieces": chain_shape_pieces,
         "patch_types": patch_types,
+        "ladder_counts": _ladder_counts(relations),
+        "face_strength_counts": {
+            item["face_strength"]: len(item["face_ids"]) for item in layers["Scaffold_Source_Face_Strength"]
+        },
         "counts": counts,
         "fallback_side_edges": sorted(list(edge) for edge in look.fallback_edges),
     }
@@ -1007,6 +1040,127 @@ def _junction_items(look, relations) -> list[dict[str, Any]]:
     return items
 
 
+# --------------------------------------------------------------------------- Ladders
+
+
+def _ladder_items(look, relations):
+    """Rails, ends and column lines of the first reading of each PatchQuadLadderRelation."""
+
+    rails, ends, columns = [], [], []
+    for relation in sorted(getattr(relations, "patch_quad_ladder_relations", ()), key=lambda item: item.id):
+        reading = relation.readings[0]
+        patch_id = str(relation.patch_id)
+        profile = [[str(vertex) for vertex in line] for line in reading.profile_vertex_ids]
+        first_column, last_column = reading.columns[0], reading.columns[-1]
+        rail_paths = {"A": [line[0] for line in profile], "B": [line[-1] for line in profile]}
+        for rail, vertices in rail_paths.items():
+            if reading.is_closed:
+                vertices = vertices + vertices[:1]
+            face_id = first_column[0] if rail == "A" else first_column[-1]
+            view = _ladder_view(look, f"{relation.id}:rail_{rail}", patch_id, vertices, face_id)
+            offset = _offset(look, view) if view is not None else None
+            rails.append({
+                "relation_id": relation.id,
+                "patch_id": patch_id,
+                "rail": rail,
+                "source_edge_ids": [
+                    str(edge) for edge in (reading.rail_a_source_edge_ids if rail == "A" else reading.rail_b_source_edge_ids)
+                ],
+                "strokes": [_stroke(offset["polyline"], f"ladder_rail_{rail}", LADDER_RAIL_COLORS[rail], LADDER_RAIL_WIDTH)]
+                if offset else [],
+            })
+        if not reading.is_closed:
+            for end, vertices, column, edges in (
+                ("A", profile[0], first_column, reading.end_a_source_edge_ids),
+                ("B", profile[-1], last_column, reading.end_b_source_edge_ids),
+            ):
+                view = _ladder_view(look, f"{relation.id}:end_{end}", patch_id, vertices, column[0])
+                offset = _offset(look, view) if view is not None else None
+                ends.append({
+                    "relation_id": relation.id,
+                    "patch_id": patch_id,
+                    "end": end,
+                    "source_edge_ids": [str(edge) for edge in edges],
+                    "strokes": [_stroke(offset["polyline"], "ladder_end", LADDER_END_COLOR, LADDER_RAIL_WIDTH)]
+                    if offset else [],
+                })
+        inner = profile if reading.is_closed else profile[1:-1]
+        strokes = []
+        for vertices in inner:
+            points = [_source_position(look, vertex) for vertex in vertices]
+            if any(point is None for point in points) or len(points) < 2:
+                continue
+            lifted = [
+                _add(point, _scale(_vertex_normal(look, patch_id, vertex), RAIL_NORMAL_HOVER_FACTOR * look.unit))
+                for point, vertex in zip(points, vertices)
+            ]
+            strokes.append(_stroke(lifted, "ladder_column", LADDER_COLUMN_COLOR, LADDER_COLUMN_WIDTH))
+        columns.append({
+            "relation_id": relation.id,
+            "patch_id": patch_id,
+            "column_count": len(reading.columns),
+            "faces_per_column": reading.faces_per_column,
+            "is_closed": reading.is_closed,
+            "reading_count": len(relation.readings),
+            "strokes": strokes,
+        })
+    return rails, ends, columns
+
+
+def _ladder_view(look, view_id: str, patch_id: str, vertices: list[str], face_id) -> UsePieceView | None:
+    """A rail or end walked the way face_id winds along its first edge, so the offset lands on that face."""
+
+    if len(vertices) < 2:
+        return None
+    face = look.source.faces.get(face_id)
+    if face is not None:
+        cycle = [str(vertex) for vertex in face.vertex_ids]
+        a, b = vertices[0], vertices[1]
+        if a in cycle and cycle[(cycle.index(a) + 1) % len(cycle)] != b:
+            vertices = list(reversed(vertices))
+    points = [_source_position(look, vertex) for vertex in vertices]
+    if any(point is None for point in points):
+        return None
+    return UsePieceView(
+        id=view_id,
+        patch_id=patch_id,
+        patch_chain_id="",
+        parent_chain_id="",
+        vertex_ids=tuple(vertices),
+        polyline=tuple(points),
+    )
+
+
+def _face_strength_items(look) -> list[dict[str, Any]]:
+    """One fill item per Blender Face Strength class present; unmarked faces are not drawn."""
+
+    faces_by_kind: dict[str, list[Any]] = defaultdict(list)
+    for patch_id in sorted(look.patch_rank, key=look.patch_rank.get):
+        for face_id in look.patch_by_id[patch_id].source_face_ids:
+            face = look.source.faces.get(face_id)
+            mark = getattr(face, "face_strength", None) if face is not None else None
+            if mark is not None:
+                faces_by_kind[mark.value].append(face_id)
+    return [
+        {
+            "face_strength": kind,
+            "face_ids": [str(face_id) for face_id in faces_by_kind[kind]],
+            "strokes": _fill_strokes(look, faces_by_kind[kind], f"face_strength_{kind}", FACE_STRENGTH_COLORS[kind]),
+        }
+        for kind in FACE_STRENGTH_KINDS
+        if faces_by_kind.get(kind)
+    ]
+
+
+def _ladder_counts(relations) -> dict[str, int]:
+    records = getattr(relations, "patch_quad_ladder_relations", ())
+    return {
+        "ladder_patches": len(records),
+        "closed": sum(1 for record in records if any(reading.is_closed for reading in record.readings)),
+        "two_readings": sum(1 for record in records if len(record.readings) == 2),
+    }
+
+
 # --------------------------------------------------------------------------- report
 
 
@@ -1037,6 +1191,16 @@ def format_report(payload: dict[str, Any], solve: Any) -> str:
     out.append("patch types: " + ", ".join(
         f"{PATCH_TYPE_NAMES[type_name]}={type_counts.get(type_name, 0)}" for type_name in PATCH_TYPES
     ))
+    ladders = payload.get("ladder_counts", {})
+    out.append(
+        f"ladder patches: {ladders.get('ladder_patches', 0)} "
+        f"(closed {ladders.get('closed', 0)}, with two readings {ladders.get('two_readings', 0)})"
+    )
+    face_strength = payload.get("face_strength_counts", {})
+    if face_strength:
+        out.append("faces by source face mark: " + ", ".join(
+            f"{kind.lower()}={face_strength.get(kind, 0)}" for kind in FACE_STRENGTH_KINDS
+        ))
     unroled = sum(1 for item in payload["layers"]["Scaffold_Chains"] if item["role"] not in ROLE_COLORS)
     out.append(f"chain strokes without an axis role: {unroled} of {len(payload['layers']['Scaffold_Chains'])}")
     undrawn = [

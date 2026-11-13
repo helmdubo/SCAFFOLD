@@ -277,6 +277,75 @@ def test_report_counts_islands_decisions_and_types() -> None:
     assert f"solver diagnostics: {len(solve.diagnostics)}" in report
 
 
+LADDER_CASES = ("b_ring_s1", "a_cube_s3", "f_border", "d_cyl_s2")
+
+
+def _bevel_payload(name: str):
+    source = load_source_snapshot(f"scaffold_core/tests/data/bevel_cases/{name}.capture.json")
+    context = run_pass_2_features(run_pass_1_relations(run_pass_0(source)), FeatureOptions())
+    solve = run_skeleton_solve(context)
+    return context, build_debug_payload(context, solve, object_name=name)
+
+
+@pytest.mark.parametrize("name", LADDER_CASES)
+def test_ladder_layers_draw_the_first_reading_of_each_ladder_record(name) -> None:
+    context, payload = _bevel_payload(name)
+    records = {record.id: record for record in context.relation_snapshot.patch_quad_ladder_relations}
+    assert records
+    layers = payload["layers"]
+    rails = layers["Scaffold_Ladder_Rails"]
+    assert sorted((item["relation_id"], item["rail"]) for item in rails) == sorted(
+        (record_id, rail) for record_id in records for rail in ("A", "B")
+    )
+    for item in rails:
+        reading = records[item["relation_id"]].readings[0]
+        edges = reading.rail_a_source_edge_ids if item["rail"] == "A" else reading.rail_b_source_edge_ids
+        assert item["source_edge_ids"] == [str(edge) for edge in edges]
+        (stroke,) = item["strokes"]
+        assert len(stroke["points"]) == len(edges) + 1
+        assert stroke["color"] == list(overlay_v2.LADDER_RAIL_COLORS[item["rail"]])
+    open_ids = {record_id for record_id, record in records.items() if not record.readings[0].is_closed}
+    ends = layers["Scaffold_Ladder_Ends"]
+    assert sorted((item["relation_id"], item["end"]) for item in ends) == sorted(
+        (record_id, end) for record_id in open_ids for end in ("A", "B")
+    )
+    for item in ends:
+        assert len(item["strokes"][0]["points"]) == records[item["relation_id"]].readings[0].faces_per_column + 1
+    columns = {item["relation_id"]: item for item in layers["Scaffold_Ladder_Columns"]}
+    assert set(columns) == set(records)
+    for record_id, item in columns.items():
+        reading = records[record_id].readings[0]
+        inner = len(reading.columns) if reading.is_closed else len(reading.columns) - 1
+        assert len(item["strokes"]) == inner
+        assert all(stroke["width"] == overlay_v2.LADDER_COLUMN_WIDTH for stroke in item["strokes"])
+    counts = payload["ladder_counts"]
+    assert counts["ladder_patches"] == len(records)
+    assert f"ladder patches: {len(records)} (closed {counts['closed']}" in payload["report"]
+
+
+@pytest.mark.parametrize("name", LADDER_CASES)
+def test_source_face_mark_layer_fills_each_marked_face_once_by_class(name) -> None:
+    context, payload = _bevel_payload(name)
+    expected = Counter(
+        face.face_strength.value for face in context.source_snapshot.faces.values() if face.face_strength is not None
+    )
+    items = payload["layers"]["Scaffold_Source_Face_Strength"]
+    assert {item["face_strength"]: len(item["face_ids"]) for item in items} == dict(expected)
+    assert payload["face_strength_counts"] == dict(expected)
+    for item in items:
+        assert {tuple(stroke["color"]) for stroke in item["strokes"]} == {
+            tuple(overlay_v2.FACE_STRENGTH_COLORS[item["face_strength"]])
+        }
+        assert all(stroke["fill"] for stroke in item["strokes"])
+    assert "faces by source face mark: weak=" in payload["report"]
+
+
+def test_unmarked_meshes_draw_no_source_face_mark() -> None:
+    _context, _solve, payload = _run("artist_walls_004")
+    assert payload["layers"]["Scaffold_Source_Face_Strength"] == []
+    assert "faces by source face mark" not in payload["report"]
+
+
 def test_no_frame_or_world_vocabulary_in_the_payload_module() -> None:
     text = inspect.getsource(overlay_v2)
     for word in ("WALL", "FLOOR", "SLOPE", "WORLD_UP", "H_FRAME", "V_FRAME"):

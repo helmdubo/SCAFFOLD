@@ -10,7 +10,12 @@ Rules:
 from __future__ import annotations
 
 from scaffold_core.ids import SourceEdgeId, SourceFaceId, SourceMeshId, SourceVertexId
-from scaffold_core.layer_0_source.marks import SourceMark, SourceMarkKind
+from scaffold_core.layer_0_source.marks import (
+    FACE_STRENGTH_ATTRIBUTE,
+    FACE_STRENGTH_BY_VALUE,
+    SourceMark,
+    SourceMarkKind,
+)
 from scaffold_core.layer_0_source.snapshot import (
     MeshEdgeRef,
     MeshFaceRef,
@@ -22,8 +27,10 @@ from scaffold_core.layer_0_source.snapshot import (
 def read_source_mesh_from_blender(context: object) -> SourceMeshSnapshot:
     """Convert the active Blender mesh object into SourceMeshSnapshot.
 
-    G1 reads mesh topology, selected faces and source edge marks only. It does
-    not build Layer 1 topology and does not write data back to Blender.
+    G1 reads mesh topology, selected faces and source edge marks only; the
+    raw Blender Face Strength class per face is read where the attribute
+    exists. It does not build Layer 1 topology and does not write data back
+    to Blender.
     """
 
     active_object = getattr(context, "object", None)
@@ -63,6 +70,7 @@ def read_source_mesh_from_blender(context: object) -> SourceMeshSnapshot:
     faces: dict[SourceFaceId, MeshFaceRef] = {}
     selected_face_ids: list[SourceFaceId] = []
     object_mode_selects_all_faces = getattr(active_object, "mode", None) == "OBJECT"
+    face_strengths = _face_strength_values(mesh)
     for polygon in mesh.polygons:
         face_id = SourceFaceId(f"f{polygon.index}")
         vertex_ids = tuple(SourceVertexId(f"v{vertex_index}") for vertex_index in polygon.vertices)
@@ -74,6 +82,11 @@ def read_source_mesh_from_blender(context: object) -> SourceMeshSnapshot:
             id=face_id,
             vertex_ids=vertex_ids,
             edge_ids=edge_ids,
+            face_strength=(
+                FACE_STRENGTH_BY_VALUE.get(face_strengths[polygon.index])
+                if face_strengths is not None and polygon.index < len(face_strengths)
+                else None
+            ),
         )
         if object_mode_selects_all_faces or getattr(polygon, "select", False):
             selected_face_ids.append(face_id)
@@ -96,3 +109,17 @@ def read_source_mesh_from_blender(context: object) -> SourceMeshSnapshot:
         selected_face_ids=tuple(selected_face_ids),
         marks=tuple(marks),
     )
+
+
+def _face_strength_values(mesh: object) -> list[int] | None:
+    """Raw per-polygon values of Blender's FACE-domain int Face Strength attribute, if any."""
+
+    attributes = getattr(mesh, "attributes", None)
+    if attributes is None:
+        return None
+    attribute = attributes.get(FACE_STRENGTH_ATTRIBUTE)
+    if attribute is None:
+        return None
+    if getattr(attribute, "domain", None) != "FACE" or getattr(attribute, "data_type", None) != "INT":
+        return None
+    return [int(item.value) for item in attribute.data]
