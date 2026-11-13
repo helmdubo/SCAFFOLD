@@ -855,6 +855,13 @@ numbers):
   hidden solved faces and any other object in Edit Mode. Not tested in the
   interactive UI; undo not verified; the bmesh select history (the active
   element) not measured.
+- The writer fixes of the second review (exact selection restore, the
+  three refusals) have no test that the suite or Tier 3 can fail on. The
+  smoke's selection check runs with every face selected, where nothing is
+  flushed, so it passes with the restore removed. They were verified by
+  the reviewer's Blender scripts (scratch `review_ah2`). To make the
+  smoke effective, deselect part of the faces of one object before the
+  quilt write and add a hidden-target and a hidden-face case.
 - Nothing decides the orientation of a quilt in UV: on the user's mesh the
   wall quilt lies upside down against the reference (straight edge up,
   noisy edge down). A natural home is the user-filter stage, which owns
