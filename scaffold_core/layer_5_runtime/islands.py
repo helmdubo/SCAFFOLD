@@ -20,7 +20,10 @@ Rules:
   FeatureConstraint.
 - A bevel strip laid from its ladder (a STRAIGHT_LADDER constraint) is an
   island by itself: no seam of it is stitched, unless the over filter joins
-  one of its seams; then it lies in its quilt and its layout comes from it.
+  one of its seams; then it lies in its quilt and its layout comes from it
+  (the quilt keeps the strip's two rails together where it can,
+  quilt_ladders.py). A marked strip without the constraint (both rails
+  straight on its surface) is an ordinary patch here.
 - An island is a quilt: the patches that lie together in UV, known as data
   before any unwrap. The over filter of user options (scaffold_core
   user_filters, plan Slice AH) reaches it only through SeamDirectives: a

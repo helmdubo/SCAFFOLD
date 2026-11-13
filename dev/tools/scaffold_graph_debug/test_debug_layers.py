@@ -405,18 +405,50 @@ def test_bevel_layers_fill_each_bevel_record_once_by_kind_and_source(name, marks
 
 
 def test_bevel_strips_laid_from_their_ladder_have_their_island_layer_and_report_line() -> None:
-    _context, solve, payload = _run("rounded_wall_bevel_marks")
+    context, solve, payload = _run("rounded_wall_bevel_marks")
     ladder_islands = {skeleton.island_id for skeleton in solve.skeletons if skeleton.frame == "LADDER"}
-    assert len(ladder_islands) == 9
+    # Five strips have a curved rail and a constraint; the four straight ones develop (plan Slice AI).
+    assert len(ladder_islands) == 5
     assert {item["island_id"] for item in payload["layers"]["Scaffold_Islands_LADDER"]} == ladder_islands
-    assert payload["bevel_ladders"] == {"constraints": 9, "islands": 9, "not_laid": []}
-    assert "bevel strips laid from their ladder: 9 of 9 constraints" in payload["report"]
+    develops = "both rails are straight on its surface: it develops as it is"
+    assert payload["bevel_ladders"] == {
+        "constraints": 5, "islands": 5, "kept_together": 0, "in_quilt": [],
+        "not_laid": [(f"patch:seed:f{i}", develops) for i in (34, 72, 94, 95)],
+    }
+    assert "bevel strips laid from their ladder: 5 by itself, 0 kept together in a quilt, of 5 constraints" in payload["report"]
+    assert f"  not laid: patch:seed:f94: {develops}" in payload["report"]
     # A closed ring by mark gets no constraint and is named with its reason.
     ring = load_source_snapshot("scaffold_core/tests/data/bevel_cases/b_ring_s1.capture.json")
     context = run_pass_2_features(run_pass_1_relations(run_pass_0(ring)))
     ring_payload = build_debug_payload(context, run_skeleton_solve(context), object_name="ring")
     assert ring_payload["bevel_ladders"]["not_laid"] == [("patch:seed:f8", "the reading is a closed ring")]
     assert "  not laid: patch:seed:f8: the reading is a closed ring" in ring_payload["report"]
+
+
+def test_the_report_says_which_bevel_strips_a_quilt_keeps_together_and_which_it_does_not_read() -> None:
+    from scaffold_core.layer_5_runtime import quilt_ladders
+    from scaffold_core.pipeline.passes import run_pass_3_filters
+    from scaffold_core.user_filters.model import FilterOptions
+
+    plain = _run("rounded_wall_bevel_marks")[0]
+    context = run_pass_3_filters(plain, FilterOptions(world_up=(0.0, 0.0, 1.0)))
+    solve = run_skeleton_solve(context)
+    payload = build_debug_payload(context, solve, object_name="rounded_up")
+    assert overlay_ladders.QUILT_LADDER_READ == quilt_ladders.QUILT_LADDER_READ
+    not_laid_on_an_axis = quilt_ladders.QUILT_LADDER_RAIL_NOT_LAID
+    laid = payload["bevel_ladders"]
+    assert laid["constraints"] == 5 and laid["islands"] == 0 and laid["kept_together"] == 2
+    assert laid["in_quilt"] == sorted([
+        ("patch:seed:f35", quilt_ladders.QUILT_LADDER_READ), ("patch:seed:f36", quilt_ladders.QUILT_LADDER_READ),
+        ("patch:seed:f71", not_laid_on_an_axis), ("patch:seed:f73", not_laid_on_an_axis),
+        ("patch:seed:f96", not_laid_on_an_axis),
+    ])
+    report = payload["report"]
+    assert "bevel strips laid from their ladder: 0 by itself, 2 kept together in a quilt, of 5 constraints" in report
+    assert f"  in a quilt, not read: patch:seed:f73: {not_laid_on_an_axis}" in report
+    assert "  in a quilt, not read: patch:seed:f36" not in report
+    # The bevel strip layer draws the strips laid by themselves only: none here.
+    assert payload["layers"]["Scaffold_Islands_LADDER"] == []
 
 
 def test_bevel_legend_says_structural_records_are_not_confirmed() -> None:

@@ -567,6 +567,33 @@ def test_rule_b_does_not_depend_on_ids_or_order(make) -> None:
         assert _signature(_run(permuted), face_map) == expected
 
 
+def _ladder_signature(context, face_map=None):
+    """Per marked strip (its faces): its constraint's (length, width) rounded, or the reason it has none."""
+
+    faces_of = {
+        str(patch_id): frozenset((face_map or {}).get(str(face), str(face)) for face in patch.source_face_ids)
+        for patch_id, patch in context.topology_snapshot.patches.items()
+    }
+    features = context.feature_snapshot
+    out = {faces_of[str(c.patch_id)]: tuple(round(x, 9) for x in c.target_lengths) for c in features.constraints}
+    out.update({
+        faces_of[str(d.entity_ids[0])]: d.evidence["reason"]
+        for d in features.diagnostics if d.code == feature_bevels.LADDER_NOT_LAID_CODE
+    })
+    return out
+
+
+@pytest.mark.parametrize("name", ("u_rounded_wall_noise_top", "d_cyl_s2"))
+def test_which_marked_strips_are_straightened_does_not_depend_on_ids(name) -> None:
+    source = _case(name)[0].source_snapshot
+    expected = _ladder_signature(_run(source))
+    assert feature_bevels.NOT_LAID_DEVELOPS in expected.values()  # both outcomes are present
+    assert any(isinstance(value, tuple) for value in expected.values())
+    for seed in range(4):
+        permuted, face_map = _permuted(source, seed)
+        assert _ladder_signature(_run(permuted), face_map) == expected
+
+
 def test_a_prism_of_quad_columns_between_two_ngon_caps_is_no_bevel() -> None:
     # Every side patch has an end-strict reading between the caps with its
     # rails on two different patches, but those are side patches too: strips
@@ -642,10 +669,13 @@ def test_pass_2_emits_no_bevel_constraint_with_the_bevel_option_off(straighten) 
             )
             assert features.constraints == strip_only.constraints
             assert all(c.kind is FeatureConstraintKind.STRAIGHT_STRIP for c in features.constraints)
-            # Paired positive: with the option on, the marked cases get ladder constraints.
+            # Paired positive: with the option on, the strips of the marked cases reach the ladder
+            # rule: a constraint, or a diagnostic that says why not (a_cube_s3's strips develop).
             on = run_pass_2_features(context, replace(options, straighten_bevel_strips=True)).feature_snapshot
             ladders = [c for c in on.constraints if c.kind is FeatureConstraintKind.STRAIGHT_LADDER]
-            assert bool(ladders) == marks
+            not_laid = [d for d in on.diagnostics if d.code == feature_bevels.LADDER_NOT_LAID_CODE]
+            assert bool(ladders or not_laid) == marks
+            assert bool(ladders) == (marks and name != "a_cube_s3")
 
 
 def test_bevel_rule_reads_no_geometry_world_axis_or_layer_5() -> None:

@@ -78,8 +78,8 @@ class SCAFFOLDGRAPH_Settings(bpy.types.PropertyGroup):
     straighten_bevel_strips: BoolProperty(
         name="Straighten Bevel Strips",
         description=(
-            "Pass 2 option: lay every bevel strip marked by Face Strength from its ladder as a straight "
-            "island of its own (applies on Rebuild and Write UV)"
+            "Pass 2 option: lay every bevel strip marked by Face Strength whose rails are not both straight "
+            "on its surface from its ladder as a straight strip (applies on Rebuild and Write UV)"
         ),
         default=True,
     )

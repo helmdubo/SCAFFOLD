@@ -11,6 +11,11 @@ Rules:
   patch side; a run-end pin is never overridden.
 - A ladder island (a STRAIGHT_LADDER constraint) pins every boundary vertex
   occurrence at the place its constraint gives it; it has no stations.
+- A ladder strip kept together in its quilt (quilt_ladders.py) pins each
+  free-rail vertex, after the stations, at its profile-line partner's place
+  along the rail and on the line between its rail's corners across; a
+  vertex whose partner has no pin is left unpinned (counted). A run-end pin
+  is never moved.
 - The result names the UV cut set (plan Slice AH): the stitched seams and
   the Chains and source edges that stay cuts, so a writer can lay each
   quilt as one chart without changing the user's seams.
@@ -23,6 +28,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from scaffold_core.layer_5_runtime.islands import IslandAssembly, build_islands, uv_cut_chain_ids
+from scaffold_core.layer_5_runtime.quilt_ladders import tie_free_rails
 from scaffold_core.layer_5_runtime.skeleton import IslandSkeleton, build_island_skeletons
 
 ISLAND_MARGIN = 0.25  # LEVEL_B_PLACEHOLDER: naive island offsets; packing is Layer 4/5 policy.
@@ -165,12 +171,25 @@ def _island_vertices(skeleton, evidence_by_id, offset_u, geometry, vertex_by_fac
             pinned=True,
             vertex_id=vertex_id,
         )
+    run_end_keys = frozenset(vertices)
     skipped = _station_pins(
         skeleton, evidence_by_id, uv_by_node, geometry, vertex_by_face_corner, vertices, min_u - offset_u
     )
     if skipped:
         diagnostics.append(
             f"{skeleton.island_id}: {skipped} station vertices without one occurrence on their side -> unpinned"
+        )
+    # A ladder strip kept together in its quilt: its free rail follows its profile lines.
+    placed, cleared, untied = tie_free_rails(
+        skeleton.ladder_ties, {key: vertex.uv for key, vertex in vertices.items()}, run_end_keys
+    )
+    for key in cleared:
+        vertices.pop(key, None)
+    for key, (source_vertex, uv) in placed.items():
+        vertices[key] = PinnedVertex(source_vertex, skeleton.island_id, key[1], uv, True, key[0])
+    if untied:
+        diagnostics.append(
+            f"{skeleton.island_id}: {untied} ladder rail vertices without a pinned profile partner -> unpinned"
         )
     for evidence_id, role_name in skeleton.axis_role_by_run.items():
         if role_name not in ("AXIS_A", "AXIS_B"):

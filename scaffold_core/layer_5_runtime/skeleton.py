@@ -35,7 +35,9 @@ Rules:
   constraint says (frame LADDER): rails on v = 0 and v = width, profile
   lines at their u. Layer 5 only turns u around when the loop walks rail A
   from end B to end A, so the layout is not mirrored; it reads no ladder,
-  face or 3D direction.
+  face or 3D direction. A STRAIGHT_LADDER strip that shares a frame-free
+  quilt is read after line orientation by quilt_ladders.py (plan Slice AI):
+  it gives no axis, only keeps its two rails together.
 - Island rails: Layer 3 cuts each family's ScaffoldRail by the island (its
   runs and stitched hinges) and orders the pieces; Layer 5 checks them
   against the unfolded frame and never orders a line itself.
@@ -56,7 +58,7 @@ from scaffold_core.layer_2_geometry.measures import EPSILON, cross, dot, normali
 from scaffold_core.layer_3_relations.model import ScaffoldRailSegment
 from scaffold_core.layer_3_relations.scaffold_rails import cut_scaffold_rail, rail_member_endpoints
 from scaffold_core.layer_4_features.model import FeatureConstraintKind
-from scaffold_core.layer_5_runtime import frame_free
+from scaffold_core.layer_5_runtime import frame_free, quilt_ladders
 from scaffold_core.layer_5_runtime.axis_solve import (
     RESIDUAL_TOLERANCE_PER_SPAN,
     AxisSolve,
@@ -108,6 +110,11 @@ class IslandSkeleton:
     # Ladder island: (vertex occurrence, patch) -> (source vertex, (u, v)) of
     # every boundary vertex, as the STRAIGHT_LADDER constraint places it.
     ladder_pins: Mapping[tuple[str, str], tuple[str, tuple[float, float]]] = field(default_factory=dict)
+    # Quilt holding STRAIGHT_LADDER strips (plan Slice AI): the outcome per
+    # strip patch (quilt_ladders.QUILT_LADDER_*), and the free-rail vertices
+    # of the strips read, placed by their profile lines after the solve.
+    quilt_ladder_by_patch: Mapping[str, str] = field(default_factory=dict)
+    ladder_ties: tuple[quilt_ladders.LadderTie, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -141,11 +148,13 @@ def build_island_skeletons(context: Any, assembly: IslandAssembly) -> tuple[Isla
     geometry = context.geometry_facts
     lookups = _selection_lookups(context)
     strip_by_island, strip_notes_by_island = _strip_constraints_by_island(context, assembly)
+    ladders_by_island = quilt_ladders.quilt_ladders_by_island(context, assembly)
     skeletons = []
     for island in assembly.islands:
         skeletons.append(_island_skeleton(
             island, assembly, relations, geometry, lookups,
             strip_by_island.get(island.id), strip_notes_by_island.get(island.id, ()),
+            ladders_by_island.get(island.id, ()),
         ))
     return tuple(skeletons)
 
@@ -156,8 +165,9 @@ def _strip_constraints_by_island(context: Any, assembly: IslandAssembly):
     A constraint applies only to an island made of its one patch; otherwise
     the island gets a diagnostic naming the patch (never silently dropped).
     Island assembly stitches a ladder patch only where the user filter joins
-    it to its quilt (plan Slice AH); the quilt then lays it, which is the
-    expected case, so a ladder sharing its island gets no diagnostic.
+    it to its quilt (plan Slice AH); the quilt then lays it and reads the
+    constraint there (quilt_ladders.py, plan Slice AI), so it gets no note
+    here.
     """
 
     features = getattr(context, "feature_snapshot", None)
@@ -224,7 +234,7 @@ def _selection_lookups(context: Any) -> _SelectionLookups:
     )
 
 
-def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None, strip_notes=()):
+def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None, strip_notes=(), ladders=()):
     diagnostics: list[str] = list(strip_notes)
     patch_ids = set(island.patch_ids)
     runs = tuple(e for e in lookups.evidence_by_id.values() if str(e.patch_id) in patch_ids)
@@ -246,6 +256,8 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
     length_of = None
     frame_coordinates = {"AXIS_A": None, "AXIS_B": None}
     bridge_vectors: dict[str, tuple[float, float]] = {}
+    ladder_ties: tuple[quilt_ladders.LadderTie, ...] = ()
+    ladder_outcomes = {str(c.patch_id): quilt_ladders.QUILT_LADDER_RIGID_FRAME for c in ladders}
     if strip_layout is not None:
         roles, signs, direction_of, length_of = strip_layout
         mismatches = ()
@@ -263,6 +275,10 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
         frame_free.orient_lines_by_corners(
             runs, line_of, axis_by_line, signs, relations.run_corner_relations, diagnostics, bridged
         )
+        if ladders:
+            length_of, ladder_ties, ladder_outcomes = quilt_ladders.read_quilt_ladders(
+                ladders, island, runs, roles, signs, vertex_by_run_end, lookups.patch_chain_by_id, diagnostics
+            )
         bridge_vectors = frame_free.bridge_vectors(runs, roles, signs, bridged, diagnostics)
         frame_free.report_unreached_lines(runs, line_of, axis_by_line, bridge_vectors, diagnostics)
         direction_of = {e.id: e.direction for e in runs}
@@ -326,6 +342,8 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
         rail_segments=rail_segments,
         rail_frame_conflicts=rail_conflicts,
         bridge_vector_by_run=bridge_vectors,
+        quilt_ladder_by_patch=ladder_outcomes,
+        ladder_ties=ladder_ties,
     )
 
 

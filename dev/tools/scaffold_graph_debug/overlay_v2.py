@@ -63,7 +63,7 @@ LAYER_SPECS = (
     LayerSpec("show_islands_unfolded", "Scaffold_Islands_UNFOLDED", "Quilts: rigid frame", GROUP_SKELETON, False),
     LayerSpec("show_islands_frame_free", "Scaffold_Islands_FRAME_FREE", "Quilts: frame-free", GROUP_SKELETON, False),
     LayerSpec("show_islands_strip", "Scaffold_Islands_STRIP", "Quilts: strip", GROUP_SKELETON, False),
-    LayerSpec("show_islands_ladder", "Scaffold_Islands_LADDER", "Quilts: bevel strip", GROUP_SKELETON, False),
+    LayerSpec("show_islands_ladder", "Scaffold_Islands_LADDER", "Quilts: bevel strip by itself", GROUP_SKELETON, False),
     LayerSpec("show_lines", "Scaffold_Skeleton_Lines", "Lines", GROUP_SKELETON, True),
     LayerSpec("show_nodes", "Scaffold_Skeleton_Nodes", "Nodes", GROUP_SKELETON, True),
     LayerSpec("show_pins", "Scaffold_Pins", "Pins", GROUP_SKELETON, False),

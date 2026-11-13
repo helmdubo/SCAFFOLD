@@ -84,8 +84,9 @@ class FeatureOptions:
     straighten_strips (off by default) lays a STRIP whose long sides are
     curved on the surface as a rectangle. straighten_bevel_strips (on by
     default) lays every bevel strip confirmed by the Face Strength mark from
-    its ladder as a straight island of its own; it changes nothing on a mesh
-    without marks.
+    its ladder as a straight strip, except a strip whose two rails are
+    straight on its surface (it develops as it is); it changes nothing on a
+    mesh without marks.
     """
 
     straighten_strips: bool = False
@@ -175,8 +176,9 @@ class FeatureConstraint:
     four uses in loop order; target_lengths[0] is the length of the opposite
     pair at loop positions 0 and 2, target_lengths[1] that of positions 1 and 3.
 
-    STRAIGHT_LADDER: a marked bevel strip is laid by itself as a straight
-    strip from its ladder (ladder holds every boundary vertex's place).
+    STRAIGHT_LADDER: a marked bevel strip is laid as a straight strip from
+    its ladder (ladder holds every boundary vertex's place): by itself, or
+    inside the quilt a user filter joins it to.
     patch_chain_ids are the rail A, rail B, end A and end B uses in that
     order; target_lengths are (length, width).
     """

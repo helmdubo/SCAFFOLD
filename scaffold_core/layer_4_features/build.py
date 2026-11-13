@@ -51,7 +51,8 @@ def build_feature_snapshot(
 
     The bevel rule runs always: it emits records. With the option
     straighten_bevel_strips each marked bevel strip with a usable reading
-    emits a STRAIGHT_LADDER constraint; a strip candidate on such a patch
+    whose rails are not both straight on its surface emits a STRAIGHT_LADDER
+    constraint; a strip candidate on such a patch
     then emits no STRAIGHT_STRIP and is suppressed as laid from its bevel
     ladder. The bevel rule needs the Layer 0 source faces (marks and
     incidence): without source (the default) bevels is empty. Pass 2 always

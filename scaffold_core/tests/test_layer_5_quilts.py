@@ -135,8 +135,10 @@ def test_a_ladder_patch_in_a_quilt_is_laid_by_the_quilt_without_a_diagnostic() -
 def test_without_the_filter_a_ladder_patch_is_still_laid_by_itself() -> None:
     solve = run_skeleton_solve(_context(ROUNDED))
 
-    assert sum(1 for skeleton in solve.skeletons if skeleton.frame == LADDER_LAYOUT) == 9
-    assert len(solve.assembly.islands) == 20
+    # Five strips have a curved rail and a ladder constraint (plan Slice AI); the four straight
+    # strips develop and are assembled by the structure.
+    assert sum(1 for skeleton in solve.skeletons if skeleton.frame == LADDER_LAYOUT) == 5
+    assert len(solve.assembly.islands) == 8
 
 
 def test_a_split_directive_also_splits_a_seam_the_structure_stitches() -> None:
@@ -287,24 +289,29 @@ def test_the_join_order_and_the_stitch_decisions_do_not_depend_on_the_mesh_scale
 
 
 def test_a_ladder_patch_with_a_join_lies_in_its_quilt_and_its_other_seams_are_the_structures() -> None:
-    # Only one JOIN, f34|f110: the other ladder patches stay alone, f34 lies
-    # with f110 and its seams without a directive go to the structure.
+    # Only one JOIN, f36|f111 (f36 has curved rails and a ladder constraint): the other
+    # ladder patches stay alone, f36 lies with f111 and its seams without a directive go to
+    # the structure.
     plain = _context(ROUNDED)
     join = next(
         d for d in _context(ROUNDED, UP).filter_snapshot.directives
         if d.kind is SeamDirectiveKind.JOIN
-        and {_short(d.first_patch_id), _short(d.second_patch_id)} == {"f34", "f110"}
+        and {_short(d.first_patch_id), _short(d.second_patch_id)} == {"f36", "f111"}
     )
     solve = run_skeleton_solve(replace(plain, filter_snapshot=FilterSnapshot(FilterOptions(UP), directives=(join,))))
-    island_id = solve.assembly.island_by_patch_id["patch:seed:f34"]
+    island_id = solve.assembly.island_by_patch_id["patch:seed:f36"]
     island = next(island for island in solve.assembly.islands if island.id == island_id)
-    f34_decisions = [d for d in solve.assembly.decisions if "patch:seed:f34" in (d.first_patch_id, d.second_patch_id)]
+    f36_decisions = [d for d in solve.assembly.decisions if "patch:seed:f36" in (d.first_patch_id, d.second_patch_id)]
 
-    assert {"f34", "f110"} <= {_short(p) for p in island.patch_ids} and len(island.patch_ids) > 2
+    assert {"f36", "f111"} <= {_short(p) for p in island.patch_ids} and len(island.patch_ids) > 2
     assert next(s for s in solve.skeletons if s.island_id == island_id).frame != LADDER_LAYOUT
-    assert sum(1 for skeleton in solve.skeletons if skeleton.frame == LADDER_LAYOUT) == 8
-    assert not any(d.reason == STITCH_BEVEL_LADDER_REASON for d in f34_decisions)
-    assert sum(1 for d in f34_decisions if d.accepted) >= 2
+    assert sum(1 for skeleton in solve.skeletons if skeleton.frame == LADDER_LAYOUT) == 4
+    assert not any(d.reason == STITCH_BEVEL_LADDER_REASON for d in f36_decisions)
+    # The structure stitches an end of f36 to its junction first; the JOIN seam then closes a
+    # cycle in the quilt and stays cut.
+    assert any(d.accepted and not d.reason.startswith(STITCH_JOIN_BY_FILTER_PREFIX) for d in f36_decisions)
+    (joined,) = [d for d in f36_decisions if d.chain_id == str(join.chain_id)]
+    assert joined.reason == STITCH_NON_TREE_REASON
 
 
 def test_a_quilt_is_connected_by_its_stitched_seams() -> None:
