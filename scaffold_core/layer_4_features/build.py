@@ -12,6 +12,9 @@ Rules:
 - The bevel rule reads Layer 0 face marks and face/edge incidence, Layer 1
   patches, chains and uses, and Layer 3 quad ladders and PatchAdjacency;
   no position, length, normal, world axis, UV or island.
+- The ladder constraint of a marked bevel strip reads its chosen ladder
+  reading, Layer 2 lengths and face fans, and Layer 0 positions of edges
+  inside the patch; it carries every number Layer 5 needs (DD-26).
 """
 
 from __future__ import annotations
@@ -24,7 +27,7 @@ from scaffold_core.layer_0_source.marks import SourceFaceStrength
 from scaffold_core.layer_0_source.snapshot import SourceMeshSnapshot
 from scaffold_core.layer_1_topology.model import SurfaceModel
 from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot
-from scaffold_core.layer_2_geometry.measures import EPSILON
+from scaffold_core.layer_2_geometry.measures import EPSILON, length, subtract
 from scaffold_core.layer_3_relations.model import (
     DihedralKind,
     PatchChainShapeKind,
@@ -46,6 +49,9 @@ from scaffold_core.layer_4_features.model import (
     FeatureOptions,
     FeatureSnapshot,
     FeatureSuppressionReason,
+    LadderProfileLine,
+    LadderVertex,
+    StraightLadder,
     StripSide,
 )
 
@@ -54,10 +60,6 @@ STRIP_SIDE_COUNT = 4
 # longer one need straightening.
 STRIP_LENGTH_MISMATCH = 0.01
 STRIP_OPPOSITE_PAIRS = ((0, 2), (1, 3))
-# A Chain is bent in 3D when its length exceeds its chord by more than this
-# share; a closed Chain (chord ~0) is always bent. A vertex merely off the
-# chord line (an arched chain whose length equals its chord) is not bent.
-STRIP_BENT_DETOUR = 0.01
 
 
 def build_feature_snapshot(
@@ -69,28 +71,51 @@ def build_feature_snapshot(
 ) -> FeatureSnapshot:
     """Run every feature rule, then resolve and constrain its candidates.
 
-    The bevel rule runs always (no option): it emits records only, no
-    constraint, so it changes no layout. It needs the Layer 0 source faces
-    (marks and incidence): without source (the default) bevels is empty.
-    Pass 2 always passes it.
+    The bevel rule runs always: it emits records. With the option
+    straighten_bevel_strips each marked bevel strip with a usable reading
+    emits a STRAIGHT_LADDER constraint; a strip candidate on such a patch
+    then emits no STRAIGHT_STRIP and is suppressed as laid from its bevel
+    ladder. The bevel rule needs the Layer 0 source faces (marks and
+    incidence): without source (the default) bevels is empty. Pass 2 always
+    passes it.
     """
 
     candidates = strip_candidates(topology, geometry, relations)
-    instances = tuple(resolve_strip(candidate, options) for candidate in candidates)
+    bevels, bevel_diagnostics = bevel_instances(topology, relations, source)
+    ladders, ladder_diagnostics = ladder_constraints(bevels, relations, geometry, source, options)
+    laid_by_ladder = {constraint.patch_id for constraint in ladders}
+    instances = tuple(
+        _laid_as_bevel_strip(instance) if instance.patch_id in laid_by_ladder else instance
+        for instance in (resolve_strip(candidate, options) for candidate in candidates)
+    )
     candidate_by_id = {candidate.id: candidate for candidate in candidates}
     constraints = tuple(
         strip_constraint(instance, candidate_by_id[instance.candidate_id])
         for instance in instances
         if instance.status is FeatureInstanceStatus.ACCEPTED
-    )
-    bevels, bevel_diagnostics = bevel_instances(topology, relations, source)
+    ) + ladders
     return FeatureSnapshot(
         options=options,
         candidates=candidates,
         instances=instances,
         constraints=constraints,
         bevels=bevels,
-        diagnostics=bevel_diagnostics,
+        diagnostics=bevel_diagnostics + ladder_diagnostics,
+    )
+
+
+def _laid_as_bevel_strip(instance: FeatureInstance) -> FeatureInstance:
+    """A strip the strip rule would accept on a patch its bevel ladder lays: the ladder takes it."""
+
+    if instance.status is not FeatureInstanceStatus.ACCEPTED:
+        return instance
+    return FeatureInstance(
+        id=instance.id,
+        candidate_id=instance.candidate_id,
+        kind=instance.kind,
+        patch_id=instance.patch_id,
+        status=FeatureInstanceStatus.SUPPRESSED,
+        suppression_reason=FeatureSuppressionReason.LAID_AS_BEVEL_STRIP,
     )
 
 
@@ -104,8 +129,8 @@ def strip_candidates(
 ) -> tuple[FeatureCandidate, ...]:
     """Patches with exactly one boundary loop of exactly four PatchChain uses.
 
-    Per use: 3D Chain length, whether the Chain is bent (chain_is_bent) and
-    whether the use is exactly one SURFACE_LINE piece.
+    Per use: 3D Chain length and whether the use is exactly one SURFACE_LINE
+    piece.
     """
 
     pieces_by_use: dict[str, list] = {}
@@ -133,7 +158,6 @@ def strip_candidates(
                     chain_id=pc.chain_id,
                     position_in_loop=pc.position_in_loop,
                     length=facts.length,
-                    is_bent=chain_is_bent(facts),
                     is_surface_line=len(pieces) == 1 and pieces[0].kind is PatchChainShapeKind.SURFACE_LINE,
                 )
             )
@@ -149,14 +173,6 @@ def strip_candidates(
     return tuple(candidates)
 
 
-def chain_is_bent(facts) -> bool:
-    """Bent in 3D: length > chord * (1 + STRIP_BENT_DETOUR), or a closed Chain."""
-
-    if facts.chord_length <= EPSILON:
-        return True
-    return facts.length > facts.chord_length * (1.0 + STRIP_BENT_DETOUR)
-
-
 def strip_needs_straightening(candidate: FeatureCandidate) -> bool:
     """Some side is not one surface line, or opposite sides differ in length."""
 
@@ -170,17 +186,42 @@ def strip_needs_straightening(candidate: FeatureCandidate) -> bool:
     return False
 
 
-def resolve_strip(candidate: FeatureCandidate, options: FeatureOptions) -> FeatureInstance:
-    """ACCEPTED only with the option on, a strip that needs straightening and a bent opposite pair.
+def strip_long_pairs(candidate: FeatureCandidate) -> tuple[tuple[int, int], ...]:
+    """The opposite pair with the larger summed 3D length; both pairs on an exact tie."""
 
-    The shape is graded first, so "option off" marks exactly the candidates the option would accept.
+    sides = candidate.sides
+    sums = [sides[first].length + sides[second].length for first, second in STRIP_OPPOSITE_PAIRS]
+    if sums[0] == sums[1]:
+        return STRIP_OPPOSITE_PAIRS
+    return (STRIP_OPPOSITE_PAIRS[0],) if sums[0] > sums[1] else (STRIP_OPPOSITE_PAIRS[1],)
+
+
+def strip_long_sides_curved(candidate: FeatureCandidate) -> bool:
+    """Both uses of the long opposite pair are not one surface line (curved, cornered or unresolved).
+
+    A wall that develops without distortion has straight long sides on its
+    own surface however it bends in 3D, so it is not a strip.
     """
 
     sides = candidate.sides
+    return any(
+        not sides[first].is_surface_line and not sides[second].is_surface_line
+        for first, second in strip_long_pairs(candidate)
+    )
+
+
+def resolve_strip(candidate: FeatureCandidate, options: FeatureOptions) -> FeatureInstance:
+    """ACCEPTED only with the option on and long sides that are curved on the surface.
+
+    The shape is graded first (already a rectangle, then long sides straight
+    on the surface), so "option off" marks exactly the candidates the option
+    would accept.
+    """
+
     if not strip_needs_straightening(candidate):
         reason = FeatureSuppressionReason.ALREADY_RECTANGLE
-    elif not any(sides[first].is_bent and sides[second].is_bent for first, second in STRIP_OPPOSITE_PAIRS):
-        reason = FeatureSuppressionReason.NO_BENT_OPPOSITE_PAIR
+    elif not strip_long_sides_curved(candidate):
+        reason = FeatureSuppressionReason.LONG_SIDES_STRAIGHT
     elif not options.straighten_strips:
         reason = FeatureSuppressionReason.OPTION_OFF
     else:
@@ -208,6 +249,176 @@ def strip_constraint(instance: FeatureInstance, candidate: FeatureCandidate) -> 
         target_lengths=tuple(
             (sides[first].length + sides[second].length) / 2.0 for first, second in STRIP_OPPOSITE_PAIRS
         ),
+    )
+
+
+# ---------------------------------------------------------------- LADDER constraint
+#
+# A bevel strip confirmed by the mark is laid from its chosen ladder reading
+# (Layer 3) as a straight strip of its own: rails straight and parallel,
+# profile lines across, true width. The constraint carries every number the
+# layout needs (DD-26): Layer 5 opens neither the ladder nor the bevel record.
+
+LADDER_NOT_LAID_CODE = "FEATURE_BEVEL_STRIP_NOT_LAID"
+NOT_LAID_NO_READING = "no chosen ladder reading"
+NOT_LAID_CLOSED = "the reading is a closed ring"
+NOT_LAID_SHARED_USE = "a use lies on more than one side"
+NOT_LAID_NO_OCCURRENCE = "a boundary vertex has no occurrence on the strip"
+NOT_LAID_TWO_PLACES = "a boundary vertex occurrence falls on two places"
+NOT_LAID_DEGENERATE = "a profile line has no length"
+
+
+def ladder_constraints(
+    bevels: tuple[BevelInstance, ...],
+    relations: RelationSnapshot,
+    geometry: GeometryFactSnapshot,
+    source: SourceMeshSnapshot | None,
+    options: FeatureOptions,
+) -> tuple[tuple[FeatureConstraint, ...], tuple[Diagnostic, ...]]:
+    """One STRAIGHT_LADDER per accepted bevel strip by mark with an open reading and no shared use.
+
+    Only with the option straighten_bevel_strips. A strip by structure
+    (a candidate) never emits one. A strip by mark that cannot be laid gets
+    a diagnostic naming the patch and the reason.
+    """
+
+    if not options.straighten_bevel_strips or source is None:
+        return (), ()
+    ladders = {relation.patch_id: relation for relation in relations.patch_quad_ladder_relations}
+    occurrence = {
+        (face_id, fan.source_vertex_id): fan.vertex_id
+        for fan in geometry.local_face_fan_facts.values()
+        for face_id in fan.source_face_ids
+    }
+    segment_length = {
+        segment.source_edge_id: segment.length
+        for facts in geometry.chain_facts.values()
+        for segment in facts.segments
+    }
+    constraints = []
+    diagnostics = []
+    for record in bevels:
+        if (
+            record.kind is not FeatureKind.BEVEL_STRIP
+            or record.status is not FeatureInstanceStatus.ACCEPTED
+            or record.source is not BevelEvidenceSource.SOURCE_MARK
+        ):
+            continue
+        if record.reading_index is None:
+            ladder, note = None, NOT_LAID_NO_READING
+        else:
+            reading = ladders[record.patch_id].readings[record.reading_index]
+            if reading.is_closed:
+                ladder, note = None, NOT_LAID_CLOSED
+            elif reading.shared_patch_chain_ids:
+                ladder, note = None, NOT_LAID_SHARED_USE
+            else:
+                ladder, note = straight_ladder(reading, occurrence, segment_length, source)
+        if ladder is None:
+            diagnostics.append(
+                Diagnostic(
+                    code=LADDER_NOT_LAID_CODE,
+                    severity=DiagnosticSeverity.WARNING,
+                    message=f"Bevel strip {record.patch_id}: not laid from its ladder ({note}).",
+                    source="layer_4_features.ladder_constraints",
+                    entity_ids=(str(record.patch_id),),
+                    evidence={"reason": note},
+                )
+            )
+            continue
+        constraints.append(
+            FeatureConstraint(
+                id=f"feature_constraint:straight_ladder:{record.patch_id}",
+                kind=FeatureConstraintKind.STRAIGHT_LADDER,
+                instance_id=record.id,
+                patch_id=record.patch_id,
+                patch_chain_ids=(
+                    ladder.rail_a_patch_chain_ids + ladder.rail_b_patch_chain_ids
+                    + ladder.end_a_patch_chain_ids + ladder.end_b_patch_chain_ids
+                ),
+                target_lengths=(ladder.length, ladder.width),
+                ladder=ladder,
+            )
+        )
+    return tuple(constraints), tuple(diagnostics)
+
+
+def straight_ladder(
+    reading: PatchQuadLadderReading,
+    occurrence: dict,
+    segment_length: dict,
+    source: SourceMeshSnapshot,
+) -> tuple[StraightLadder | None, str | None]:
+    """The straight layout of an open reading, or None and the reason.
+
+    u of profile line i is the mean of the two rails' cumulative 3D arc
+    lengths from end A to line i, so the strip's length is the mean of its
+    rails' lengths. The width is the mean 3D length of the profile lines
+    (each a polyline across). An end line's vertices between the rails sit
+    at their cumulative fraction of that line's length. A vertex is named by
+    its occurrence on the strip's side: the face fan (Layer 2) holding a
+    column face at that vertex. Edge lengths are Layer 2 Chain segment
+    lengths; an edge inside the patch is measured the same way from its two
+    Layer 0 positions.
+    """
+
+    def edge_length(edge_id) -> float:
+        if edge_id in segment_length:
+            return segment_length[edge_id]
+        first, second = source.edges[edge_id].vertex_ids
+        return length(subtract(source.vertices[second].position, source.vertices[first].position))
+
+    columns = reading.columns
+    lines = reading.profile_vertex_ids
+    last_column, last_face = len(columns) - 1, reading.faces_per_column - 1
+    place: dict = {}
+
+    def vertex(line_index: int, position: int, u: float, v: float) -> LadderVertex | None:
+        face_id = columns[min(line_index, last_column)][min(position, last_face)]
+        source_vertex = lines[line_index][position]
+        vertex_id = occurrence.get((face_id, source_vertex))
+        if vertex_id is None:
+            return None
+        place.setdefault(vertex_id, set()).add((u, v))
+        return LadderVertex(vertex_id, source_vertex)
+
+    def cumulative(edge_ids) -> list[float]:
+        walked = [0.0]
+        for edge_id in edge_ids:
+            walked.append(walked[-1] + edge_length(edge_id))
+        return walked
+
+    rail_a, rail_b = cumulative(reading.rail_a_source_edge_ids), cumulative(reading.rail_b_source_edge_ids)
+    across_by_line = [cumulative(edge_ids) for edge_ids in reading.profile_edge_ids]
+    if any(walked[-1] <= EPSILON for walked in across_by_line):
+        return None, NOT_LAID_DEGENERATE
+    width = sum(walked[-1] for walked in across_by_line) / len(across_by_line)
+    profile_lines = []
+    for index, line in enumerate(lines):
+        u = (rail_a[index] + rail_b[index]) / 2.0
+        ends = (vertex(index, 0, u, 0.0), vertex(index, len(line) - 1, u, width))
+        across = []
+        if index in (0, len(lines) - 1):
+            walked = across_by_line[index]
+            for position in range(1, len(line) - 1):
+                fraction = walked[position] / walked[-1]
+                across.append((vertex(index, position, u, fraction * width), fraction))
+        if None in ends or any(item is None for item, _fraction in across):
+            return None, NOT_LAID_NO_OCCURRENCE
+        profile_lines.append(LadderProfileLine(u, ends[0], ends[1], tuple(across)))
+    if any(len(places) > 1 for places in place.values()):
+        return None, NOT_LAID_TWO_PLACES
+    return (
+        StraightLadder(
+            width=width,
+            length=profile_lines[-1].u,
+            profile_lines=tuple(profile_lines),
+            rail_a_patch_chain_ids=reading.rail_a_patch_chain_ids,
+            rail_b_patch_chain_ids=reading.rail_b_patch_chain_ids,
+            end_a_patch_chain_ids=reading.end_a_patch_chain_ids,
+            end_b_patch_chain_ids=reading.end_b_patch_chain_ids,
+        ),
+        None,
     )
 
 

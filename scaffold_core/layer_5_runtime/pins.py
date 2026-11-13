@@ -9,6 +9,8 @@ Rules:
   UV is pinned on the straight UV segment between them, at its arc-length
   fraction along the run. Its identity is its occurrence on the run's own
   patch side; a run-end pin is never overridden.
+- A ladder island (a STRAIGHT_LADDER constraint) pins every boundary vertex
+  occurrence at the place its constraint gives it; it has no stations.
 - Invariants are validation outputs, never silently relaxed (G5a).
 """
 
@@ -132,6 +134,17 @@ def _island_vertices(skeleton, evidence_by_id, offset_u, geometry, vertex_by_fac
             island_id=skeleton.island_id,
             patch_id=str(evidence.patch_id),
             uv=shifted,
+            pinned=True,
+            vertex_id=vertex_id,
+        )
+    # A ladder island pins every boundary vertex where its constraint places
+    # it, so no station is derived from arc length there.
+    for (vertex_id, patch_id), (source_vertex, uv) in skeleton.ladder_pins.items():
+        vertices[(vertex_id, patch_id)] = PinnedVertex(
+            source_vertex_id=source_vertex,
+            island_id=skeleton.island_id,
+            patch_id=patch_id,
+            uv=(uv[0] - min_u + offset_u, uv[1]),
             pinned=True,
             vertex_id=vertex_id,
         )

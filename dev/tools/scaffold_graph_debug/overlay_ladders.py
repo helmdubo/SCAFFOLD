@@ -260,7 +260,34 @@ def report_lines(payload: dict[str, Any]) -> list[str]:
         )
         out.append("bevel junctions: " + _count_text(bevel.get("junctions_by_source", {})))
         out.append("bevel-marked, not isolated: " + _count_text(bevel.get("suppressed_by_reason", {})))
+    laid = payload.get("bevel_ladders", {})
+    if laid.get("constraints") or laid.get("not_laid"):
+        out.append(
+            f"bevel strips laid from their ladder: {laid.get('islands', 0)} of {laid.get('constraints', 0)} constraints"
+        )
+        for patch_id, reason in laid.get("not_laid", ()):
+            out.append(f"  not laid: {patch_id}: {reason}")
     return out
+
+
+def ladder_layout_counts(context, solve) -> dict[str, Any]:
+    """STRAIGHT_LADDER constraints, islands laid by them, and the bevel strips without one and why."""
+
+    features = getattr(context, "feature_snapshot", None)
+    constraints = [
+        constraint for constraint in getattr(features, "constraints", ()) or ()
+        if constraint.kind.value == "STRAIGHT_LADDER"
+    ]
+    not_laid = [
+        (str(diagnostic.entity_ids[0]) if diagnostic.entity_ids else "?", str(diagnostic.evidence.get("reason", "")))
+        for diagnostic in getattr(features, "diagnostics", ()) or ()
+        if diagnostic.code == "FEATURE_BEVEL_STRIP_NOT_LAID"
+    ]
+    return {
+        "constraints": len(constraints),
+        "islands": sum(1 for skeleton in solve.skeletons if skeleton.frame == "LADDER"),
+        "not_laid": not_laid,
+    }
 
 
 def _count_text(counts: dict[str, int]) -> str:

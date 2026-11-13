@@ -30,6 +30,12 @@ Rules:
   constraint's loop order gives axes and signs, its target lengths scale the
   runs. A constraint on a patch that shares its island is not applied and
   the island gets a diagnostic. Layer 5 recognises no strips itself.
+- A Layer 4 STRAIGHT_LADDER FeatureConstraint (a marked bevel strip, an
+  island by itself) places every boundary vertex of its patch where the
+  constraint says (frame LADDER): rails on v = 0 and v = width, profile
+  lines at their u. Layer 5 only turns u around when the loop walks rail A
+  from end B to end A, so the layout is not mirrored; it reads no ladder,
+  face or 3D direction.
 - Island rails: Layer 3 cuts each family's ScaffoldRail by the island (its
   runs and stitched hinges) and orders the pieces; Layer 5 checks them
   against the unfolded frame and never orders a line itself.
@@ -76,6 +82,7 @@ NODE_FRAME_TOLERANCE = 1e-6  # relative to the island extent
 UNFOLDED_FRAME = "UNFOLDED"
 FRAME_FREE = "FRAME_FREE"
 STRIP_LAYOUT = "STRIP"  # an applied STRAIGHT_STRIP FeatureConstraint
+LADDER_LAYOUT = "LADDER"  # an applied STRAIGHT_LADDER FeatureConstraint
 _STRIP_AXIS_UNIT = {"AXIS_A": (1.0, 0.0, 0.0), "AXIS_B": (0.0, 1.0, 0.0)}
 _LAYOUT_AXIS_UNIT = {"AXIS_A": (1.0, 0.0), "AXIS_B": (0.0, 1.0)}
 
@@ -98,6 +105,9 @@ class IslandSkeleton:
     # Frame-free island: the (AXIS_A, AXIS_B) vector of each OBLIQUE bridge
     # run laid by a bridged right corner.
     bridge_vector_by_run: Mapping[str, tuple[float, float]] = field(default_factory=dict)
+    # Ladder island: (vertex occurrence, patch) -> (source vertex, (u, v)) of
+    # every boundary vertex, as the STRAIGHT_LADDER constraint places it.
+    ladder_pins: Mapping[tuple[str, str], tuple[str, tuple[float, float]]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -141,10 +151,12 @@ def build_island_skeletons(context: Any, assembly: IslandAssembly) -> tuple[Isla
 
 
 def _strip_constraints_by_island(context: Any, assembly: IslandAssembly):
-    """STRAIGHT_STRIP constraints that apply, and notes for those that do not.
+    """STRAIGHT_STRIP and STRAIGHT_LADDER constraints that apply, and notes for those that do not.
 
     A constraint applies only to an island made of its one patch; otherwise
     the island gets a diagnostic naming the patch (never silently dropped).
+    Island assembly never stitches a ladder patch, so only a strip can share
+    its island.
     """
 
     features = getattr(context, "feature_snapshot", None)
@@ -154,7 +166,7 @@ def _strip_constraints_by_island(context: Any, assembly: IslandAssembly):
     applied: dict[str, Any] = {}
     notes: dict[str, list[str]] = {}
     for constraint in features.constraints:
-        if constraint.kind is not FeatureConstraintKind.STRAIGHT_STRIP:
+        if constraint.kind not in (FeatureConstraintKind.STRAIGHT_STRIP, FeatureConstraintKind.STRAIGHT_LADDER):
             continue
         patch_id = str(constraint.patch_id)
         island_id = assembly.island_by_patch_id.get(patch_id)
@@ -163,8 +175,9 @@ def _strip_constraints_by_island(context: Any, assembly: IslandAssembly):
         if tuple(island_by_id[island_id].patch_ids) == (patch_id,):
             applied[island_id] = constraint
         else:
+            name = "strip" if constraint.kind is FeatureConstraintKind.STRAIGHT_STRIP else "ladder"
             notes.setdefault(island_id, []).append(
-                f"strip constraint not applied, patch shares its island: {patch_id}"
+                f"{name} constraint not applied, patch shares its island: {patch_id}"
             )
     return applied, {island_id: tuple(messages) for island_id, messages in notes.items()}
 
@@ -222,6 +235,12 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
         )
     rail_segments = _island_rail_segments(island, runs, lookups)
     line_of = _lines_from_segments(rail_segments)
+    if strip is not None and strip.kind is FeatureConstraintKind.STRAIGHT_LADDER:
+        ladder_layout = _ladder_layout(strip, runs, node_by_run_end, vertex_by_run_end, diagnostics)
+        if ladder_layout is not None:
+            return _ladder_skeleton(island, ladder_layout, node_by_run_end, vertex_by_run_end, line_of,
+                                    rail_segments, diagnostics)
+        strip = None
     strip_layout = None if strip is None else _strip_layout(strip, runs, node_by_run_end, diagnostics)
     frame = None if strip_layout is not None else _unfolded_frame(island, assembly, geometry, lookups)
     length_of = None
@@ -348,6 +367,93 @@ def _strip_layout(strip, runs, node_by_run_end, diagnostics):
             length_of[e.id] = e.length * scale
             direction_of[e.id] = tuple(sign * c for c in _STRIP_AXIS_UNIT[role])
     return roles, signs, direction_of, length_of
+
+
+def _ladder_layout(ladder_constraint, runs, node_by_run_end, vertex_by_run_end, diagnostics):
+    """Roles, signs, node coordinates and pins of a STRAIGHT_LADDER island, all from the constraint.
+
+    The constraint places every boundary vertex occurrence at (u, v): rail A
+    on v = 0, rail B on v = width, profile line i at its u. Runs on a rail
+    take AXIS_A, runs on an end AXIS_B, other runs stay OBLIQUE. Runs follow
+    the loop as the faces wind (DD-51), so when rail A's runs walk from end
+    B to end A every u becomes length - u: walking the loop the strip then
+    turns left at its convex corners and is not mirrored. A run's sign is
+    the direction of its two placed ends along its axis. Returns None, with
+    a diagnostic, when a run end is not placed by the constraint or one
+    solve node would fall on two places; the island then keeps its normal
+    layout.
+    """
+
+    ladder = ladder_constraint.ladder
+    patch_id = str(ladder_constraint.patch_id)
+    place: dict[str, tuple[str, float, float]] = {}
+    for line in ladder.profile_lines:
+        place[str(line.rail_a.vertex_id)] = (str(line.rail_a.source_vertex_id), line.u, 0.0)
+        place[str(line.rail_b.vertex_id)] = (str(line.rail_b.source_vertex_id), line.u, ladder.width)
+        for vertex, fraction in line.across:
+            place[str(vertex.vertex_id)] = (str(vertex.source_vertex_id), line.u, fraction * ladder.width)
+    if any(vertex_by_run_end.get((e.id, role)) not in place for e in runs for role in ("START", "END")):
+        diagnostics.append(f"ladder constraint not applied, a run end is not on the ladder: {patch_id}")
+        return None
+    rail_a = {str(use) for use in ladder.rail_a_patch_chain_ids}
+    rails = rail_a | {str(use) for use in ladder.rail_b_patch_chain_ids}
+    ends = {str(use) for use in ladder.end_a_patch_chain_ids + ladder.end_b_patch_chain_ids}
+    walked = sum(
+        place[vertex_by_run_end[(e.id, "END")]][1] - place[vertex_by_run_end[(e.id, "START")]][1]
+        for e in runs
+        if str(e.patch_chain_id) in rail_a
+    )
+    if walked == 0.0:
+        diagnostics.append(f"ladder constraint not applied, rail A runs have no length: {patch_id}")
+        return None
+
+    def position(vertex_id: str) -> tuple[float, float]:
+        _source, u, v = place[vertex_id]
+        return (ladder.length - u if walked < 0.0 else u, v)
+
+    roles: dict[str, str] = {}
+    signs: dict[str, float] = {}
+    coordinates: dict[str, dict[str, float]] = {"AXIS_A": {}, "AXIS_B": {}}
+    for e in runs:
+        start, end = (position(vertex_by_run_end[(e.id, role)]) for role in ("START", "END"))
+        use = str(e.patch_chain_id)
+        role = "AXIS_A" if use in rails else "AXIS_B" if use in ends else "OBLIQUE"
+        roles[e.id] = role
+        delta = end[0] - start[0] if role == "AXIS_A" else end[1] - start[1]
+        if role != "OBLIQUE" and delta != 0.0:
+            signs[e.id] = 1.0 if delta > 0.0 else -1.0
+        for run_role, point in (("START", start), ("END", end)):
+            node = node_by_run_end[(e.id, run_role)]
+            for axis_name, value in zip(("AXIS_A", "AXIS_B"), point):
+                if coordinates[axis_name].setdefault(node, value) != value:
+                    diagnostics.append(f"ladder constraint not applied, a solve node falls on two places: {patch_id}")
+                    return None
+    pins = {(vertex_id, patch_id): (source, position(vertex_id)) for vertex_id, (source, _u, _v) in place.items()}
+    return roles, signs, coordinates, pins
+
+
+def _ladder_skeleton(island, layout, node_by_run_end, vertex_by_run_end, line_of, rail_segments, diagnostics):
+    """The skeleton of a ladder island: coordinates straight from the constraint, no solve.
+
+    Every node keeps the place the constraint gives it, so the residual is
+    zero. The rail/line check does not apply: the axes come from the
+    constraint, not from the lines.
+    """
+
+    roles, signs, coordinates, pins = layout
+    axes = tuple(
+        AxisSolve(axis_name, coordinates[axis_name], 0.0, (), sum(1 for role in roles.values() if role == axis_name))
+        for axis_name in ("AXIS_A", "AXIS_B")
+    )
+    return IslandSkeleton(
+        island.id, node_by_run_end, roles, axes[0], axes[1], tuple(diagnostics),
+        line_by_run=line_of,
+        orientation_by_run=signs,
+        frame=LADDER_LAYOUT,
+        vertex_by_run_end=vertex_by_run_end,
+        rail_segments=rail_segments,
+        ladder_pins=pins,
+    )
 
 
 def _strip_uses_close(uses, runs_by_use, node_by_run_end) -> bool:

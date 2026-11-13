@@ -330,7 +330,10 @@ def test_a_marked_quad_with_bevel_faces_across_the_rails_of_both_readings_fits_n
     context = _run(make_quad_with_bevel_faces_on_both_readings_rails_source())
     record = _accepted(context, FeatureKind.BEVEL_STRIP)["patch:seed:f0"]
     assert record.reading_index is None
-    (diagnostic,) = [d for d in context.feature_snapshot.diagnostics if d.entity_ids == ("patch:seed:f0",)]
+    (diagnostic,) = [
+        d for d in context.feature_snapshot.diagnostics
+        if d.entity_ids == ("patch:seed:f0",) and d.code == feature_build.BEVEL_UNRESOLVED_CODE
+    ]
     assert diagnostic.evidence["reason"] == feature_build.UNRESOLVED_NO_READING_FITS_MARKS
     # A junction across an end of an unresolved strip: the contact has no end.
     for junction_id in ("patch:seed:f1", "patch:seed:f2"):
@@ -342,9 +345,13 @@ def test_a_marked_strip_with_two_fitting_readings_is_accepted_unresolved() -> No
     context = _run(make_single_quad_source())
     (record,) = context.feature_snapshot.bevels
     assert record.status is FeatureInstanceStatus.ACCEPTED and record.reading_index is None
-    (diagnostic,) = context.feature_snapshot.diagnostics
+    diagnostic, not_laid = context.feature_snapshot.diagnostics
     assert diagnostic.entity_ids == ("patch:seed:f0",)
     assert diagnostic.evidence["reason"] == feature_build.UNRESOLVED_TWO_READINGS_FIT_MARKS
+    # Without a chosen reading the strip is not laid from its ladder.
+    assert not_laid.code == feature_build.LADDER_NOT_LAID_CODE
+    assert not_laid.evidence["reason"] == feature_build.NOT_LAID_NO_READING
+    assert context.feature_snapshot.constraints == ()
 
 
 def _fixpoint(context):
@@ -578,20 +585,27 @@ def test_layer_5_does_not_read_the_bevel_records() -> None:
     assert context.feature_snapshot.bevels
     without = replace(context, feature_snapshot=replace(context.feature_snapshot, bevels=(), diagnostics=()))
     assert run_skeleton_solve(context) == run_skeleton_solve(without)
+    # The constraints are the channel: without them the ladder layout is gone.
+    no_constraints = replace(without, feature_snapshot=replace(without.feature_snapshot, constraints=()))
+    assert run_skeleton_solve(no_constraints) != run_skeleton_solve(context)
 
 
 @pytest.mark.parametrize("straighten", (False, True))
-def test_pass_2_emits_no_constraint_for_a_bevel(straighten) -> None:
+def test_pass_2_emits_no_bevel_constraint_with_the_bevel_option_off(straighten) -> None:
     for name in ("u_rounded_wall_noise_top", "a_cube_s3", "c_arch_s2"):
         for marks in (True, False):
             context, _truth = _case(name, marks=marks)
-            options = FeatureOptions(straighten_strips=straighten)
+            options = FeatureOptions(straighten_strips=straighten, straighten_bevel_strips=False)
             features = run_pass_2_features(context, options).feature_snapshot
             strip_only = feature_build.build_feature_snapshot(
                 context.topology_snapshot, context.geometry_facts, context.relation_snapshot, options
             )
             assert features.constraints == strip_only.constraints
             assert all(c.kind is FeatureConstraintKind.STRAIGHT_STRIP for c in features.constraints)
+            # Paired positive: with the option on, the marked cases get ladder constraints.
+            on = run_pass_2_features(context, replace(options, straighten_bevel_strips=True)).feature_snapshot
+            ladders = [c for c in on.constraints if c.kind is FeatureConstraintKind.STRAIGHT_LADDER]
+            assert bool(ladders) == marks
 
 
 def test_bevel_rule_reads_no_geometry_world_axis_or_layer_5() -> None:

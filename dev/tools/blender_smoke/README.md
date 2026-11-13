@@ -74,6 +74,8 @@ axis_violations, seam_mismatches     G5a invariants (must be 0)
 residual_max / residual_ok           lstsq residual; only residual_ok is baselined
 written_loops, pinned_loops          UV write summary (--write-uv)
 strip_islands                        islands laid by a STRAIGHT_STRIP constraint (--straighten-strips)
+ladder_islands                       islands laid by a STRAIGHT_LADDER constraint, a marked bevel strip (--straighten-strips)
+bevel_ladder_constraints             STRAIGHT_LADDER constraints emitted by Layer 4 (--straighten-strips)
 foreign_loops_changed                loops outside the solved faces touched (must be 0)
 pipeline_codes                       diagnostic code histogram
 ms                                   wall time, never baselined

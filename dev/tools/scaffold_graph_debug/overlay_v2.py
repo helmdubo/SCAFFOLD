@@ -63,6 +63,7 @@ LAYER_SPECS = (
     LayerSpec("show_islands_unfolded", "Scaffold_Islands_UNFOLDED", "Islands: rigid frame", GROUP_SKELETON, False),
     LayerSpec("show_islands_frame_free", "Scaffold_Islands_FRAME_FREE", "Islands: frame-free", GROUP_SKELETON, False),
     LayerSpec("show_islands_strip", "Scaffold_Islands_STRIP", "Islands: strip", GROUP_SKELETON, False),
+    LayerSpec("show_islands_ladder", "Scaffold_Islands_LADDER", "Islands: bevel strip", GROUP_SKELETON, False),
     LayerSpec("show_lines", "Scaffold_Skeleton_Lines", "Lines", GROUP_SKELETON, True),
     LayerSpec("show_nodes", "Scaffold_Skeleton_Nodes", "Nodes", GROUP_SKELETON, True),
     LayerSpec("show_pins", "Scaffold_Pins", "Pins", GROUP_SKELETON, False),
@@ -184,11 +185,12 @@ PIN_MARKER_FACTOR = 0.07
 CORNER_MARKER_FACTOR = 0.08
 JUNCTION_MARKER_FACTOR = 0.1
 LABEL_SIZE_FACTOR = 0.4
-ISLAND_SV = {"UNFOLDED": (0.65, 0.9), "FRAME_FREE": (0.45, 0.75), "STRIP": (0.85, 0.95)}
+ISLAND_SV = {"UNFOLDED": (0.65, 0.9), "FRAME_FREE": (0.45, 0.75), "STRIP": (0.85, 0.95), "LADDER": (1.0, 0.7)}
 ISLAND_LAYERS = {
     "UNFOLDED": "Scaffold_Islands_UNFOLDED",
     "FRAME_FREE": "Scaffold_Islands_FRAME_FREE",
     "STRIP": "Scaffold_Islands_STRIP",
+    "LADDER": "Scaffold_Islands_LADDER",
 }
 PATCH_TYPES = ("STRIP", "STRIP_OFF", "RECTANGLE", "FOUR_SIDED", "OTHER")
 PATCH_TYPE_LAYERS = {
@@ -208,10 +210,11 @@ PATCH_TYPE_COLORS = {
 PATCH_TYPE_BY_REASON = {
     "option off": "STRIP_OFF",
     "already a rectangle": "RECTANGLE",
-    "no bent opposite pair": "FOUR_SIDED",
+    "long sides are straight on the surface": "FOUR_SIDED",
+    "laid from its bevel ladder": "STRIP",
 }
 PATCH_TYPE_NAMES = {
-    "STRIP": "strip",
+    "STRIP": "strip (straightened, or laid from its bevel ladder)",
     "STRIP_OFF": "strip (option off, would straighten)",
     "RECTANGLE": "rectangle",
     "FOUR_SIDED": "four-sided",
@@ -295,6 +298,7 @@ def build_debug_payload(context: Any, solve: Any, *, object_name: str = "") -> d
         "patch_types": patch_types,
         "ladder_counts": overlay_ladders.ladder_counts(relations),
         "bevel_counts": overlay_ladders.bevel_counts(bevels),
+        "bevel_ladders": overlay_ladders.ladder_layout_counts(context, solve),
         "face_strength_counts": {
             item["face_strength"]: len(item["face_ids"]) for item in layers["Scaffold_Source_Face_Strength"]
         },

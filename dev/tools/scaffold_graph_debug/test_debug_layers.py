@@ -42,6 +42,7 @@ CASES = {
     "artist_walls_007": (_capture("artist_walls_007"), False),
     "artist_arch_bevel_strips_on": (_capture("artist_arch_bevel"), True),
     "artist_arch_bevel_strips_off": (_capture("artist_arch_bevel"), False),
+    "rounded_wall_bevel_marks": (_capture("bevel_cases/u_rounded_wall_noise_top.capture"), False),
 }
 # Written out here, not read from the module: AXIS_A yellow, AXIS_B cyan.
 ROLE_RGBA = {"AXIS_A": [1.0, 0.85, 0.0, 1.0], "AXIS_B": [0.0, 0.85, 0.85, 1.0]}
@@ -144,7 +145,8 @@ def test_patch_types_equal_the_layer_4_instances(case) -> None:
             expected[patch_id] = {
                 "option off": "STRIP_OFF",
                 "already a rectangle": "RECTANGLE",
-                "no bent opposite pair": "FOUR_SIDED",
+                "long sides are straight on the surface": "FOUR_SIDED",
+                "laid from its bevel ladder": "STRIP",
             }[instance.suppression_reason.value]
     assert {patch_id: row["type"] for patch_id, row in payload["patch_types"].items()} == expected
     for type_name, layer in PATCH_TYPE_LAYERS.items():
@@ -157,14 +159,14 @@ def test_patch_types_equal_the_layer_4_instances(case) -> None:
 def test_island_layers_equal_the_frame_kinds(case) -> None:
     _context, solve, payload = _run(case)
     frame_by_island = {skeleton.island_id: skeleton.frame for skeleton in solve.skeletons}
-    for frame_kind in ("UNFOLDED", "FRAME_FREE", "STRIP"):
+    for frame_kind in ("UNFOLDED", "FRAME_FREE", "STRIP", "LADDER"):
         items = payload["layers"][f"Scaffold_Islands_{frame_kind}"]
         assert {item["island_id"] for item in items} == {
             island_id for island_id, frame in frame_by_island.items() if frame == frame_kind
         }
     all_items = [
         item
-        for frame_kind in ("UNFOLDED", "FRAME_FREE", "STRIP")
+        for frame_kind in ("UNFOLDED", "FRAME_FREE", "STRIP", "LADDER")
         for item in payload["layers"][f"Scaffold_Islands_{frame_kind}"]
     ]
     assert sorted(patch for item in all_items for patch in item["patch_ids"]) == sorted(
@@ -400,6 +402,21 @@ def test_bevel_layers_fill_each_bevel_record_once_by_kind_and_source(name, marks
     assert counts["unresolved"] == sum(1 for r in strips if r.reading_index is None)
     assert ("bevel strips: source_mark=" if marks else "bevel strips: structure=") in payload["report"]
     assert f"unresolved {counts['unresolved']}" in payload["report"]
+
+
+def test_bevel_strips_laid_from_their_ladder_have_their_island_layer_and_report_line() -> None:
+    _context, solve, payload = _run("rounded_wall_bevel_marks")
+    ladder_islands = {skeleton.island_id for skeleton in solve.skeletons if skeleton.frame == "LADDER"}
+    assert len(ladder_islands) == 9
+    assert {item["island_id"] for item in payload["layers"]["Scaffold_Islands_LADDER"]} == ladder_islands
+    assert payload["bevel_ladders"] == {"constraints": 9, "islands": 9, "not_laid": []}
+    assert "bevel strips laid from their ladder: 9 of 9 constraints" in payload["report"]
+    # A closed ring by mark gets no constraint and is named with its reason.
+    ring = load_source_snapshot("scaffold_core/tests/data/bevel_cases/b_ring_s1.capture.json")
+    context = run_pass_2_features(run_pass_1_relations(run_pass_0(ring)))
+    ring_payload = build_debug_payload(context, run_skeleton_solve(context), object_name="ring")
+    assert ring_payload["bevel_ladders"]["not_laid"] == [("patch:seed:f8", "the reading is a closed ring")]
+    assert "  not laid: patch:seed:f8: the reading is a closed ring" in ring_payload["report"]
 
 
 def test_bevel_legend_says_structural_records_are_not_confirmed() -> None:

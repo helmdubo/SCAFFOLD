@@ -18,6 +18,8 @@ Rules:
   but would deform a neighbour stitched along a bent side. A strip with a
   bent stitch candidate stays stitched. Layer 4 is read only through
   FeatureConstraint.
+- A bevel strip laid from its ladder (a STRAIGHT_LADDER constraint) is an
+  island by itself: no seam of it is stitched.
 - Read-only over lower layers; no UV or semantic roles here.
 """
 
@@ -32,6 +34,7 @@ from scaffold_core.layer_3_relations.direction_families import SHARED_CHAIN_HING
 from scaffold_core.layer_4_features.model import FeatureConstraintKind
 
 STITCH_LEAVING_STRIP_REASON = "a straightened strip leaves its island"
+STITCH_BEVEL_LADDER_REASON = "a bevel strip is laid by itself"
 STITCH_DEFECT_TOLERANCE = 1e-3
 PLANAR_PATCH_MIN_NORMAL_DOT = 0.996  # every face-fan normal within ~5 degrees of the patch normal
 OVERLAP_TOLERANCE = 1e-6  # relative to the selection extent; shared edges only touch
@@ -180,6 +183,7 @@ def build_islands(context: Any) -> IslandAssembly:
         and adjacency.first_patch_id != adjacency.second_patch_id
     }
     leaving_patch_ids = _leaving_strip_patch_ids(context, adjacencies, gate_by_adjacency, rigidity)
+    ladder_patch_ids = _constrained_patch_ids(context, FeatureConstraintKind.STRAIGHT_LADDER)
     for adjacency in adjacencies:
         chain_id = str(adjacency.chain_id)
         first = str(adjacency.first_patch_id)
@@ -188,7 +192,9 @@ def build_islands(context: Any) -> IslandAssembly:
             decisions.append(StitchDecision(chain_id, first, second, False, "SEAM_SELF always splits"))
             continue
         accepted, reason, defects = gate_by_adjacency[str(adjacency.id)]
-        if accepted and (first in leaving_patch_ids or second in leaving_patch_ids):
+        if first in ladder_patch_ids or second in ladder_patch_ids:
+            decisions.append(StitchDecision(chain_id, first, second, False, STITCH_BEVEL_LADDER_REASON, defects))
+        elif accepted and (first in leaving_patch_ids or second in leaving_patch_ids):
             decisions.append(StitchDecision(chain_id, first, second, False, STITCH_LEAVING_STRIP_REASON, defects))
         elif accepted and find(first) != find(second):
             joined, placement, refusal = _join_placements(
@@ -235,14 +241,7 @@ def _leaving_strip_patch_ids(context, adjacencies, gate_by_adjacency, rigidity: 
     angle gate accepts; a patch without candidates is an island anyway.
     """
 
-    features = getattr(context, "feature_snapshot", None)
-    if features is None:
-        return set()
-    strip_patch_ids = {
-        str(constraint.patch_id)
-        for constraint in features.constraints
-        if constraint.kind is FeatureConstraintKind.STRAIGHT_STRIP
-    }
+    strip_patch_ids = _constrained_patch_ids(context, FeatureConstraintKind.STRAIGHT_STRIP)
     candidates: dict[str, list[str]] = {}
     for adjacency in adjacencies:
         gate = gate_by_adjacency.get(str(adjacency.id))
@@ -255,6 +254,13 @@ def _leaving_strip_patch_ids(context, adjacencies, gate_by_adjacency, rigidity: 
         for patch_id, chain_ids in candidates.items()
         if all(chain_id in rigidity.straight_chain_ids for chain_id in chain_ids)
     }
+
+
+def _constrained_patch_ids(context, kind: FeatureConstraintKind) -> set[str]:
+    features = getattr(context, "feature_snapshot", None)
+    if features is None:
+        return set()
+    return {str(constraint.patch_id) for constraint in features.constraints if constraint.kind is kind}
 
 
 def _tree_edge_priority(adjacency, rigidity: SeamRigidity, topology) -> tuple[bool, int, str]:
