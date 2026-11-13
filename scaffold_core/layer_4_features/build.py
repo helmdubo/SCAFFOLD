@@ -142,15 +142,18 @@ def strip_needs_straightening(candidate: FeatureCandidate) -> bool:
 
 
 def resolve_strip(candidate: FeatureCandidate, options: FeatureOptions) -> FeatureInstance:
-    """ACCEPTED only with the option on, a strip that needs straightening and a bent opposite pair."""
+    """ACCEPTED only with the option on, a strip that needs straightening and a bent opposite pair.
+
+    The shape is graded first, so "option off" marks exactly the candidates the option would accept.
+    """
 
     sides = candidate.sides
-    if not options.straighten_strips:
-        reason = FeatureSuppressionReason.OPTION_OFF
-    elif not strip_needs_straightening(candidate):
+    if not strip_needs_straightening(candidate):
         reason = FeatureSuppressionReason.ALREADY_RECTANGLE
     elif not any(sides[first].is_bent and sides[second].is_bent for first, second in STRIP_OPPOSITE_PAIRS):
         reason = FeatureSuppressionReason.NO_BENT_OPPOSITE_PAIR
+    elif not options.straighten_strips:
+        reason = FeatureSuppressionReason.OPTION_OFF
     else:
         reason = None
     return FeatureInstance(

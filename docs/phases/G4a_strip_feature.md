@@ -41,8 +41,11 @@ Instance:
   ACCEPTED when FeatureOptions.straighten_strips is on AND the strip needs
   straightening (some use is not one surface line, or two opposite uses
   differ in length by more than 1%) AND at least one opposite pair has both
-  uses bent in 3D. Otherwise SUPPRESSED with a reason: option off, already a
-  rectangle, no bent opposite pair. Suppressed instances stay inspectable.
+  uses bent in 3D. Otherwise SUPPRESSED with a reason. The shape is graded
+  first: already a rectangle, then no bent opposite pair; a candidate that
+  passes both and only waits for the option is suppressed as option off
+  (plan Slice AC). So the reason does not depend on the option except for
+  the candidates the option accepts. Suppressed instances stay inspectable.
 
 Constraint STRAIGHT_STRIP (self-contained, DD-26):
   patch id, the four PatchChain ids in loop order, and the target length of

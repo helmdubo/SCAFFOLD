@@ -1,12 +1,24 @@
-# ScaffoldGraph Debug Add-on
+# Scaffold Structure Debugger (Blender add-on)
 
-Development-only Blender add-on for the ScaffoldGraph Grease Pencil overlay
-and the temporary G5a UV write button.
+Development-only Blender add-on: a Grease Pencil overlay that shows what the
+Scaffold pipeline decided about a mesh, plus the temporary G5a UV write button.
 
-It consumes Pass 0 / Pass 1 snapshots from Scaffold Core. The overlay does not
-store roles and does not add Scaffold Core relation records. The v2 overlay
-rebuilds a temporary artist-facing view each time you press Rebuild. `Write UV
-(G5a)` consumes the Layer 5 runtime result and writes pinned UV skeleton loops.
+It draws pipeline records only. One rebuild runs Pass 0, Pass 1, Pass 2 (with
+the panel's Straighten Strips option) and the Layer 5 skeleton solve
+(`build_islands`, `build_island_skeletons`, pins) once, then draws every layer.
+The add-on computes display offsets and marker shapes and nothing else; it
+assigns no roles and recomputes no stitch, line or strip decision.
+
+Split:
+
+```text
+overlay_v2.py   pure Python payload builder (no bpy), tested headless
+draw_v2.py      thin bpy drawing: one GP layer per payload layer
+debug.py        Grease Pencil / text-label primitives (legacy GPENCIL and GP v3)
+rail_offsets.py per-use display offset (inward + lift along the patch normal)
+session.py      Analyze / Rebuild / close, report Text datablock
+operators.py    panel, settings, operators
+```
 
 ## Register From Blender
 
@@ -19,51 +31,156 @@ import scaffold_graph_debug
 scaffold_graph_debug.register()
 ```
 
-Then use:
+Then use `View3D > Sidebar > Scaffold > Scaffold Graph`.
+
+Works with legacy Grease Pencil (Blender 4.1 / 4.2) and Grease Pencil v3
+(Blender 4.3+).
+
+## Panel
 
 ```text
-View3D > Sidebar > Scaffold > Scaffold Graph
+Analyze             toggle: build the overlay and hide the mesh / remove it and restore the mesh
+Rebuild             rerun the pipeline and redraw every layer
+Straighten Strips   Pass 2 option; applies on the next Rebuild (and on Write UV)
+Structure / Skeleton / Patches: sides and types / Layer 3 (detail)
+                    collapsible groups, one eye toggle per layer, legend underneath
+Write UV (G5a)      unchanged
+SCAFFOLD JSON       unchanged
 ```
 
-Controls:
+The eye toggles only show or hide Grease Pencil layers, so they act at once
+and never rebuild. If the analysed mesh is deleted or renamed, Analyze still
+ends the session (removing its overlay and labels) and Rebuild works on the
+active mesh. Unregistering the add-on ends every session and shows the source
+meshes again. A rebuild touches only its own object's overlay (exact names).
+
+`Line thickness` (slider under Straighten Strips) is a multiplier for every
+stroke of the overlay: 1.0 = as built, 2.0 = twice as thick. It acts at once
+through a live layer property, never rebuilds, and is re-applied after each
+Rebuild. Fill layers (Patches, Islands, Types) are not touched. Per layer:
+
+- Grease Pencil v3 (Blender 4.3+): strokes are world-space radii (width x
+  0.00075, times max(1, median edge length / 0.2) on large meshes). The layer's
+  `radius_offset` is added to every point radius, so it is set to
+  `(multiplier - 1) x` the radius of the layer's thinnest stroke. That stroke
+  becomes exactly `multiplier` times as thick; thicker strokes in the same layer
+  (Chains with an axis role) grow by the same amount.
+- Legacy Grease Pencil (Blender 4.1 / 4.2): strokes are screen-space pixels.
+  The layer's `line_change` (pixels) is added to every line width, so it is set
+  to `round((multiplier - 1) x` the layer's thinnest width`)`, never below 1 px.
+
+In GP v3 a stroke keeps its world thickness when you zoom out, so at
+whole-building zoom raise the slider (3 to 5 makes chains and lines clearly
+visible); in legacy GP 1.0 is usually right. Changing Straighten Strips does not rebuild by itself:
+press Rebuild.
+
+After each rebuild a compact report is printed to the system console and
+written to the Text datablock `Scaffold_Debug_Report__<object>`: per island its
+id, frame kind, patch count, number of lines and pins; stitch decisions counted
+by reason; patch types; the number of chain strokes without an axis role; the
+number of solver diagnostics.
+
+## Layers
+
+Group Structure:
+
+| Toggle | GP layer | Draws |
+| --- | --- | --- |
+| Patches | `Scaffold_Patches` | fill of each patch (its source faces), one colour per patch |
+| Boundary | `Scaffold_Loops_Boundary` | OUTER loops, near-white |
+| Holes | `Scaffold_Loops_Holes` | INNER (and DEGRADED) loops, blue |
+| Chains | `Scaffold_Chains` | every PatchChain use, one stroke per directional run, coloured by the axis role Layer 5 gave that run |
+| Labels | collection `Scaffold_Debug_Labels__<object>` | `P<patch>C<position in loop>` (`L<loop>` when the patch has several loops), created only while the toggle is on |
+
+Group Skeleton:
+
+| Toggle | GP layer | Draws |
+| --- | --- | --- |
+| Islands: rigid frame / frame-free / strip | `Scaffold_Islands_UNFOLDED`, `_FRAME_FREE`, `_STRIP` | fill of every patch of an island, one colour per island, layer by the island's frame kind |
+| Lines | `Scaffold_Skeleton_Lines` | each island line (`line_by_run`): all its runs in one colour |
+| Nodes | `Scaffold_Skeleton_Nodes` | white 3D cross at every skeleton node |
+| Pins | `Scaffold_Pins` | small orange 3D cross at every pinned vertex occurrence of the solve |
+| Seams | `Scaffold_Seams` | every Layer 5 stitch decision along its chain: green dashed = stitched, red solid = cut |
+
+Group Patches: sides and types:
+
+| Toggle | GP layer | Draws |
+| --- | --- | --- |
+| Sides | `Scaffold_Patch_Sides` | one stroke per `PatchChainShapeRelation` piece: mint = surface line, blue = surface curve, orange = unresolved |
+| Corners | `Scaffold_Patch_Corners` | `RunCornerRelation` RIGHT and OTHER: green = right convex, magenta = right reflex, orange = other; STRAIGHT is not drawn |
+| Types: strip / strip (option off) / rectangle / four-sided / other | `Scaffold_Types_*` | patch fill by the Layer 4 verdict: accepted strip (straightened); suppressed "option off" (a strip the option would straighten); suppressed "already a rectangle"; suppressed "no bent opposite pair"; no candidate |
+
+Layer 4 grades the shape before it reads the option, so Rectangle, Four-sided
+and Other are the same with Straighten Strips on or off; only the strips the
+option would straighten move between Strip (option on) and Strip (option off).
+
+Group Layer 3 (detail), collapsed by default:
+
+| Toggle | GP layer | Draws |
+| --- | --- | --- |
+| Family Colors | `Scaffold_L3_Families` | each run in the colour of its ConnectedDirectionFamily (grey without one) |
+| Junctions | `Scaffold_L3_Junctions` | ScaffoldNode as a 3D `+`, RunEndpointJunction as a 3D `*`; yellow when more than two run ends meet |
+
+Defaults: Patches, Boundary, Holes, Chains, Lines, Nodes and Seams are on;
+everything else is off. Island fills compete with Patches; turning an Islands
+layer on does not hide Patches, so turn Patches off yourself if needed.
+
+### What the two chain colours mean
+
+Yellow and cyan are the two axes of one island (Layer 5 `AXIS_A` and `AXIS_B`):
+runs of the same colour in one island are laid along the same UV axis. The
+colours have no world meaning, and there is no relation between islands:
+yellow in one island and yellow in another island are unrelated. Grey runs
+are `OBLIQUE` or have no role.
+
+### Positions
+
+Every PatchChain use is drawn as its own copy, on its own side of the edge.
+The side comes from the winding rule (G0 DD-51: a use walks its loop the way
+its patch's faces wind): for a use edge a -> b the owning face is the patch
+face whose vertex cycle contains a -> b in that order, and the inward
+direction is `normalize(cross(face normal, b - a))`, left of the edge for that
+face's own winding (for an n-gon of 5+ vertices the patch's Layer 2 face-fan
+normals at a and b replace the face normal). This holds for concave and
+non-planar faces and puts the two uses of a SEAM_SELF chain on their two faces
+without any flip. An edge that no patch face walks a -> b falls back to the
+old rule (towards the centroid of the single patch face holding it) and is
+counted in the report line `edges with fallback side`; none occur on the test
+captures.
+
+Each stroke point moves inward by `RAIL_OFFSET_FACTOR` (0.012) x the stroke's
+average edge length and is lifted along the owning face normal. Lifts are
+multiples of the marker unit, the mesh's median edge length, so the stack
+order holds on every mesh size:
 
 ```text
-Rebuild Overlay
-SCAFFOLD JSON
-Write UV (G5a) / Straighten Strips (Pass 2 option for Write UV, default off)
-Close Graph
-Family Colors / Spines / Ribs / Seam Verdicts (also CutRails) / Junctions / Branches / Chain Shape visibility
+Patches 0 (on the surface) < Loops 0.014 < Chains / Sides 0.016 < Seams 0.018
+< Lines 0.022 < Labels 0.025   (x median edge length)
 ```
 
-`Rebuild Overlay` hides the source mesh while the overlay is active. `Close Graph`
-removes the overlay and restores the mesh visibility.
+Loops lift along the patch's face-fan normal at each vertex; seams along the
+mean of both patches' fan normals. Marker half-sizes are also multiples of the
+marker unit (nodes 0.12, corners 0.08, pins 0.07, junctions 0.1 to 0.19).
 
-## SCAFFOLD JSON
+An island that has no skeleton or an unknown frame kind is not drawn in any
+Islands layer; the report names it.
 
-`SCAFFOLD JSON` exports the active mesh / selected faces as a graph-viewer
-payload:
+GP materials are shared between the overlays of several objects, so every
+material name carries the colour it holds (as RGBA hex): drawing a second
+object never recolours the first.
+
+## Headless checkpoint
 
 ```text
-Pass 0 / Pass 1 -> inspect_pipeline_context(detail="full")
--> scaffold_graph_viewer_payload_v1 JSON
+blender -b scene.blend --python dev/tools/scaffold_graph_debug/write_debug_scene.py -- \
+    --objects Arc,collumn --straighten Arc --out debug.blend \
+    [--render-dir pngs --render Arc,collumn]
 ```
 
-The button opens a file-save dialog and defaults to:
-
-```text
-dev/tools/scaffold_graph_viewer/reports/<object>.graph.json
-```
-
-Use this for the external flat topological viewer:
-
-```text
-dev/tools/scaffold_graph_viewer/index.html
-```
-
-If the overlay is already active and the Grease Pencil object is selected, the
-button still exports the original source mesh recorded by the overlay session.
-In Edit Mode, selected faces define the export. In Object Mode, selecting one
-mesh object means all faces of that object are exported.
+Builds the overlay for the named objects with the panel's default layer
+visibility, hides each source mesh as Analyze does, prints stroke counts per
+layer and the report, and saves a copy (the opened file is never written).
+`--render` writes Workbench PNGs of three layer sets per object.
 
 ## Write UV (G5a)
 
@@ -75,165 +192,31 @@ Pass 0 / Pass 1 / Pass 2 (Straighten Strips toggle) -> build_islands -> build_is
 ```
 
 The button writes UV coordinates and pin flags for the skeleton only. It does
-not call `bpy.ops.uv.unwrap`, does not switch modes by operator, and does not
-perform conformal fill. After the info-bar reports success, run Blender's
-manual command:
-
-In Edit Mode, selected faces define the run. In Object Mode, selecting one mesh
-object means all faces of that object are used.
+not call `bpy.ops.uv.unwrap`. In Edit Mode, selected faces define the run. In
+Object Mode, selecting one mesh object means all faces of that object are
+used. Then run Blender's manual command:
 
 ```text
 UV Editor -> U -> Unwrap
 ```
 
-Blender's unwrap respects the pins written by G5a. This split is intentional:
-the `uv_transfer.py` boundary is crash-proof in Blender 4.3 because it writes
-pin flags through bmesh in Edit Mode and Object Mode, and avoids
-operator-context unwrap calls.
+Blender's unwrap respects the pins written by G5a. If the button reports
+diagnostics, treat them as part of the G5a validation surface.
 
-Current expected validation on the artist Cylinder capture:
+## SCAFFOLD JSON
 
-```text
-pinned:68 loops:192 residual:~4e-15 axis_violations:0 diags:0
-```
-
-If the button reports diagnostics, treat them as part of the G5a validation
-surface. They should name the degraded entities instead of silently smearing
-the UV skeleton.
-
-## Overlay v2 Layers
-
-```text
-ScaffoldGraph_FamilyRuns
-ScaffoldGraph_Spines
-ScaffoldGraph_Ribs
-ScaffoldGraph_CutRails
-ScaffoldGraph_SeamVerdicts
-ScaffoldGraph_JunctionsV2
-ScaffoldGraph_Branches
-ScaffoldGraph_ChainShape
-```
-
-| Layer | Meaning |
-| --- | --- |
-| ScaffoldGraph_FamilyRuns | Raw core ConnectedDirectionFamily runs. Every directional run segment is drawn, including n-gon cap chains. |
-| ScaffoldGraph_Spines | Derived debug rails: the dominant rail in a patch group plus rails parallel to it. |
-| ScaffoldGraph_Ribs | Derived debug rails that are not spines/parallel rails. Ribs may carry multiple related rail ids. |
-| ScaffoldGraph_CutRails | SEAM_SELF and cut rails in the dedicated cut color. |
-| ScaffoldGraph_SeamVerdicts | Level A stitch verdicts for shared seam chains. |
-| ScaffoldGraph_JunctionsV2 | Node atoms: every ScaffoldNode and every RunEndpointJunction. |
-| ScaffoldGraph_Branches | Explicit branch markers where the debug rail graph has valence > 2. |
-| ScaffoldGraph_ChainShape | Core `PatchChainShapeRelation` pieces: how each boundary chain is judged on each patch side, colored by kind. |
-
-Rails are debug-side views over core `ConnectedDirectionFamily v1`, rebuilt on
-each overlay refresh. In-patch geodesic continuation, occurrence-aware
-face-fan angles, and cross-patch transport are supplied by core evidence; the
-overlay does not run a separate geodesic grouping rule.
-
-Rail membership is per PatchChain use. The same source edge can draw twice:
-one offset line for the side-band patch view and one offset line for the cap
-patch view. Shared chains are drawn as per-use double lines, each lifted along
-the owning patch-use face normal and then nudged slightly inward toward that
-patch by `RAIL_OFFSET_FACTOR` times local edge length. Rail layers draw those
-rails as continuous Grease Pencil strokes with intermediate vertices instead
-of one stroke per source edge. Cap perimeters are no longer
-hidden; the cap-side cornered perimeter and the band-side continuous rail are
-both visible.
-
-Seam Verdicts shows Level A stitch/cut checks for shared seam chains. Green
-dashed means the seam is geometrically sewable under the current angle-defect
-test. Red solid means it must stay cut; red X markers show failing vertices.
-There are no labels on this layer.
-
-SELF_SEAM chains are always treated as cut rails/seams and use the dedicated
-cut color.
-
-JunctionsV2 shows ScaffoldNodes as circles and RunEndpointJunctions as
-diamonds. Anchored run endpoints share the same position as their ScaffoldNode
-but remain separate glyphs. Larger glyphs mean higher run-end valence.
-
-Branches shows explicit yellow branch markers at junctions where more than two
-run ends meet in the debug rail graph. The overlay marks the ambiguity and does
-not choose a path through it.
-
-Chain Shape draws one line per piece of each PatchChain use (a piece is the
-part of the chain between surface corners on that patch side), using the same
-per-side offset as the rail layers. Two parallel lines along one shared chain
-are its two sides, one per patch, and each side can be judged differently.
-Green (mint) means the piece is a straight line on that patch's surface
-(`SURFACE_LINE`), even when it is bent in 3D, for example an arch edge seen
-from the flat rim strip. Blue means a curve on that surface (`SURFACE_CURVE`),
-for example the same arch edge seen from the flat front face. Orange means
-`UNRESOLVED`; Rebuild prints a `[scaffold overlay] chain shape UNRESOLVED`
-line with the core diagnostic for each such piece in the system console. The
-panel summary shows `shape line/curve/unresolved` counts.
-
-Colors are stable across rebuilds. They are derived from ids, never from true
-random numbers. Chain Shape colors are fixed by kind, not by id.
-
-## Canonical Artist Example
-
-For an extruded-cross building:
-
-```text
-side band = one patch with one vertical seam
-top and bottom caps = separate patches
-```
-
-Expected overlay:
-
-```text
-1. The entire top rim is one visible rail.
-2. The entire bottom rim is a second visible rail with a different family color.
-3. The vertical seam is rendered in the cut color.
-4. The cap patch views still see those same rim edges as cornered perimeter
-   pieces, not as one straight rail; those cap-view pieces draw beside the
-   side-band rail as their own offset lines.
-```
+`SCAFFOLD JSON` exports the active mesh / selected faces as a graph-viewer
+payload (`Pass 0 / Pass 1 -> inspect_pipeline_context(detail="full")`), by
+default to `dev/tools/scaffold_graph_viewer/reports/<object>.graph.json`, for
+the external flat viewer `dev/tools/scaffold_graph_viewer/index.html`.
 
 ## Avoiding Stale Add-ons
 
-The panel header shows:
-
-```text
-Build: <short git hash>[-dirty]
-```
-
-After `git pull`, update the Blender add-on with a clean reload:
-
-```text
-1. Close Graph.
-2. Unregister/remove the add-on module from Blender.
-3. Restart Blender.
-4. Register/install the add-on again from this checkout.
-5. Confirm the panel Build stamp matches the new git hash and has no `-dirty`
-   suffix unless you intentionally run local edits.
-```
-
-Python bytecode cache for this add-on lives under:
-
-```text
-dev/tools/scaffold_graph_debug/__pycache__/
-```
-
-If Blender appears to run stale code after an update, close Blender and delete
-that directory before registering the add-on again.
-
-## Staged Validation Checklist
-
-Stage 1 is structural validation before UVs exist:
-
-```text
-1. Family Runs: expected same-direction flow uses one stable color across seams.
-2. Spines: the main long rail follows the intended length direction.
-3. Parallel rails: the opposite long rail appears thinner but same hue family.
-4. Ribs: cross rails appear in the contrasting hue.
-5. Seam Verdicts: green seams are candidates for sewing; red seams stay cut.
-6. Junctions: mid-chain corners appear as diamonds when they are not
-   ScaffoldNodes.
-7. Branches: branch markers are warnings; do not expect the overlay to choose
-   the continuation.
-```
+The panel header shows `Build: <short git hash>[-dirty]`. After `git pull`:
+turn Analyze off, unregister the add-on, restart Blender, register again and
+check the Build stamp. Python bytecode cache lives under
+`dev/tools/scaffold_graph_debug/__pycache__/`; delete it if Blender appears to
+run stale code.
 
 To unregister:
 

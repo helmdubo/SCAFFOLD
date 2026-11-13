@@ -1,79 +1,39 @@
-"""Grease Pencil drawing helpers for the ScaffoldGraph dev overlay.
+"""Grease Pencil and text-label primitives for the Scaffold debug overlay.
 
-This module may import Blender APIs because it lives outside scaffold_core. It
-only consumes the pipeline inspection overlay payload and does not recompute
-ScaffoldGraph semantics.
+This module may import Blender APIs because it lives outside scaffold_core.
+It draws what it is given and computes no Scaffold semantics. Both Grease
+Pencil generations are handled: legacy GPENCIL (Blender <= 4.2, frame.strokes)
+and GP v3 (Blender >= 4.3, frame.drawing).
 """
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Sequence
+from typing import Any, Sequence
 
 import bpy
 from mathutils import Vector
 
 
-EDGE_LAYER_NAME = "ScaffoldGraph_Edges"
-NODE_LAYER_NAME = "ScaffoldGraph_Nodes"
-JUNCTION_LAYER_NAME = "ScaffoldGraph_Junctions"
-INCIDENT_RELATION_LAYER_NAME = "ScaffoldGraph_IncidentRelations"
-SHARED_CHAIN_RELATION_LAYER_NAME = "ScaffoldGraph_SharedChainRelations"
 GP_OBJECT_PREFIX = "ScaffoldGraph_Overlay__"
-LABEL_COLLECTION_PREFIX = "ScaffoldGraph_Labels__"
-LABEL_OBJECT_PREFIX = "ScaffoldGraph_Label__"
-EDGE_MATERIAL_NAME = "ScaffoldGraph_Edge_Material"
-CONTINUITY_EDGE_MATERIAL_PREFIX = "ScaffoldGraph_ContinuityEdge_"
-NODE_MATERIAL_NAME = "ScaffoldGraph_Node_Material"
-JUNCTION_MATERIAL_NAME = "ScaffoldGraph_Junction_Material"
-INCIDENT_RELATION_MATERIAL_NAME = "ScaffoldGraph_IncidentRelation_Material"
-SHARED_CHAIN_RELATION_MATERIAL_NAME = "ScaffoldGraph_SharedChainRelation_Material"
-LABEL_MATERIAL_NAME = "ScaffoldGraph_Label_Material"
-EDGE_COLOR = (0.1, 0.75, 1.0, 1.0)
-NODE_COLOR = (1.0, 0.95, 0.2, 1.0)
-JUNCTION_COLOR = (1.0, 0.2, 0.45, 1.0)
-INCIDENT_RELATION_COLOR = (0.2, 1.0, 0.45, 1.0)
-SHARED_CHAIN_RELATION_COLOR = (1.0, 0.55, 0.1, 1.0)
-LABEL_COLOR = (1.0, 1.0, 1.0, 1.0)
-EDGE_WIDTH = 5
-NODE_WIDTH = 9
-JUNCTION_WIDTH = 7
-INCIDENT_RELATION_WIDTH = 6
-SHARED_CHAIN_RELATION_WIDTH = 6
-NODE_MARKER_SIZE = 0.045
-JUNCTION_MARKER_SIZE = 0.065
-INCIDENT_RELATION_MARKER_SIZE = 0.085
-SHARED_CHAIN_RELATION_MARKER_SIZE = 0.075
-INCIDENT_RELATION_LABEL_OFFSET = 0.14
-INCIDENT_RELATION_KIND_STYLES = {
-    "STRAIGHT_CONTINUATION_CANDIDATE": ("CONT", (0.2, 1.0, 0.45, 1.0)),
-    "SURFACE_CONTINUATION_CANDIDATE": ("CONT", (0.2, 1.0, 0.45, 1.0)),
-    "CROSS_SURFACE_CONNECTOR": ("XSRF", (1.0, 0.35, 0.15, 1.0)),
-    "ORTHOGONAL_CORNER": ("ORTH", (0.15, 0.85, 1.0, 1.0)),
-    "OBLIQUE_CONNECTOR": ("OBL", (1.0, 0.65, 0.15, 1.0)),
-    "SAME_RAY_AMBIGUOUS": ("SR?", (1.0, 0.95, 0.15, 1.0)),
-    "MISSING_ENDPOINT_EVIDENCE": ("MISS", (1.0, 0.7, 0.05, 1.0)),
-    "DEGRADED": ("DEG", (0.55, 0.55, 0.55, 1.0)),
-}
-INCIDENT_RELATION_DEFAULT_STYLE = ("INC", INCIDENT_RELATION_COLOR)
-SHARED_CHAIN_RELATION_LABEL = "SHARED"
+LABEL_COLLECTION_PREFIX = "Scaffold_Debug_Labels__"
+LABEL_OBJECT_PREFIX = "Scaffold_Label__"
+LABEL_MATERIAL_PREFIX = "ScaffoldDebug_Label_"
+MATERIAL_PREFIX = "ScaffoldDebug_"
+LEGACY_MATERIAL_PREFIXES = ("ScaffoldGraphV2_", "ScaffoldGraph_")
 LABEL_SIZE = 0.12
-LABEL_LIFT = 0.06
-EDGE_LANE_SPACING = 0.035
-EDGE_LANE_ROUND_DIGITS = 6
 GP_OBJECT_TYPES = {"GREASEPENCIL", "GPENCIL"}
-DISPLAY_MODE_IDENTITY = "IDENTITY"
-DISPLAY_MODE_CONTINUITY = "CONTINUITY"
-DISPLAY_MODE_RELATIONS = "RELATIONS"
-DISPLAY_MODES = {
-    DISPLAY_MODE_IDENTITY,
-    DISPLAY_MODE_CONTINUITY,
-    DISPLAY_MODE_RELATIONS,
-}
+V3_RADIUS_PER_WIDTH = 0.00075
 
 
 def _safe_object_suffix(name: str) -> str:
     safe = "".join(ch if ch.isalnum() or ch in {"_", "-", "."} else "_" for ch in name)
     return safe or "mesh"
+
+
+def color_hex(color: Sequence[float]) -> str:
+    """RGBA as 8 hex digits: materials shared by several overlays are named by their colour."""
+
+    return "".join(f"{max(0, min(255, round(float(value) * 255))):02x}" for value in tuple(color)[:4])
 
 
 def overlay_object_name(source_name: str) -> str:
@@ -134,6 +94,8 @@ def _ensure_layer(gp_data: Any, layer_name: str, visible: bool) -> Any:
         _clear_layer(layer)
     if hasattr(layer, "hide"):
         layer.hide = not visible
+    if hasattr(layer, "use_lights"):
+        layer.use_lights = False  # flat debug colours, independent of scene lights
     return layer
 
 
@@ -150,6 +112,8 @@ def _ensure_material(
     gp_data: Any,
     material_name: str,
     color: tuple[float, float, float, float],
+    *,
+    fill: bool = False,
 ) -> int:
     material = bpy.data.materials.get(material_name)
     if material is None:
@@ -157,65 +121,16 @@ def _ensure_material(
     if not getattr(material, "grease_pencil", None):
         bpy.data.materials.create_gpencil_data(material)
     material.grease_pencil.color = color
-    material.grease_pencil.show_fill = False
+    material.grease_pencil.show_fill = fill
+    material.grease_pencil.show_stroke = not fill
+    if fill:
+        material.grease_pencil.fill_color = color
 
     for index, slot in enumerate(gp_data.materials):
         if slot is not None and slot.name == material_name:
             return index
     gp_data.materials.append(material)
     return len(gp_data.materials) - 1
-
-
-def _rgba(color: Sequence[float]) -> tuple[float, float, float, float]:
-    if len(color) != 4:
-        return EDGE_COLOR
-    return (
-        float(color[0]),
-        float(color[1]),
-        float(color[2]),
-        float(color[3]),
-    )
-
-
-def _continuity_material_name(color_key: str) -> str:
-    return f"{CONTINUITY_EDGE_MATERIAL_PREFIX}{_safe_object_suffix(color_key)}_Material"
-
-
-def _continuity_edge_material_indexes(
-    gp_data: Any,
-    overlay: dict[str, Any],
-) -> dict[str, int]:
-    keyed_colors: dict[str, tuple[float, float, float, float]] = {}
-    for component in overlay.get("continuity_components", ()):
-        color_key = str(component.get("color_key") or component.get("id") or "")
-        color = component.get("continuity_color", ())
-        if color_key and len(color) == 4:
-            keyed_colors[color_key] = _rgba(color)
-    for edge in overlay.get("edges", ()):
-        color_key = str(edge.get("color_key") or "")
-        color = edge.get("continuity_color", ())
-        if color_key and len(color) == 4:
-            keyed_colors.setdefault(color_key, _rgba(color))
-    return {
-        color_key: _ensure_material(gp_data, _continuity_material_name(color_key), color)
-        for color_key, color in sorted(keyed_colors.items())
-    }
-
-
-def _new_stroke(frame: Any, point_count: int) -> Any:
-    strokes = getattr(frame, "strokes", None)
-    if strokes is not None and hasattr(strokes, "new"):
-        stroke = strokes.new()
-        _ensure_stroke_point_count(stroke, point_count)
-        return stroke
-
-    drawing = getattr(frame, "drawing", None)
-    if drawing is None:
-        raise RuntimeError("Grease Pencil frame has neither strokes nor drawing API.")
-    drawing.add_strokes(sizes=[point_count])
-    stroke = drawing.strokes[-1]
-    _ensure_stroke_point_count(stroke, point_count)
-    return stroke
 
 
 def _ensure_stroke_point_count(stroke: Any, point_count: int) -> None:
@@ -238,22 +153,20 @@ def _ensure_stroke_point_count(stroke: Any, point_count: int) -> None:
             )
 
 
-def _set_stroke_style(stroke: Any, material_index: int, line_width: int) -> None:
+def _set_stroke_style(stroke: Any, material_index: int, line_width: int, cyclic: bool = False) -> None:
     try:
         stroke.material_index = material_index
     except (IndexError, RuntimeError):
         stroke.material_index = 0
     if hasattr(stroke, "line_width"):
         stroke.line_width = line_width
-    if hasattr(stroke, "radius"):
-        stroke.radius = float(line_width)
     if hasattr(stroke, "use_cyclic"):
-        stroke.use_cyclic = False
+        stroke.use_cyclic = cyclic
     elif hasattr(stroke, "cyclic"):
-        stroke.cyclic = False
+        stroke.cyclic = cyclic
 
 
-def _set_point(point: Any, coords: Sequence[float], line_width: int) -> None:
+def _set_point(point: Any, coords: Sequence[float], line_width: int, radius_scale: float = 1.0) -> None:
     location = (float(coords[0]), float(coords[1]), float(coords[2]))
     if hasattr(point, "co"):
         point.co = location
@@ -269,454 +182,68 @@ def _set_point(point: Any, coords: Sequence[float], line_width: int) -> None:
     if hasattr(point, "pressure"):
         point.pressure = 1.0
     if hasattr(point, "radius"):
-        point.radius = max(0.001, float(line_width) * 0.00075)
+        point.radius = max(0.001, float(line_width) * V3_RADIUS_PER_WIDTH * radius_scale)
 
 
-def _add_stroke(
+def set_layer_thickness(layer: Any, base_width: int, multiplier: float, radius_scale: float) -> bool:
+    """Scale a layer's strokes live through its layer-level thickness property.
+
+    GP v3: radius_offset (world units) is added to every point radius, so
+    offset = (multiplier - 1) x the radius the layer's thinnest stroke was
+    built with (base_width x V3_RADIUS_PER_WIDTH x radius_scale).
+    Legacy GPENCIL: line_change (pixels) is added to every line_width, so
+    change = round((multiplier - 1) x base_width), never below 1 px.
+    """
+
+    multiplier = max(0.0, float(multiplier))
+    if hasattr(layer, "radius_offset"):
+        base_radius = max(0.001, float(base_width) * V3_RADIUS_PER_WIDTH * float(radius_scale))
+        layer.radius_offset = (multiplier - 1.0) * base_radius
+        return True
+    if hasattr(layer, "line_change"):
+        layer.line_change = max(1 - int(base_width), int(round((multiplier - 1.0) * float(base_width))))
+        return True
+    return False
+
+
+def write_strokes(
     frame: Any,
-    points: Sequence[Sequence[float]],
-    material_index: int,
-    line_width: int,
-) -> bool:
-    if len(points) < 2:
-        return False
-    stroke = _new_stroke(frame, len(points))
-    _set_stroke_style(stroke, material_index, line_width)
-    for index, point in enumerate(points):
-        _set_point(stroke.points[index], point, line_width)
-    return True
-
-
-def _node_marker_strokes(
-    position: Sequence[float],
-) -> tuple[tuple[tuple[float, float, float], ...], ...]:
-    x, y, z = (float(position[0]), float(position[1]), float(position[2]))
-    size = NODE_MARKER_SIZE
-    return (
-        ((x - size, y, z), (x + size, y, z)),
-        ((x, y - size, z), (x, y + size, z)),
-    )
-
-
-def _junction_marker_strokes(
-    position: Sequence[float],
-) -> tuple[tuple[tuple[float, float, float], ...], ...]:
-    x, y, z = (float(position[0]), float(position[1]), float(position[2]))
-    size = JUNCTION_MARKER_SIZE
-    return (
-        ((x - size, y - size, z), (x + size, y + size, z)),
-        ((x - size, y + size, z), (x + size, y - size, z)),
-    )
-
-
-def _incident_relation_kind(relation: dict[str, Any]) -> str:
-    return str(relation.get("kind") or "")
-
-
-def _incident_relation_style(relation: dict[str, Any]) -> tuple[str, tuple[float, float, float, float]]:
-    return INCIDENT_RELATION_KIND_STYLES.get(
-        _incident_relation_kind(relation),
-        INCIDENT_RELATION_DEFAULT_STYLE,
-    )
-
-
-def _incident_relation_label(relation: dict[str, Any]) -> str:
-    label, _color = _incident_relation_style(relation)
-    return label
-
-
-def _incident_relation_material_name(kind: str) -> str:
-    label, _color = INCIDENT_RELATION_KIND_STYLES.get(
-        kind,
-        INCIDENT_RELATION_DEFAULT_STYLE,
-    )
-    return f"ScaffoldGraph_IncidentRelation_{_safe_object_suffix(label)}_Material"
-
-
-def _incident_relation_marker_strokes(
-    kind: str,
-    position: Sequence[float],
-) -> tuple[tuple[tuple[float, float, float], ...], ...]:
-    x, y, z = (float(position[0]), float(position[1]), float(position[2]))
-    size = INCIDENT_RELATION_MARKER_SIZE
-    if kind in {"STRAIGHT_CONTINUATION_CANDIDATE", "SURFACE_CONTINUATION_CANDIDATE"}:
-        return (
-            ((x - size, y, z), (x + size, y, z)),
-            ((x, y - size * 0.35, z), (x, y + size * 0.35, z)),
-        )
-    if kind == "CROSS_SURFACE_CONNECTOR":
-        return (
-            ((x - size, y - size * 0.45, z), (x + size, y + size * 0.45, z)),
-            ((x - size, y + size * 0.45, z), (x + size, y - size * 0.45, z)),
-            ((x, y - size, z), (x, y + size, z)),
-        )
-    if kind == "ORTHOGONAL_CORNER":
-        return (
-            ((x - size, y, z), (x, y, z), (x, y + size, z)),
-        )
-    if kind == "OBLIQUE_CONNECTOR":
-        return (
-            ((x - size, y - size * 0.45, z), (x + size, y + size * 0.45, z)),
-            ((x - size * 0.35, y + size * 0.55, z), (x + size * 0.35, y - size * 0.55, z)),
-        )
-    if kind == "SAME_RAY_AMBIGUOUS":
-        return (
-            ((x - size, y - size * 0.35, z), (x, y, z), (x - size, y + size * 0.35, z)),
-            ((x, y - size * 0.35, z), (x + size, y, z), (x, y + size * 0.35, z)),
-        )
-    if kind in {"MISSING_ENDPOINT_EVIDENCE", "DEGRADED"}:
-        return (
-            ((x - size, y - size, z), (x + size, y + size, z)),
-            ((x - size, y + size, z), (x + size, y - size, z)),
-        )
-    return (
-        ((x - size, y, z), (x, y + size, z), (x + size, y, z)),
-    )
-
-
-def _shared_chain_relation_marker_strokes(
-    position: Sequence[float],
-) -> tuple[tuple[tuple[float, float, float], ...], ...]:
-    x, y, z = (float(position[0]), float(position[1]), float(position[2]))
-    size = SHARED_CHAIN_RELATION_MARKER_SIZE
-    return (
-        ((x - size, y - size, z), (x + size, y - size, z)),
-        ((x + size, y - size, z), (x, y + size, z)),
-        ((x, y + size, z), (x - size, y - size, z)),
-    )
-
-
-def _edge_label(edge: dict[str, Any]) -> str:
-    return str(edge.get("display_label") or edge.get("id") or edge.get("patch_chain_id") or "")
-
-
-def _node_label(node: dict[str, Any]) -> str:
-    return str(node.get("display_label") or node.get("id") or "")
-
-
-def _rounded_polyline_point(point: Sequence[float]) -> tuple[float, float, float]:
-    return (
-        round(float(point[0]), EDGE_LANE_ROUND_DIGITS),
-        round(float(point[1]), EDGE_LANE_ROUND_DIGITS),
-        round(float(point[2]), EDGE_LANE_ROUND_DIGITS),
-    )
-
-
-def _coincident_polyline_key(polyline: Sequence[Sequence[float]]) -> tuple[tuple[float, float, float], ...]:
-    rounded = tuple(_rounded_polyline_point(point) for point in polyline if len(point) == 3)
-    reversed_rounded = tuple(reversed(rounded))
-    return min(rounded, reversed_rounded)
-
-
-def _lane_perpendicular(
-    key: tuple[tuple[float, float, float], ...],
-) -> Vector:
-    points = [Vector(point) for point in key]
-    for first, second in zip(points, points[1:]):
-        direction = second - first
-        if direction.length > 1.0e-8:
-            direction.normalize()
-            axis = min(
-                (Vector((0.0, 0.0, 1.0)), Vector((0.0, 1.0, 0.0)), Vector((1.0, 0.0, 0.0))),
-                key=lambda candidate: abs(direction.dot(candidate)),
-            )
-            perpendicular = direction.cross(axis)
-            if perpendicular.length > 1.0e-8:
-                perpendicular.normalize()
-                return perpendicular
-    return Vector((0.0, 0.0, 1.0))
-
-
-def _offset_polyline(
-    polyline: Sequence[Sequence[float]],
-    offset: Vector,
-) -> list[tuple[float, float, float]]:
-    return [
-        (
-            float(point[0]) + offset.x,
-            float(point[1]) + offset.y,
-            float(point[2]) + offset.z,
-        )
-        for point in polyline
-        if len(point) == 3
-    ]
-
-
-def _display_edges(edges: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
-    groups: dict[tuple[tuple[float, float, float], ...], list[tuple[int, dict[str, Any]]]] = {}
-    display_edges = [dict(edge) for edge in edges]
-    for index, edge in enumerate(display_edges):
-        polyline = edge.get("polyline", ())
-        if len(polyline) < 2:
-            edge["display_polyline"] = polyline
-            continue
-        groups.setdefault(_coincident_polyline_key(polyline), []).append((index, edge))
-
-    for key, group in groups.items():
-        ordered_group = sorted(
-            group,
-            key=lambda item: (
-                _edge_label(item[1]),
-                str(item[1].get("id", "")),
-                str(item[1].get("patch_chain_id", "")),
-            ),
-        )
-        perpendicular = _lane_perpendicular(key)
-        midpoint = (len(ordered_group) - 1) * 0.5
-        for lane_index, (edge_index, edge) in enumerate(ordered_group):
-            amount = (lane_index - midpoint) * EDGE_LANE_SPACING
-            offset = perpendicular * amount if len(ordered_group) > 1 else Vector((0.0, 0.0, 0.0))
-            display_edges[edge_index]["display_polyline"] = _offset_polyline(
-                edge.get("polyline", ()),
-                offset,
-            )
-    return display_edges
-
-
-def _draw_edges(
-    frame: Any,
-    material_index: int,
-    edges: Iterable[dict[str, Any]],
+    rows: Sequence[tuple[Sequence[Sequence[float]], int, int, bool]],
     *,
-    material_indexes_by_color_key: dict[str, int] | None = None,
+    radius_scale: float = 1.0,
 ) -> int:
-    stroke_count = 0
-    for edge in edges:
-        polyline = edge.get("display_polyline", edge.get("polyline", ()))
-        stroke_material_index = material_index
-        if material_indexes_by_color_key:
-            color_key = str(edge.get("color_key") or "")
-            stroke_material_index = material_indexes_by_color_key.get(color_key, material_index)
-        if _add_stroke(frame, polyline, stroke_material_index, EDGE_WIDTH):
-            stroke_count += 1
-    return stroke_count
+    """Write (points, material_index, line_width, cyclic) rows into one frame.
 
+    GP v3 gets one add_strokes call per frame (fast for thousands of fill
+    triangles); legacy GPENCIL gets one strokes.new() per row.
+    """
 
-def _draw_nodes(frame: Any, material_index: int, nodes: Iterable[dict[str, Any]]) -> int:
-    marker_count = 0
-    for node in nodes:
-        position = node.get("position", ())
-        if len(position) != 3:
-            continue
-        for stroke_points in _node_marker_strokes(position):
-            _add_stroke(frame, stroke_points, material_index, NODE_WIDTH)
-        marker_count += 1
-    return marker_count
+    rows = [row for row in rows if len(row[0]) >= 2]
+    if not rows:
+        return 0
+    legacy_strokes = getattr(frame, "strokes", None)
+    if legacy_strokes is not None and hasattr(legacy_strokes, "new"):
+        for points, material_index, line_width, cyclic in rows:
+            stroke = legacy_strokes.new()
+            _ensure_stroke_point_count(stroke, len(points))
+            _set_stroke_style(stroke, material_index, line_width, cyclic)
+            for index, point in enumerate(points):
+                _set_point(stroke.points[index], point, line_width, radius_scale)
+        return len(rows)
 
-
-def _draw_junctions(frame: Any, material_index: int, junctions: Iterable[dict[str, Any]]) -> int:
-    marker_count = 0
-    for junction in junctions:
-        position = junction.get("position", ())
-        if len(position) != 3:
-            continue
-        for stroke_points in _junction_marker_strokes(position):
-            _add_stroke(frame, stroke_points, material_index, JUNCTION_WIDTH)
-        marker_count += 1
-    return marker_count
-
-
-def _draw_incident_relations(
-    frame: Any,
-    material_indexes: dict[str, int],
-    relations: Iterable[dict[str, Any]],
-) -> int:
-    marker_count = 0
-    for relation in relations:
-        position = relation.get("position", ())
-        if len(position) != 3:
-            continue
-        kind = _incident_relation_kind(relation)
-        material_index = material_indexes.get(kind, material_indexes[""])
-        for stroke_points in _incident_relation_marker_strokes(kind, position):
-            _add_stroke(frame, stroke_points, material_index, INCIDENT_RELATION_WIDTH)
-        marker_count += 1
-    return marker_count
-
-
-def _draw_shared_chain_relations(
-    frame: Any,
-    material_index: int,
-    relations: Iterable[dict[str, Any]],
-) -> int:
-    marker_count = 0
-    for relation in relations:
-        position = relation.get("label_position", relation.get("midpoint", ()))
-        if len(position) != 3:
-            continue
-        for stroke_points in _shared_chain_relation_marker_strokes(position):
-            _add_stroke(frame, stroke_points, material_index, SHARED_CHAIN_RELATION_WIDTH)
-        marker_count += 1
-    return marker_count
-
-
-def _edge_label_position(polyline: Sequence[Sequence[float]]) -> Vector | None:
-    points = [Vector((float(point[0]), float(point[1]), float(point[2]))) for point in polyline]
-    if not points:
-        return None
-    if len(points) == 1:
-        return points[0]
-
-    lengths: list[float] = []
-    total = 0.0
-    for first, second in zip(points, points[1:]):
-        length = (second - first).length
-        lengths.append(length)
-        total += length
-    if total <= 1e-8:
-        return points[0]
-
-    halfway = total * 0.5
-    accumulated = 0.0
-    for index, length in enumerate(lengths):
-        if accumulated + length >= halfway:
-            ratio = (halfway - accumulated) / length if length > 1e-8 else 0.0
-            return points[index].lerp(points[index + 1], ratio)
-        accumulated += length
-    return points[-1]
-
-
-def _ensure_label_collection(source_name: str) -> Any:
-    collection_name = label_collection_name(source_name)
-    collection = bpy.data.collections.get(collection_name)
-    if collection is None:
-        collection = bpy.data.collections.new(collection_name)
-        bpy.context.scene.collection.children.link(collection)
-    else:
-        for obj in list(collection.objects):
-            data = obj.data
-            bpy.data.objects.remove(obj, do_unlink=True)
-            if data and getattr(data, "users", 0) == 0:
-                bpy.data.curves.remove(data)
-    return collection
-
-
-def _ensure_label_material() -> Any:
-    material = bpy.data.materials.get(LABEL_MATERIAL_NAME)
-    if material is None:
-        material = bpy.data.materials.new(LABEL_MATERIAL_NAME)
-    material.diffuse_color = LABEL_COLOR
-    return material
-
-
-def _add_label(
-    collection: Any,
-    source_object: Any,
-    kind: str,
-    label: str,
-    local_position: Vector,
-    material: Any,
-) -> None:
-    safe_label = _safe_object_suffix(label)
-    curve_name = f"{LABEL_OBJECT_PREFIX}{kind}__{safe_label}"
-    curve_data = bpy.data.curves.new(curve_name, type="FONT")
-    curve_data.body = label
-    curve_data.size = LABEL_SIZE
-    curve_data.align_x = "CENTER"
-    curve_data.align_y = "CENTER"
-    curve_data.materials.append(material)
-
-    label_object = bpy.data.objects.new(curve_name, curve_data)
-    label_object.location = source_object.matrix_world @ (
-        local_position + Vector((0.0, 0.0, LABEL_LIFT))
-    )
-    collection.objects.link(label_object)
-
-
-def _position_key(position: Sequence[float]) -> tuple[float, float, float]:
-    return (
-        round(float(position[0]), EDGE_LANE_ROUND_DIGITS),
-        round(float(position[1]), EDGE_LANE_ROUND_DIGITS),
-        round(float(position[2]), EDGE_LANE_ROUND_DIGITS),
-    )
-
-
-def _relation_label_position(position: Sequence[float], lane_index: int) -> Vector:
-    lane_x = (lane_index % 3) - 1
-    lane_y = lane_index // 3
-    return Vector((
-        float(position[0]) + lane_x * INCIDENT_RELATION_LABEL_OFFSET,
-        float(position[1]) + (lane_y + 1) * INCIDENT_RELATION_LABEL_OFFSET,
-        float(position[2]),
-    ))
-
-
-def _draw_labels(
-    source_object: Any,
-    nodes: Sequence[dict[str, Any]],
-    edges: Sequence[dict[str, Any]],
-    incident_relations: Sequence[dict[str, Any]],
-    shared_chain_relations: Sequence[dict[str, Any]],
-    *,
-    visible: bool,
-) -> int:
-    collection = _ensure_label_collection(source_object.name)
-    collection.hide_viewport = not visible
-    material = _ensure_label_material()
-    label_count = 0
-
-    for node in nodes:
-        label = _node_label(node)
-        position = node.get("position", ())
-        if label and len(position) == 3:
-            _add_label(
-                collection,
-                source_object,
-                "node",
-                label,
-                Vector((float(position[0]), float(position[1]), float(position[2]))),
-                material,
-            )
-            label_count += 1
-
-    for edge in edges:
-        label = _edge_label(edge)
-        label_position = _edge_label_position(edge.get("display_polyline", edge.get("polyline", ())))
-        if label and label_position is not None:
-            _add_label(collection, source_object, "edge", label, label_position, material)
-            label_count += 1
-
-    incident_groups: dict[tuple[float, float, float], list[dict[str, Any]]] = {}
-    for relation in incident_relations:
-        position = relation.get("position", ())
-        if len(position) == 3:
-            incident_groups.setdefault(_position_key(position), []).append(relation)
-
-    for relations_at_node in incident_groups.values():
-        ordered_relations = sorted(
-            relations_at_node,
-            key=lambda relation: (
-                _incident_relation_label(relation),
-                str(relation.get("id", "")),
-            ),
-        )
-        for lane_index, relation in enumerate(ordered_relations):
-            label = _incident_relation_label(relation)
-            position = relation.get("position", ())
-            _add_label(
-                collection,
-                source_object,
-                "incident",
-                label,
-                _relation_label_position(position, lane_index),
-                material,
-            )
-            label_count += 1
-
-    for relation in shared_chain_relations:
-        position = relation.get("label_position", relation.get("midpoint", ()))
-        if len(position) == 3:
-            _add_label(
-                collection,
-                source_object,
-                "shared",
-                SHARED_CHAIN_RELATION_LABEL,
-                Vector((float(position[0]), float(position[1]), float(position[2]))),
-                material,
-            )
-            label_count += 1
-
-    return label_count
+    drawing = getattr(frame, "drawing", None)
+    if drawing is None:
+        raise RuntimeError("Grease Pencil frame has neither strokes nor drawing API.")
+    start = len(drawing.strokes)
+    drawing.add_strokes(sizes=[len(points) for points, _m, _w, _c in rows])
+    strokes = drawing.strokes
+    for offset, (points, material_index, line_width, cyclic) in enumerate(rows):
+        stroke = strokes[start + offset]
+        _set_stroke_style(stroke, material_index, line_width, cyclic)
+        stroke_points = stroke.points
+        for index, point in enumerate(points):
+            _set_point(stroke_points[index], point, line_width, radius_scale)
+    return len(rows)
 
 
 def _get_or_create_grease_pencil_object(source_object: Any) -> Any:
@@ -740,134 +267,63 @@ def _get_or_create_grease_pencil_object(source_object: Any) -> Any:
     return gp_object
 
 
-def render_overlay(
-    source_object: Any,
-    overlay: dict[str, Any],
-    *,
-    display_mode: str = DISPLAY_MODE_CONTINUITY,
-    show_edges: bool = True,
-    show_nodes: bool = True,
-    show_junctions: bool = True,
-    show_incident_relations: bool = True,
-    show_shared_chain_relations: bool = True,
-    show_labels: bool = True,
-) -> dict[str, Any]:
-    if display_mode not in DISPLAY_MODES:
-        display_mode = DISPLAY_MODE_CONTINUITY
-    gp_object = _get_or_create_grease_pencil_object(source_object)
-    gp_data = gp_object.data
+def _matches(name: str, exact: str | None, prefix: str) -> bool:
+    """One source: its exact name only (Arc never clears ArcX); no source: every debug item."""
 
-    edge_layer = _ensure_layer(gp_data, EDGE_LAYER_NAME, show_edges)
-    node_layer = _ensure_layer(gp_data, NODE_LAYER_NAME, show_nodes)
-    junction_layer = _ensure_layer(gp_data, JUNCTION_LAYER_NAME, show_junctions)
-    incident_relation_layer = _ensure_layer(
-        gp_data,
-        INCIDENT_RELATION_LAYER_NAME,
-        show_incident_relations,
-    )
-    shared_chain_relation_layer = _ensure_layer(
-        gp_data,
-        SHARED_CHAIN_RELATION_LAYER_NAME,
-        show_shared_chain_relations,
-    )
-    edge_frame = _ensure_frame(edge_layer)
-    node_frame = _ensure_frame(node_layer)
-    junction_frame = _ensure_frame(junction_layer)
-    incident_relation_frame = _ensure_frame(incident_relation_layer)
-    shared_chain_relation_frame = _ensure_frame(shared_chain_relation_layer)
-    edge_material_index = _ensure_material(gp_data, EDGE_MATERIAL_NAME, EDGE_COLOR)
-    continuity_edge_material_indexes = (
-        _continuity_edge_material_indexes(gp_data, overlay)
-        if display_mode == DISPLAY_MODE_CONTINUITY
-        else {}
-    )
-    node_material_index = _ensure_material(gp_data, NODE_MATERIAL_NAME, NODE_COLOR)
-    junction_material_index = _ensure_material(gp_data, JUNCTION_MATERIAL_NAME, JUNCTION_COLOR)
-    incident_relation_material_indexes = {
-        kind: _ensure_material(gp_data, _incident_relation_material_name(kind), color)
-        for kind, (_label, color) in INCIDENT_RELATION_KIND_STYLES.items()
-    }
-    incident_relation_material_indexes[""] = _ensure_material(
-        gp_data,
-        INCIDENT_RELATION_MATERIAL_NAME,
-        INCIDENT_RELATION_COLOR,
-    )
-    shared_chain_relation_material_index = _ensure_material(
-        gp_data,
-        SHARED_CHAIN_RELATION_MATERIAL_NAME,
-        SHARED_CHAIN_RELATION_COLOR,
-    )
+    return name == exact if exact is not None else name.startswith(prefix)
 
-    edges = list(overlay.get("edges", ()))
-    nodes = list(overlay.get("nodes", ()))
-    junctions = list(overlay.get("junctions", ()))
-    incident_relations = list(overlay.get("incident_relations", ()))
-    shared_chain_relations = list(overlay.get("shared_chain_relations", ()))
-    display_edges = _display_edges(edges)
-    edge_stroke_count = _draw_edges(
-        edge_frame,
-        edge_material_index,
-        display_edges,
-        material_indexes_by_color_key=continuity_edge_material_indexes,
-    )
-    node_marker_count = _draw_nodes(node_frame, node_material_index, nodes)
-    junction_marker_count = _draw_junctions(
-        junction_frame,
-        junction_material_index,
-        junctions,
-    )
-    incident_relation_marker_count = _draw_incident_relations(
-        incident_relation_frame,
-        incident_relation_material_indexes,
-        incident_relations,
-    )
-    shared_chain_relation_marker_count = _draw_shared_chain_relations(
-        shared_chain_relation_frame,
-        shared_chain_relation_material_index,
-        shared_chain_relations,
-    )
-    label_count = _draw_labels(
-        source_object,
-        nodes,
-        display_edges,
-        incident_relations if show_incident_relations else [],
-        shared_chain_relations if show_shared_chain_relations else [],
-        visible=show_labels,
-    )
 
-    return {
-        "scaffold_node_count": int(overlay.get("scaffold_node_count", len(nodes))),
-        "scaffold_edge_count": int(overlay.get("scaffold_edge_count", len(edges))),
-        "scaffold_junction_count": int(overlay.get("scaffold_junction_count", len(junctions))),
-        "scaffold_continuity_component_count": int(
-            overlay.get("scaffold_continuity_component_count", 0)
-        ),
-        "scaffold_node_incident_edge_relation_count": int(
-            overlay.get("scaffold_node_incident_edge_relation_count", len(incident_relations))
-        ),
-        "shared_chain_patch_chain_relation_count": int(
-            overlay.get("shared_chain_patch_chain_relation_count", len(shared_chain_relations))
-        ),
-        "grease_pencil_object": gp_object.name,
-        "display_mode": display_mode,
-        "edge_layer": EDGE_LAYER_NAME,
-        "node_layer": NODE_LAYER_NAME,
-        "junction_layer": JUNCTION_LAYER_NAME,
-        "incident_relation_layer": INCIDENT_RELATION_LAYER_NAME,
-        "shared_chain_relation_layer": SHARED_CHAIN_RELATION_LAYER_NAME,
-        "edge_stroke_count": edge_stroke_count,
-        "node_marker_count": node_marker_count,
-        "junction_marker_count": junction_marker_count,
-        "incident_relation_marker_count": incident_relation_marker_count,
-        "shared_chain_relation_marker_count": shared_chain_relation_marker_count,
-        "label_count": label_count,
-    }
+def remove_labels(source_name: str | None = None) -> None:
+    exact = label_collection_name(source_name) if source_name else None
+    for collection in list(bpy.data.collections):
+        if _matches(collection.name, exact, LABEL_COLLECTION_PREFIX):
+            for obj in list(collection.objects):
+                data = obj.data
+                bpy.data.objects.remove(obj, do_unlink=True)
+                if data and getattr(data, "users", 0) == 0:
+                    bpy.data.curves.remove(data)
+            bpy.data.collections.remove(collection)
+
+
+def draw_labels(source_object: Any, labels: Sequence[dict[str, Any]]) -> int:
+    """Create one text object per label; positions are mesh-local."""
+
+    remove_labels(source_object.name)
+    collection = bpy.data.collections.new(label_collection_name(source_object.name))
+    bpy.context.scene.collection.children.link(collection)
+    materials: dict[tuple[float, ...], Any] = {}
+    count = 0
+    for label in labels:
+        text = str(label.get("text") or "")
+        position = label.get("position") or ()
+        if not text or len(position) != 3:
+            continue
+        color = tuple(float(value) for value in label.get("color", (1.0, 1.0, 1.0, 1.0)))
+        material = materials.get(color)
+        if material is None:
+            name = f"{LABEL_MATERIAL_PREFIX}{color_hex(color)}"  # the name fixes the colour
+            material = bpy.data.materials.get(name) or bpy.data.materials.new(name)
+            material.diffuse_color = color
+            materials[color] = material
+        curve_name = f"{LABEL_OBJECT_PREFIX}{_safe_object_suffix(text)}"
+        curve_data = bpy.data.curves.new(curve_name, type="FONT")
+        curve_data.body = text
+        curve_data.size = float(label.get("size", LABEL_SIZE))
+        curve_data.align_x = "CENTER"
+        curve_data.align_y = "CENTER"
+        curve_data.materials.append(material)
+        label_object = bpy.data.objects.new(curve_name, curve_data)
+        label_object.location = source_object.matrix_world @ Vector(tuple(float(value) for value in position))
+        label_object.hide_select = True
+        collection.objects.link(label_object)
+        count += 1
+    return count
 
 
 def clear_overlay(source_name: str | None = None) -> None:
-    prefix = overlay_object_name(source_name) if source_name else GP_OBJECT_PREFIX
+    exact = overlay_object_name(source_name) if source_name else None
     for obj in list(bpy.data.objects):
-        if obj.name.startswith(prefix):
+        if _matches(obj.name, exact, GP_OBJECT_PREFIX):
             data_name = getattr(obj.data, "name", "")
             bpy.data.objects.remove(obj, do_unlink=True)
             for collection in (
@@ -879,59 +335,10 @@ def clear_overlay(source_name: str | None = None) -> None:
                     if getattr(data, "users", 0) == 0:
                         collection.remove(data)
 
-    label_prefix = label_collection_name(source_name) if source_name else LABEL_COLLECTION_PREFIX
-    for collection in list(bpy.data.collections):
-        if collection.name.startswith(label_prefix):
-            for obj in list(collection.objects):
-                data = obj.data
-                bpy.data.objects.remove(obj, do_unlink=True)
-                if data and getattr(data, "users", 0) == 0:
-                    bpy.data.curves.remove(data)
-            bpy.data.collections.remove(collection)
+    remove_labels(source_name)
 
     for material in list(bpy.data.materials):
         if material.users != 0:
             continue
-        if material.name in {
-            EDGE_MATERIAL_NAME,
-            NODE_MATERIAL_NAME,
-            JUNCTION_MATERIAL_NAME,
-            SHARED_CHAIN_RELATION_MATERIAL_NAME,
-            LABEL_MATERIAL_NAME,
-        } or material.name.startswith("ScaffoldGraph_IncidentRelation_") or material.name.startswith(
-            CONTINUITY_EDGE_MATERIAL_PREFIX
-        ) or material.name.startswith("ScaffoldGraphV2_"):
+        if material.name.startswith((MATERIAL_PREFIX,) + LEGACY_MATERIAL_PREFIXES):
             bpy.data.materials.remove(material)
-
-
-def apply_layer_visibility(
-    source_name: str,
-    *,
-    show_edges: bool,
-    show_nodes: bool,
-    show_junctions: bool,
-    show_incident_relations: bool,
-    show_shared_chain_relations: bool,
-    show_labels: bool,
-) -> None:
-    obj = bpy.data.objects.get(overlay_object_name(source_name))
-    if is_graph_debug_object(obj):
-        edge_layer = _find_layer(obj.data, EDGE_LAYER_NAME)
-        node_layer = _find_layer(obj.data, NODE_LAYER_NAME)
-        junction_layer = _find_layer(obj.data, JUNCTION_LAYER_NAME)
-        incident_relation_layer = _find_layer(obj.data, INCIDENT_RELATION_LAYER_NAME)
-        shared_chain_relation_layer = _find_layer(obj.data, SHARED_CHAIN_RELATION_LAYER_NAME)
-        if edge_layer is not None and hasattr(edge_layer, "hide"):
-            edge_layer.hide = not show_edges
-        if node_layer is not None and hasattr(node_layer, "hide"):
-            node_layer.hide = not show_nodes
-        if junction_layer is not None and hasattr(junction_layer, "hide"):
-            junction_layer.hide = not show_junctions
-        if incident_relation_layer is not None and hasattr(incident_relation_layer, "hide"):
-            incident_relation_layer.hide = not show_incident_relations
-        if shared_chain_relation_layer is not None and hasattr(shared_chain_relation_layer, "hide"):
-            shared_chain_relation_layer.hide = not show_shared_chain_relations
-
-    collection = bpy.data.collections.get(label_collection_name(source_name))
-    if collection is not None:
-        collection.hide_viewport = not show_labels

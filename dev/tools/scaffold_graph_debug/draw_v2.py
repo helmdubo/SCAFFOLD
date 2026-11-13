@@ -1,349 +1,126 @@
-"""Thin Blender drawing layer for ScaffoldGraph overlay v2."""
+"""Thin Blender drawing layer for the Scaffold structure debugger.
+
+Draws the payload of overlay_v2.build_debug_payload into one Grease Pencil
+object per source mesh, one GP layer per LayerSpec. Visibility is the GP
+layer flag only, so the panel toggles act without a rebuild.
+"""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any
-
-from .colors import material_key
-from .debug import (
-    _add_stroke,
-    _ensure_frame,
-    _ensure_layer,
-    _ensure_material,
-    _get_or_create_grease_pencil_object,
-    _find_layer,
-    is_graph_debug_object,
-    overlay_object_name,
-)
+import json
+from typing import Any, Mapping
 
 import bpy
 
+from .colors import material_key
+from .debug import (
+    MATERIAL_PREFIX,
+    color_hex,
+    _ensure_frame,
+    _ensure_layer,
+    _ensure_material,
+    _find_layer,
+    _get_or_create_grease_pencil_object,
+    clear_overlay,
+    draw_labels,
+    is_graph_debug_object,
+    label_collection_name,
+    overlay_object_name,
+    remove_labels,
+    set_layer_thickness,
+    write_strokes,
+)
+from .overlay_v2 import LAYER_SPECS
 
-FAMILY_LAYER_NAME = "ScaffoldGraph_FamilyRuns"
-SPINE_LAYER_NAME = "ScaffoldGraph_Spines"
-RIB_LAYER_NAME = "ScaffoldGraph_Ribs"
-CUT_RAIL_LAYER_NAME = "ScaffoldGraph_CutRails"
-SEAM_VERDICT_LAYER_NAME = "ScaffoldGraph_SeamVerdicts"
-JUNCTION_V2_LAYER_NAME = "ScaffoldGraph_JunctionsV2"
-BRANCH_LAYER_NAME = "ScaffoldGraph_Branches"
-CHAIN_SHAPE_LAYER_NAME = "ScaffoldGraph_ChainShape"
-FAMILY_MATERIAL_PREFIX = "ScaffoldGraphV2_Family_"
-RAIL_MATERIAL_PREFIX = "ScaffoldGraphV2_Rail_"
-SEAM_MATERIAL_PREFIX = "ScaffoldGraphV2_Seam_"
-JUNCTION_MATERIAL_PREFIX = "ScaffoldGraphV2_Junction_"
-BRANCH_MATERIAL_NAME = "ScaffoldGraphV2_Branch_Material"
-CHAIN_SHAPE_MATERIAL_PREFIX = "ScaffoldGraphV2_ChainShape_"
-FAMILY_WIDTH = 9
-SPINE_WIDTH = 9
-PARALLEL_WIDTH = 5
-RIB_WIDTH = 4
-SEAM_WIDTH = 6
-JUNCTION_WIDTH = 5
-BRANCH_WIDTH = 7
-CHAIN_SHAPE_WIDTH = 6
+LABELS_PROPERTY = "scaffold_debug_labels"
+BASE_WIDTHS_PROPERTY = "scaffold_debug_base_widths"
+RADIUS_SCALE_PROPERTY = "scaffold_debug_radius_scale"
+# GP v3 widths are world-space radii: thicken them on large meshes.
+RADIUS_REFERENCE_UNIT = 0.2
 
 
-def render_overlay_v2(
+def render_debug_overlay(
     source_object: Any,
     payload: dict[str, Any],
+    visibility: Mapping[str, bool],
     *,
-    show_family_colors: bool,
-    show_spines: bool,
-    show_ribs: bool,
-    show_seam_verdicts: bool,
-    show_junctions: bool,
-    show_branch_points: bool,
-    show_chain_shape: bool = True,
-) -> dict[str, Any]:
+    show_labels: bool = False,
+    line_thickness: float = 1.0,
+) -> dict[str, int]:
+    """Rebuild the overlay object of source_object; returns strokes per layer."""
+
+    clear_overlay(source_object.name)
     gp_object = _get_or_create_grease_pencil_object(source_object)
     gp_data = gp_object.data
-    family_frame = _ensure_frame(_ensure_layer(gp_data, FAMILY_LAYER_NAME, show_family_colors))
-    spine_frame = _ensure_frame(_ensure_layer(gp_data, SPINE_LAYER_NAME, show_spines))
-    rib_frame = _ensure_frame(_ensure_layer(gp_data, RIB_LAYER_NAME, show_ribs))
-    cut_rail_frame = _ensure_frame(_ensure_layer(gp_data, CUT_RAIL_LAYER_NAME, show_seam_verdicts))
-    seam_frame = _ensure_frame(_ensure_layer(gp_data, SEAM_VERDICT_LAYER_NAME, show_seam_verdicts))
-    junction_frame = _ensure_frame(_ensure_layer(gp_data, JUNCTION_V2_LAYER_NAME, show_junctions))
-    branch_frame = _ensure_frame(_ensure_layer(gp_data, BRANCH_LAYER_NAME, show_branch_points))
-    chain_shape_frame = _ensure_frame(_ensure_layer(gp_data, CHAIN_SHAPE_LAYER_NAME, show_chain_shape))
-    _clear_v2_material_slots(gp_data)
-
-    family_strokes = _draw_family_runs(
-        gp_data,
-        family_frame,
-        payload.get("family_run_segments", ()),
-    )
-    spine_strokes, rib_strokes, cut_rail_strokes = _draw_rails(
-        gp_data,
-        spine_frame,
-        rib_frame,
-        cut_rail_frame,
-        payload.get("rails", ()),
-    )
-    seam_strokes = _draw_seam_verdicts(gp_data, seam_frame, payload.get("seam_verdicts", ()))
-    junction_markers = _draw_junctions(gp_data, junction_frame, payload.get("junction_glyphs", ()))
-    branch_markers = _draw_branches(gp_data, branch_frame, payload.get("branch_glyphs", ()))
-    chain_shape_strokes = _draw_chain_shape(gp_data, chain_shape_frame, payload.get("chain_shape_pieces", ()))
-    counts = payload.get("counts", {})
-    return {
-        "grease_pencil_object": gp_object.name,
-        "family_layer": FAMILY_LAYER_NAME,
-        "spine_layer": SPINE_LAYER_NAME,
-        "rib_layer": RIB_LAYER_NAME,
-        "cut_rail_layer": CUT_RAIL_LAYER_NAME,
-        "seam_verdict_layer": SEAM_VERDICT_LAYER_NAME,
-        "junction_layer": JUNCTION_V2_LAYER_NAME,
-        "branch_layer": BRANCH_LAYER_NAME,
-        "chain_shape_layer": CHAIN_SHAPE_LAYER_NAME,
-        "family_run_segment_count": int(counts.get("family_run_segment_count", 0)),
-        "rail_count": int(counts.get("rail_count", 0)),
-        "rail_polyline_count": int(counts.get("rail_polyline_count", 0)),
-        "offset_polyline_count": int(counts.get("offset_polyline_count", 0)),
-        "unoffset_polyline_count": int(counts.get("unoffset_polyline_count", 0)),
-        "spine_count": int(counts.get("spine_count", 0)),
-        "parallel_rail_count": int(counts.get("parallel_rail_count", 0)),
-        "rib_count": int(counts.get("rib_count", 0)),
-        "dual_membership_rib_count": int(counts.get("dual_membership_rib_count", 0)),
-        "sewable_seam_count": int(counts.get("sewable_seam_count", 0)),
-        "cut_seam_count": int(counts.get("cut_seam_count", 0)),
-        "junction_glyph_count": int(counts.get("junction_glyph_count", 0)),
-        "branch_glyph_count": int(counts.get("branch_glyph_count", 0)),
-        "chain_shape_piece_count": int(counts.get("chain_shape_piece_count", 0)),
-        "chain_shape_surface_line_count": int(counts.get("chain_shape_surface_line_count", 0)),
-        "chain_shape_surface_curve_count": int(counts.get("chain_shape_surface_curve_count", 0)),
-        "chain_shape_unresolved_count": int(counts.get("chain_shape_unresolved_count", 0)),
-        "family_stroke_count": family_strokes,
-        "spine_stroke_count": spine_strokes,
-        "rib_stroke_count": rib_strokes,
-        "cut_rail_stroke_count": cut_rail_strokes,
-        "seam_stroke_count": seam_strokes,
-        "junction_marker_count": junction_markers,
-        "branch_marker_count": branch_markers,
-        "chain_shape_stroke_count": chain_shape_strokes,
-    }
+    radius_scale = max(1.0, float(payload.get("marker_unit", RADIUS_REFERENCE_UNIT)) / RADIUS_REFERENCE_UNIT)
+    material_indexes: dict[tuple[str, str, bool], int] = {}
+    stroke_counts: dict[str, int] = {}
+    base_widths: dict[str, int] = {}
+    for spec in LAYER_SPECS:
+        frame = _ensure_frame(_ensure_layer(gp_data, spec.layer, bool(visibility.get(spec.layer, spec.default))))
+        rows = []
+        for item in payload["layers"].get(spec.layer, ()):
+            for stroke in item["strokes"]:
+                key = (stroke["material"], color_hex(stroke["color"]), bool(stroke["fill"]))
+                index = material_indexes.get(key)
+                if index is None:
+                    index = _ensure_material(
+                        gp_data,
+                        # shared across overlays, so the name carries everything that sets the colour
+                        f"{MATERIAL_PREFIX}{material_key(stroke['material'])}_{key[1]}{'_Fill' if stroke['fill'] else ''}",
+                        tuple(float(value) for value in stroke["color"]),
+                        fill=bool(stroke["fill"]),
+                    )
+                    material_indexes[key] = index
+                rows.append((stroke["points"], index, stroke["width"], bool(stroke["fill"])))
+                if not stroke["fill"]:
+                    base_widths[spec.layer] = min(base_widths.get(spec.layer, stroke["width"]), stroke["width"])
+        stroke_counts[spec.layer] = write_strokes(frame, rows, radius_scale=radius_scale)
+    gp_object[BASE_WIDTHS_PROPERTY] = json.dumps(base_widths, separators=(",", ":"), sort_keys=True)
+    gp_object[RADIUS_SCALE_PROPERTY] = radius_scale
+    apply_line_thickness(source_object.name, line_thickness)
+    gp_object[LABELS_PROPERTY] = json.dumps(payload.get("labels", []), separators=(",", ":"))
+    stroke_counts["labels"] = draw_labels(source_object, payload.get("labels", [])) if show_labels else 0
+    return stroke_counts
 
 
-def _draw_family_runs(
-    gp_data: Any,
-    frame: Any,
-    segments: Sequence[dict[str, Any]],
-) -> int:
+def apply_line_thickness(source_name: str, multiplier: float) -> int:
+    """Set the live thickness of every stroke layer (fill-only layers untouched); returns layers set."""
+
+    obj = bpy.data.objects.get(overlay_object_name(source_name))
+    if not is_graph_debug_object(obj):
+        return 0
+    try:
+        base_widths = json.loads(obj.get(BASE_WIDTHS_PROPERTY, "{}"))
+    except (TypeError, ValueError):
+        base_widths = {}
+    radius_scale = float(obj.get(RADIUS_SCALE_PROPERTY, 1.0))
     count = 0
-    for segment in segments:
-        material_index = _material(gp_data, FAMILY_MATERIAL_PREFIX, segment.get("color_key", ""), segment.get("color"))
-        if _add_polyline(frame, segment.get("polyline", ()), material_index, FAMILY_WIDTH):
+    for layer_name, base_width in base_widths.items():
+        layer = _find_layer(obj.data, layer_name)
+        if layer is not None and set_layer_thickness(layer, int(base_width), multiplier, radius_scale):
             count += 1
     return count
 
 
-def _draw_rails(
-    gp_data: Any,
-    spine_frame: Any,
-    rib_frame: Any,
-    cut_rail_frame: Any,
-    rails: Sequence[dict[str, Any]],
-) -> tuple[int, int, int]:
-    spine_count = 0
-    rib_count = 0
-    cut_count = 0
-    for rail in rails:
-        role = str(rail.get("role") or "RIB")
-        frame = (
-            spine_frame
-            if role in {"SPINE", "PARALLEL"}
-            else cut_rail_frame
-            if role == "CUT"
-            else rib_frame
-        )
-        width = (
-            SPINE_WIDTH
-            if role == "SPINE"
-            else PARALLEL_WIDTH
-            if role == "PARALLEL"
-            else SEAM_WIDTH
-            if role == "CUT"
-            else RIB_WIDTH
-        )
-        material_index = _material(gp_data, RAIL_MATERIAL_PREFIX, rail.get("color_key", ""), rail.get("color"))
-        if rail.get("is_closed") and role in {"SPINE", "PARALLEL"}:
-            first_polyline = next(iter(rail.get("segment_polylines", ())), None)
-            if first_polyline:
-                for marker in _circle_marker(first_polyline[0], 0.09):
-                    _add_polyline(frame, marker, material_index, width)
-        for polyline in rail.get("segment_polylines", ()):
-            if _add_polyline(frame, polyline, material_index, width):
-                if role in {"SPINE", "PARALLEL"}:
-                    spine_count += 1
-                elif role == "CUT":
-                    cut_count += 1
-                else:
-                    rib_count += 1
-    return spine_count, rib_count, cut_count
+def apply_layer_visibility(source_name: str, visibility: Mapping[str, bool], *, show_labels: bool) -> None:
+    """Show or hide the overlay layers of one source mesh; labels are created or removed."""
 
-
-def _draw_seam_verdicts(gp_data: Any, frame: Any, verdicts: Sequence[dict[str, Any]]) -> int:
-    count = 0
-    for verdict in verdicts:
-        material_index = _material(gp_data, SEAM_MATERIAL_PREFIX, verdict.get("status", ""), verdict.get("color"))
-        polylines = _dashed_polyline(verdict.get("polyline", ())) if verdict.get("line_style") == "DASHED" else (verdict.get("polyline", ()),)
-        for polyline in polylines:
-            if _add_polyline(frame, polyline, material_index, SEAM_WIDTH):
-                count += 1
-        for position in verdict.get("failing_positions", ()):
-            for marker in _x_marker(position, 0.075):
-                _add_polyline(frame, marker, material_index, SEAM_WIDTH)
-    return count
-
-
-def _draw_junctions(gp_data: Any, frame: Any, glyphs: Sequence[dict[str, Any]]) -> int:
-    count = 0
-    for glyph in glyphs:
-        material_index = _material(gp_data, JUNCTION_MATERIAL_PREFIX, glyph.get("kind", ""), glyph.get("color"))
-        size = 0.045 + 0.018 * int(glyph.get("size_step", 0))
-        strokes = (
-            _diamond_marker(glyph.get("position", ()), size)
-            if glyph.get("kind") == "RUN_ENDPOINT_JUNCTION"
-            else _circle_marker(glyph.get("position", ()), size)
-        )
-        for marker in strokes:
-            _add_polyline(frame, marker, material_index, JUNCTION_WIDTH)
-        count += 1
-    return count
-
-
-def _draw_branches(gp_data: Any, frame: Any, glyphs: Sequence[dict[str, Any]]) -> int:
-    material_index = _ensure_material(gp_data, BRANCH_MATERIAL_NAME, (1.0, 0.9, 0.05, 1.0))
-    count = 0
-    for glyph in glyphs:
-        for marker in _branch_marker(glyph.get("position", ()), 0.11):
-            _add_polyline(frame, marker, material_index, BRANCH_WIDTH)
-        count += 1
-    return count
-
-
-def _draw_chain_shape(gp_data: Any, frame: Any, pieces: Sequence[dict[str, Any]]) -> int:
-    count = 0
-    for piece in pieces:
-        material_index = _material(gp_data, CHAIN_SHAPE_MATERIAL_PREFIX, piece.get("kind", ""), piece.get("color"))
-        if _add_polyline(frame, piece.get("polyline", ()), material_index, CHAIN_SHAPE_WIDTH):
-            count += 1
-    return count
-
-
-def _material(gp_data: Any, prefix: str, key: object, color: object) -> int:
-    rgba = color if isinstance(color, Sequence) and len(color) == 4 else (0.6, 0.6, 0.6, 1.0)
-    return _ensure_material(
-        gp_data,
-        f"{prefix}{material_key(str(key))}_Material",
-        tuple(float(value) for value in rgba),
-    )
-
-
-def _clear_v2_material_slots(gp_data: Any) -> None:
-    materials = getattr(gp_data, "materials", None)
-    if materials is None:
-        return
-    pop = getattr(materials, "pop", None)
-    if not callable(pop):
-        return
-    for index in reversed(range(len(materials))):
-        material = materials[index]
-        if material is None or not _is_v2_material_name(material.name):
-            continue
-        try:
-            pop(index=index)
-        except TypeError:
-            pop(index)
-    for material in list(bpy.data.materials):
-        if material.users == 0 and _is_v2_material_name(material.name):
-            bpy.data.materials.remove(material)
-
-
-def _is_v2_material_name(material_name: str) -> bool:
-    return material_name == BRANCH_MATERIAL_NAME or material_name.startswith(
-        (
-            FAMILY_MATERIAL_PREFIX,
-            RAIL_MATERIAL_PREFIX,
-            SEAM_MATERIAL_PREFIX,
-            JUNCTION_MATERIAL_PREFIX,
-            CHAIN_SHAPE_MATERIAL_PREFIX,
-        )
-    )
-
-
-def _add_polyline(
-    frame: Any,
-    points: Sequence[Sequence[float]],
-    material_index: int,
-    line_width: int,
-) -> bool:
-    if len(points) < 2:
-        return False
-    return _add_stroke(frame, points, material_index, line_width)
-
-
-def _dashed_polyline(polyline: Sequence[Sequence[float]]) -> tuple[tuple[Sequence[float], Sequence[float]], ...]:
-    return tuple((polyline[index], polyline[index + 1]) for index in range(0, max(0, len(polyline) - 1), 2))
-
-
-def _circle_marker(position: Sequence[float], size: float) -> tuple[tuple[tuple[float, float, float], ...], ...]:
-    x, y, z = _xyz(position)
-    return (
-        ((x - size, y, z), (x, y + size, z), (x + size, y, z), (x, y - size, z), (x - size, y, z)),
-    )
-
-
-def _diamond_marker(position: Sequence[float], size: float) -> tuple[tuple[tuple[float, float, float], ...], ...]:
-    x, y, z = _xyz(position)
-    return (
-        ((x, y + size, z), (x + size, y, z), (x, y - size, z), (x - size, y, z), (x, y + size, z)),
-    )
-
-
-def _branch_marker(position: Sequence[float], size: float) -> tuple[tuple[tuple[float, float, float], ...], ...]:
-    x, y, z = _xyz(position)
-    return (
-        ((x - size, y, z), (x + size, y, z)),
-        ((x, y - size, z), (x, y + size, z)),
-        ((x - size * 0.7, y - size * 0.7, z), (x + size * 0.7, y + size * 0.7, z)),
-    )
-
-
-def _x_marker(position: Sequence[float], size: float) -> tuple[tuple[tuple[float, float, float], ...], ...]:
-    x, y, z = _xyz(position)
-    return (
-        ((x - size, y - size, z), (x + size, y + size, z)),
-        ((x - size, y + size, z), (x + size, y - size, z)),
-    )
-
-
-def _xyz(position: Sequence[float]) -> tuple[float, float, float]:
-    return (float(position[0]), float(position[1]), float(position[2]))
-
-
-def apply_v2_layer_visibility(
-    source_name: str,
-    *,
-    show_family_colors: bool,
-    show_spines: bool,
-    show_ribs: bool,
-    show_seam_verdicts: bool,
-    show_junctions: bool,
-    show_branch_points: bool,
-    show_chain_shape: bool = True,
-) -> None:
     obj = bpy.data.objects.get(overlay_object_name(source_name))
     if not is_graph_debug_object(obj):
         return
-    for layer_name, visible in (
-        (FAMILY_LAYER_NAME, show_family_colors),
-        (SPINE_LAYER_NAME, show_spines),
-        (RIB_LAYER_NAME, show_ribs),
-        (SEAM_VERDICT_LAYER_NAME, show_seam_verdicts),
-        (JUNCTION_V2_LAYER_NAME, show_junctions),
-        (BRANCH_LAYER_NAME, show_branch_points),
-        (CHAIN_SHAPE_LAYER_NAME, show_chain_shape),
-    ):
-        layer = _find_layer(obj.data, layer_name)
+    for spec in LAYER_SPECS:
+        layer = _find_layer(obj.data, spec.layer)
         if layer is not None and hasattr(layer, "hide"):
-            layer.hide = not visible
+            layer.hide = not bool(visibility.get(spec.layer, spec.default))
+    if not show_labels:
+        remove_labels(source_name)
+        return
+    source_object = bpy.data.objects.get(source_name)
+    if source_object is None or bpy.data.collections.get(label_collection_name(source_name)) is not None:
+        return
+    try:
+        labels = json.loads(obj.get(LABELS_PROPERTY, "[]"))
+    except (TypeError, ValueError):
+        labels = []
+    draw_labels(source_object, labels)

@@ -12,6 +12,12 @@ bl_info = {
 
 
 def register():
+    import sys
+    from pathlib import Path
+
+    repo_root = str(Path(__file__).resolve().parents[3])
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)  # scaffold_core, read by the payload builder
     from .operators import register as _register
 
     return _register()
