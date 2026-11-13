@@ -43,9 +43,16 @@ Options:
                     Straighten Bevel Strips is on by default everywhere else
 --world-up X,Y,Z    run Pass 2 and the Pass 3 user filter with this up axis and
                     add metrics filter_split / filter_join; default off keeps
-                    baselines (the pipeline default is no filter)
+                    baselines (the pipeline default is no filter). The axis is
+                    in world space and turned into each object's space by its
+                    matrix_world; a non-uniform object scale is not handled
 --unwrap-quilts     with --write-uv: write through write_quilt_uvs (pins, then
-                    each quilt laid as one chart) and add seam_flags_changed
+                    each quilt laid as one chart) and add seam_flags_changed;
+                    a second visible mesh object is selected beside the target,
+                    and the object fails (error record, exit 1) when a seam
+                    flag differs, a loop of an unsolved face or of that other
+                    object changes, or the selection or active object is not
+                    restored
 --baseline PATH     compare stable fields; exit 1 and print only the diffs
 --update-baseline   rewrite PATH from this run
 ```

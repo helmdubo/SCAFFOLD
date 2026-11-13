@@ -72,7 +72,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--write-uv", action="store_true", help="exercise the UV write boundary")
     parser.add_argument("--capture-dir", default="", help="dump SourceMeshSnapshot JSON per object")
     parser.add_argument("--straighten-strips", action="store_true", help="run Pass 2 with straighten_strips")
-    parser.add_argument("--world-up", default="", help="run Pass 2 and the Pass 3 user filter with this up axis")
+    parser.add_argument(
+        "--world-up", default="",
+        help="run Pass 2 and the Pass 3 user filter with this up axis in world space, turned into each "
+        "object's space by its matrix_world (a non-uniform object scale is not handled)",
+    )
     parser.add_argument(
         "--unwrap-quilts", action="store_true", help="with --write-uv: lay the quilts (write_quilt_uvs)"
     )
@@ -102,6 +106,10 @@ def _run_object(obj, args: argparse.Namespace) -> dict:
             context = run_pass_2_features(context, FeatureOptions(straighten_strips=True))
         world_up = tuple(float(value) for value in args.world_up.split(",")) if args.world_up else None
         if world_up is not None:
+            # FilterOptions.world_up is a direction in the mesh's own space
+            from mathutils import Vector
+
+            world_up = tuple(float(value) for value in obj.matrix_world.to_3x3().inverted_safe() @ Vector(world_up))
             if context.feature_snapshot is None:
                 context = run_pass_2_features(context)
             context = run_pass_3_filters(context, FilterOptions(world_up=world_up))
@@ -232,7 +240,11 @@ def _write_uv_metrics(obj, solve, source, selection: str, unwrap_quilts: bool = 
     """Write pins through the G5 boundary and prove no loop outside the selection changed.
 
     With unwrap_quilts the quilts are laid (write_quilt_uvs), and the record
-    also says how many seam flags differ after the write (must be 0).
+    also says how many seam flags differ after the write. A second visible
+    mesh object is selected too (in Object Mode beside the target) and its UV
+    loops are compared. The run fails (an error record) when a seam flag
+    differs, a loop of an unsolved face or of the other object changes, or
+    the object selection or the active object is not restored.
     """
 
     from scaffold_core.layer_5_runtime.uv_transfer import write_pinned_uvs, write_quilt_uvs
@@ -244,6 +256,12 @@ def _write_uv_metrics(obj, solve, source, selection: str, unwrap_quilts: bool = 
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode="EDIT")
     seams_before = [edge.use_seam for edge in obj.data.edges]
+    other = _other_mesh_object(obj) if unwrap_quilts else None
+    if other is not None:
+        other.select_set(True)
+    other_before = _foreign_loop_state(other, set()) if other is not None else []
+    selected_before = {item.name for item in bpy.context.view_layer.objects if item.select_get()}
+    active_before = bpy.context.view_layer.objects.active
     try:
         writer = write_quilt_uvs if unwrap_quilts else write_pinned_uvs
         summary = writer(SimpleNamespace(object=obj), solve)
@@ -258,6 +276,19 @@ def _write_uv_metrics(obj, solve, source, selection: str, unwrap_quilts: bool = 
         extra["seam_flags_changed"] = sum(
             1 for edge, before in zip(obj.data.edges, seams_before) if edge.use_seam != before
         )
+        other_after = _foreign_loop_state(other, set()) if other is not None else []
+        other_changed = sum(1 for before, after in zip(other_before, other_after) if before != after)
+        foreign_changed = sum(1 for before, after in zip(foreign_before, foreign_after) if before != after)
+        selection_kept = selected_before == {item.name for item in bpy.context.view_layer.objects if item.select_get()}
+        active_kept = bpy.context.view_layer.objects.active == active_before
+        if other is not None:
+            other.select_set(False)
+        if extra["seam_flags_changed"] or other_changed or foreign_changed or not selection_kept or not active_kept:
+            raise RuntimeError(
+                f"write_quilt_uvs changed state: seam flags {extra['seam_flags_changed']}, unsolved loops "
+                f"{foreign_changed}, other object loops {other_changed}, "
+                f"selection kept {selection_kept}, active kept {active_kept}"
+            )
     return {
         **extra,
         "written_loops": summary["written_loops"],
@@ -266,6 +297,16 @@ def _write_uv_metrics(obj, solve, source, selection: str, unwrap_quilts: bool = 
             1 for before, after in zip(foreign_before, foreign_after) if before != after
         ),
     }
+
+
+def _other_mesh_object(obj):
+    """A visible mesh object other than obj, with its own mesh and an active UV layer, or None."""
+
+    for other in sorted(bpy.context.view_layer.objects, key=lambda item: item.name):
+        if other != obj and other.type == "MESH" and other.visible_get() and other.data != obj.data:
+            if other.data.uv_layers.active is not None and len(other.data.polygons):
+                return other
+    return None
 
 
 def _foreign_loop_state(obj, solved_faces: set[int]) -> list:

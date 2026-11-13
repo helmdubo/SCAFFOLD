@@ -141,6 +141,7 @@ def run_pass_3_filters(context: PipelineContext, options: FilterOptions = Filter
         context.relation_snapshot,
         context.feature_snapshot,
         options,
+        source=context.source_snapshot,
     )
     filters_seconds = perf_counter() - filters_started
 

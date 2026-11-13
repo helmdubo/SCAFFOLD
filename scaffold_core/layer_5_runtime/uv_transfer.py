@@ -11,8 +11,12 @@ Rules:
   of the solve (so each quilt is one chart), runs Blender's conformal unwrap
   on the solved faces and restores every seam flag and the selection in a
   finally block. The user's seams are never changed. From Object Mode it
-  enters Edit Mode for the unwrap and returns (the unwrap operator needs
-  Edit Mode); from Edit Mode it calls no mode_set.
+  takes only the target object into Edit Mode (the unwrap operator needs
+  Edit Mode and unwraps every object in it), writes the pins there and
+  returns, restoring the object selection and the active object also when
+  the unwrap fails; from Edit Mode it calls no mode_set, and it refuses
+  before changing anything when another object is in Edit Mode with the
+  target. No other object's UVs change.
 - After the unwrap, write_quilt_uvs restores the layout's scale of every
   chart (a connected set of solved faces under the cut set) that has fewer
   than two distinct pinned UV positions: Blender gives such a chart a scale
@@ -126,15 +130,47 @@ def write_quilt_uvs(blender_context: Any, result: SolveResult) -> dict[str, Any]
     import bpy
     import bmesh
 
-    summary = write_pinned_uvs(blender_context, result)
     mesh_object = _resolve_mesh_object(blender_context)
+    if mesh_object is None:
+        raise ValueError("Active object is not a mesh; select the mesh and retry.")
     mesh = mesh_object.data
     view_layer = bpy.context.view_layer
-    previous_active = view_layer.objects.active
     started_in_edit = mesh_object.mode == "EDIT"
+    if started_in_edit:
+        others = sorted(o.name for o in view_layer.objects if o != mesh_object and o.mode == "EDIT")
+        if others:
+            raise RuntimeError(
+                "other objects are in Edit Mode with the target and the unwrap would change their UVs too; "
+                f"leave Edit Mode on them and retry: {', '.join(others[:5])}"
+            )
+    previous_active = view_layer.objects.active
+    previous_selected = [o for o in view_layer.objects if o.select_get()]
     if not started_in_edit:
+        # Only the target enters Edit Mode, so the unwrap sees no other object.
+        for other in previous_selected:
+            other.select_set(False)
+        mesh_object.select_set(True)
         view_layer.objects.active = mesh_object
-        bpy.ops.object.mode_set(mode="EDIT")
+    try:
+        if not started_in_edit:
+            bpy.ops.object.mode_set(mode="EDIT")
+        # Pins are written in Edit Mode, the mode of the unwrap.
+        summary = write_pinned_uvs(blender_context, result)
+        summary.update(_unwrap_quilts(bpy, bmesh, mesh, result))
+    finally:
+        if not started_in_edit:
+            if mesh_object.mode == "EDIT":
+                bpy.ops.object.mode_set(mode="OBJECT")
+            mesh_object.select_set(mesh_object in previous_selected)
+            for other in previous_selected:
+                other.select_set(True)
+            view_layer.objects.active = previous_active
+    return summary
+
+
+def _unwrap_quilts(bpy: Any, bmesh: Any, mesh: Any, result: SolveResult) -> dict[str, Any]:
+    """Seams to the cut set, conformal unwrap, loose charts rescaled, seams and selection restored (Edit Mode)."""
+
     cut = result.uv_cut_source_edge_ids
     solved = {int(face_id[1:]) for face_id in result.patch_by_source_face}
     bm = bmesh.from_edit_mesh(mesh)
@@ -168,17 +204,13 @@ def write_quilt_uvs(blender_context: Any, result: SolveResult) -> dict[str, Any]
                 item.select = flag
         bmesh.update_edit_mesh(mesh)
         restored = sum(1 for edge, seam in zip(bm.edges, seams) if edge.seam != seam)
-        if not started_in_edit:
-            bpy.ops.object.mode_set(mode="OBJECT")
-            view_layer.objects.active = previous_active
-    summary.update({
+    return {
         "quilts": len(result.assembly.islands),
         "uv_cut_edges": cut_edges,
         "seam_flags_changed": restored,
         **rescale,
         "next_step": "quilts laid by the conformal unwrap; seams unchanged",
-    })
-    return summary
+    }
 
 
 def chart_rescale_factor(

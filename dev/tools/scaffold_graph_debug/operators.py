@@ -252,7 +252,7 @@ class SCAFFOLDGRAPH_OT_WriteUV(bpy.types.Operator):
 
     def execute(self, context):
         try:
-            from .session import _add_repo_root_to_path, filter_from_settings
+            from .session import _add_repo_root_to_path, filter_from_settings, object_space_up
 
             _add_repo_root_to_path()
             from scaffold_core.layer_0_source.blender_io import read_source_mesh_from_blender
@@ -277,6 +277,7 @@ class SCAFFOLDGRAPH_OT_WriteUV(bpy.types.Operator):
                 straighten_bevel_strips=bool(settings.straighten_bevel_strips),
             )
             world_up, angle = filter_from_settings(settings)
+            world_up = object_space_up(getattr(context, "object", None), world_up)
             pipeline = run_pass_3_filters(
                 run_pass_2_features(run_pass_1_relations(run_pass_0(source)), options),
                 FilterOptions(world_up=world_up, horizontal_angle_degrees=angle),

@@ -52,7 +52,7 @@ from scaffold_graph_debug.draw_v2 import (  # noqa: E402
     render_debug_overlay,
 )
 from scaffold_graph_debug.overlay_v2 import LAYER_SPECS  # noqa: E402
-from scaffold_graph_debug.session import build_payload, write_report_text  # noqa: E402
+from scaffold_graph_debug.session import build_payload, object_space_up, write_report_text  # noqa: E402
 
 RENDER_SETS = {
     "patches_chains": ("Scaffold_Patches", "Scaffold_Chains"),
@@ -101,7 +101,11 @@ def main() -> int:
     parser.add_argument("--width", type=int, default=1200)
     parser.add_argument("--sets", default=",".join(DEFAULT_RENDER_SETS))
     parser.add_argument("--no-bevel-strips", action="store_true", help="Pass 2 with straighten_bevel_strips off")
-    parser.add_argument("--world-up", default="0,0,1", help="Pass 3 user filter up axis (the panel's default +Z)")
+    parser.add_argument(
+        "--world-up", default="0,0,1",
+        help="Pass 3 user filter up axis in world space (the panel's default +Z), turned into each object's "
+        "space by its matrix_world; a non-uniform object scale is not handled",
+    )
     parser.add_argument("--no-filter", action="store_true", help="Pass 3 without the user filter")
     parser.add_argument("--angle", type=float, default=45.0, help="Pass 3 horizontal angle in degrees")
     args = parser.parse_args(argv)
@@ -120,7 +124,7 @@ def main() -> int:
         payload = build_payload(
             SimpleNamespace(object=obj), straighten_strips=name in straighten, object_name=name, capture=False,
             straighten_bevel_strips=not args.no_bevel_strips,
-            world_up=world_up, horizontal_angle_degrees=args.angle,
+            world_up=object_space_up(obj, world_up), horizontal_angle_degrees=args.angle,
         )
         counts = render_debug_overlay(obj, payload, default_visibility, show_labels=False)
         write_report_text(name, payload["report"])

@@ -32,6 +32,7 @@ from scaffold_core.pipeline.passes import (
     run_pass_2_features,
     run_pass_3_filters,
 )
+from scaffold_core.tests.fixtures.quad_ladders import _mesh
 from scaffold_core.user_filters.build import build_filter_snapshot
 from scaffold_core.user_filters.model import (
     RULE_BEVEL_WITH_ITS_SURFACES,
@@ -44,6 +45,8 @@ from scaffold_core.user_filters.model import (
 )
 
 ROUNDED = Path(__file__).resolve().parent / "data" / "bevel_cases" / "u_rounded_wall_noise_top.capture.json"
+H_RECT_TRI = Path(__file__).resolve().parent / "data" / "bevel_cases" / "h_rect_s2_tri.capture.json"
+CROSS_BAND = Path(__file__).resolve().parent / "data" / "artist_cross_band.json"
 UP = (0.0, 0.0, 1.0)
 
 
@@ -269,3 +272,97 @@ def test_pass_3_without_world_up_stores_an_empty_snapshot() -> None:
 def test_a_zero_world_up_is_refused() -> None:
     with pytest.raises(ValueError):
         build_filter_snapshot(*_fake({"p": UP}), FilterOptions(world_up=(0.0, 0.0, 0.0)))
+
+
+def test_the_angle_threshold_is_inclusive() -> None:
+    # A normal exactly perpendicular to up is at exactly 90 degrees.
+    snapshot = build_filter_snapshot(*_fake({"wall": (1.0, 0.0, 0.0)}), FilterOptions(UP, 90.0))
+
+    assert snapshot.patch_classes[0].angle_degrees == 90.0
+    assert _classes(snapshot)["wall"] is PatchClass.HORIZONTAL
+
+
+def test_a_degenerate_normal_is_vertical_with_a_diagnostic() -> None:
+    snapshot = build_filter_snapshot(*_fake({"p": (0.0, 0.0, 0.0)}), FilterOptions(UP, 90.0))
+
+    assert _classes(snapshot)["p"] is PatchClass.VERTICAL
+    assert snapshot.patch_classes[0].angle_degrees is None
+    assert [d.code for d in snapshot.diagnostics] == ["FILTER_PATCH_NORMAL_DEGENERATE"]
+
+
+def test_no_join_for_a_suppressed_bevel_record() -> None:
+    normals = {"top": UP, "wall": (0.0, -1.0, 0.0), "s": _normal_at(45.0)}
+    bevels = (_strip("s", ["top"], ["wall"], status=FeatureInstanceStatus.SUPPRESSED),)
+    snapshot = build_filter_snapshot(
+        *_fake(normals, seams=[("c1", "s", "top"), ("c2", "s", "wall")], bevels=bevels), FilterOptions(world_up=UP)
+    )
+
+    record = next(r for r in snapshot.patch_classes if r.patch_id == "s")
+    assert record.rule is PatchClassRule.BY_NORMAL and not record.is_bevel
+    assert not any(d.kind is SeamDirectiveKind.JOIN for d in snapshot.directives)
+
+
+def test_a_strip_without_rails_goes_with_a_horizontal_adjacent_patch() -> None:
+    # h_rect_s2_tri: the marked strips f8 and f12 are triangulated (no ladder
+    # reading, no rails); at 49 degrees their own normal would make them
+    # vertical and split them from their horizontal tops f18 and f23.
+    context = run_pass_3_filters(_rounded_context(load_source_snapshot(H_RECT_TRI)), FilterOptions(world_up=UP))
+    by_patch = {str(r.patch_id).replace("patch:seed:", ""): r for r in context.filter_snapshot.patch_classes}
+    directive = {
+        frozenset(str(p).replace("patch:seed:", "") for p in (d.first_patch_id, d.second_patch_id)): d.kind
+        for d in context.filter_snapshot.directives
+    }
+
+    for strip, top in (("f8", "f18"), ("f12", "f23")):
+        assert by_patch[strip].is_bevel and by_patch[strip].angle_degrees == pytest.approx(49.08, abs=0.01)
+        assert by_patch[strip].patch_class is PatchClass.HORIZONTAL
+        assert by_patch[strip].rule is PatchClassRule.BEVEL_STRIP_BY_ADJACENT_PATCHES
+        assert directive[frozenset((strip, top))] is SeamDirectiveKind.JOIN
+    assert not context.filter_snapshot.diagnostics
+
+
+def test_a_strip_without_rails_ignores_bevel_neighbours_and_without_any_takes_its_normal() -> None:
+    normals = {"wall": (0.0, -1.0, 0.0), "s": _normal_at(30.0), "s_only": _normal_at(30.0), "a_peer": UP}
+    bevels = (_strip("s"), _strip("s_only"), _strip("a_peer"))
+    seams = [("c1", "s", "wall"), ("c2", "s", "a_peer"), ("c3", "s_only", "a_peer")]
+    snapshot = build_filter_snapshot(*_fake(normals, seams=seams, bevels=bevels), FilterOptions(world_up=UP))
+    by_patch = {str(r.patch_id): r for r in snapshot.patch_classes}
+
+    # Its one surface is a wall; the bevel peer (classed first, horizontal) is ignored.
+    assert by_patch["s"].patch_class is PatchClass.VERTICAL
+    assert by_patch["s"].rule is PatchClassRule.BEVEL_STRIP_BY_ADJACENT_PATCHES
+    assert by_patch["s_only"].rule is PatchClassRule.BY_NORMAL
+    assert by_patch["s_only"].patch_class is PatchClass.HORIZONTAL
+    assert "FILTER_BEVEL_STRIP_WITHOUT_SURFACE" in {d.code for d in snapshot.diagnostics}
+
+
+def test_a_patch_whose_face_normals_cancel_has_no_usable_normal() -> None:
+    # artist_cross_band f1: a band around a cross, |sum of face area vectors|
+    # is about 1.8e-4 of the total face area.
+    context = run_pass_3_filters(_rounded_context(load_source_snapshot(CROSS_BAND)), FilterOptions(world_up=UP))
+    by_patch = {str(r.patch_id): r for r in context.filter_snapshot.patch_classes}
+
+    assert by_patch["patch:seed:f1"].angle_degrees is None
+    assert by_patch["patch:seed:f1"].patch_class is PatchClass.VERTICAL
+    assert [(d.code, d.entity_ids) for d in context.filter_snapshot.diagnostics] == [
+        ("FILTER_PATCH_NORMAL_DEGENERATE", ("patch:seed:f1",))
+    ]
+    assert by_patch["patch:seed:f0"].patch_class is PatchClass.HORIZONTAL
+
+
+def test_a_half_cylinder_keeps_its_normal_at_any_size() -> None:
+    # |sum of face area vectors| / total area of a half cylinder is 2 / pi.
+    for radius in (1e-4, 1.0, 1e4):
+        segments = 8
+        positions = {}
+        for i in range(segments + 1):
+            angle = math.pi * i / segments
+            for j, y in enumerate((0.0, 2.0 * radius)):
+                positions[f"v{i}_{j}"] = (radius * math.cos(angle), y, radius * math.sin(angle))
+        faces = [(f"v{i}_0", f"v{i}_1", f"v{i + 1}_1", f"v{i + 1}_0") for i in range(segments)]
+        context = run_pass_3_filters(_rounded_context(_mesh("half_cylinder", positions, faces)), FilterOptions(UP))
+        (record,) = context.filter_snapshot.patch_classes
+
+        assert record.angle_degrees == pytest.approx(0.0, abs=1e-6)
+        assert record.patch_class is PatchClass.HORIZONTAL
+        assert not context.filter_snapshot.diagnostics

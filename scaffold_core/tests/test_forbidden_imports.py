@@ -219,7 +219,7 @@ def test_layers_0_to_3_import_nothing_from_layer_4() -> None:
 # sits between Layer 4 and Layer 5. It imports Layers 0-4 read-only and never
 # Layer 5; Layers 0-4 never import it; Layer 5 reads only its SeamDirectives.
 USER_FILTER_PACKAGE = "user_filters"
-WORLD_VERTICAL_WORDS = ("world_up", "world up", "worldup", "vertical", "horizontal", "patchclass")
+WORLD_VERTICAL_WORDS = ("world_up", "world up", "worldup", "vertical", "horizontal", "patchclass", "patch_class")
 
 
 def test_user_filters_import_nothing_from_layer_5() -> None:
@@ -267,7 +267,9 @@ def _words_of(path: Path) -> list[str]:
 def test_no_world_vertical_outside_the_user_filters() -> None:
     violations = []
     for path in _source_files():
-        if _layer_index(_module_parts_from_file(path)) is None and "core" not in _module_parts_from_file(path)[:1]:
+        if _layer_index(_module_parts_from_file(path)) is None and _module_parts_from_file(path)[:1] not in (
+            ("core",), ("constants",),
+        ):
             continue
         for word in _words_of(path):
             lowered = word.lower()

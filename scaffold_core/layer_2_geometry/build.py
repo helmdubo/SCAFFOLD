@@ -50,6 +50,10 @@ from scaffold_core.layer_2_geometry.measures import (
 
 STRAIGHTNESS_TOLERANCE = 1.0e-6
 SAWTOOTH_DETOUR_RATIO = 1.02
+# A face whose area is below this fraction of its perimeter squared has no
+# width at its own scale (a square has 1/16); the absolute EPSILON on the
+# patch area does not see a 0.5 m long face that is 6e-8 m wide.
+FACE_NEAR_ZERO_AREA_RATIO = 1.0e-6
 
 
 def build_geometry_facts(
@@ -245,15 +249,32 @@ def _build_patch_geometry_facts(
         if len(face_points) < 3:
             continue
         first = face_points[0]
+        face_area = 0.0
         for index in range(1, len(face_points) - 1):
             area, area_vector, triangle_centroid = triangle_area_normal_centroid(
                 first,
                 face_points[index],
                 face_points[index + 1],
             )
+            face_area += area
             total_area += area
             normal_accumulator = add(normal_accumulator, area_vector)
             centroid_accumulator = add(centroid_accumulator, scale(triangle_centroid, area))
+        perimeter = sum(
+            length(subtract(face_points[(index + 1) % len(face_points)], face_points[index]))
+            for index in range(len(face_points))
+        )
+        if perimeter > EPSILON and face_area <= FACE_NEAR_ZERO_AREA_RATIO * perimeter * perimeter:
+            diagnostics.append(
+                Diagnostic(
+                    code="GEOMETRY_FACE_NEAR_ZERO_AREA",
+                    severity=DiagnosticSeverity.DEGRADED,
+                    message="Face has near-zero area for its perimeter (no width at its own scale).",
+                    source="layer_2_geometry.build.build_geometry_facts",
+                    entity_ids=(str(patch.id), str(source_face_id)),
+                    evidence={"area": face_area, "perimeter": perimeter},
+                )
+            )
 
     if total_area <= EPSILON:
         diagnostics.append(

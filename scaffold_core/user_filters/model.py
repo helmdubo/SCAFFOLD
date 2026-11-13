@@ -4,7 +4,8 @@ Layer: user filters - model
 Rules:
 - Frozen filter model only: options, patch classes, seam directives, snapshot.
 - The world vertical (FilterOptions.world_up) is a user option of this stage
-  and never an input of Layers 1-4; nothing here is written back to them.
+  and never an input of Layers 1-4; nothing here is written back to them. It
+  is a direction in the mesh's own space (the Layer 0 vertex positions).
 - A SeamDirective is the only channel into Layer 5: island assembly reads it
   to split or join one seam; Layer 5 never reads the patch classes or the
   world vertical.
@@ -32,6 +33,7 @@ class PatchClassRule(str, Enum):
 
     BY_NORMAL = "by its normal"
     BEVEL_STRIP_BY_RAIL_NEIGHBOURS = "bevel strip: by its rail neighbours"
+    BEVEL_STRIP_BY_ADJACENT_PATCHES = "bevel strip without rails: by its adjacent patches"
     BEVEL_JUNCTION_BY_STRIPS = "bevel junction: by the strips it joins"
 
 
@@ -48,6 +50,10 @@ class FilterOptions:
     every output equals a run without this stage. With a world_up a patch is
     HORIZONTAL when its normal lies within horizontal_angle_degrees of +up or
     -up, else VERTICAL.
+
+    world_up is a direction in the mesh's own space, the space of the Layer 0
+    vertex positions (Blender's vertex.co), not in world space: a tool that
+    has the object's transform turns the world axis into that space first.
     """
 
     world_up: tuple[float, float, float] | None = None

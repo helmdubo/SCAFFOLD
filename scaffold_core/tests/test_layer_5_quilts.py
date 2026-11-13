@@ -11,6 +11,7 @@ Rules:
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ import pytest
 from dev.tools.scaffold_graph_debug.snapshot_io import load_source_snapshot
 from scaffold_core.layer_4_features.model import FeatureOptions
 from scaffold_core.layer_5_runtime.islands import (
+    STITCH_BEVEL_LADDER_REASON,
     STITCH_JOIN_BY_FILTER_PREFIX,
     STITCH_NON_TREE_REASON,
     STITCH_SPLIT_BY_FILTER_PREFIX,
@@ -35,10 +37,14 @@ from scaffold_core.pipeline.passes import (
     run_pass_2_features,
     run_pass_3_filters,
 )
+from scaffold_core.tests.fixtures.cylinder_tube import make_cylinder_tube_without_caps_with_one_seam_source
+from scaffold_core.tests.fixtures.quad_ladders import make_quad_grid_with_inner_seam_source
 from scaffold_core.user_filters.model import (
     RULE_BEVEL_WITH_ITS_SURFACES,
     RULE_VERTICAL_APART_FROM_HORIZONTAL,
     FilterOptions,
+    FilterSnapshot,
+    SeamDirectiveKind,
 )
 
 DATA = Path(__file__).resolve().parent / "data"
@@ -92,15 +98,28 @@ def test_the_users_mesh_lies_as_the_three_quilts_of_the_reference() -> None:
         STITCH_JOIN_BY_FILTER_PREFIX + RULE_BEVEL_WITH_ITS_SURFACES: 17,
         STITCH_NON_TREE_REASON: 7,
     }
-    # The wall ring is a cycle of six joined seams; the last in tree order
-    # (all six have two edges, so by adjacency id) stays open: f34|f112.
+    # The wall ring is a cycle of six joined seams of two edges each; the last
+    # in tree order (the shortest in 3D, 4.1475) stays open: f94|f211.
     ring = {frozenset(("f34", "f110")), frozenset(("f34", "f112")), frozenset(("f72", "f112")),
             frozenset(("f72", "f211")), frozenset(("f94", "f211")), frozenset(("f94", "f110"))}
     open_in_ring = [
         d for d in solve.assembly.decisions
         if frozenset((_short(d.first_patch_id), _short(d.second_patch_id))) in ring and not d.accepted
     ]
-    assert [(d.chain_id, d.reason) for d in open_in_ring] == [("chain:e338:e122", STITCH_NON_TREE_REASON)]
+    assert [(d.chain_id, d.reason) for d in open_in_ring] == [("chain:e301:e337", STITCH_NON_TREE_REASON)]
+
+
+def test_a_face_without_width_is_reported_by_layer_2() -> None:
+    # g_short's f30 is 0.53 long and 6e-8 wide: the quilt lays it as a line,
+    # as its 3D shape is; Layer 2 says so, and no other bevel face is flagged.
+    flagged = {
+        (capture.name, diagnostic.entity_ids)
+        for capture in sorted((DATA / "bevel_cases").glob("*.capture.json"))
+        for diagnostic in run_pass_1_relations(run_pass_0(load_source_snapshot(capture))).geometry_facts.diagnostics
+        if diagnostic.code == "GEOMETRY_FACE_NEAR_ZERO_AREA"
+    }
+
+    assert flagged == {("g_short.capture.json", ("patch:seed:f30", "f30"))}
 
 
 def test_a_ladder_patch_in_a_quilt_is_laid_by_the_quilt_without_a_diagnostic() -> None:
@@ -137,8 +156,14 @@ def test_the_uv_cut_set_is_the_complement_of_the_stitched_seams(capture: Path, w
     context = _context(capture, world_up)
     solve = run_skeleton_solve(context)
     topology = context.topology_snapshot
-    uses = Counter(str(patch_chain.chain_id) for patch_chain in topology.patch_chains.values())
-    shared = {chain_id for chain_id, count in uses.items() if count >= 2}
+    # A Chain is a seam when one of its edges is walked on two sides by the
+    # patch uses: two uses, or one use that walks a slit twice.
+    sides = Counter(
+        (str(patch_chain.chain_id), str(edge_id))
+        for patch_chain in topology.patch_chains.values()
+        for edge_id in topology.chains[patch_chain.chain_id].source_edge_ids
+    )
+    shared = {chain_id for (chain_id, _edge_id), count in sides.items() if count >= 2}
     self_seams = {
         str(junction.matched_chain_id)
         for junction in context.relation_snapshot.scaffold_junctions
@@ -155,6 +180,101 @@ def test_the_uv_cut_set_is_the_complement_of_the_stitched_seams(capture: Path, w
         str(edge_id) for chain_id in solve.stitched_chain_ids for edge_id in topology.chains[chain_id].source_edge_ids
     }
     assert not stitched_edges & solve.uv_cut_source_edge_ids
+    # The user's rule: a user seam between two solved faces that the tree did not stitch is a cut.
+    source = context.source_snapshot
+    faces_of_edge = Counter(
+        str(edge_id) for face_id in source.selected_face_ids for edge_id in source.faces[face_id].edge_ids
+    )
+    user_seams = {str(mark.target_id) for mark in source.marks if mark.kind.name == "SEAM"}
+    interior_seams = {edge_id for edge_id in user_seams if faces_of_edge[edge_id] == 2}
+    assert interior_seams - stitched_edges <= solve.uv_cut_source_edge_ids
+
+
+def _plain_solve(source):
+    context = run_pass_3_filters(run_pass_2_features(run_pass_1_relations(run_pass_0(source))), FilterOptions())
+    return context, run_skeleton_solve(context)
+
+
+def test_a_slit_seam_inside_a_patch_is_a_cut() -> None:
+    # One interior edge carries a seam from the border into the grid: one
+    # patch, and its loop walks the slit twice (a single use, e1 then e1).
+    context, solve = _plain_solve(make_quad_grid_with_inner_seam_source())
+    slit = [chain for chain in context.topology_snapshot.chains.values() if len(set(chain.source_edge_ids)) == 1]
+
+    assert [str(chain.id) for chain in slit] == ["chain:e1:e1"]
+    assert sum(1 for pc in context.topology_snapshot.patch_chains.values() if pc.chain_id == slit[0].id) == 1
+    assert solve.uv_cut_chain_ids == ("chain:e1:e1",)
+    assert solve.uv_cut_source_edge_ids == {"e1"}
+
+
+def test_a_seam_self_chain_is_a_cut() -> None:
+    # The tube's one seam: a Chain with two uses in the same patch (SEAM_SELF).
+    context, solve = _plain_solve(make_cylinder_tube_without_caps_with_one_seam_source())
+    self_seams = {
+        str(junction.matched_chain_id)
+        for junction in context.relation_snapshot.scaffold_junctions
+        if junction.kind.value == "SELF_SEAM"
+    }
+
+    assert self_seams == {"chain:e_v0"}
+    assert solve.uv_cut_chain_ids == ("chain:e_v0",)
+    assert solve.uv_cut_source_edge_ids == {"e_v0"}
+
+
+def test_join_seams_enter_the_tree_after_every_other_seam_longest_first() -> None:
+    context = _context(ROUNDED, UP)
+    solve = run_skeleton_solve(context)
+    joins = {
+        (str(d.chain_id), frozenset((str(d.first_patch_id), str(d.second_patch_id))))
+        for d in context.filter_snapshot.directives
+        if d.kind is SeamDirectiveKind.JOIN
+    }
+    # Decisions follow the tree order: one per seam.
+    is_join = [
+        (d.chain_id, frozenset((d.first_patch_id, d.second_patch_id))) in joins for d in solve.assembly.decisions
+    ]
+    # A joined seam is ordered by its 3D length, not by its edge count: most
+    # joined seams are one or two edges, and the id would break those ties.
+    length_by_seam = {
+        (str(a.chain_id), frozenset((str(a.first_patch_id), str(a.second_patch_id)))): a.shared_length
+        for a in context.relation_snapshot.patch_adjacencies.values()
+    }
+    lengths = [
+        length_by_seam[(d.chain_id, frozenset((d.first_patch_id, d.second_patch_id)))]
+        for d, join in zip(solve.assembly.decisions, is_join)
+        if join
+    ]
+    edge_counts = [
+        len(context.topology_snapshot.chains[d.chain_id].source_edge_ids)
+        for d, join in zip(solve.assembly.decisions, is_join)
+        if join
+    ]
+
+    assert len(lengths) == len(joins) == 24
+    assert is_join == sorted(is_join)  # every other seam first, then the joined seams
+    assert lengths == sorted(lengths, reverse=True) and lengths[0] > lengths[-1]
+    assert edge_counts != sorted(edge_counts, reverse=True)  # the edge count would order them otherwise
+
+
+def test_a_ladder_patch_with_a_join_lies_in_its_quilt_and_its_other_seams_are_the_structures() -> None:
+    # Only one JOIN, f34|f110: the other ladder patches stay alone, f34 lies
+    # with f110 and its seams without a directive go to the structure.
+    plain = _context(ROUNDED)
+    join = next(
+        d for d in _context(ROUNDED, UP).filter_snapshot.directives
+        if d.kind is SeamDirectiveKind.JOIN
+        and {_short(d.first_patch_id), _short(d.second_patch_id)} == {"f34", "f110"}
+    )
+    solve = run_skeleton_solve(replace(plain, filter_snapshot=FilterSnapshot(FilterOptions(UP), directives=(join,))))
+    island_id = solve.assembly.island_by_patch_id["patch:seed:f34"]
+    island = next(island for island in solve.assembly.islands if island.id == island_id)
+    f34_decisions = [d for d in solve.assembly.decisions if "patch:seed:f34" in (d.first_patch_id, d.second_patch_id)]
+
+    assert {"f34", "f110"} <= {_short(p) for p in island.patch_ids} and len(island.patch_ids) > 2
+    assert next(s for s in solve.skeletons if s.island_id == island_id).frame != LADDER_LAYOUT
+    assert sum(1 for skeleton in solve.skeletons if skeleton.frame == LADDER_LAYOUT) == 8
+    assert not any(d.reason == STITCH_BEVEL_LADDER_REASON for d in f34_decisions)
+    assert sum(1 for d in f34_decisions if d.accepted) >= 2
 
 
 def test_a_quilt_is_connected_by_its_stitched_seams() -> None:

@@ -71,7 +71,11 @@ def main() -> int:
     parser.add_argument("--scale", type=float, default=0.25)
     parser.add_argument("--no-unwrap", action="store_true")
     parser.add_argument("--no-bevel-strips", action="store_true", help="Pass 2 with straighten_bevel_strips off")
-    parser.add_argument("--world-up", default="0,0,1", help="Pass 3 user filter up axis (default +Z)")
+    parser.add_argument(
+        "--world-up", default="0,0,1",
+        help="Pass 3 user filter up axis in world space (default +Z), turned into each object's space by its "
+        "matrix_world; a non-uniform object scale is not handled",
+    )
     parser.add_argument("--no-filter", action="store_true", help="Pass 3 without the user filter")
     parser.add_argument("--angle", type=float, default=45.0, help="Pass 3 horizontal angle in degrees")
     parser.add_argument("--pins-only", action="store_true", help="pins + unwrap on the mesh's own seams")
@@ -104,7 +108,12 @@ def _write_object(obj, straighten_strips: bool, args) -> str:
     context = run_pass_2_features(context, FeatureOptions(
         straighten_strips=straighten_strips, straighten_bevel_strips=not args.no_bevel_strips,
     ))
-    context = run_pass_3_filters(context, FilterOptions(world_up=args.world_up, horizontal_angle_degrees=args.angle))
+    world_up = args.world_up
+    if world_up is not None:  # FilterOptions.world_up is a direction in the mesh's own space
+        from mathutils import Vector
+
+        world_up = tuple(float(value) for value in obj.matrix_world.to_3x3().inverted_safe() @ Vector(world_up))
+    context = run_pass_3_filters(context, FilterOptions(world_up=world_up, horizontal_angle_degrees=args.angle))
     solve = run_skeleton_solve(context)
 
     mesh = obj.data

@@ -29,9 +29,10 @@ Rules:
   first. A JOIN between two rigid parts over a rigid seam keeps the overlap
   gate; any other JOIN cannot be checked for overlap and joins, keeping the
   larger rigid part's frame for later checks.
-- The UV cut set (uv_cut_chain_ids) is every Chain shared by two patch uses
-  that the tree did not stitch: seams between quilts, seams left cut inside
-  a quilt and every SEAM_SELF Chain; mesh borders are cuts anyway.
+- The UV cut set (uv_cut_chain_ids) is every Chain whose source edges are
+  walked on two sides by the patch uses and that the tree did not stitch:
+  seams between quilts, seams left cut inside a quilt, every SEAM_SELF Chain
+  and every slit seam inside one patch; mesh borders are cuts anyway.
 - Read-only over lower layers; no UV or semantic roles here.
 """
 
@@ -318,22 +319,27 @@ def _constrained_patch_ids(context, kind: FeatureConstraintKind) -> set[str]:
     return {str(constraint.patch_id) for constraint in features.constraints if constraint.kind is kind}
 
 
-def _tree_edge_priority(adjacency, rigidity: SeamRigidity, topology, directive_by_adjacency=None) -> tuple[int, int, str]:
+def _tree_edge_priority(adjacency, rigidity: SeamRigidity, topology, directive_by_adjacency=None) -> tuple:
     """Rigid seams first (plan Slice P), then the other seams, then the seams a user filter joins.
 
     Longest seam first inside each group, then by id. Joined seams come last,
-    so a seam the structure accepts never loses its tree place to them.
+    so a seam the structure accepts never loses its tree place to them. A
+    joined seam is measured by its 3D length (PatchAdjacency.shared_length),
+    not by its edge count: most joined seams are one or two edges, so an edge
+    count ties them and the id would choose where a ring of joined patches
+    opens; the 3D length is a fact of the mesh.
     """
 
     directive = (directive_by_adjacency or {}).get(str(adjacency.id))
     if directive is not None and directive.kind is SeamDirectiveKind.JOIN:
-        group = JOIN_SEAM_GROUP
-    else:
-        rigid = is_rigid_seam(
-            rigidity, str(adjacency.chain_id), str(adjacency.first_patch_id), str(adjacency.second_patch_id)
-        )
-        group = 0 if rigid else 1
-    return (group, -_chain_edge_count(topology, adjacency.chain_id), str(adjacency.id))
+        return (JOIN_SEAM_GROUP, -round(adjacency.shared_length, JOIN_LENGTH_DIGITS), str(adjacency.id))
+    rigid = is_rigid_seam(
+        rigidity, str(adjacency.chain_id), str(adjacency.first_patch_id), str(adjacency.second_patch_id)
+    )
+    return (0 if rigid else 1, -_chain_edge_count(topology, adjacency.chain_id), str(adjacency.id))
+
+
+JOIN_LENGTH_DIGITS = 9  # equal 3D lengths stay equal under float noise of a summed Chain length
 
 
 JOIN_SEAM_GROUP = 2  # after the rigid (0) and the other (1) seams
@@ -357,18 +363,23 @@ def _directives_by_adjacency(context, adjacencies) -> dict:
 
 
 def uv_cut_chain_ids(topology, assembly: IslandAssembly) -> tuple[str, ...]:
-    """Chains that are UV cuts: shared by two or more patch uses and not stitched by the tree.
+    """Chains that are UV cuts: a source edge walked on two sides by the patch uses, not stitched by the tree.
 
     That is every seam between two quilts, every seam left cut inside a quilt
-    (non-tree, refused) and every SEAM_SELF Chain. A Chain with one use is a
-    mesh or selection border and is a cut anyway, so it is not listed.
+    (non-tree, refused), every SEAM_SELF Chain and every slit seam inside one
+    patch (a single use that walks its edges twice). A Chain whose edges have
+    one side is a mesh or selection border and is a cut anyway, so it is not
+    listed.
     """
 
     stitched = {decision.chain_id for decision in assembly.decisions if decision.accepted}
-    use_count: dict[str, int] = {}
+    side_count: dict[tuple[str, str], int] = {}
     for patch_chain in topology.patch_chains.values():
-        use_count[str(patch_chain.chain_id)] = use_count.get(str(patch_chain.chain_id), 0) + 1
-    return tuple(sorted(chain_id for chain_id, count in use_count.items() if count >= 2 and chain_id not in stitched))
+        for edge_id in topology.chains[patch_chain.chain_id].source_edge_ids:
+            key = (str(patch_chain.chain_id), str(edge_id))
+            side_count[key] = side_count.get(key, 0) + 1
+    seams = {chain_id for (chain_id, _edge_id), count in side_count.items() if count >= 2}
+    return tuple(sorted(seams - stitched))
 
 
 def _gate(source, topology, chain_id, angle_by_source_vertex, cut_chains_by_vertex, border_vertices):

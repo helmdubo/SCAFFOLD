@@ -99,6 +99,22 @@ def filter_from_settings(settings: Any) -> tuple[tuple[float, float, float] | No
     return WORLD_UP_BY_AXIS[str(getattr(settings, "world_up_axis", "+Z"))], angle
 
 
+def object_space_up(obj: Any, world_up: tuple[float, float, float] | None) -> tuple[float, float, float] | None:
+    """The world axis world_up in obj's own space (FilterOptions.world_up is a mesh-space direction).
+
+    Turned by the inverse of the 3x3 part of matrix_world, which under a
+    rotation and a uniform scale (mirroring included) keeps every angle
+    between a normal and the up line. A non-uniform scale changes those
+    angles in world space; that is a stated limit, not handled here.
+    """
+
+    if world_up is None or obj is None:
+        return world_up
+    from mathutils import Vector
+
+    return tuple(float(value) for value in obj.matrix_world.to_3x3().inverted_safe() @ Vector(world_up))
+
+
 def visibility_from_settings(settings: Any) -> dict[str, bool]:
     from .overlay_v2 import LAYER_SPECS
 
@@ -153,6 +169,7 @@ def show_or_refresh(context: Any) -> tuple[dict[str, Any], str]:
         context.view_layer.objects.active = source_object
 
     world_up, horizontal_angle = filter_from_settings(settings)
+    world_up = object_space_up(source_object, world_up)
     payload = build_payload(
         context,
         straighten_strips=bool(settings.straighten_strips),
