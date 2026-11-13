@@ -93,6 +93,7 @@ def _run_object(obj, args: argparse.Namespace) -> dict:
         record.update(_pipeline_metrics(source, context))
         solve = run_skeleton_solve(context)
         record.update(_solve_metrics(solve))
+        record.update(_corner_turn_metrics(context, solve))
         if args.straighten_strips:
             # Layer 4 STRAIGHT_STRIP constraints applied as strip islands (absent without the flag)
             record["strip_islands"] = sum(1 for skeleton in solve.skeletons if skeleton.frame == "STRIP")
@@ -190,6 +191,15 @@ def _structure_metrics(solve, roles: Counter) -> dict:
         "unordered_island_rails": sum(1 for segment in island_rails if not segment.is_ordered),
         "rail_frame_conflicts": len(solve.rail_frame_conflicts),
     }
+
+
+def _corner_turn_metrics(context, solve) -> dict:
+    """The corner law in the solved layout (convex turns left, reflex right)."""
+
+    from dev.tools.cftuv_parity.parity import corner_turns
+
+    with_law, checked, mirrored = corner_turns(context.relation_snapshot, solve)
+    return {"corners_against_law": checked - with_law, "mirrored_islands": mirrored}
 
 
 def _write_uv_metrics(obj, solve, source, selection: str) -> dict:

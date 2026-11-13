@@ -45,7 +45,10 @@ from scaffold_core.layer_2_geometry.build import build_geometry_facts
 from scaffold_core.layer_2_geometry.facts import ChainShapeHint
 from scaffold_core.pipeline.inspection import geometry_summary_to_dict
 from scaffold_core.tests.fixtures.capped_prism import make_capped_decagon_prism_odd_strips_source
-from scaffold_core.tests.fixtures.chain_shape_geometry import make_chain_shape_source_and_topology
+from scaffold_core.tests.fixtures.chain_shape_geometry import (
+    make_chain_shape_source_and_topology,
+    make_reversed_one_edge_chain_source_and_topology,
+)
 from scaffold_core.tests.fixtures.chain_shape_surfaces import (
     make_cone_frustum_band_source,
     make_single_pentagon_source,
@@ -58,7 +61,9 @@ from scaffold_core.tests.fixtures.cylinder_tube import (
 from scaffold_core.tests.fixtures.degenerate_geometry import make_degenerate_triangle_source
 from scaffold_core.tests.fixtures.l_corridor_tunnel import make_l_corridor_tunnel_seamed_folds_source
 from scaffold_core.tests.fixtures.l_shape import make_two_quad_l_source
+from scaffold_core.tests.fixtures.run_corner_sheets import make_bow_tie_quad_source, make_flat_l_hexagon_source
 from scaffold_core.tests.fixtures.single_patch import make_single_quad_source
+from scaffold_core.tests.test_layer_5_runtime import DATA, _load_capture
 
 
 def test_single_quad_geometry_facts_are_measured() -> None:
@@ -379,6 +384,90 @@ def test_seam_self_chain_takes_the_side_face_of_each_use() -> None:
     assert {face_ids[0] for face_ids in side_faces} == {SourceFaceId("f0"), SourceFaceId("f3")}
     # A straight seam has no plane, so no tilt.
     assert all(facts.patch_chain_facts[use.id].tilt_min is None for use in seam_uses)
+
+
+def test_open_chain_vertex_run_follows_the_chain_from_its_start_vertex() -> None:
+    checked = 0
+    for path in sorted(DATA.glob("*.json")):
+        source = _load_capture(path.name)
+        topology = build_topology_snapshot(source)
+        facts = build_geometry_facts(source, topology)
+        for chain in topology.chains.values():
+            start_sources = topology.vertices[chain.start_vertex_id].source_vertex_ids
+            end_sources = topology.vertices[chain.end_vertex_id].source_vertex_ids
+            if set(start_sources) & set(end_sources):
+                continue  # a closed Chain has no end points to follow
+            chain_facts = facts.chain_facts[chain.id]
+            run = chain_facts.source_vertex_run
+            assert run[0] in start_sources, (path.name, chain.id)
+            assert run[-1] in end_sources, (path.name, chain.id)
+            assert chain_facts.segments[0].start_source_vertex_id == run[0]
+            assert chain_facts.segments[-1].end_source_vertex_id == run[-1]
+            _assert_chord_follows_segments(chain_facts)
+            checked += 1
+    assert checked > 200
+
+
+def test_one_edge_chain_stored_against_its_edge_runs_from_the_chain_start() -> None:
+    source, topology = make_reversed_one_edge_chain_source_and_topology()
+
+    chain_facts = build_geometry_facts(source, topology).chain_facts[ChainId("chain:reversed")]
+
+    assert chain_facts.source_vertex_run == (SourceVertexId("v1"), SourceVertexId("v0"))
+    (segment,) = chain_facts.segments
+    assert (segment.start_source_vertex_id, segment.end_source_vertex_id) == (
+        SourceVertexId("v1"),
+        SourceVertexId("v0"),
+    )
+    assert chain_facts.chord_direction[0] < 0.0 and chain_facts.chord_direction[1] < 0.0
+    _assert_chord_follows_segments(chain_facts)
+
+
+def test_reflex_corner_of_an_n_gon_measures_its_full_interior_angle() -> None:
+    source = make_flat_l_hexagon_source()
+    topology = build_topology_snapshot(source)
+    corners = ("a", "b", "d", "e", "f", "g")
+    vertex_topology = _topology_with_vertices(
+        "flat_l_hexagon",
+        tuple(SourceVertexId(name) for name in corners),
+    )
+
+    fans = build_geometry_facts(source, topology).local_face_fan_facts.values()
+    vertex_facts = build_geometry_facts(source, vertex_topology).vertex_facts
+
+    fan_angle = {str(fan.source_vertex_id): fan.interior_angle_sum for fan in fans}
+    assert set(fan_angle) == set(corners)
+    for name in corners:
+        expected = 1.5 * pi if name == "e" else 0.5 * pi
+        assert isclose(fan_angle[name], expected), name
+        assert isclose(vertex_facts[VertexId(f"vertex:{name}")].interior_angle_sum, expected), name
+
+
+def test_self_crossing_face_keeps_the_plain_corner_angles() -> None:
+    # Read by its winding, this quad would get two corners above pi and a
+    # corner sum of 4*pi; a simple quad sums to 2*pi, and the plain reading
+    # (every corner below pi) is the closer one.
+    source = make_bow_tie_quad_source()
+    corners = ("a", "b", "c", "d")
+    vertex_topology = _topology_with_vertices(
+        "bow_tie_quad",
+        tuple(SourceVertexId(name) for name in corners),
+    )
+
+    vertex_facts = build_geometry_facts(source, vertex_topology).vertex_facts
+
+    angles = [vertex_facts[VertexId(f"vertex:{name}")].interior_angle_sum for name in corners]
+    assert all(0.0 < angle < pi for angle in angles)
+    assert sum(angles) < 2.0 * pi
+
+
+def _assert_chord_follows_segments(chain_facts) -> None:
+    summed = tuple(sum(segment.vector[axis] for segment in chain_facts.segments) for axis in range(3))
+    norm = sum(component * component for component in summed) ** 0.5
+    assert isclose(norm, chain_facts.chord_length, rel_tol=1e-9, abs_tol=1e-12)
+    if norm > 1e-9:
+        for axis in range(3):
+            assert isclose(chain_facts.chord_direction[axis], summed[axis] / norm, abs_tol=1e-9)
 
 
 def _topology_with_vertices(

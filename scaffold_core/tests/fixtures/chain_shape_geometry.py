@@ -83,3 +83,39 @@ def make_chain_shape_source_and_topology() -> tuple[SourceMeshSnapshot, SurfaceM
         },
     )
     return source, topology
+
+
+def make_reversed_one_edge_chain_source_and_topology() -> tuple[SourceMeshSnapshot, SurfaceModel]:
+    """Return a one-edge Chain from v1 to v0 over an edge stored as (v0, v1)."""
+
+    v0 = SourceVertexId("v0")
+    v1 = SourceVertexId("v1")
+    e0 = SourceEdgeId("e0")
+    source = SourceMeshSnapshot(
+        id=SourceMeshId("reversed_one_edge_chain"),
+        vertices={
+            v0: MeshVertexRef(v0, (0.0, 0.0, 0.0)),
+            v1: MeshVertexRef(v1, (2.0, 1.0, 0.0)),
+        },
+        edges={e0: MeshEdgeRef(e0, (v0, v1))},
+        faces={},
+    )
+    chain_id = ChainId("chain:reversed")
+    tv0 = VertexId("vertex:v0")
+    tv1 = VertexId("vertex:v1")
+    topology = SurfaceModel(
+        id=SurfaceModelId("surface:reversed_one_edge_chain"),
+        chains={
+            chain_id: Chain(
+                id=chain_id,
+                start_vertex_id=tv1,
+                end_vertex_id=tv0,
+                source_edge_ids=(e0,),
+            ),
+        },
+        vertices={
+            tv0: Vertex(id=tv0, source_vertex_ids=(v0,)),
+            tv1: Vertex(id=tv1, source_vertex_ids=(v1,)),
+        },
+    )
+    return source, topology

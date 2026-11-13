@@ -10,9 +10,13 @@ from dev.tools.cftuv_parity.parity import (
     AXIS_LINE,
     FREE_LINE,
     NOT_LINE,
+    REFERENCE_DIR,
     SHAPED,
+    STRAIGHTEN_STRIPS,
     Use,
+    _replay,
     _scaffold_use,
+    corner_turns,
     classify_uv_polyline,
     oblique_causes,
     sample_pairs,
@@ -153,3 +157,14 @@ def test_scaffold_use_line_and_failures():
     unlinked = _skeleton({"r1": "OBLIQUE", "r2": "OBLIQUE"}, frame="FRAME_FREE")
     assert _scaffold_use(runs, unlinked, "P", on_line, 3.0)[2] == "OBLIQUE_UNLINKED"
     assert _scaffold_use([], skeleton, "P", on_line, 3.0)[2] == "NO_RUNS"
+
+
+@pytest.mark.parametrize("name", ["Main_wall", "Arc"])
+def test_reference_right_corners_turn_by_the_corner_law(name):
+    # Frame-free islands orient their lines from corner handedness: no
+    # corner against the law, no mirrored island (Main_wall was twisted).
+    context, solve = _replay(REFERENCE_DIR / f"{name}.capture.json", STRAIGHTEN_STRIPS[name])
+    with_law, checked, mirrored = corner_turns(context.relation_snapshot, solve)
+    assert checked > 10
+    assert with_law == checked
+    assert mirrored == 0

@@ -414,7 +414,12 @@ def _orientation_sign_for_run(
     run_start = _run_start_vertex_id(run)
     run_end = _run_end_vertex_id(run)
     run_source_edge_ids = _run_source_edge_ids(run)
-    if chain.start_vertex_id == chain.end_vertex_id and run_start == run_end:
+    chain_start_sources = set(vertices[chain.start_vertex_id].source_vertex_ids)
+    chain_end_sources = set(vertices[chain.end_vertex_id].source_vertex_ids)
+    # A closed Chain has no end points to compare: a use may start anywhere on
+    # it, and at a seam the two ends (of the Chain or of the use) are different
+    # occurrences of one vertex. The edge order alone decides.
+    if chain.start_vertex_id == chain.end_vertex_id or chain_start_sources & chain_end_sources:
         if _matches_cyclic_order(run_source_edge_ids, chain.source_edge_ids):
             return 1
         if _matches_cyclic_order(tuple(reversed(run_source_edge_ids)), chain.source_edge_ids):
@@ -424,8 +429,6 @@ def _orientation_sign_for_run(
         return 1
     if chain.start_vertex_id == run_end and chain.end_vertex_id == run_start:
         return -1
-    chain_start_sources = set(vertices[chain.start_vertex_id].source_vertex_ids)
-    chain_end_sources = set(vertices[chain.end_vertex_id].source_vertex_ids)
     run_start_sources = set(vertices[run_start].source_vertex_ids)
     run_end_sources = set(vertices[run_end].source_vertex_ids)
     if chain_start_sources & run_start_sources and chain_end_sources & run_end_sources:

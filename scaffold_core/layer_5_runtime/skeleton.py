@@ -12,9 +12,14 @@ Rules:
 - Axis roles and run orientation come from the island's unfolded frame
   (stitch-tree parallel transport) when every island patch is planar;
   an island without one bipartitions its lines into axes by the right
-  corners of its patch surfaces (Layer 3 RunCornerRelation) and takes
-  in-line run signs from its ordered island rails;
-  an unordered rail stays unsigned with a diagnostic. No world axes.
+  corners of its patch surfaces (Layer 3 RunCornerRelation), takes
+  in-line run signs from its ordered island rails and one sign per line
+  from the handedness of those right corners (convex turns left, reflex
+  right); an unordered rail or a line the corners contradict stays
+  unsigned with a diagnostic, and a signed axis line the corners do not
+  tie to the island's longest line is reported. No world axes; roles and
+  signs read no 3D directions (the axis solve still normalizes equations
+  between the same two cross components by a 3D dot).
 - A Layer 4 STRAIGHT_STRIP FeatureConstraint (the only feature channel,
   G0 DD-26) lays an island of exactly its one patch as a rectangle: the
   constraint's loop order gives axes and signs, its target lengths scale the
@@ -30,11 +35,13 @@ Rules:
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field, replace
+from math import pi
 from typing import Any, Mapping
 
 from scaffold_core.layer_2_geometry.measures import EPSILON, cross, dot, normalize
-from scaffold_core.layer_3_relations.model import RunCornerKind, ScaffoldRailSegment
+from scaffold_core.layer_3_relations.model import PatchChainEndpointRole, RunCornerKind, ScaffoldRailSegment
 from scaffold_core.layer_3_relations.scaffold_rails import cut_scaffold_rail, rail_member_endpoints
 from scaffold_core.layer_4_features.model import FeatureConstraintKind
 from scaffold_core.layer_5_runtime.axis_solve import RESIDUAL_TOLERANCE_PER_SPAN, AxisSolve, solve_axis
@@ -216,7 +223,7 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
             for e in runs
         }
         signs = _rail_signs(rail_segments, line_of, diagnostics)
-        _co_orient_axis_families(runs, line_of, axis_by_line, signs, node_by_run_end, diagnostics)
+        _orient_lines_by_corners(runs, line_of, axis_by_line, signs, relations.run_corner_relations, diagnostics)
         direction_of = {e.id: e.direction for e in runs}
         mismatches: tuple[str, ...] = ()
         drift = None  # no frame: the solve measures drift along each axis
@@ -818,60 +825,98 @@ def _bipartition_families(runs, family_of, run_corner_relations, diagnostics):
     return axis_by_family
 
 
-def _co_orient_axis_families(runs, family_of, axis_by_family, signs, node_by_run_end, diagnostics):
-    """Co-orient parallel rails of one axis through their linking cross runs.
+def _orient_lines_by_corners(runs, line_of, axis_by_line, signs, run_corner_relations, diagnostics):
+    """One sign factor per island line from the handedness of right corners.
 
-    At a cross (other-axis) run's two end nodes the incident rail
-    directions are locally parallel on a developable band, so their dot
-    fixes the relative sign between the two rail families.
+    Frame-free islands only. The rails fix each line's in-line run signs; the
+    factor of a whole line is unknown. At a Layer 3 RunCornerRelation of kind
+    RIGHT the run whose role is END arrives at the corner and the run whose
+    role is START leaves it, both along the patch's boundary loop, which
+    follows the face winding. In an unmirrored layout a convex corner turns
+    left and a reflex corner turns right, so with a sign s per run
+    (coordinate(END) - coordinate(START) = s * length):
+    s(arriving) * s(leaving) = +1 when (arriving is AXIS_A) == convex, else -1.
+    That fixes the product of the two lines' factors. Factors propagate by
+    BFS from the longest line (tie: id), each corner read once. A line
+    given two different factors is a conflict: its runs lose their signs (no
+    length equations) and the island gets one diagnostic per such line. A
+    signed axis line that the corners do not tie to the longest line keeps
+    its rail signs, with a diagnostic: its direction against the rest of the
+    island is unknown. No 3D directions are read.
     """
 
-    runs_by_node: dict[str, list] = {}
+    island_run_ids = {e.id for e in runs}
+    length_by_line: dict[str, float] = {}
     for e in runs:
-        for role in ("START", "END"):
-            runs_by_node.setdefault(node_by_run_end[(e.id, role)], []).append(e)
-    for axis in ("AXIS_A", "AXIS_B"):
-        cross_axis = "AXIS_B" if axis == "AXIS_A" else "AXIS_A"
-        links: dict[str, dict[str, float]] = {}
-        for e in runs:
-            family_id = family_of.get(e.id)
-            if axis_by_family.get(family_id) != cross_axis:
-                continue
-            ends = [node_by_run_end[(e.id, "START")], node_by_run_end[(e.id, "END")]]
-            rail_hits = []
-            for node in ends:
-                for other in runs_by_node.get(node, ()):
-                    other_family = family_of.get(other.id)
-                    if axis_by_family.get(other_family) == axis and other.id in signs:
-                        rail_hits.append((other_family, other))
-                        break
-            if len(rail_hits) == 2 and rail_hits[0][0] != rail_hits[1][0]:
-                (fam_a, run_a), (fam_b, run_b) = rail_hits
-                oriented_a = tuple(c * signs[run_a.id] for c in run_a.direction)
-                oriented_b = tuple(c * signs[run_b.id] for c in run_b.direction)
-                rel = 1.0 if dot(normalize(oriented_a), normalize(oriented_b)) >= 0.0 else -1.0
-                links.setdefault(fam_a, {})[fam_b] = rel
-                links.setdefault(fam_b, {})[fam_a] = rel
-        flip: dict[str, float] = {}
-        for family_id in sorted(links):
-            if family_id in flip:
-                continue
-            flip[family_id] = 1.0
-            queue = [family_id]
-            while queue:
-                current = queue.pop()
-                for neighbor, rel in links.get(current, {}).items():
-                    expected = flip[current] * rel
-                    if neighbor not in flip:
-                        flip[neighbor] = expected
-                        queue.append(neighbor)
-                    elif flip[neighbor] != expected:
-                        diagnostics.append(f"rail co-orientation conflict at {neighbor}")
-        for e in runs:
-            family_id = family_of.get(e.id)
-            factor = flip.get(family_id)
-            if factor is not None and factor < 0.0 and e.id in signs:
-                signs[e.id] = -signs[e.id]
+        line_id = line_of.get(e.id)
+        if line_id is not None:
+            length_by_line[line_id] = length_by_line.get(line_id, 0.0) + e.length
+    links: dict[str, list[tuple[str, float, int]]] = {}
+    for index, corner in enumerate(run_corner_relations):
+        if corner.kind is not RunCornerKind.RIGHT:
+            continue
+        run_by_role = {
+            corner.first_endpoint_role: corner.first_directional_evidence_id,
+            corner.second_endpoint_role: corner.second_directional_evidence_id,
+        }
+        arriving = run_by_role.get(PatchChainEndpointRole.END)
+        leaving = run_by_role.get(PatchChainEndpointRole.START)
+        if arriving is None or leaving is None:
+            continue
+        if not {arriving, leaving} <= island_run_ids or arriving not in signs or leaving not in signs:
+            continue
+        arriving_line, leaving_line = line_of.get(arriving), line_of.get(leaving)
+        arriving_axis = axis_by_line.get(arriving_line)
+        if {arriving_axis, axis_by_line.get(leaving_line)} != {"AXIS_A", "AXIS_B"}:
+            continue
+        convex = corner.interior_angle_sum < pi
+        wanted = 1.0 if (arriving_axis == "AXIS_A") == convex else -1.0
+        relative = wanted * signs[arriving] * signs[leaving]
+        links.setdefault(arriving_line, []).append((leaving_line, relative, index))
+        links.setdefault(leaving_line, []).append((arriving_line, relative, index))
+    factor_by_line: dict[str, float] = {}
+    conflicts: set[str] = set()
+    read: set[int] = set()
+    longest_first = sorted(length_by_line, key=lambda line_id: (-length_by_line[line_id], line_id))
+    tied: set[str] = set()  # the lines the corners tie to the longest linked line
+    for seed in longest_first:
+        if seed not in links or seed in factor_by_line:
+            continue
+        first_group = not factor_by_line
+        factor_by_line[seed] = 1.0
+        pending = deque([seed])
+        while pending:
+            current = pending.popleft()
+            for neighbor, relative, index in sorted(links[current]):
+                if index in read:
+                    continue
+                read.add(index)
+                expected = factor_by_line[current] * relative
+                if neighbor not in factor_by_line:
+                    factor_by_line[neighbor] = expected
+                    pending.append(neighbor)
+                elif factor_by_line[neighbor] != expected:
+                    conflicts.add(neighbor)
+        if first_group:
+            tied = set(factor_by_line)
+    for line_id in sorted(conflicts):
+        diagnostics.append(f"corner handedness conflict on island line: {line_id} -> unsigned")
+    signed_axis_lines = {
+        line_of[e.id] for e in runs
+        if e.id in signs and axis_by_line.get(line_of.get(e.id)) in ("AXIS_A", "AXIS_B")
+    }
+    if not tied:  # no corner links at all: the longest signed axis line stands for itself
+        tied = set(next(([line_id] for line_id in longest_first if line_id in signed_axis_lines), ()))
+    for line_id in sorted(signed_axis_lines - tied):
+        diagnostics.append(f"island line not tied to the longest line by right corners: {line_id}")
+    for e in runs:
+        line_id = line_of.get(e.id)
+        if e.id not in signs or line_id is None:
+            continue
+        if line_id in conflicts:
+            del signs[e.id]
+        elif factor_by_line.get(line_id, 1.0) < 0.0:
+            signs[e.id] = -signs[e.id]
 
 
 _chain_axis = chain_axis

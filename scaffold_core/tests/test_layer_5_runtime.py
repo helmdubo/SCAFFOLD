@@ -13,6 +13,7 @@ import json
 import sys
 from collections import Counter
 from dataclasses import replace
+from math import pi
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -26,7 +27,7 @@ from scaffold_core.layer_0_source.snapshot import (
     MeshVertexRef,
     SourceMeshSnapshot,
 )
-from scaffold_core.layer_3_relations.model import RunCornerKind
+from scaffold_core.layer_3_relations.model import PatchChainEndpointRole, RunCornerKind
 from scaffold_core.layer_4_features.model import FeatureOptions
 from scaffold_core.layer_5_runtime.islands import IslandAssembly
 from scaffold_core.layer_5_runtime.pins import PinnedVertex, SolveResult, _station_pins, run_skeleton_solve
@@ -1029,6 +1030,153 @@ def test_bipartition_links_only_runs_of_this_island() -> None:
     axis = _bipartition_families(runs, line_of, (_corner("run_x", "outside"),), [])
 
     assert axis == {"x": "AXIS_A"}
+
+
+def _corner_law_by_island(context, result) -> dict[str, Counter]:
+    """Per island: RIGHT corners that turn by the corner law ("with") or not ("against").
+
+    The run whose endpoint role is END arrives at the corner, the START run
+    leaves it; in an unmirrored layout a convex corner turns left and a reflex
+    corner right. Only corners with all four run-end coordinates solved and a
+    clear turn (sine of at least 0.5) are counted.
+    """
+
+    skeleton_of_run = {run_id: s for s in result.skeletons for run_id in s.axis_role_by_run}
+    counts: dict[str, Counter] = {}
+    for corner in context.relation_snapshot.run_corner_relations:
+        if corner.kind is not RunCornerKind.RIGHT:
+            continue
+        run_by_role = {
+            corner.first_endpoint_role: corner.first_directional_evidence_id,
+            corner.second_endpoint_role: corner.second_directional_evidence_id,
+        }
+        arriving = run_by_role.get(PatchChainEndpointRole.END)
+        leaving = run_by_role.get(PatchChainEndpointRole.START)
+        skeleton = skeleton_of_run.get(arriving)
+        if leaving is None or skeleton is None or skeleton_of_run.get(leaving) is not skeleton:
+            continue
+        uv = []
+        for run_id, role in ((arriving, "START"), (arriving, "END"), (leaving, "START"), (leaving, "END")):
+            node = skeleton.node_by_run_end[(run_id, role)]
+            uv.append((skeleton.axis_a.coordinate_by_node.get(node), skeleton.axis_b.coordinate_by_node.get(node)))
+        if any(None in point for point in uv):
+            continue
+        da = (uv[1][0] - uv[0][0], uv[1][1] - uv[0][1])
+        dl = (uv[3][0] - uv[2][0], uv[3][1] - uv[2][1])
+        turn = da[0] * dl[1] - da[1] * dl[0]
+        if turn == 0.0 or abs(turn) < 0.5 * (da[0] ** 2 + da[1] ** 2) ** 0.5 * (dl[0] ** 2 + dl[1] ** 2) ** 0.5:
+            continue
+        law = (turn > 0.0) == (corner.interior_angle_sum < pi)
+        counts.setdefault(skeleton.island_id, Counter())["with" if law else "against"] += 1
+    return counts
+
+
+CORNER_LAW_SOURCES = {
+    **{path.name: (lambda name=path.name: _load_capture(name)) for path in sorted(DATA.glob("*.json"))},
+    "bent_hinge": make_bent_hinge_panels_source,
+    "capped_decagon_prism": make_capped_decagon_prism_odd_strips_source,
+    "capped_square_prism": make_capped_square_prism_all_seams_source,
+    "tube_one_seam": make_cylinder_tube_without_caps_with_one_seam_source,
+    "tube_two_seams": make_cylinder_tube_without_caps_with_two_seams_source,
+    "segmented_tube": make_segmented_cylinder_tube_without_caps_with_one_seam_source,
+    "detached_walls": make_detached_parallel_walls_source,
+    "extruded_cross": make_extruded_cross_source,
+    "l_corridor_tunnel": make_l_corridor_tunnel_seamed_folds_source,
+    "reflex_corner": make_reflex_corner_walls_source,
+    "folded_l_sheet": make_folded_l_sheet_source,
+    "folded_sheet": make_folded_sheet_source,
+    "cut_annulus": make_cut_annulus_source,
+    "t_vertex_wall": make_t_vertex_wall_source,
+    "tube_with_cap": make_tube_with_cap_source,
+}
+
+
+@pytest.mark.parametrize("name", sorted(CORNER_LAW_SOURCES))
+def test_right_corners_turn_by_the_corner_law_in_every_island(name) -> None:
+    context = run_pass_1_relations(run_pass_0(CORNER_LAW_SOURCES[name]()))
+    result = run_skeleton_solve(context)
+
+    counts = _corner_law_by_island(context, result)
+
+    assert {island: c["against"] for island, c in counts.items() if c["against"]} == {}
+
+
+def test_corner_law_is_checked_in_frame_free_and_framed_islands() -> None:
+    checked = Counter()
+    for name in sorted(CORNER_LAW_SOURCES):
+        context = run_pass_1_relations(run_pass_0(CORNER_LAW_SOURCES[name]()))
+        result = run_skeleton_solve(context)
+        frame_of = {s.island_id: s.frame for s in result.skeletons}
+        for island, c in _corner_law_by_island(context, result).items():
+            checked[frame_of[island]] += c["with"] + c["against"]
+    assert checked["FRAME_FREE"] > 40
+    assert checked["UNFOLDED"] > 500
+
+
+def test_arch_front_island_is_not_mirrored() -> None:
+    # The 3D co-orientation left the arch front's lines unlinked and the island
+    # came out mirrored: every right corner turned the wrong way.
+    context = run_pass_1_relations(run_pass_0(_load_capture("artist_arch_bevel.json")))
+    result = run_skeleton_solve(context)
+
+    island = _corner_law_by_island(context, result)["island:0"]
+
+    assert _skeleton_by_island(result)["island:0"].frame == "FRAME_FREE"
+    assert island["with"] >= 4
+    assert island["against"] == 0
+
+
+def _turn_corner(arriving: str, leaving: str, convex: bool):
+    return SimpleNamespace(
+        kind=RunCornerKind.RIGHT,
+        first_directional_evidence_id=arriving,
+        first_endpoint_role=PatchChainEndpointRole.END,
+        second_directional_evidence_id=leaving,
+        second_endpoint_role=PatchChainEndpointRole.START,
+        interior_angle_sum=0.5 * pi if convex else 1.5 * pi,
+    )
+
+
+def test_corner_handedness_orients_lines_and_unsigns_a_contradicted_line() -> None:
+    from scaffold_core.layer_5_runtime.skeleton import _orient_lines_by_corners
+
+    lengths = {"x1": 3.0, "x2": 2.0, "y1": 1.0, "y2": 1.0, "z1": 1.0, "w1": 1.0}
+    runs = tuple(SimpleNamespace(id=run_id, length=length) for run_id, length in lengths.items())
+    line_of = {run_id: run_id[0] for run_id in lengths}
+    axis_by_line = {"x": "AXIS_A", "y": "AXIS_B", "z": "AXIS_B", "w": "AXIS_B"}
+    signs = {run_id: 1.0 for run_id in lengths}
+    signs["z1"] = -1.0
+    corners = (
+        # Arriving on AXIS_A at a convex corner: the two signs agree. Line x
+        # (longest) keeps its signs; z flips to agree with it.
+        _turn_corner("x1", "z1", convex=True),
+        # y meets x at a convex and at a reflex corner with the same signs:
+        # it cannot satisfy both.
+        _turn_corner("x1", "y1", convex=True),
+        _turn_corner("x2", "y2", convex=False),
+        # Two START ends are no arrive/leave pair; w keeps its rail sign and
+        # is reported as not tied to the longest line.
+        SimpleNamespace(
+            kind=RunCornerKind.RIGHT,
+            first_directional_evidence_id="x1",
+            first_endpoint_role=PatchChainEndpointRole.START,
+            second_directional_evidence_id="w1",
+            second_endpoint_role=PatchChainEndpointRole.START,
+            interior_angle_sum=0.5 * pi,
+        ),
+    )
+    diagnostics: list[str] = []
+
+    _orient_lines_by_corners(runs, line_of, axis_by_line, signs, corners, diagnostics)
+
+    assert diagnostics == [
+        "corner handedness conflict on island line: y -> unsigned",
+        "island line not tied to the longest line by right corners: w",
+    ]
+    assert "y1" not in signs and "y2" not in signs
+    assert signs["x1"] == signs["x2"] == 1.0  # the seed is not blamed for y's corners
+    assert signs["z1"] == 1.0
+    assert signs["w1"] == 1.0
 
 
 def _skeleton_by_island(result):

@@ -62,6 +62,23 @@ def make_flat_l_sheet_source() -> SourceMeshSnapshot:
     return _sheet("flat_l_sheet", points, faces)
 
 
+def make_flat_l_hexagon_source() -> SourceMeshSnapshot:
+    """Return one flat L-shaped hexagon face: five 90-degree corners, one 270 at e = (1,1)."""
+
+    points = {
+        "a": (0.0, 0.0, 0.0), "b": (2.0, 0.0, 0.0), "d": (2.0, 1.0, 0.0),
+        "e": (1.0, 1.0, 0.0), "f": (1.0, 2.0, 0.0), "g": (0.0, 2.0, 0.0),
+    }
+    return _sheet("flat_l_hexagon", points, {"f0": tuple(points)})
+
+
+def make_bow_tie_quad_source() -> SourceMeshSnapshot:
+    """Return one self-crossing quad: its edges a-b and c-d cross, so its winding says nothing."""
+
+    points = {"a": (0.0, 0.0, 0.0), "b": (2.0, 2.0, 0.0), "c": (2.0, 0.0, 0.0), "d": (0.0, 1.0, 0.0)}
+    return _sheet("bow_tie_quad", points, {"f0": tuple(points)})
+
+
 def make_folded_sheet_source() -> SourceMeshSnapshot:
     """Return one patch folded 90 degrees along the edge y = 1, z = 0.
 
