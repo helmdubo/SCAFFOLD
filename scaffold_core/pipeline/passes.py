@@ -125,7 +125,7 @@ def run_pass_2_features(context: PipelineContext, options: FeatureOptions = Feat
 
 
 def run_pass_3_filters(context: PipelineContext, options: FilterOptions = FilterOptions()) -> PipelineContext:
-    """Run Pass 3, the over filter of user options, after Pass 2; Layers 0-4 are read, never written.
+    """Run Pass 3, the over filter of user options, after Pass 2; Layers 1-4 are read, never written.
 
     With options.world_up None the snapshot is empty and the solve equals a
     run without this pass.
@@ -141,7 +141,6 @@ def run_pass_3_filters(context: PipelineContext, options: FilterOptions = Filter
         context.relation_snapshot,
         context.feature_snapshot,
         options,
-        source=context.source_snapshot,
     )
     filters_seconds = perf_counter() - filters_started
 

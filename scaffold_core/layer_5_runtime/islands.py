@@ -332,14 +332,18 @@ def _tree_edge_priority(adjacency, rigidity: SeamRigidity, topology, directive_b
 
     directive = (directive_by_adjacency or {}).get(str(adjacency.id))
     if directive is not None and directive.kind is SeamDirectiveKind.JOIN:
-        return (JOIN_SEAM_GROUP, -round(adjacency.shared_length, JOIN_LENGTH_DIGITS), str(adjacency.id))
+        return (JOIN_SEAM_GROUP, -float(f"{adjacency.shared_length:.{JOIN_LENGTH_DIGITS}g}"), str(adjacency.id))
     rigid = is_rigid_seam(
         rigidity, str(adjacency.chain_id), str(adjacency.first_patch_id), str(adjacency.second_patch_id)
     )
     return (0 if rigid else 1, -_chain_edge_count(topology, adjacency.chain_id), str(adjacency.id))
 
 
-JOIN_LENGTH_DIGITS = 9  # equal 3D lengths stay equal under float noise of a summed Chain length
+# Significant digits of a joined seam's 3D length in its sort key, so the key
+# does not depend on the mesh's scale. Rounding is not a tolerance: two
+# lengths on either side of a rounding step still order apart, and the
+# lengths are only as exact as the mesh's float32 vertex positions.
+JOIN_LENGTH_DIGITS = 9
 
 
 JOIN_SEAM_GROUP = 2  # after the rigid (0) and the other (1) seams

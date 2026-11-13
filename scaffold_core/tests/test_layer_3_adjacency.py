@@ -132,6 +132,7 @@ def test_seam_self_chain_does_not_build_patch_adjacency() -> None:
                 area=1.0,
                 normal=(0.0, 0.0, 1.0),
                 centroid=(0.5, 0.5, 0.0),
+                area_vector_length=1.0,
             )
         },
         chain_facts={

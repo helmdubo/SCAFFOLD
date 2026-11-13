@@ -60,7 +60,8 @@ def _fake(normals: dict[str, tuple[float, float, float]], seams=(), bevels=()):
 
     topology = SimpleNamespace(patches={patch_id: None for patch_id in normals})
     geometry = SimpleNamespace(patch_facts={
-        patch_id: SimpleNamespace(normal=normal) for patch_id, normal in normals.items()
+        patch_id: SimpleNamespace(normal=normal, area=1.0, area_vector_length=1.0)
+        for patch_id, normal in normals.items()
     })
     relations = SimpleNamespace(patch_adjacencies={
         f"a{index}": SimpleNamespace(id=f"a{index}", chain_id=chain, first_patch_id=first, second_patch_id=second)
@@ -334,6 +335,21 @@ def test_a_strip_without_rails_ignores_bevel_neighbours_and_without_any_takes_it
     assert by_patch["s_only"].rule is PatchClassRule.BY_NORMAL
     assert by_patch["s_only"].patch_class is PatchClass.HORIZONTAL
     assert "FILTER_BEVEL_STRIP_WITHOUT_SURFACE" in {d.code for d in snapshot.diagnostics}
+
+
+def test_a_bevel_rail_neighbour_is_not_a_surface() -> None:
+    # s_b's rails touch s_a (a bevel, classed first and HORIZONTAL by top) and
+    # the wall: only the wall counts, so s_b is VERTICAL.
+    normals = {"top": UP, "wall": (0.0, -1.0, 0.0), "s_a": _normal_at(45.0), "s_b": _normal_at(45.0)}
+    bevels = (_strip("s_a", ["top"], ["s_b"]), _strip("s_b", ["s_a"], ["wall"]))
+    by_patch = {
+        str(r.patch_id): r
+        for r in build_filter_snapshot(*_fake(normals, bevels=bevels), FilterOptions(world_up=UP)).patch_classes
+    }
+
+    assert by_patch["s_a"].patch_class is PatchClass.HORIZONTAL
+    assert by_patch["s_b"].patch_class is PatchClass.VERTICAL
+    assert by_patch["s_b"].rule is PatchClassRule.BEVEL_STRIP_BY_RAIL_NEIGHBOURS
 
 
 def test_a_patch_whose_face_normals_cancel_has_no_usable_normal() -> None:

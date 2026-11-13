@@ -9,14 +9,16 @@ Rules:
 - write_quilt_uvs (plan Slice AH) lays the quilts: it writes the same pins,
   sets the seam flags of the solved faces' edges to exactly the UV cut set
   of the solve (so each quilt is one chart), runs Blender's conformal unwrap
-  on the solved faces and restores every seam flag and the selection in a
-  finally block. The user's seams are never changed. From Object Mode it
-  takes only the target object into Edit Mode (the unwrap operator needs
-  Edit Mode and unwraps every object in it), writes the pins there and
-  returns, restoring the object selection and the active object also when
-  the unwrap fails; from Edit Mode it calls no mode_set, and it refuses
-  before changing anything when another object is in Edit Mode with the
-  target. No other object's UVs change.
+  on the solved faces and restores every seam flag and the vertex, edge and
+  face selection in a finally block. The user's seams are never changed.
+  From Object Mode it takes only the target object into Edit Mode (the
+  unwrap operator needs Edit Mode and unwraps every object in it), writes
+  the pins there and returns, restoring the object selection, the active
+  object and the mesh's selection flags (saved before Edit Mode, which
+  flushes them) also when the unwrap fails; from Edit Mode it calls no
+  mode_set. It refuses before changing anything when the target is not
+  visible or a solved face is hidden (the unwrap skips both), or another
+  object is in Edit Mode. No other object's UVs change.
 - After the unwrap, write_quilt_uvs restores the layout's scale of every
   chart (a connected set of solved faces under the cut set) that has fewer
   than two distinct pinned UV positions: Blender gives such a chart a scale
@@ -135,17 +137,33 @@ def write_quilt_uvs(blender_context: Any, result: SolveResult) -> dict[str, Any]
         raise ValueError("Active object is not a mesh; select the mesh and retry.")
     mesh = mesh_object.data
     view_layer = bpy.context.view_layer
+    if not mesh_object.visible_get():
+        # The unwrap operator skips an object that is not visible.
+        raise RuntimeError(f"the target object is hidden; unhide it and retry: {mesh_object.name}")
     started_in_edit = mesh_object.mode == "EDIT"
+    others = sorted(o.name for o in view_layer.objects if o != mesh_object and o.mode == "EDIT")
+    if others:
+        raise RuntimeError(
+            "other objects are in Edit Mode and the unwrap would change their UVs too; "
+            f"leave Edit Mode on them and retry: {', '.join(others[:5])}"
+        )
+    solved = {int(face_id[1:]) for face_id in result.patch_by_source_face}
     if started_in_edit:
-        others = sorted(o.name for o in view_layer.objects if o != mesh_object and o.mode == "EDIT")
-        if others:
-            raise RuntimeError(
-                "other objects are in Edit Mode with the target and the unwrap would change their UVs too; "
-                f"leave Edit Mode on them and retry: {', '.join(others[:5])}"
-            )
+        face_hidden = [face.hide for face in bmesh.from_edit_mesh(mesh).faces]
+    else:
+        face_hidden = [polygon.hide for polygon in mesh.polygons]
+    hidden = sum(1 for index, hide in enumerate(face_hidden) if hide and index in solved)
+    if hidden:
+        # The unwrap skips hidden faces, so their charts would not be laid as one.
+        raise RuntimeError(f"{hidden} solved faces are hidden; reveal them and retry")
     previous_active = view_layer.objects.active
     previous_selected = [o for o in view_layer.objects if o.select_get()]
+    element_selection = None
     if not started_in_edit:
+        # Entering Edit Mode flushes the selection, so the flags are saved here.
+        element_selection = [
+            _select_flags(items) for items in (mesh.vertices, mesh.edges, mesh.polygons)
+        ]
         # Only the target enters Edit Mode, so the unwrap sees no other object.
         for other in previous_selected:
             other.select_set(False)
@@ -161,6 +179,9 @@ def write_quilt_uvs(blender_context: Any, result: SolveResult) -> dict[str, Any]
         if not started_in_edit:
             if mesh_object.mode == "EDIT":
                 bpy.ops.object.mode_set(mode="OBJECT")
+            for items, flags in zip((mesh.vertices, mesh.edges, mesh.polygons), element_selection):
+                items.foreach_set("select", flags)
+            mesh.update()
             mesh_object.select_set(mesh_object in previous_selected)
             for other in previous_selected:
                 other.select_set(True)
@@ -199,9 +220,15 @@ def _unwrap_quilts(bpy: Any, bmesh: Any, mesh: Any, result: SolveResult) -> dict
         bm = bmesh.from_edit_mesh(mesh)
         for edge, seam in zip(bm.edges, seams):
             edge.seam = seam
+        # bmesh's select flushes to shared elements: clear everything, then set
+        # only the True flags, vertices, then edges, then faces.
+        for items in (bm.verts, bm.edges, bm.faces):
+            for item in items:
+                item.select = False
         for items, flags in zip((bm.verts, bm.edges, bm.faces), selection):
             for item, flag in zip(items, flags):
-                item.select = flag
+                if flag:
+                    item.select = True
         bmesh.update_edit_mesh(mesh)
         restored = sum(1 for edge, seam in zip(bm.edges, seams) if edge.seam != seam)
     return {
@@ -300,6 +327,12 @@ def _rescale_loose_charts(bm: Any, solved: set[int], cut: frozenset[str]) -> dic
         "rescaled_scale_before": (min(before), max(before)) if before else None,
         "rescaled_scale_after": (min(after), max(after)) if after else None,
     }
+
+
+def _select_flags(items: Any) -> list[bool]:
+    flags = [False] * len(items)
+    items.foreach_get("select", flags)
+    return flags
 
 
 def _resolve_mesh_object(blender_context: Any) -> Any:

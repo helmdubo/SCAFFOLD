@@ -292,6 +292,7 @@ def _build_patch_geometry_facts(
             area=0.0,
             normal=(0.0, 0.0, 0.0),
             centroid=average(tuple(fallback_points)),
+            area_vector_length=0.0,
         )
 
     return PatchGeometryFacts(
@@ -299,6 +300,7 @@ def _build_patch_geometry_facts(
         area=total_area,
         normal=normalize(normal_accumulator),
         centroid=scale(centroid_accumulator, 1.0 / total_area),
+        area_vector_length=0.5 * length(normal_accumulator),  # the cross products are twice the areas
     )
 
 

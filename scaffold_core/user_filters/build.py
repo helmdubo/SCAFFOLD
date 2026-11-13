@@ -7,19 +7,20 @@ Rules:
   or -up, else VERTICAL. A bevel patch confirmed by the mark (Layer 4
   BevelInstance, ACCEPTED, SOURCE_MARK) takes its class by rule: a strip is
   HORIZONTAL when a rail neighbour that is not a bevel patch is HORIZONTAL
-  (a strip without rails, e.g. triangulated, reads every adjacent patch that
-  is not a bevel the same way, and only without those its own normal); a
+  (a strip without such a rail neighbour, e.g. triangulated with no rails or
+  with only bevel patches on its rails, reads every adjacent patch that is
+  not a bevel the same way, and only without those its own normal); a
   junction takes the majority class of the strips it joins (a tie is
   HORIZONTAL, like a strip beside a horizontal surface).
-- A patch whose face area vectors cancel (DEGENERATE_NORMAL_RATIO, relative
-  to its total face area) has no usable normal and is classed VERTICAL with
-  a diagnostic.
+- A patch whose face area vectors cancel (DEGENERATE_NORMAL_RATIO: the
+  Layer 2 area_vector_length relative to the Layer 2 area) has no usable
+  normal and is classed VERTICAL with a diagnostic.
 - world_up is a direction in the mesh's own space (Layer 0 vertex positions).
 - Output: one SeamDirective per Chain shared by two different patches where
   the filter has something to say: SPLIT when their classes differ, JOIN
   when they agree and one of them is a bevel patch by mark. Every other seam
   is left to the structure.
-- Reads Layers 0-4 read-only and never imports Layer 5. The class depends
+- Reads Layers 1-4 read-only and never imports Layer 5. The class depends
   only on the angle between a normal and the up line, so rotating the mesh
   and the up vector together changes nothing.
 """
@@ -29,7 +30,7 @@ from __future__ import annotations
 from math import acos, degrees
 
 from scaffold_core.core.diagnostics import Diagnostic, DiagnosticSeverity
-from scaffold_core.layer_2_geometry.measures import EPSILON, add, cross, dot, length, normalize, subtract
+from scaffold_core.layer_2_geometry.measures import EPSILON, dot, length, normalize
 from scaffold_core.layer_4_features.model import (
     BevelEvidenceSource,
     FeatureInstanceStatus,
@@ -48,14 +49,8 @@ from scaffold_core.user_filters.model import (
 )
 
 
-def build_filter_snapshot(
-    topology, geometry, relations, features, options: FilterOptions, source=None
-) -> FilterSnapshot:
-    """Patch classes and seam directives; an empty snapshot when options.world_up is None.
-
-    source is the Layer 0 snapshot for the degenerate-normal rule; without it
-    only a zero Layer 2 normal counts as degenerate.
-    """
+def build_filter_snapshot(topology, geometry, relations, features, options: FilterOptions) -> FilterSnapshot:
+    """Patch classes and seam directives; an empty snapshot when options.world_up is None."""
 
     if options.world_up is None:
         return FilterSnapshot(options=options)
@@ -66,7 +61,7 @@ def build_filter_snapshot(
     strips, junctions = _bevels_by_mark(features)
     bevel_ids = set(strips) | set(junctions)
     angle_by_patch = {
-        str(patch_id): _angle_to_up(geometry, patch_id, up, topology, source) for patch_id in topology.patches
+        str(patch_id): _angle_to_up(geometry, patch_id, up) for patch_id in topology.patches
     }
 
     def by_normal(patch_id: str) -> PatchClass:
@@ -97,7 +92,7 @@ def build_filter_snapshot(
             if str(neighbour) in records and str(neighbour) not in bevel_ids
         }
         rule = PatchClassRule.BEVEL_STRIP_BY_RAIL_NEIGHBOURS
-        if not surfaces:  # no ladder reading (e.g. triangulated): every adjacent patch that is not a bevel
+        if not surfaces:  # no rail neighbour that is not a bevel: every adjacent patch that is not a bevel
             surfaces = (_adjacent_patch_ids(relations, patch_id) - bevel_ids) & set(records)
             rule = PatchClassRule.BEVEL_STRIP_BY_ADJACENT_PATCHES
         if surfaces:
@@ -205,42 +200,27 @@ def _adjacent_patch_ids(relations, patch_id: str) -> set[str]:
 
 
 # A patch has no usable normal when its face area vectors cancel: the length
-# of their sum is at most this fraction of the sum of their lengths (a closed
-# or folded surface such as a band around a cross; a half cylinder keeps
-# about 0.64). Relative, so it does not depend on the mesh's size.
+# of their sum (Layer 2 area_vector_length) is at most this fraction of the
+# patch's area, the sum of its triangle areas (a closed or folded surface
+# such as a band around a cross; a half cylinder keeps about 0.64).
+# Relative, so it does not depend on the mesh's size.
 DEGENERATE_NORMAL_RATIO = 1e-3
 
 
-def _angle_to_up(geometry, patch_id, up, topology=None, source=None) -> float | None:
+def _angle_to_up(geometry, patch_id, up) -> float | None:
     """Degrees between the Layer 2 patch normal and the up line (0 = facing up or down).
 
-    None when the normal is not usable: a zero Layer 2 normal, or, with the
-    Layer 0 source, face area vectors that cancel (DEGENERATE_NORMAL_RATIO).
+    None when the normal is not usable: a zero Layer 2 normal, or face area
+    vectors that cancel (DEGENERATE_NORMAL_RATIO).
     """
 
     facts = geometry.patch_facts.get(patch_id)
     if facts is None or length(facts.normal) <= EPSILON:
         return None
-    if source is not None and _normal_ratio(topology, source, patch_id) <= DEGENERATE_NORMAL_RATIO:
+    if facts.area <= 0.0 or facts.area_vector_length / facts.area <= DEGENERATE_NORMAL_RATIO:
         return None
     cosine = min(1.0, abs(dot(normalize(facts.normal), up)))
     return degrees(acos(cosine))
-
-
-def _normal_ratio(topology, source, patch_id) -> float:
-    """|sum of the patch's face area vectors| / sum of their lengths (1 = flat, 0 = they cancel)."""
-
-    total = (0.0, 0.0, 0.0)
-    lengths = 0.0
-    for face_id in topology.patches[patch_id].source_face_ids:
-        points = [source.vertices[vertex_id].position for vertex_id in source.faces[face_id].vertex_ids]
-        face_vector = (0.0, 0.0, 0.0)
-        for index in range(1, len(points) - 1):  # the face fan, as Layer 2 measures it
-            edge_a, edge_b = subtract(points[index], points[0]), subtract(points[index + 1], points[0])
-            face_vector = add(face_vector, cross(edge_a, edge_b))
-        total = add(total, face_vector)
-        lengths += length(face_vector)
-    return length(total) / lengths if lengths > 0.0 else 0.0
 
 
 def _diagnostic(code: str, message: str, patch_id: str, severity=DiagnosticSeverity.WARNING) -> Diagnostic:

@@ -256,6 +256,36 @@ def test_join_seams_enter_the_tree_after_every_other_seam_longest_first() -> Non
     assert edge_counts != sorted(edge_counts, reverse=True)  # the edge count would order them otherwise
 
 
+@pytest.mark.parametrize("factor", (0.001, 1000.0))
+def test_the_join_order_and_the_stitch_decisions_do_not_depend_on_the_mesh_scale(factor: float) -> None:
+    # g_short's joined seams order by 3D length; an absolute rounding of the
+    # length changed 8 stitched seams at scale 0.001. Pins and the tree order
+    # of the other seams still move with the scale (Layer 2's absolute
+    # EPSILON drops the 6e-8 wide f30 to a zero normal at 0.001), so only the
+    # stitch decisions and the order of the joined seams are compared.
+    source = load_source_snapshot(DATA / "bevel_cases" / "g_short.capture.json")
+    scaled = replace(source, vertices={
+        key: replace(vertex, position=tuple(value * factor for value in vertex.position))
+        for key, vertex in source.vertices.items()
+    })
+
+    def decisions(src):
+        context = run_pass_3_filters(run_pass_2_features(run_pass_1_relations(run_pass_0(src))), FilterOptions(UP))
+        joins = {str(d.chain_id) for d in context.filter_snapshot.directives if d.kind is SeamDirectiveKind.JOIN}
+        solve = run_skeleton_solve(context)
+        return (
+            {(d.chain_id, d.first_patch_id, d.second_patch_id, d.accepted) for d in solve.assembly.decisions},
+            [d.chain_id for d in solve.assembly.decisions if d.chain_id in joins],
+        )
+
+    plain_set, plain_joins = decisions(source)
+    scaled_set, scaled_joins = decisions(scaled)
+
+    assert len(plain_joins) > 2
+    assert scaled_set == plain_set
+    assert scaled_joins == plain_joins
+
+
 def test_a_ladder_patch_with_a_join_lies_in_its_quilt_and_its_other_seams_are_the_structures() -> None:
     # Only one JOIN, f34|f110: the other ladder patches stay alone, f34 lies
     # with f110 and its seams without a directive go to the structure.
