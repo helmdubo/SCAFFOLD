@@ -11,7 +11,8 @@ Usage:
   blender -b reference.blend --python write_scaffold_layer.py -- \
       --objects Arc,collumn --straighten Arc,collumn --out result.blend
 
-Per object: Pass 0, Pass 1, Pass 2 (Straighten Strips on for --straighten),
+Per object: Pass 0, Pass 1, Pass 2 (Straighten Strips on for --straighten;
+Straighten Bevel Strips on unless --no-bevel-strips),
 the skeleton solve, pins written to a new UV layer "Scaffold", then Blender's
 conformal unwrap fills the rest (pins are respected). The layer is scaled by
 --scale (default 0.25, the reference's UV units per metre) so both layers have
@@ -50,6 +51,7 @@ def main() -> int:
     parser.add_argument("--out", required=True)
     parser.add_argument("--scale", type=float, default=0.25)
     parser.add_argument("--no-unwrap", action="store_true")
+    parser.add_argument("--no-bevel-strips", action="store_true", help="Pass 2 with straighten_bevel_strips off")
     args = parser.parse_args(argv)
     straighten = {name for name in args.straighten.split(",") if name}
 
@@ -75,7 +77,9 @@ def _write_object(obj, straighten_strips: bool, args) -> str:
 
     source = read_source_mesh_from_blender(SimpleNamespace(object=obj))
     context = run_pass_1_relations(run_pass_0(source))
-    context = run_pass_2_features(context, FeatureOptions(straighten_strips=straighten_strips))
+    context = run_pass_2_features(context, FeatureOptions(
+        straighten_strips=straighten_strips, straighten_bevel_strips=not args.no_bevel_strips,
+    ))
     solve = run_skeleton_solve(context)
 
     mesh = obj.data

@@ -116,4 +116,6 @@ class GeometryFactSnapshot:
     vertex_facts: Mapping[VertexId, VertexGeometryFacts] = field(default_factory=dict)
     local_face_fan_facts: Mapping[str, LocalFaceFanGeometryFacts] = field(default_factory=dict)
     patch_chain_facts: Mapping[PatchChainId, PatchChainGeometryFacts] = field(default_factory=dict)
+    # 3D length of every source edge of the model's faces (chain or interior edge alike).
+    edge_length_by_source_edge: Mapping[SourceEdgeId, float] = field(default_factory=dict)
     diagnostics: tuple[Diagnostic, ...] = ()

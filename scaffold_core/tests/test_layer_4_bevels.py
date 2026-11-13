@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from dev.tools.scaffold_graph_debug.snapshot_io import load_source_snapshot
+from scaffold_core.layer_4_features import bevels as feature_bevels
 from scaffold_core.layer_4_features import build as feature_build
 from scaffold_core.layer_4_features.model import (
     BevelCornerKind,
@@ -128,10 +129,10 @@ def test_by_mark_strips_and_junctions_are_the_ground_truth_patches(name) -> None
     assert all(record.source is BevelEvidenceSource.SOURCE_MARK for record in context.feature_snapshot.bevels)
     unresolved = [record for record in strips.values() if record.reading_index is None]
     assert len(unresolved) == UNRESOLVED_BY_MARK.get(name, 0)
-    diagnostics = [d for d in context.feature_snapshot.diagnostics if d.code == feature_build.BEVEL_UNRESOLVED_CODE]
+    diagnostics = [d for d in context.feature_snapshot.diagnostics if d.code == feature_bevels.BEVEL_UNRESOLVED_CODE]
     assert sorted(d.entity_ids[0] for d in diagnostics) == sorted(str(record.patch_id) for record in unresolved)
     if name in UNRESOLVED_BY_MARK:
-        assert {d.evidence["reason"] for d in diagnostics} == {feature_build.UNRESOLVED_NO_LADDER}
+        assert {d.evidence["reason"] for d in diagnostics} == {feature_bevels.UNRESOLVED_NO_LADDER}
         assert not any(
             record.patch_id == relation.patch_id
             for record in unresolved
@@ -253,6 +254,45 @@ def test_by_structure_on_the_non_bevel_captures_finds_nothing(path) -> None:
 # --------------------------------------------------------------------------- corner kind
 
 
+def test_rule_b_reads_a_marked_ladder_patch_as_a_ladder() -> None:
+    """Rule B decides only unmarked patches; a marked ladder patch takes part in its state as a ladder."""
+
+    unmarked, _truth = _case("a_cube_s1", marks=False)
+    kept = "patch:seed:f10"  # one bevel strip keeps its mark, every other face is unmarked
+    source = load_source_snapshot(BEVEL_CASES / "a_cube_s1.capture.json")
+    marked_faces = set(unmarked.topology_snapshot.patches[kept].source_face_ids)
+    source = replace(source, faces={
+        key: face if key in marked_faces else replace(face, face_strength=None) for key, face in source.faces.items()
+    })
+    context = _run(source)
+    records = {str(r.patch_id): r for r in context.feature_snapshot.bevels}
+    before = {str(r.patch_id): r for r in unmarked.feature_snapshot.bevels}
+    assert set(records) == set(before)
+    # Every unmarked patch, the junctions at both ends of the marked strip
+    # included, is decided by structure exactly as on the fully unmarked mesh:
+    # Rule B reads the marked strip as a decided ladder. Only a junction's
+    # contact with the marked strip names no strip end (see below).
+    def without_end_on_kept(record):
+        return replace(record, joined_strips=tuple(
+            replace(c, strip_end=None) if str(c.strip_patch_id) == kept else c for c in record.joined_strips
+        ))
+
+    touching = 0
+    for patch_id, record in records.items():
+        if patch_id != kept:
+            assert record == without_end_on_kept(before[patch_id]), patch_id
+            touching += any(str(c.strip_patch_id) == kept for c in record.joined_strips)
+    assert touching == 2  # the junctions at its two ends
+    junctions = {p for p, r in records.items() if r.kind is FeatureKind.BEVEL_JUNCTION}
+    assert len(junctions) == 8 and all(records[p].source is BevelEvidenceSource.STRUCTURE for p in junctions)
+    # The marked strip is Rule A's: a strip by mark. Its ends lie on unmarked
+    # patches, so the mark picks no reading (no ladder constraint for it).
+    strip = records[kept]
+    assert strip.kind is FeatureKind.BEVEL_STRIP and strip.status is FeatureInstanceStatus.ACCEPTED
+    assert strip.source is BevelEvidenceSource.SOURCE_MARK and strip.reading_index is None
+    assert before[kept].source is BevelEvidenceSource.STRUCTURE and before[kept].reading_index is not None
+
+
 @pytest.mark.parametrize("name", ("a_cube_s1", "a_cube_s3", "g_short", "u_rounded_wall_noise_top"))
 def test_corner_kind_of_cube_prism_and_user_strips(name) -> None:
     context, _truth = _case(name)
@@ -319,7 +359,7 @@ def test_strong_marks_are_authoritative_and_stop_the_structural_rule() -> None:
     # but not once every face carries the STRONG mark.
     source = make_quad_between_two_surfaces_source(junction_touches_surface=False)
     assert _accepted(_run(source), FeatureKind.BEVEL_STRIP)
-    strong = replace(source, faces={k: replace(f, face_strength=feature_build.SourceFaceStrength.STRONG)
+    strong = replace(source, faces={k: replace(f, face_strength=feature_bevels.SourceFaceStrength.STRONG)
                                     for k, f in source.faces.items()})
     assert _run(strong).feature_snapshot.bevels == ()
 
@@ -330,8 +370,11 @@ def test_a_marked_quad_with_bevel_faces_across_the_rails_of_both_readings_fits_n
     context = _run(make_quad_with_bevel_faces_on_both_readings_rails_source())
     record = _accepted(context, FeatureKind.BEVEL_STRIP)["patch:seed:f0"]
     assert record.reading_index is None
-    (diagnostic,) = [d for d in context.feature_snapshot.diagnostics if d.entity_ids == ("patch:seed:f0",)]
-    assert diagnostic.evidence["reason"] == feature_build.UNRESOLVED_NO_READING_FITS_MARKS
+    (diagnostic,) = [
+        d for d in context.feature_snapshot.diagnostics
+        if d.entity_ids == ("patch:seed:f0",) and d.code == feature_bevels.BEVEL_UNRESOLVED_CODE
+    ]
+    assert diagnostic.evidence["reason"] == feature_bevels.UNRESOLVED_NO_READING_FITS_MARKS
     # A junction across an end of an unresolved strip: the contact has no end.
     for junction_id in ("patch:seed:f1", "patch:seed:f2"):
         (contact,) = _accepted(context, FeatureKind.BEVEL_JUNCTION)[junction_id].joined_strips
@@ -342,14 +385,18 @@ def test_a_marked_strip_with_two_fitting_readings_is_accepted_unresolved() -> No
     context = _run(make_single_quad_source())
     (record,) = context.feature_snapshot.bevels
     assert record.status is FeatureInstanceStatus.ACCEPTED and record.reading_index is None
-    (diagnostic,) = context.feature_snapshot.diagnostics
+    diagnostic, not_laid = context.feature_snapshot.diagnostics
     assert diagnostic.entity_ids == ("patch:seed:f0",)
-    assert diagnostic.evidence["reason"] == feature_build.UNRESOLVED_TWO_READINGS_FIT_MARKS
+    assert diagnostic.evidence["reason"] == feature_bevels.UNRESOLVED_TWO_READINGS_FIT_MARKS
+    # Without a chosen reading the strip is not laid from its ladder.
+    assert not_laid.code == feature_bevels.LADDER_NOT_LAID_CODE
+    assert not_laid.evidence["reason"] == feature_bevels.NOT_LAID_NO_READING
+    assert context.feature_snapshot.constraints == ()
 
 
 def _fixpoint(context):
-    mesh = feature_build._BevelMesh(context.topology_snapshot, context.relation_snapshot, context.source_snapshot)
-    return mesh, feature_build.rule_b_fixpoint(mesh, list(mesh.patch_ids))
+    mesh = feature_bevels._BevelMesh(context.topology_snapshot, context.relation_snapshot, context.source_snapshot)
+    return mesh, feature_bevels.rule_b_fixpoint(mesh, list(mesh.patch_ids))
 
 
 @pytest.mark.parametrize("top", (False, True), ids=("F2_border_on_top", "triangle_on_top"))
@@ -527,7 +574,7 @@ def test_a_prism_of_quad_columns_between_two_ngon_caps_is_no_bevel() -> None:
     source = make_capped_prism_source(6)
     context = _run(source)
     assert context.feature_snapshot.bevels == ()
-    mesh = feature_build._BevelMesh(context.topology_snapshot, context.relation_snapshot, source)
+    mesh = feature_bevels._BevelMesh(context.topology_snapshot, context.relation_snapshot, source)
     assert len(mesh.ladders) == 6
     for patch_id, relation in mesh.ladders.items():
         assert any(
@@ -578,27 +625,54 @@ def test_layer_5_does_not_read_the_bevel_records() -> None:
     assert context.feature_snapshot.bevels
     without = replace(context, feature_snapshot=replace(context.feature_snapshot, bevels=(), diagnostics=()))
     assert run_skeleton_solve(context) == run_skeleton_solve(without)
+    # The constraints are the channel: without them the ladder layout is gone.
+    no_constraints = replace(without, feature_snapshot=replace(without.feature_snapshot, constraints=()))
+    assert run_skeleton_solve(no_constraints) != run_skeleton_solve(context)
 
 
 @pytest.mark.parametrize("straighten", (False, True))
-def test_pass_2_emits_no_constraint_for_a_bevel(straighten) -> None:
+def test_pass_2_emits_no_bevel_constraint_with_the_bevel_option_off(straighten) -> None:
     for name in ("u_rounded_wall_noise_top", "a_cube_s3", "c_arch_s2"):
         for marks in (True, False):
             context, _truth = _case(name, marks=marks)
-            options = FeatureOptions(straighten_strips=straighten)
+            options = FeatureOptions(straighten_strips=straighten, straighten_bevel_strips=False)
             features = run_pass_2_features(context, options).feature_snapshot
             strip_only = feature_build.build_feature_snapshot(
                 context.topology_snapshot, context.geometry_facts, context.relation_snapshot, options
             )
             assert features.constraints == strip_only.constraints
             assert all(c.kind is FeatureConstraintKind.STRAIGHT_STRIP for c in features.constraints)
+            # Paired positive: with the option on, the marked cases get ladder constraints.
+            on = run_pass_2_features(context, replace(options, straighten_bevel_strips=True)).feature_snapshot
+            ladders = [c for c in on.constraints if c.kind is FeatureConstraintKind.STRAIGHT_LADDER]
+            assert bool(ladders) == marks
 
 
 def test_bevel_rule_reads_no_geometry_world_axis_or_layer_5() -> None:
-    text = inspect.getsource(feature_build)
+    text = inspect.getsource(feature_bevels)
     bevel_part = text[text.index("# ---------------------------------------------------------------- BEVEL rule"):]
     for word in ("geometry", "position", "normal", "length", "chain_facts", "patch_facts", "WORLD", "uv", "island", "layer_5"):
         assert re.search(rf"\b{word}\b", bevel_part) is None, word
+
+
+# A read of a raw position: an attribute named position or *_position, the
+# vertex table of a snapshot, or a Blender coordinate.
+POSITION_READS = (r"\.position\b", r"\w+_position\b", r"\.vertices\b", r"\.co\b")
+
+
+def test_layer_4_reads_no_raw_position_anywhere() -> None:
+    """Lengths are Layer 2 facts (G0 DD-03): no module of layer_4_features reads a vertex position."""
+
+    package = Path(feature_build.__file__).parent
+    modules = sorted(package.glob("*.py"))
+    assert {path.name for path in modules} >= {"build.py", "bevels.py", "model.py"}
+    for path in modules:
+        text = path.read_text(encoding="utf-8")
+        for pattern in POSITION_READS:
+            assert re.search(pattern, text) is None, (path.name, pattern)
+    # Paired positive: the guard sees a position read where there is one (Layer 2 builds them).
+    layer_2 = (package.parent / "layer_2_geometry" / "build.py").read_text(encoding="utf-8")
+    assert re.search(POSITION_READS[0], layer_2) and re.search(POSITION_READS[2], layer_2)
 
 
 def test_inspection_counts_bevels_by_kind_source_and_status() -> None:
@@ -620,13 +694,13 @@ def test_inspection_counts_bevels_by_kind_source_and_status() -> None:
 def _contact_order(context, junction_id, strips):
     """The strips met along the junction's boundary loops, in loop order (each use walked its way)."""
 
-    mesh = feature_build._BevelMesh(context.topology_snapshot, context.relation_snapshot, context.source_snapshot)
+    mesh = feature_bevels._BevelMesh(context.topology_snapshot, context.relation_snapshot, context.source_snapshot)
     order = []
     for loop_edges in mesh.loop_edges(junction_id):
         met = []
         for edge_id in loop_edges:
             kind, other = mesh.across(junction_id, edge_id)
-            if kind == feature_build.ACROSS_PATCH and other in strips and (not met or met[-1] != other):
+            if kind == feature_bevels.ACROSS_PATCH and other in strips and (not met or met[-1] != other):
                 met.append(other)
         if len(met) > 1 and met[0] == met[-1]:
             met.pop()

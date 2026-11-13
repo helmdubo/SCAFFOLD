@@ -12,10 +12,10 @@ Usage:
   blender -b scene.blend --python write_debug_scene.py -- \
       --objects Arc,collumn --straighten Arc --out debug.blend \
       [--render-dir pngs --render Arc,collumn --facade Main_wall --line-thickness 4]
-      [--sets patches_chains,bevels_ladders,face_mark]
+      [--sets patches_chains,bevels_ladders,face_mark] [--no-bevel-strips]
 
-Per object: Pass 0, 1, 2 (Straighten Strips on for --straighten), the skeleton
-solve, the overlay with the panel's default layer visibility and line
+Per object: Pass 0, 1, 2 (Straighten Strips on for --straighten; Straighten
+Bevel Strips on unless --no-bevel-strips), the skeleton solve, the overlay with the panel's default layer visibility and line
 thickness 1.0, then the source mesh is hidden like Analyze does, so the saved
 file opens on the overlay. After the copy is saved, --render writes Workbench
 PNGs of layer sets per named object from an oblique view (by default three:
@@ -57,6 +57,7 @@ RENDER_SETS = {
         "Scaffold_Islands_UNFOLDED",
         "Scaffold_Islands_FRAME_FREE",
         "Scaffold_Islands_STRIP",
+        "Scaffold_Islands_LADDER",
         "Scaffold_Skeleton_Lines",
         "Scaffold_Seams",
     ),
@@ -96,6 +97,7 @@ def main() -> int:
     parser.add_argument("--line-thickness", type=float, default=1.0)
     parser.add_argument("--width", type=int, default=1200)
     parser.add_argument("--sets", default=",".join(DEFAULT_RENDER_SETS))
+    parser.add_argument("--no-bevel-strips", action="store_true", help="Pass 2 with straighten_bevel_strips off")
     args = parser.parse_args(argv)
     straighten = {name for name in args.straighten.split(",") if name}
     default_visibility = {spec.layer: spec.default for spec in LAYER_SPECS}
@@ -109,7 +111,8 @@ def main() -> int:
         if obj.mode != "OBJECT":
             bpy.ops.object.mode_set(mode="OBJECT")
         payload = build_payload(
-            SimpleNamespace(object=obj), straighten_strips=name in straighten, object_name=name, capture=False
+            SimpleNamespace(object=obj), straighten_strips=name in straighten, object_name=name, capture=False,
+            straighten_bevel_strips=not args.no_bevel_strips,
         )
         counts = render_debug_overlay(obj, payload, default_visibility, show_labels=False)
         write_report_text(name, payload["report"])

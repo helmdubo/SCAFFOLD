@@ -43,6 +43,16 @@ Works with legacy Grease Pencil (Blender 4.1 / 4.2) and Grease Pencil v3
 Analyze             toggle: build the overlay and hide the mesh / remove it and restore the mesh
 Rebuild             rerun the pipeline and redraw every layer
 Straighten Strips   Pass 2 option; applies on the next Rebuild (and on Write UV)
+Straighten Bevel Strips
+                    Pass 2 option, on by default: every bevel strip marked by Face
+                    Strength is laid from its ladder as a straight island of its own
+                    (STRAIGHT_LADDER); applies on the next Rebuild (and on Write UV).
+                    Limit: a triangulated bevel strip has no ladder reading, and
+                    with straight long sides Straighten Strips does not take it
+                    either, so it gets no layout and stays stitched into the main
+                    island, which then has no rigid frame (h_rect_s2_tri with
+                    Straighten Strips: 36 pins against 72 before Slice AF, the
+                    same as with Straighten Strips off)
 Structure / Skeleton / Patches: sides and types / Layer 3 (detail) / Ladders / Bevels
                     collapsible groups, one eye toggle per layer, legend underneath
 Write UV (G5a)      unchanged
@@ -83,7 +93,10 @@ faces by source face mark when the mesh has Blender's Face Strength
 attribute; when there are bevel records, bevel strips by source (mark or
 structure) with the unresolved ones and their corner kinds (convex /
 concave / mixed / undefined), bevel junctions by source and bevel-marked
-patches that are not isolated, by reason; the number of chain strokes without an axis role; the number of
+patches that are not isolated, by reason; when there are STRAIGHT_LADDER
+constraints or marked bevel strips that got none, the bevel strips laid from
+their ladder (islands of frame LADDER of the constraints) and each strip not
+laid with its reason; the number of chain strokes without an axis role; the number of
 solver diagnostics.
 
 ## Layers
@@ -102,7 +115,7 @@ Group Skeleton:
 
 | Toggle | GP layer | Draws |
 | --- | --- | --- |
-| Islands: rigid frame / frame-free / strip | `Scaffold_Islands_UNFOLDED`, `_FRAME_FREE`, `_STRIP` | fill of every patch of an island, one colour per island, layer by the island's frame kind |
+| Islands: rigid frame / frame-free / strip / bevel strip | `Scaffold_Islands_UNFOLDED`, `_FRAME_FREE`, `_STRIP`, `_LADDER` | fill of every patch of an island, one colour per island, layer by the island's frame kind (bevel strip: a marked bevel strip laid from its ladder, frame LADDER) |
 | Lines | `Scaffold_Skeleton_Lines` | each island line (`line_by_run`): all its runs in one colour |
 | Nodes | `Scaffold_Skeleton_Nodes` | white 3D cross at every skeleton node |
 | Pins | `Scaffold_Pins` | small orange 3D cross at every pinned vertex occurrence of the solve |
@@ -114,7 +127,7 @@ Group Patches: sides and types:
 | --- | --- | --- |
 | Sides | `Scaffold_Patch_Sides` | one stroke per `PatchChainShapeRelation` piece: mint = surface line, blue = surface curve, orange = unresolved |
 | Corners | `Scaffold_Patch_Corners` | `RunCornerRelation` RIGHT and OTHER: green = right convex, magenta = right reflex, orange = other; STRAIGHT is not drawn. `RunBridgedCornerRelation` (a right corner turned over one bridge run): blue cross at the bridge run's midpoint |
-| Types: strip / strip (option off) / rectangle / four-sided / other | `Scaffold_Types_*` | patch fill by the Layer 4 verdict: accepted strip (straightened); suppressed "option off" (a strip the option would straighten); suppressed "already a rectangle"; suppressed "no bent opposite pair"; no candidate |
+| Types: strip / strip (option off) / rectangle / four-sided / other | `Scaffold_Types_*` | patch fill by the Layer 4 verdict: strip = accepted strip (straightened) or suppressed "laid from its bevel ladder" (a strip the bevel ladder lays instead); suppressed "option off" (a strip the option would straighten); suppressed "already a rectangle"; four-sided = suppressed "long sides are straight on the surface"; no candidate |
 
 Layer 4 grades the shape before it reads the option, so Rectangle, Four-sided
 and Other are the same with Straighten Strips on or off; only the strips the

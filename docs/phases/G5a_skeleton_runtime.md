@@ -2,8 +2,9 @@
 
 Phase start authorized by the user after artist validation of stage-1
 structure (rails/families/junctions/seam verdicts on real meshes).
-Layer 4 remains deferred: G5a runs FeatureConstraint-free (DD-18 allows
-optional constraints; the L4 grammar plugs in later without rework).
+Layer 4 v0 exists since plan Slice Y: G5a reads it only through
+FeatureConstraint (DD-18, DD-26): STRAIGHT_STRIP and, since plan Slice AF,
+STRAIGHT_LADDER.
 
 ## Consumed API (validated by tracer + overlay consumption)
 
@@ -51,6 +52,11 @@ skeleton.py  - selection-wide solve:
   (its runs and stitched hinges) and orders the pieces; the pieces are
   the island lines (plan Slice Q), Layer 5 checks them against the frame
   and never orders a line.
+
+frame_free.py - the consumer of right corners in islands without a rigid
+  frame (plan Slices X, AA, AD; split out of skeleton.py in Slice AF):
+  axis bipartition, line orientation by the corner turn law, bridge
+  vectors, the diagnostic for lines the corners never reach.
 
 axis_solve.py - the per-axis solve: components, equation groups, gauge,
   frame anchoring, residual tolerance and UNCONSTRAINED exclusion.
@@ -294,6 +300,19 @@ FeatureConstraint (Layer 4, user option `straighten_strips`) takes the
 strip layout instead of the rigid frame or the frame-free branch: frame
 value STRIP, opposite uses on one axis with equal length. With the option
 off nothing changes; the buildings baseline is identical.
+
+After Slice AF (2026-11) an island that is one patch with a STRAIGHT_LADDER
+FeatureConstraint (a bevel strip confirmed by a mark, G0 DD-54) is laid
+from the constraint alone: frame value LADDER, every boundary vertex
+occurrence pinned at the constraint's place, rail runs AXIS_A and end runs
+AXIS_B, no equation solved (residual 0), no stations. Invariants 1, 2, 4
+and 9 hold on such islands; 3, 5 and 7 do not apply (no stitched seam, no
+frame); 6 is not checked, as for STRIP (the axes come from the
+constraint); 8 adds nothing (every vertex is already pinned). Every seam
+of such a patch is refused in island assembly, which is provisional (see
+the plan). If a run end is not in the constraint the island keeps its
+normal layout with a diagnostic. The buildings baseline is identical (no
+marks there); the smoke tool runs Layer 4 only with --straighten-strips.
 
 After Slice Z (2026-11) pins are consistent and complete: on the 13
 buildings objects the framed pins that sat beyond drift from their frame

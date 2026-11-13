@@ -9,7 +9,8 @@ Rules:
   channel into Layer 5 solve (DD-18, DD-26).
 - No world axes, no H/V, no surface-role vocabulary.
 - Bevel records (BevelInstance) are evidence for later user-option filters;
-  they emit no constraint and Layer 5 never reads them.
+  Layer 5 never reads them. A marked bevel strip reaches the solve only
+  through its STRAIGHT_LADDER FeatureConstraint.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from scaffold_core.core.diagnostics import Diagnostic
-from scaffold_core.ids import BoundaryLoopId, ChainId, PatchChainId, PatchId
+from scaffold_core.ids import BoundaryLoopId, ChainId, PatchChainId, PatchId, SourceVertexId, VertexId
 
 
 class FeatureKind(str, Enum):
@@ -35,7 +36,8 @@ class FeatureInstanceStatus(str, Enum):
 class FeatureSuppressionReason(str, Enum):
     OPTION_OFF = "option off"
     ALREADY_RECTANGLE = "already a rectangle"
-    NO_BENT_OPPOSITE_PAIR = "no bent opposite pair"
+    LONG_SIDES_STRAIGHT = "long sides are straight on the surface"
+    LAID_AS_BEVEL_STRIP = "laid from its bevel ladder"
     BEVEL_STRIP_AND_JUNCTION_FACES = "strip and junction faces in one patch"
     BEVEL_NOT_ISOLATED = "bevel faces not isolated by seams"
 
@@ -72,13 +74,22 @@ class BevelStripEnd(str, Enum):
 
 class FeatureConstraintKind(str, Enum):
     STRAIGHT_STRIP = "STRAIGHT_STRIP"
+    STRAIGHT_LADDER = "STRAIGHT_LADDER"
 
 
 @dataclass(frozen=True)
 class FeatureOptions:
-    """User-facing feature switches; every feature is off by default."""
+    """User-facing feature switches.
+
+    straighten_strips (off by default) lays a STRIP whose long sides are
+    curved on the surface as a rectangle. straighten_bevel_strips (on by
+    default) lays every bevel strip confirmed by the Face Strength mark from
+    its ladder as a straight island of its own; it changes nothing on a mesh
+    without marks.
+    """
 
     straighten_strips: bool = False
+    straighten_bevel_strips: bool = True
 
 
 @dataclass(frozen=True)
@@ -89,7 +100,6 @@ class StripSide:
     chain_id: ChainId
     position_in_loop: int
     length: float  # 3D length of the Chain
-    is_bent: bool  # Chain length exceeds its chord by > 1%, or the Chain is closed
     is_surface_line: bool  # the use is one SURFACE_LINE piece (Layer 3)
 
 
@@ -117,12 +127,58 @@ class FeatureInstance:
 
 
 @dataclass(frozen=True)
+class LadderVertex:
+    """A boundary vertex of a ladder strip: its occurrence on the strip's side (the pin key) and its source vertex."""
+
+    vertex_id: VertexId
+    source_vertex_id: SourceVertexId
+
+
+@dataclass(frozen=True)
+class LadderProfileLine:
+    """Profile line i of a ladder strip, from its rail A vertex to its rail B vertex.
+
+    u is its position along the strip from end A. across lists, for the two
+    end lines only, the vertices between the rails with their fraction of the
+    width from rail A.
+    """
+
+    u: float
+    rail_a: LadderVertex
+    rail_b: LadderVertex
+    across: tuple[tuple[LadderVertex, float], ...] = ()
+
+
+@dataclass(frozen=True)
+class StraightLadder:
+    """The straight layout of a bevel strip in its own frame (u along, v across).
+
+    Rail A lies on v = 0 and rail B on v = width; profile line i lies at its
+    u, from u = 0 (end A) to u = length (end B). The uses name which runs lie
+    on which side.
+    """
+
+    width: float
+    length: float
+    profile_lines: tuple[LadderProfileLine, ...]
+    rail_a_patch_chain_ids: tuple[PatchChainId, ...]
+    rail_b_patch_chain_ids: tuple[PatchChainId, ...]
+    end_a_patch_chain_ids: tuple[PatchChainId, ...]
+    end_b_patch_chain_ids: tuple[PatchChainId, ...]
+
+
+@dataclass(frozen=True)
 class FeatureConstraint:
     """Self-contained solve requirement of an accepted instance.
 
     STRAIGHT_STRIP: the patch is laid as a rectangle. patch_chain_ids are the
     four uses in loop order; target_lengths[0] is the length of the opposite
     pair at loop positions 0 and 2, target_lengths[1] that of positions 1 and 3.
+
+    STRAIGHT_LADDER: a marked bevel strip is laid by itself as a straight
+    strip from its ladder (ladder holds every boundary vertex's place).
+    patch_chain_ids are the rail A, rail B, end A and end B uses in that
+    order; target_lengths are (length, width).
     """
 
     id: str
@@ -131,6 +187,7 @@ class FeatureConstraint:
     patch_id: PatchId
     patch_chain_ids: tuple[PatchChainId, ...]
     target_lengths: tuple[float, float]
+    ladder: StraightLadder | None = None
 
 
 @dataclass(frozen=True)

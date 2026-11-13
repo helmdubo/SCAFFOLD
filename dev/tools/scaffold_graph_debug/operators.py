@@ -74,6 +74,14 @@ class SCAFFOLDGRAPH_Settings(bpy.types.PropertyGroup):
         description="Pass 2 option: lay accepted strip patches as rectangles (applies on Rebuild and Write UV)",
         default=False,
     )
+    straighten_bevel_strips: BoolProperty(
+        name="Straighten Bevel Strips",
+        description=(
+            "Pass 2 option: lay every bevel strip marked by Face Strength from its ladder as a straight "
+            "island of its own (applies on Rebuild and Write UV)"
+        ),
+        default=True,
+    )
     show_labels: BoolProperty(name="Labels", default=False, update=_on_visibility_changed)
     line_thickness: FloatProperty(
         name="Line thickness",
@@ -232,8 +240,10 @@ class SCAFFOLDGRAPH_OT_WriteUV(bpy.types.Operator):
             if not source.selected_face_ids:
                 self.report({"ERROR"}, "Select faces before writing UVs")
                 return {"CANCELLED"}
+            settings = context.scene.scaffold_graph_debug_settings
             options = FeatureOptions(
-                straighten_strips=bool(context.scene.scaffold_graph_debug_settings.straighten_strips)
+                straighten_strips=bool(settings.straighten_strips),
+                straighten_bevel_strips=bool(settings.straighten_bevel_strips),
             )
             result = run_skeleton_solve(run_pass_2_features(run_pass_1_relations(run_pass_0(source)), options))
             report = write_pinned_uvs(context, result)
@@ -278,7 +288,8 @@ class SCAFFOLDGRAPH_PT_Panel(bpy.types.Panel):
         )
         col.operator("scaffold_graph_debug.refresh", text="Rebuild", icon="FILE_REFRESH")
         col.prop(settings, "straighten_strips", toggle=True)
-        col.label(text="Straighten Strips applies on Rebuild")
+        col.prop(settings, "straighten_bevel_strips", toggle=True)
+        col.label(text="Straighten options apply on Rebuild")
         col.prop(settings, "line_thickness", slider=True)
         if settings.source_object:
             col.label(text=f"Source: {settings.source_object}")

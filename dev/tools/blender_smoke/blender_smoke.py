@@ -97,6 +97,11 @@ def _run_object(obj, args: argparse.Namespace) -> dict:
         if args.straighten_strips:
             # Layer 4 STRAIGHT_STRIP constraints applied as strip islands (absent without the flag)
             record["strip_islands"] = sum(1 for skeleton in solve.skeletons if skeleton.frame == "STRIP")
+            # STRAIGHT_LADDER constraints (marked bevel strips, option on by default) laid as LADDER islands
+            record["ladder_islands"] = sum(1 for skeleton in solve.skeletons if skeleton.frame == "LADDER")
+            record["bevel_ladder_constraints"] = sum(
+                1 for constraint in context.feature_snapshot.constraints if constraint.kind.value == "STRAIGHT_LADDER"
+            )
         if args.write_uv:
             record.update(_write_uv_metrics(obj, solve, source, args.selection))
     except Exception as error:  # report, never abort the batch

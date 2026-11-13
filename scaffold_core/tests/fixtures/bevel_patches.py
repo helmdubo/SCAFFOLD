@@ -5,7 +5,8 @@ Rules:
 - Small synthetic meshes for the Layer 4 bevel rule: an extruded corner
   profile with one bevel strip (convex or concave, marked or not, with or
   without seams), flat patch layouts and a capped prism for the structural
-  rule edges.
+  rule edges; a marked ladder strip of any rail shape, and a marked ring
+  cut by one seam, for the ladder constraint.
 - Seams are given as vertex pairs; Face Strength marks per face index.
 - No production logic here.
 """
@@ -290,3 +291,87 @@ def make_quad_pointed_both_ways_source() -> SourceMeshSnapshot:
     }
     seams = tuple({tuple(sorted((c[i], c[(i + 1) % len(c)]))) for c in faces for i in range(len(c))})
     return _mesh("quad_pointed_both_ways", positions, faces, tuple(sorted(seams)))
+
+
+def make_marked_ladder_strip_source(
+    rail_a: list[tuple[float, float, float]],
+    rail_b: list[tuple[float, float, float]],
+    across: list[tuple[float, float, float]] | None = None,
+) -> SourceMeshSnapshot:
+    """A MEDIUM strip of len(rail_a) - 1 columns between two STRONG surfaces, WEAK junctions at both ends.
+
+    Profile line i runs from rail_a[i] to rail_b[i]; across gives the inner
+    points of every profile line as offsets from rail_a[i] (a strip of
+    len(across) + 1 segments; default: one segment). The strip's faces wind
+    rail A -> rail B like (+x, +y) in the plane. One STRONG quad row lies
+    beyond each rail and one WEAK quad column beyond each end; every strip
+    boundary edge is a seam. Only the reading whose ends lie on the WEAK
+    junctions fits the marks.
+    """
+
+    columns = len(rail_a) - 1
+    inner = across or []
+    rows = len(inner) + 1
+
+    def add(a, b, s=1.0):
+        return tuple(x + s * y for x, y in zip(a, b))
+
+    positions: dict[str, tuple[float, float, float]] = {}
+    for i in range(columns + 1):
+        line = [rail_a[i]] + [add(rail_a[i], offset) for offset in inner] + [rail_b[i]]
+        for r, point in enumerate(line):
+            positions[f"p{i}_{r}"] = point
+        positions[f"oa{i}"] = add(rail_a[i], add(rail_a[i], line[1], -1.0))
+        positions[f"ob{i}"] = add(rail_b[i], add(rail_b[i], line[-2], -1.0))
+    for r in range(rows + 1):
+        positions[f"ea{r}"] = add(positions[f"p0_{r}"], add(positions[f"p0_{r}"], positions[f"p1_{r}"], -1.0))
+        last, before = positions[f"p{columns}_{r}"], positions[f"p{columns - 1}_{r}"]
+        positions[f"eb{r}"] = add(last, add(last, before, -1.0))
+    faces = []
+    strengths: dict[int, SourceFaceStrength] = {}
+    seams = []
+    for i in range(columns):
+        for r in range(rows):
+            strengths[len(faces)] = MEDIUM
+            faces.append((f"p{i}_{r}", f"p{i + 1}_{r}", f"p{i + 1}_{r + 1}", f"p{i}_{r + 1}"))
+        strengths[len(faces)] = STRONG
+        faces.append((f"oa{i}", f"oa{i + 1}", f"p{i + 1}_0", f"p{i}_0"))
+        strengths[len(faces)] = STRONG
+        faces.append((f"p{i}_{rows}", f"p{i + 1}_{rows}", f"ob{i + 1}", f"ob{i}"))
+        seams += [(f"p{i}_0", f"p{i + 1}_0"), (f"p{i}_{rows}", f"p{i + 1}_{rows}")]
+    for r in range(rows):
+        strengths[len(faces)] = WEAK
+        faces.append((f"ea{r}", f"p0_{r}", f"p0_{r + 1}", f"ea{r + 1}"))
+        strengths[len(faces)] = WEAK
+        faces.append((f"p{columns}_{r}", f"eb{r}", f"eb{r + 1}", f"p{columns}_{r + 1}"))
+        seams += [(f"p0_{r}", f"p0_{r + 1}"), (f"p{columns}_{r}", f"p{columns}_{r + 1}")]
+    return _mesh("marked_ladder_strip", positions, faces, tuple(seams), strengths)
+
+
+def make_marked_cut_ring_source(sides: int = 12) -> SourceMeshSnapshot:
+    """A flat MEDIUM ring between two STRONG rings, cut across by one seam.
+
+    Rings of radius 0.5, 1.0, 1.1 and 1.6 with sides vertices each; the
+    middle ring (1.0 to 1.1) is marked MEDIUM, the others STRONG. Both its
+    circles are seams, and so is the edge r1_0 - r2_0: the strip's two ends
+    are one SEAM_SELF Chain, so each end vertex has two occurrences.
+    """
+
+    radii = (0.5, 1.0, 1.1, 1.6)
+    positions = {
+        f"r{k}_{i}": (r * math.cos(2.0 * math.pi * i / sides), r * math.sin(2.0 * math.pi * i / sides), 0.0)
+        for k, r in enumerate(radii) for i in range(sides)
+    }
+    faces = []
+    strengths: dict[int, SourceFaceStrength] = {}
+    seams = []
+    for k in range(3):
+        for i in range(sides):
+            j = (i + 1) % sides
+            strengths[len(faces)] = MEDIUM if k == 1 else STRONG
+            faces.append((f"r{k}_{i}", f"r{k}_{j}", f"r{k + 1}_{j}", f"r{k + 1}_{i}"))
+    for i in range(sides):
+        j = (i + 1) % sides
+        seams += [(f"r1_{i}", f"r1_{j}"), (f"r2_{i}", f"r2_{j}")]
+    seams.append(("r1_0", "r2_0"))
+    return _mesh("marked_cut_ring", positions, faces, tuple(seams), strengths)

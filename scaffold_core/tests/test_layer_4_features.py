@@ -17,8 +17,8 @@ import pytest
 
 from scaffold_core.ids import ChainId, PatchChainId, PatchId
 from scaffold_core.layer_4_features.build import (
-    chain_is_bent,
     resolve_strip,
+    strip_long_pairs,
     strip_candidates,
     strip_needs_straightening,
 )
@@ -283,13 +283,12 @@ def test_strip_stitched_across_a_bent_side_is_not_applied_with_a_diagnostic() ->
 # ------------------------------------------------------------ Layer 4 units
 
 
-def _side(position, length, bent=False, line=True):
+def _side(position, length, line=True):
     return StripSide(
         patch_chain_id=PatchChainId(f"pc{position}"),
         chain_id=ChainId(f"c{position}"),
         position_in_loop=position,
         length=length,
-        is_bent=bent,
         is_surface_line=line,
     )
 
@@ -314,7 +313,6 @@ def test_cut_annulus_candidate_and_constraint_fields() -> None:
     )
     lengths = [side.length for side in candidate.sides]
     assert lengths == pytest.approx([1.0, 12.4233, 1.0, 6.2117], abs=1e-4)
-    assert [side.is_bent for side in candidate.sides] == [False, True, False, True]
     assert [side.is_surface_line for side in candidate.sides] == [True, False, True, False]
     assert candidate.sides[0].chain_id == candidate.sides[2].chain_id  # the two SEAM_SELF sides
     assert instance.candidate_id == candidate.id
@@ -325,21 +323,50 @@ def test_cut_annulus_candidate_and_constraint_fields() -> None:
 
 
 def test_resolver_reasons() -> None:
-    bent_arcs = _candidate(_side(0, 1.0), _side(1, 3.0, True, False), _side(2, 1.0), _side(3, 2.0, True, False))
-    accepted = resolve_strip(bent_arcs, ON)
+    curved_arcs = _candidate(_side(0, 1.0), _side(1, 3.0, False), _side(2, 1.0), _side(3, 2.0, False))
+    accepted = resolve_strip(curved_arcs, ON)
     assert accepted.status is FeatureInstanceStatus.ACCEPTED and accepted.suppression_reason is None
-    off = resolve_strip(bent_arcs, FeatureOptions())
+    off = resolve_strip(curved_arcs, FeatureOptions())
     assert off.status is FeatureInstanceStatus.SUPPRESSED
     assert off.suppression_reason is FeatureSuppressionReason.OPTION_OFF
-    rectangle = _candidate(_side(0, 1.0), _side(1, 3.0, True), _side(2, 1.0), _side(3, 3.0, True))
+    rectangle = _candidate(_side(0, 1.0), _side(1, 3.0), _side(2, 1.0), _side(3, 3.0))
     assert resolve_strip(rectangle, ON).suppression_reason is FeatureSuppressionReason.ALREADY_RECTANGLE
     trapezoid = _candidate(_side(0, 1.0), _side(1, 3.0), _side(2, 1.0), _side(3, 2.0))
-    assert resolve_strip(trapezoid, ON).suppression_reason is FeatureSuppressionReason.NO_BENT_OPPOSITE_PAIR
+    assert resolve_strip(trapezoid, ON).suppression_reason is FeatureSuppressionReason.LONG_SIDES_STRAIGHT
     # The option does not change the grade of a shape it would not accept.
     assert resolve_strip(rectangle, FeatureOptions()).suppression_reason is FeatureSuppressionReason.ALREADY_RECTANGLE
-    assert resolve_strip(trapezoid, FeatureOptions()).suppression_reason is FeatureSuppressionReason.NO_BENT_OPPOSITE_PAIR
-    one_bent = _candidate(_side(0, 1.0, True), _side(1, 3.0, True), _side(2, 1.0), _side(3, 2.0))
-    assert resolve_strip(one_bent, ON).suppression_reason is FeatureSuppressionReason.NO_BENT_OPPOSITE_PAIR
+    assert resolve_strip(trapezoid, FeatureOptions()).suppression_reason is FeatureSuppressionReason.LONG_SIDES_STRAIGHT
+    one_curved = _candidate(_side(0, 1.0), _side(1, 3.0, False), _side(2, 1.0), _side(3, 2.0))
+    assert resolve_strip(one_curved, ON).suppression_reason is FeatureSuppressionReason.LONG_SIDES_STRAIGHT
+
+
+def test_long_sides_curved_on_the_surface_decide_acceptance() -> None:
+    # Long pair curved on the surface -> accepted.
+    long_curved = _candidate(_side(0, 1.0), _side(1, 5.0, False), _side(2, 1.2), _side(3, 4.0, False))
+    assert strip_long_pairs(long_curved) == ((1, 3),)
+    assert resolve_strip(long_curved, ON).suppression_reason is None
+    # Long pair lines on the surface, short pair curved -> suppressed: a wall
+    # bent in 3D that develops without distortion is not a strip.
+    short_curved = _candidate(_side(0, 1.0, False), _side(1, 5.0), _side(2, 1.2, False), _side(3, 4.0))
+    assert resolve_strip(short_curved, ON).suppression_reason is FeatureSuppressionReason.LONG_SIDES_STRAIGHT
+    # One long side curved is not enough.
+    one_long_curved = _candidate(_side(0, 1.0), _side(1, 5.0, False), _side(2, 1.2), _side(3, 4.0))
+    assert resolve_strip(one_long_curved, ON).suppression_reason is FeatureSuppressionReason.LONG_SIDES_STRAIGHT
+    # Exact tie of the summed lengths: either pair may qualify.
+    tie_a = _candidate(_side(0, 2.0, False), _side(1, 3.0), _side(2, 2.0, False), _side(3, 1.0))
+    tie_b = _candidate(_side(0, 2.0), _side(1, 3.0, False), _side(2, 2.0), _side(3, 1.0, False))
+    assert strip_long_pairs(tie_a) == ((0, 2), (1, 3))
+    assert resolve_strip(tie_a, ON).suppression_reason is None
+    assert resolve_strip(tie_b, ON).suppression_reason is None
+    # The pair is chosen by the summed length, not by the longest single use.
+    by_sum = _candidate(_side(0, 4.5), _side(1, 2.0, False), _side(2, 0.4), _side(3, 2.95, False))
+    assert strip_long_pairs(by_sum) == ((1, 3),)
+    assert resolve_strip(by_sum, ON).suppression_reason is None
+    # A trapezoid with straight sides only is already graded by its sides.
+    trapezoid = _candidate(_side(0, 1.0), _side(1, 3.0), _side(2, 1.0), _side(3, 2.0))
+    assert resolve_strip(trapezoid, ON).suppression_reason is FeatureSuppressionReason.LONG_SIDES_STRAIGHT
+    # Bending in 3D is no longer read: the record has no such field.
+    assert not hasattr(long_curved.sides[0], "is_bent")
 
 
 def test_needs_straightening_threshold_is_one_percent() -> None:
@@ -354,17 +381,19 @@ def test_needs_straightening_threshold_is_one_percent() -> None:
 def test_inspection_lists_feature_counts() -> None:
     base = _pass_1(_load_capture("artist_arch_bevel.json"))
     report = inspect_pipeline_context(run_pass_2_features(base, ON))["features"]
-    assert report["options"] == {"straighten_strips": True}
+    assert report["options"] == {"straighten_strips": True, "straighten_bevel_strips": True}
     assert report["candidate_count"] == 5
     assert report["accepted_count"] == 1
-    assert report["suppressed_by_reason"] == {"already a rectangle": 2, "no bent opposite pair": 2}
+    assert report["suppressed_by_reason"] == {"already a rectangle": 2, "long sides are straight on the surface": 2}
     assert report["constraint_count"] == 1
     assert report["constraints"][0]["patch_id"] == ARCH_FRONT
     assert "features" not in inspect_pipeline_context(base)
     # With the option off the shapes keep their grade; only the strip waits for the option.
     off = inspect_pipeline_context(run_pass_2_features(base))["features"]
     assert off["accepted_count"] == 0 and off["constraint_count"] == 0
-    assert off["suppressed_by_reason"] == {"already a rectangle": 2, "no bent opposite pair": 2, "option off": 1}
+    assert off["suppressed_by_reason"] == {
+        "already a rectangle": 2, "long sides are straight on the surface": 2, "option off": 1,
+    }
 
 
 # ------------------------------------------------------------------ guard
@@ -374,6 +403,58 @@ def test_inspection_lists_feature_counts() -> None:
 def test_default_pass_2_leaves_the_solve_unchanged(name) -> None:
     base = _pass_1(_load_capture(name))
     assert run_skeleton_solve(run_pass_2_features(base)) == run_skeleton_solve(base)
+
+
+REFERENCES = Path(__file__).resolve().parents[2] / "dev" / "tools" / "cftuv_parity" / "reference"
+UNMARKED = [DATA / path.name for path in sorted(DATA.glob("*.json"))] + sorted(REFERENCES.glob("*.capture.json"))
+
+
+@pytest.mark.parametrize("path", UNMARKED, ids=lambda path: path.name)
+@pytest.mark.parametrize("strips", (False, True), ids=("strips_off", "strips_on"))
+def test_a_mesh_without_marks_solves_the_same_with_the_bevel_option_at_its_default(path, strips) -> None:
+    from dev.tools.scaffold_graph_debug.snapshot_io import load_source_snapshot
+
+    base = _pass_1(load_source_snapshot(path))
+    default = run_pass_2_features(base, FeatureOptions(straighten_strips=strips))
+    assert default.feature_snapshot.options.straighten_bevel_strips
+    off = run_pass_2_features(base, FeatureOptions(straighten_strips=strips, straighten_bevel_strips=False))
+    assert default.feature_snapshot.constraints == off.feature_snapshot.constraints
+    assert run_skeleton_solve(default) == run_skeleton_solve(off)
+
+
+# --------------------------------------------- STRIP acceptance on the captures
+
+BEVEL_CASES = DATA / "bevel_cases"
+# Verdicts of the strip rule (option on): A accepted, S suppressed (plan Slice AF).
+STRIP_VERDICTS = [
+    (DATA / "artist_arch_bevel.json", "f16", "A"),
+    (REFERENCES / "Arc.capture.json", "f16", "A"),
+    (REFERENCES / "collumn.capture.json", "f1", "A"),
+    (REFERENCES / "collumn.capture.json", "f355", "A"),
+    (REFERENCES / "building_walls.capture.json", "f1415", "A"),  # a folded one-face strip
+    (BEVEL_CASES / "u_rounded_wall_noise_top.capture.json", "f110", "S"),  # a wall that develops
+    (BEVEL_CASES / "u_rounded_wall_noise_top.capture.json", "f211", "S"),
+    *[(BEVEL_CASES / "u_rounded_wall_noise_top.capture.json", f"f{i}", "A") for i in (35, 36, 71, 73, 96)],
+    *[(BEVEL_CASES / "f_rect_inarc.capture.json", f"f{i}", "S") for i in (20, 22, 24, 26)],
+    *[(BEVEL_CASES / "e_arch_s2_n20.capture.json", f"f{i}", "S") for i in (22, 24, 42)],
+    *[(BEVEL_CASES / name, f"f{i}", "S") for name in ("b_rect_s2.capture.json", "h_rect_s2_tri.capture.json",
+                                                       "m_rect_s2_trimain.capture.json") for i in (8, 10, 12, 14)],
+    *[(BEVEL_CASES / "c_arch_s2.capture.json", f"f{i}", "S") for i in (22, 24, 42)],
+    *[(BEVEL_CASES / "d_cyl_s2.capture.json", f"f{i}", "S") for i in (124, 154)],
+]
+
+
+@pytest.mark.parametrize(("path", "face", "verdict"), STRIP_VERDICTS, ids=lambda item: getattr(item, "name", item))
+def test_strip_acceptance_reads_long_sides_curved_on_the_surface(path, face, verdict) -> None:
+    from dev.tools.scaffold_graph_debug.snapshot_io import load_source_snapshot
+
+    context = _pass_1(load_source_snapshot(path))
+    candidates = strip_candidates(context.topology_snapshot, context.geometry_facts, context.relation_snapshot)
+    (candidate,) = [c for c in candidates if str(c.patch_id) == f"patch:seed:{face}"]
+    instance = resolve_strip(candidate, ON)
+    assert (instance.status is FeatureInstanceStatus.ACCEPTED) == (verdict == "A")
+    if verdict == "S":
+        assert instance.suppression_reason is FeatureSuppressionReason.LONG_SIDES_STRAIGHT
 
 
 # ------------------------------------------------- reviewer gate additions
@@ -441,15 +522,6 @@ def test_a_use_of_several_surface_line_pieces_is_not_one_line() -> None:
     assert [side.is_surface_line for side in split.sides[1:]] == [side.is_surface_line for side in candidate.sides[1:]]
 
 
-def test_bent_means_longer_than_the_chord() -> None:
-    from types import SimpleNamespace
-
-    assert not chain_is_bent(SimpleNamespace(length=15.259, chord_length=15.259))  # arched but chord-long
-    assert not chain_is_bent(SimpleNamespace(length=1.005, chord_length=1.0))
-    assert chain_is_bent(SimpleNamespace(length=1.02, chord_length=1.0))
-    assert chain_is_bent(SimpleNamespace(length=6.28, chord_length=0.0))  # closed
-
-
 def test_layer_4_records_are_frozen() -> None:
     context = run_pass_2_features(_pass_1(make_cut_annulus_source()), ON)
     features = context.feature_snapshot
@@ -461,18 +533,3 @@ def test_layer_4_records_are_frozen() -> None:
     for record in records:
         with pytest.raises(FrozenInstanceError):
             record.id = "changed"
-
-
-def test_a_chord_long_chain_off_its_line_is_not_bent() -> None:
-    context = _pass_1(make_cut_annulus_source())
-    geometry = context.geometry_facts
-    (candidate,) = strip_candidates(context.topology_snapshot, geometry, context.relation_snapshot)
-    straight = candidate.sides[0]
-    assert not straight.is_bent and candidate.sides[1].is_bent
-    # A vertex off the chord line gives a plane, yet the length equals the chord.
-    facts = geometry.chain_facts[straight.chain_id]
-    planed = replace(geometry, chain_facts={
-        **geometry.chain_facts, straight.chain_id: replace(facts, plane_normal=(0.0, 0.0, 1.0)),
-    })
-    (same,) = strip_candidates(context.topology_snapshot, planed, context.relation_snapshot)
-    assert not same.sides[0].is_bent

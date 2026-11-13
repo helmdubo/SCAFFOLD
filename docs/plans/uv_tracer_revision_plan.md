@@ -2634,6 +2634,83 @@ independent review yet.
 
 Tests 599 -> 786.
 
+## Slice AF — bevel strips laid from their ladder; a strip is curved on the surface (DONE, 2026-11)
+
+Target: the user's rounded_wall_noise_top (a curved wall with a noisy top,
+9 bevel strips, 6 junction triangles). The user: this mesh must unwrap
+well; its own UV is the reference, except the top patch.
+
+Measured first: with strips off the wall band was already the exact
+development (0.02% of its length off the reference), but six of nine bevel
+strips had no axis and one pin, and came out of Blender's unwrap curved and
+at an arbitrary scale (area 0.12 to 10.6 of true); with strips on, the STRIP
+rule took both walls for strips and rectified them (the noisy top 0.26 m
+off).
+
+User decisions (AskUserQuestion, 2026-11-13): bevel strips as separate
+straight islands; a strip is only a patch whose long sides are curved on
+the surface; the flat curved bottom patch waits for a "band" kind.
+
+```text
+Layer 4  STRIP: accepted only when both uses of the longer opposite pair
+         are not one surface line (G0 DD-50); is_bent is gone.
+         BEVEL_STRIP by mark -> STRAIGHT_LADDER constraint (G0 DD-54),
+         option straighten_bevel_strips, on by default.
+Layer 2  the length of every source edge (the constraint reads lengths
+         only from Layer 2).
+Layer 5  a ladder patch is laid from the constraint: frame LADDER, every
+         boundary vertex pinned; it is an island by itself (provisional).
+files    layer_4_features/bevels.py and layer_5_runtime/frame_free.py split
+         out, no behaviour change.
+```
+
+rounded_wall_noise_top, strips off, before -> after: islands 3 -> 20
+(LADDER 9, UNFOLDED 8, FRAME_FREE 3); pins 94 -> 243; solver diagnostics
+151 -> 57; area of every patch after Blender's unwrap 0.12-10.6 -> 0.99-1.15
+of true (the top, without pins, aside); with strips on the walls keep their
+exact development. Each pinned vertex of a strip is within 6e-15 of the
+constraint; no island is mirrored (39 of 39 corners with the law).
+
+STRIP verdicts that change (strips on), all captures: the two walls of the
+user's mesh, the trapezoid f539 of walls.009 (the open question of Slice AB
+is closed by this rule), and mitred or inner-arc bevel strips of the test
+cases, which the ladder lays when marked. The four references, Arc and
+collumn solves included, are unchanged; Tier 3 baseline identical.
+
+A step back, stated: a fully triangulated bevel gets no layout (no ladder
+reading, no longer a STRIP), and its strips stay stitched into the main
+island, which loses its rigid frame (h_rect_s2_tri, strips on: 72 -> 36
+pins, equal to strips off).
+
+Reviewer gate (independent agent): PASS WITH FIXES. It recomputed every
+number from geometry (2e-16 against the constraint), proved from the code
+that a ladder island cannot be mirrored, reproduced the verdict list with
+its own implementation, 17 of 18 mutations caught. Fixes: Layer 4 measured
+edge lengths from Layer 0 positions (now a Layer 2 fact), two files past
+the size rule split, four test gaps, two unreachable guards removed. It
+also reviewed the fixpoint form of rule B from Slice AE-2: equal to DD-54
+but for one sentence (now corrected), independent of ids on ten meshes.
+
+The user's reaction to the result: too many small islands; bevels are a
+consequence of the main patches and must lie with them. See "DIRECTION SET
+BY THE USER" in `docs/agent_handoff.md`: the island rule of this slice is
+provisional.
+
+Tests 786 -> 900 (with Slice AG-1).
+
+## Slice AG-1 — index lookups in Layers 1-3 (DONE, 2026-11)
+
+From an external audit of the architecture (the user: take what has real
+value). Seven scans repeated per element replaced by indexes built once.
+No output changes: 4408 field hashes equal on 38 captures x 2 options
+(worker), 17630 equal on 318 inputs including shuffled ids and 120 random
+meshes (reviewer, PASS). building_walls tiled 8 times: Layer 1 24.0 -> 0.73
+s, Layer 2 25.1 -> 3.26 s, pass 1 135.8 -> 15.1 s; growth near linear.
+
+Not done from the audit: removing the Layer 3 records nothing reads,
+Layer 5 speed, an order of failure in the axis solve. Deferred: the
+`confidence` fields, a direction field inside a patch, an own relaxation.
+
 ## Decisions the user must approve before the relevant slice
 
 ```text

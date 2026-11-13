@@ -89,7 +89,10 @@ def feature_summary_to_dict(features: FeatureSnapshot) -> InspectionDict:
             key = instance.suppression_reason.value
             suppressed[key] = suppressed.get(key, 0) + 1
     return {
-        "options": {"straighten_strips": features.options.straighten_strips},
+        "options": {
+            "straighten_strips": features.options.straighten_strips,
+            "straighten_bevel_strips": features.options.straighten_bevel_strips,
+        },
         "candidate_count": len(features.candidates),
         "accepted_count": sum(
             1 for instance in features.instances if instance.status is FeatureInstanceStatus.ACCEPTED

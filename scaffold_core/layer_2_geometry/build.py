@@ -88,8 +88,24 @@ def build_geometry_facts(
         vertex_facts=vertex_facts,
         local_face_fan_facts=local_face_fan_facts,
         patch_chain_facts=patch_chain_facts,
+        edge_length_by_source_edge=_edge_length_by_source_edge(source, topology),
         diagnostics=tuple(diagnostics),
     )
+
+
+def _edge_length_by_source_edge(source: SourceMeshSnapshot, topology: SurfaceModel) -> dict[SourceEdgeId, float]:
+    """3D length of every source edge of the model's faces, the chain segment formula."""
+
+    lengths: dict[SourceEdgeId, float] = {}
+    for patch in topology.patches.values():
+        for face_id in patch.source_face_ids:
+            for edge_id in source.faces[face_id].edge_ids:
+                if edge_id not in lengths:
+                    first, second = source.edges[edge_id].vertex_ids
+                    lengths[edge_id] = length(
+                        subtract(_source_vertex_point(source, second), _source_vertex_point(source, first))
+                    )
+    return lengths
 
 
 def _build_patch_chain_geometry_facts(

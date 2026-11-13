@@ -37,7 +37,10 @@ Options:
 --write-uv          write pins through uv_transfer and verify that no loop
                     outside the solved faces changed (foreign_loops_changed)
 --straighten-strips run Pass 2 with FeatureOptions(straighten_strips=True) and
-                    add metric strip_islands; default off keeps baselines
+                    add metric strip_islands; default off keeps baselines.
+                    Smoke runs Layer 4 only with this flag: without it, it
+                    does not exercise bevel strips at all, although
+                    Straighten Bevel Strips is on by default everywhere else
 --baseline PATH     compare stable fields; exit 1 and print only the diffs
 --update-baseline   rewrite PATH from this run
 ```
@@ -74,6 +77,8 @@ axis_violations, seam_mismatches     G5a invariants (must be 0)
 residual_max / residual_ok           lstsq residual; only residual_ok is baselined
 written_loops, pinned_loops          UV write summary (--write-uv)
 strip_islands                        islands laid by a STRAIGHT_STRIP constraint (--straighten-strips)
+ladder_islands                       islands laid by a STRAIGHT_LADDER constraint, a marked bevel strip (--straighten-strips)
+bevel_ladder_constraints             STRAIGHT_LADDER constraints emitted by Layer 4 (--straighten-strips)
 foreign_loops_changed                loops outside the solved faces touched (must be 0)
 pipeline_codes                       diagnostic code histogram
 ms                                   wall time, never baselined

@@ -38,6 +38,7 @@ def build_payload(
     straighten_strips: bool,
     object_name: str,
     capture: bool = True,
+    straighten_bevel_strips: bool = True,
 ) -> dict[str, Any]:
     """Pass 0, 1, 2, the skeleton solve (islands + skeletons + pins) once, then the payload.
 
@@ -63,7 +64,10 @@ def build_payload(
         raise RuntimeError("select faces before analyzing")
     context = run_pass_2_features(
         run_pass_1_relations(run_pass_0(source)),
-        FeatureOptions(straighten_strips=bool(straighten_strips)),
+        FeatureOptions(
+            straighten_strips=bool(straighten_strips),
+            straighten_bevel_strips=bool(straighten_bevel_strips),
+        ),
     )
     solve = run_skeleton_solve(context)
     return build_debug_payload(context, solve, object_name=object_name)
@@ -86,7 +90,10 @@ def _summary(payload: dict[str, Any]) -> str:
     layers = payload["layers"]
     seams = layers["Scaffold_Seams"]
     islands = sum(
-        len(layers[name]) for name in ("Scaffold_Islands_UNFOLDED", "Scaffold_Islands_FRAME_FREE", "Scaffold_Islands_STRIP")
+        len(layers[name])
+        for name in (
+            "Scaffold_Islands_UNFOLDED", "Scaffold_Islands_FRAME_FREE", "Scaffold_Islands_STRIP", "Scaffold_Islands_LADDER",
+        )
     )
     return (
         f"patches:{len(layers['Scaffold_Patches'])} islands:{islands} "
@@ -122,6 +129,7 @@ def show_or_refresh(context: Any) -> tuple[dict[str, Any], str]:
     payload = build_payload(
         context,
         straighten_strips=bool(settings.straighten_strips),
+        straighten_bevel_strips=bool(getattr(settings, "straighten_bevel_strips", True)),
         object_name=source_object.name,
     )
     if context.active_object and context.active_object.mode != "OBJECT":
