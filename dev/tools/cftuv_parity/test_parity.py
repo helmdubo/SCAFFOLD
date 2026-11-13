@@ -168,3 +168,29 @@ def test_reference_right_corners_turn_by_the_corner_law(name):
     assert checked > 10
     assert with_law == checked
     assert mirrored == 0
+
+
+def test_reference_column_back_face_leaves_its_island_as_a_strip():
+    # The flat back face is stitched to both caps only across its two short
+    # straight ends, so with strips on it leaves its island and is laid as a
+    # rectangle with every boundary vertex pinned (CFTUV pins all 46); the
+    # caps become islands of their own with pins.
+    context, solve = _replay(REFERENCE_DIR / "collumn.capture.json", STRAIGHTEN_STRIPS["collumn"])
+    assembly = solve.assembly
+    patches_by_island = {island.id: island.patch_ids for island in assembly.islands}
+    frame_by_island = {skeleton.island_id: skeleton.frame for skeleton in solve.skeletons}
+    back = "patch:seed:f355"
+    assert patches_by_island[assembly.island_by_patch_id[back]] == (back,)
+    assert frame_by_island[assembly.island_by_patch_id[back]] == "STRIP"
+    assert len({v.vertex_id for v in solve.vertices if v.pinned and v.patch_id == back}) == 46
+    for cap in ("patch:seed:f0", "patch:seed:f353"):
+        assert patches_by_island[assembly.island_by_patch_id[cap]] == (cap,)
+        assert any(v.pinned and v.patch_id == cap for v in solve.vertices)
+    # Only seams the angle gate accepts get the leaving reason: the two bent
+    # sides, shared with the body, keep the gate's own refusal.
+    reasons = {
+        decision.reason
+        for decision in assembly.decisions
+        if {decision.first_patch_id, decision.second_patch_id} == {back, "patch:seed:f1"}
+    }
+    assert reasons == {"angle defect exceeds stitch limit"}

@@ -12,6 +12,12 @@ Rules:
 - Overlap gate (plan Slice U): a rigid stitch stays cut when the unfolded
   part would lie over the island; a non-rigid seam between two rigid parts
   stays cut, because the frame cannot cross it.
+- A straightened strip leaves its island (G0 DD-50): a patch with a
+  STRAIGHT_STRIP constraint whose stitch candidates are all straight hinges
+  stitches to nothing, because straightening keeps a straight side straight
+  but would deform a neighbour stitched along a bent side. A strip with a
+  bent stitch candidate stays stitched. Layer 4 is read only through
+  FeatureConstraint.
 - Read-only over lower layers; no UV or semantic roles here.
 """
 
@@ -23,7 +29,9 @@ from typing import Any, Mapping
 
 from scaffold_core.layer_2_geometry.measures import EPSILON, cross, dot, length, normalize
 from scaffold_core.layer_3_relations.direction_families import SHARED_CHAIN_HINGE_MAX_RUNS
+from scaffold_core.layer_4_features.model import FeatureConstraintKind
 
+STITCH_LEAVING_STRIP_REASON = "a straightened strip leaves its island"
 STITCH_DEFECT_TOLERANCE = 1e-3
 PLANAR_PATCH_MIN_NORMAL_DOT = 0.996  # every face-fan normal within ~5 degrees of the patch normal
 OVERLAP_TOLERANCE = 1e-6  # relative to the selection extent; shared edges only touch
@@ -158,6 +166,20 @@ def build_islands(context: Any) -> IslandAssembly:
         relations.patch_adjacencies.values(),
         key=lambda item: _tree_edge_priority(item, rigidity, topology),
     )
+    gate_by_adjacency = {
+        str(adjacency.id): _gate(
+            source,
+            topology,
+            str(adjacency.chain_id),
+            angle_by_source_vertex,
+            cut_chains_by_vertex,
+            border_vertices,
+        )
+        for adjacency in adjacencies
+        if str(adjacency.chain_id) not in self_seam_chain_ids
+        and adjacency.first_patch_id != adjacency.second_patch_id
+    }
+    leaving_patch_ids = _leaving_strip_patch_ids(context, adjacencies, gate_by_adjacency, rigidity)
     for adjacency in adjacencies:
         chain_id = str(adjacency.chain_id)
         first = str(adjacency.first_patch_id)
@@ -165,15 +187,10 @@ def build_islands(context: Any) -> IslandAssembly:
         if chain_id in self_seam_chain_ids or first == second:
             decisions.append(StitchDecision(chain_id, first, second, False, "SEAM_SELF always splits"))
             continue
-        accepted, reason, defects = _gate(
-            source,
-            topology,
-            chain_id,
-            angle_by_source_vertex,
-            cut_chains_by_vertex,
-            border_vertices,
-        )
-        if accepted and find(first) != find(second):
+        accepted, reason, defects = gate_by_adjacency[str(adjacency.id)]
+        if accepted and (first in leaving_patch_ids or second in leaving_patch_ids):
+            decisions.append(StitchDecision(chain_id, first, second, False, STITCH_LEAVING_STRIP_REASON, defects))
+        elif accepted and find(first) != find(second):
             joined, placement, refusal = _join_placements(
                 placements[find(first)], placements[find(second)],
                 chain_id, first, second, rigidity, context.geometry_facts, overlap_tolerance,
@@ -209,6 +226,35 @@ def build_islands(context: Any) -> IslandAssembly:
         for patch_id in members[root]:
             island_by_patch[patch_id] = island_id
     return IslandAssembly(tuple(islands), tuple(decisions), island_by_patch)
+
+
+def _leaving_strip_patch_ids(context, adjacencies, gate_by_adjacency, rigidity: SeamRigidity) -> set[str]:
+    """STRAIGHT_STRIP patches whose stitch candidates are all straight hinges.
+
+    A stitch candidate is a non-SEAM_SELF adjacency of the patch that the
+    angle gate accepts; a patch without candidates is an island anyway.
+    """
+
+    features = getattr(context, "feature_snapshot", None)
+    if features is None:
+        return set()
+    strip_patch_ids = {
+        str(constraint.patch_id)
+        for constraint in features.constraints
+        if constraint.kind is FeatureConstraintKind.STRAIGHT_STRIP
+    }
+    candidates: dict[str, list[str]] = {}
+    for adjacency in adjacencies:
+        gate = gate_by_adjacency.get(str(adjacency.id))
+        if gate is None or not gate[0]:
+            continue
+        for patch_id in {str(adjacency.first_patch_id), str(adjacency.second_patch_id)} & strip_patch_ids:
+            candidates.setdefault(patch_id, []).append(str(adjacency.chain_id))
+    return {
+        patch_id
+        for patch_id, chain_ids in candidates.items()
+        if all(chain_id in rigidity.straight_chain_ids for chain_id in chain_ids)
+    }
 
 
 def _tree_edge_priority(adjacency, rigidity: SeamRigidity, topology) -> tuple[bool, int, str]:

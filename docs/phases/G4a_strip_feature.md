@@ -68,6 +68,11 @@ The island then takes the strip layout (IslandSkeleton.frame == "STRIP"):
   - the existing axis solve places the nodes; every run end is pinned.
 A constraint whose patch shares its island is not applied, and the island
 gets a diagnostic naming the patch.
+Island assembly (plan Slice AB) does not stitch a constrained patch when
+every seam its stitch gate accepts is a straight hinge (every use of the
+Chain carries at most one run): straightening only rescales such a side,
+so the patch leaves its island and the constraint applies. A constrained
+patch with a bent seam among them stays stitched and is not applied.
 ```
 
 ## Results (2026-11)
@@ -87,8 +92,9 @@ all 25 replayed captures are identical to the run without Layer 4.
 ## Known limits
 
 ```text
-- A strip stitched into a larger island is not straightened (the column's
-  flat back face, three patches of building_walls).
+- A strip stitched along a bent side is not straightened (L-shaped faces
+  in the walls of the buildings). A strip stitched across straight sides
+  only leaves its island (plan Slice AB: the column's flat back face).
 - Pins sit at run ends only: a long side made of one multi-segment run keeps
   its inner vertices unpinned, and Blender's unwrap bows that side.
 - No FeatureRule protocol or registry yet: one rule, plain functions.
