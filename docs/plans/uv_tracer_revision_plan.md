@@ -2412,8 +2412,8 @@ Tests 513 -> 515.
 
 Reviewer gate (independent agent): PASS WITH FIXES, nothing blocking. Off:
 identical to main on 25 captures. On: only collumn and walls.009 change;
-the corner law holds. 9 own mutations: 5 caught, 2 equivalent, 2 gaps (one
-now covered by an assert on the gate's own refusal reason). The walls.009
+the corner law holds. 9 own mutations: 6 caught, 2 equivalent, 1 gap, now
+covered by an assert on the gate's own refusal reason. The walls.009
 split and the trapezoid question above come from the review.
 
 ## Decisions the user must approve before the relevant slice
