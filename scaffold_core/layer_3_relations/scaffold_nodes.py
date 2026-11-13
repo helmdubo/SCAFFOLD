@@ -37,13 +37,16 @@ def build_scaffold_nodes(
     for vertex_id in vertex_ids:
         groups.setdefault(_group_key(topology, vertex_id), set()).add(vertex_id)
 
+    corners_by_vertex = _indexed_items_by_vertex(loop_corners)
+    samples_by_vertex = _indexed_items_by_vertex(endpoint_samples)
+    relations_by_vertex = _indexed_items_by_vertex(endpoint_relations)
     nodes = [
         _node_for_vertices(
             topology,
             tuple(sorted(group_vertex_ids, key=str)),
-            loop_corners,
-            endpoint_samples,
-            endpoint_relations,
+            corners_by_vertex,
+            samples_by_vertex,
+            relations_by_vertex,
         )
         for group_vertex_ids in groups.values()
     ]
@@ -69,29 +72,44 @@ def _group_key(topology: SurfaceModel, vertex_id: VertexId) -> tuple[str, ...]:
     return ("vertex", str(vertex_id))
 
 
+def _indexed_items_by_vertex(items: tuple) -> dict[VertexId, list[tuple[int, object]]]:
+    # (input position, item) per vertex id, so a node's items keep input order.
+    by_vertex: dict[VertexId, list[tuple[int, object]]] = {}
+    for index, item in enumerate(items):
+        by_vertex.setdefault(item.vertex_id, []).append((index, item))
+    return by_vertex
+
+
+def _items_for_vertices(
+    items_by_vertex: dict[VertexId, list[tuple[int, object]]],
+    vertex_ids: tuple[VertexId, ...],
+) -> list:
+    indexed = [pair for vertex_id in vertex_ids for pair in items_by_vertex.get(vertex_id, ())]
+    return [item for _, item in sorted(indexed, key=lambda pair: pair[0])]
+
+
 def _node_for_vertices(
     topology: SurfaceModel,
     vertex_ids: tuple[VertexId, ...],
-    loop_corners: tuple[LoopCorner, ...],
-    endpoint_samples: tuple[PatchChainEndpointSample, ...],
-    endpoint_relations: tuple[PatchChainEndpointRelation, ...],
+    corners_by_vertex: dict[VertexId, list[tuple[int, LoopCorner]]],
+    samples_by_vertex: dict[VertexId, list[tuple[int, PatchChainEndpointSample]]],
+    relations_by_vertex: dict[VertexId, list[tuple[int, PatchChainEndpointRelation]]],
 ) -> ScaffoldNode:
-    vertex_id_set = frozenset(vertex_ids)
     node_corners = tuple(
         sorted(
-            (corner for corner in loop_corners if corner.vertex_id in vertex_id_set),
+            _items_for_vertices(corners_by_vertex, vertex_ids),
             key=lambda corner: corner.id,
         )
     )
     node_samples = tuple(
         sorted(
-            (sample for sample in endpoint_samples if sample.vertex_id in vertex_id_set),
+            _items_for_vertices(samples_by_vertex, vertex_ids),
             key=lambda sample: sample.id,
         )
     )
     node_relations = tuple(
         sorted(
-            (relation for relation in endpoint_relations if relation.vertex_id in vertex_id_set),
+            _items_for_vertices(relations_by_vertex, vertex_ids),
             key=lambda relation: relation.id,
         )
     )

@@ -252,6 +252,10 @@ def _materialized_vertex_ids_by_face(
     vertices: dict[VertexId, Vertex],
 ) -> dict[tuple[PatchId, SourceFaceId, SourceVertexId], VertexId]:
     materialized: dict[tuple[PatchId, SourceFaceId, SourceVertexId], VertexId] = {}
+    edge_ids_by_vertex: dict[SourceVertexId, list[SourceEdgeId]] = defaultdict(list)
+    for edge_id, source_edge in source.edges.items():
+        for edge_vertex_id in dict.fromkeys(source_edge.vertex_ids):
+            edge_ids_by_vertex[edge_vertex_id].append(edge_id)
     for patch_id, face_ids in patch_face_ids.items():
         faces_by_vertex: dict[SourceVertexId, list[SourceFaceId]] = defaultdict(list)
         for face_id in face_ids:
@@ -277,9 +281,7 @@ def _materialized_vertex_ids_by_face(
                 if first_root != second_root:
                     parents[second_root] = first_root
 
-            for edge_id, source_edge in source.edges.items():
-                if source_vertex_id not in source_edge.vertex_ids:
-                    continue
+            for edge_id in edge_ids_by_vertex.get(source_vertex_id, ()):
                 if is_patch_boundary_edge(
                     edge_id,
                     edge_incidence.get(edge_id, ()),
