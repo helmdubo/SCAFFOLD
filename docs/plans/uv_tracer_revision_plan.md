@@ -2605,6 +2605,18 @@ into wall pieces a bevelled prism (6 strips, 2 junctions). Two conditions
 from the definition removed it: a strip's rail neighbours are not strips,
 and a junction joins at least one strip.
 
+The AE-2 reviewer then showed that with non-quad main surfaces the rule
+turned every main surface into a junction (a cube with triangulated main
+faces): a one-segment strip has two end-strict readings, and the rule
+counted the ends of both. Rule B is now a fixpoint from decided readings
+(G0 DD-54): a strip with one end-strict reading is decided, junctions are
+found from decided ends, junctions decide the undecided strips beside
+them. Result: the four exact cases stay exact, the triangulated-main
+cubes give nothing, and what remains is the topology-only false positive
+(a quad band capped by non-quad patches: the top of an open slab; one
+single-quad strip on the building captures, not in the repo). Rule B
+records are candidates and are drawn on their own debugger layers.
+
 Each strip keeps what the user's future filters need (horizontal, vertical,
 under a ceiling, outer or inner corner for decals): rails, the neighbour
 patches on each rail, the corner kind.
@@ -2612,10 +2624,15 @@ patches on each rail, the corner kind.
 Reviewer gates (independent agents): AE-1 PASS WITH FIXES (an own
 brute-force finder agreed with the relation on 953 patches of 25 captures
 and about 3600 random synthetic patches; fixes: two test gaps, a red suite
-caused by the architect adding the user's case after the test run). AE-2:
-see the PR.
+caused by the architect adding the user's case after the test run). AE-2
+PASS WITH FIXES (an own implementation of both rules agreed with the code
+everywhere; it found the non-quad-main defect of rule B, a Rule A limit on
+partial bevels and five test gaps; 21 mutations). The fixpoint form of rule
+B was written after that gate: it has the worker's mutation checks (10 of
+11 killed, 1 equivalent) and an id-permutation test, and no second
+independent review yet.
 
-Tests 599 -> 762.
+Tests 599 -> 786.
 
 ## Decisions the user must approve before the relevant slice
 

@@ -13,6 +13,7 @@ Split:
 
 ```text
 overlay_v2.py   pure Python payload builder (no bpy), tested headless
+overlay_ladders.py  its Ladders and Bevels layers and their report lines
 draw_v2.py      thin bpy drawing: one GP layer per payload layer
 debug.py        Grease Pencil / text-label primitives (legacy GPENCIL and GP v3)
 rail_offsets.py per-use display offset (inward + lift along the patch normal)
@@ -145,9 +146,11 @@ Strength mark where a patch has one, else by the strict structural rule):
 
 | Toggle | GP layer | Draws |
 | --- | --- | --- |
-| Bevel strip | `Scaffold_Bevel_Strip` | fill of each accepted bevel strip, orange (also those whose ladder direction is unresolved) |
-| Bevel junction | `Scaffold_Bevel_Junction` | fill of each accepted bevel junction, purple |
-| Bevel, not isolated | `Scaffold_Bevel_Not_Isolated` | fill of each suppressed bevel record, red: a patch with bevel-marked faces mixed with strong or unmarked faces, or with strip and junction faces in one patch; seams are missing there |
+| Bevel strip | `Scaffold_Bevel_Strip` | fill of each accepted bevel strip set by the mark, orange (also those whose ladder direction is unresolved) |
+| Bevel junction | `Scaffold_Bevel_Junction` | fill of each accepted bevel junction set by the mark, purple |
+| Bevel strip (by structure) | `Scaffold_Bevel_Strip_Structure` | fill of each bevel strip found by mesh structure, light orange: a candidate, not confirmed by a mark |
+| Bevel junction (by structure) | `Scaffold_Bevel_Junction_Structure` | fill of each bevel junction found by mesh structure, light purple: a candidate, not confirmed by a mark |
+| Bevel, not isolated | `Scaffold_Bevel_Not_Isolated` | fill of each SUPPRESSED bevel record, red: a patch with bevel-marked faces mixed with strong or unmarked faces, or with strip and junction faces in one patch; seams are missing there |
 
 Defaults: Patches, Boundary, Holes, Chains, Lines, Nodes and Seams are on;
 everything else is off. Island fills compete with Patches; turning an Islands

@@ -123,9 +123,13 @@ with a reason (the seams do not isolate the bevel). The strip's direction is
 the ladder reading (G0 DD-53) whose rails have no bevel face across and
 whose ends have a bevel face, the border or the patch itself across.
 
-Rule B, by structure (only patches with no marked face): end-strict
-readings, pure junctions, a strip between two patches that are not strips,
-a junction that joins at least one strip (G0 DD-54 has the definitions).
+Rule B, by structure (only patches with no marked face), gives candidates,
+not truth: a ladder patch with one end-strict reading is decided; a
+non-ladder patch bounded only by ends of decided readings, undecided
+ladders and the border is a junction; junctions decide the undecided
+ladders next to them, in rounds to a fixpoint; a strip lies between two
+patches that are not strips and has an end on a junction; a junction
+joins at least one strip (G0 DD-54 has the definitions).
 
 A strip keeps its reading, rail and end uses, the neighbour patches on each
 rail, faces per column, column count, ring flag and a corner kind (CONVEX /
@@ -136,7 +140,12 @@ strips it joins in loop order, its other neighbours and a border flag.
 Known limits of rule B: a miter without junction faces (every window corner
 of Blender's default Bevel), a strip that runs to the mesh border, a
 junction that also touches a main surface, a closed ring, a triangulated
-bevel. The mark finds all of these. A plain quad ladder is not a kind.
+bevel, a bevel between non-quad main surfaces. The mark finds all of these.
+Known false positive of rule B: a quad band capped by non-quad patches
+(the top of a free-standing slab with n-gon end caps). Known limit of rule
+A: a strip that ends on an unbevelled face gets no direction. A plain quad
+ladder is not a kind. The debugger draws rule B records on their own
+layers ("by structure").
 
 Later (not built): user filters that select strips as horizontal, vertical,
 under a ceiling, outer or inner corner. The world vertical enters there, as

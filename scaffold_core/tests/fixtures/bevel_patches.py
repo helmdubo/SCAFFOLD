@@ -134,54 +134,68 @@ _Q_EDGES = (("v11", "v21"), ("v21", "v22"), ("v22", "v12"), ("v12", "v11"))
 _J = ("v21", "v11", "apex")
 
 
-def make_quad_with_four_junctions_source() -> SourceMeshSnapshot:
-    """The quad q with a triangle patch on each side, the triangles' other edges on the border.
+def make_quad_with_triangles_source(*, top: bool = False) -> SourceMeshSnapshot:
+    """The quad q with a triangle patch under it, on its left and right, and with top a fourth above.
 
-    Both ladder readings of q are end-strict, end on a pure junction and
-    have their rails on two different patches: two readings qualify.
+    The triangles' other edges lie on the border; without top the top side
+    of q is on the border (reviewer case F2). Both ladder readings of q are
+    end-strict (their ends lie on triangles or the border), so q is
+    undecided and nothing anchors a decision.
     """
 
-    faces = [
-        _Q,
-        _J,
-        ("v22", "v21", "right2"),
-        ("v12", "v22", "top2"),
-        ("v11", "v12", "left2"),
-    ]
+    faces = [_Q, _J, ("v22", "v21", "right2"), ("v11", "v12", "left2")]
+    if top:
+        faces.append(("v12", "v22", "top2"))
     positions = dict(_FLAT)
     positions.update({"right2": (3.0, 1.5, 0.0), "top2": (1.5, 3.0, 0.0), "left2": (0.0, 1.5, 0.0)})
-    return _mesh("quad_with_four_junctions", positions, faces, _Q_EDGES)
+    return _mesh("quad_with_triangles" + ("_top" if top else ""), positions, faces, _Q_EDGES)
 
 
-def make_quad_between_junction_and_one_surface_source() -> SourceMeshSnapshot:
-    """The quad q with J under it and one patch M wrapped round its other three sides.
+def make_quad_with_bevel_faces_on_both_readings_rails_source() -> SourceMeshSnapshot:
+    """Marked: the MEDIUM quad q between WEAK triangles left and right, a MEDIUM quad above, border below.
 
-    M has a triangle (no ladder relation) and a neighbour N, a triangle across
-    a seam (no ladder relation either), so M is no junction. Read with rails left and right, q has an end on the pure
-    junction J but both rails on M: not a strip. Read the other way its ends
-    lie on M, which is no junction. J stays a pure junction.
+    Read with its ends on the triangles, q has a MEDIUM face across its top
+    rail; read with its ends top and bottom, it has WEAK faces across both
+    rails. Only the rail clause of the mark rule rejects either reading.
     """
 
+    faces = [_Q, ("v22", "v21", "right2"), ("v11", "v12", "left2"), ("v12", "v22", "v23", "v13")]
+    positions = dict(_FLAT)
+    positions.update({"right2": (3.0, 1.5, 0.0), "left2": (0.0, 1.5, 0.0)})
+    strengths = {0: MEDIUM, 1: WEAK, 2: WEAK, 3: MEDIUM}
+    edges = _Q_EDGES + (("v12", "v13"), ("v22", "v23"), ("v13", "v23"))
+    return _mesh("quad_with_bevel_faces_on_rails", positions, faces, edges, strengths)
+
+
+def make_open_slab_source() -> SourceMeshSnapshot:
+    """A free-standing slab with an open bottom: outer, inner and top quads, two 5-gon end caps.
+
+    Every patch is one face, every edge a seam. Topologically the top is a
+    one-segment bevel between outer and inner with the caps as junctions
+    (reviewer case F3, a known false positive of the structural rule).
+    """
+
+    positions = {f"v{x}{y}{z}": (4.0 * x, 0.3 * y, 2.0 * z) for x in (0, 1) for y in (0, 1) for z in (0, 1)}
+    positions.update({"m0": (0.0, 0.15, 0.0), "m1": (4.0, 0.15, 0.0)})
     faces = [
-        _Q,
-        _J,
-        ("v01", "v11", "v12", "v02"),  # M, left of q
-        ("v02", "v12", "v13", "v03"),  # M, top left
-        ("v12", "v22", "v23"),  # M, top middle, two triangles
-        ("v12", "v23", "v13"),
-        ("v22", "v32", "v33", "v23"),  # M, top right
-        ("v21", "v31", "v32", "v22"),  # M, right of q
-        ("v03", "v13", "v04"),  # N, a triangle above M
+        ("v000", "v100", "v101", "v001"),  # outer, y = 0
+        ("v110", "v010", "v011", "v111"),  # inner, y = 0.3
+        ("v001", "v101", "v111", "v011"),  # top
+        ("v010", "m0", "v000", "v001", "v011"),  # cap, x = 0
+        ("m1", "v110", "v111", "v101", "v100"),  # cap, x = 4
     ]
-    return _mesh("quad_between_junction_and_one_surface", dict(_FLAT), faces, _Q_EDGES + (("v03", "v13"),))
+    seams = tuple({tuple(sorted((c[i], c[(i + 1) % len(c)]))) for c in faces for i in range(len(c))})
+    return _mesh("open_slab", positions, faces, tuple(sorted(seams)))
 
 
-def make_quad_between_two_surfaces_source(*, junction_touches_surface: bool) -> SourceMeshSnapshot:
+def make_quad_between_two_surfaces_source(*, junction_touches_surface: bool, fins_on_top: bool = False) -> SourceMeshSnapshot:
     """The quad q between two quads L and R, with J under it and the top on the border.
 
     With junction_touches_surface, a triangle of L also borders J across a
-    seam, so J touches a main surface and is no pure junction: nothing is a
-    bevel. Without it, J is a pure junction and q a bevel strip.
+    seam, so J touches a main surface and is no junction: nothing is a
+    bevel. Without it, J is a junction and q a bevel strip. With
+    fins_on_top, two fin triangles stand on q's top edge (a non-manifold
+    edge): no reading of q is end-strict and nothing is a bevel.
     """
 
     faces = [
@@ -194,8 +208,12 @@ def make_quad_between_two_surfaces_source(*, junction_touches_surface: bool) -> 
     if junction_touches_surface:
         faces.append(("v01", "apex", "v11"))  # L, under its quad, touching J
         seams = seams + (("v11", "apex"),)
-    name = "quad_between_two_surfaces" + ("_touching" if junction_touches_surface else "")
-    return _mesh(name, dict(_FLAT), faces, seams)
+    positions = dict(_FLAT)
+    if fins_on_top:
+        positions.update({"fin_a": (1.5, 2.0, 1.0), "fin_b": (1.5, 2.0, -1.0)})
+        faces.extend((("v22", "v12", "fin_a"), ("v12", "v22", "fin_b")))
+    name = "quad_between_two_surfaces" + ("_touching" if junction_touches_surface else "") + ("_fins" if fins_on_top else "")
+    return _mesh(name, positions, faces, seams)
 
 
 def make_capped_prism_source(sides: int = 6) -> SourceMeshSnapshot:
@@ -217,3 +235,58 @@ def make_capped_prism_source(sides: int = 6) -> SourceMeshSnapshot:
         (f"{ring}{i}", f"{ring}{(i + 1) % sides}") for ring in "bt" for i in range(sides)
     )
     return _mesh(f"capped_prism_{sides}", positions, faces, seams)
+
+
+def make_tube_with_one_quad_column_source(sides: int = 6) -> SourceMeshSnapshot:
+    """An open-bottom tube under an n-gon cap: one side quad q and one wall patch W of the other sides.
+
+    Seams on the two vertical edges between q and W and around the cap. Both
+    q and W have exactly one end-strict reading (ends on the cap and the
+    border), and the cap is a junction of them, but q has W on both rails
+    and W has q on both rails: no strip, so the cap joins none.
+    """
+
+    positions = {}
+    for i in range(sides):
+        angle = 2.0 * math.pi * i / sides
+        positions[f"b{i}"] = (math.cos(angle), math.sin(angle), 0.0)
+        positions[f"t{i}"] = (math.cos(angle), math.sin(angle), 1.0)
+    faces = [(f"b{i}", f"b{(i + 1) % sides}", f"t{(i + 1) % sides}", f"t{i}") for i in range(sides)]
+    faces.append(tuple(f"t{i}" for i in range(sides)))
+    seams = (("b0", "t0"), (f"b{sides - 1}", f"t{sides - 1}")) + tuple(
+        (f"t{i}", f"t{(i + 1) % sides}") for i in range(sides)
+    )
+    return _mesh(f"tube_with_one_quad_column_{sides}", positions, faces, seams)
+
+
+def make_quad_pointed_both_ways_source() -> SourceMeshSnapshot:
+    """A quad q with a triangle on each side; the bottom and left triangles are anchored by strips.
+
+    Topology only (the positions are a plain spread, not a real surface).
+    Both readings of q end on triangles, so q is undecided. Below and left
+    of q, a one-quad strip D1 / D2 has one end on the triangle, the other on
+    the border, and single-quad ladders L on both rails: D1 and D2 are
+    decided, so the bottom and left triangles are junctions. Their edges
+    on q are ends of different readings of q: q is blocked and stays
+    undecided; D1 and D2 are bevel strips with those two junctions.
+    """
+
+    faces = [
+        ("a", "b", "c", "d"),  # f0: q
+        ("b", "a", "x1"),  # f1: bottom triangle
+        ("c", "b", "x2"),  # f2: right triangle
+        ("d", "c", "x3"),  # f3: top triangle
+        ("a", "d", "x4"),  # f4: left triangle
+        ("b", "x1", "y1", "y2"),  # f5: D1 on the bottom triangle
+        ("y1", "x1", "z1", "z2"),  # f6: L on a rail of D1
+        ("b", "y2", "z3", "z4"),  # f7: L on the other rail of D1
+        ("a", "x4", "w1", "w2"),  # f8: D2 on the left triangle
+        ("w1", "x4", "u1", "u2"),  # f9: L on a rail of D2
+        ("a", "w2", "u3", "u4"),  # f10: L on the other rail of D2
+    ]
+    names = sorted({vertex for face in faces for vertex in face})
+    positions = {
+        name: (math.cos(index * 2.4), math.sin(index * 2.4), 0.1 * index) for index, name in enumerate(names)
+    }
+    seams = tuple({tuple(sorted((c[i], c[(i + 1) % len(c)]))) for c in faces for i in range(len(c))})
+    return _mesh("quad_pointed_both_ways", positions, faces, tuple(sorted(seams)))

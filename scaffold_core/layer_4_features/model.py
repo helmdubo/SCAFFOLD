@@ -135,8 +135,14 @@ class FeatureConstraint:
 
 @dataclass(frozen=True)
 class BevelJunctionContact:
-    """One bevel strip a junction joins; strip_end is None when the strip has no chosen reading
-    or the contact is not on one of its ends."""
+    """One bevel strip a junction joins, at end A or end B of the strip's chosen reading.
+
+    A junction never lies across a rail of a strip's chosen reading (by
+    mark a rail has no bevel-marked face across; by structure a rail edge
+    breaks a junction), so a contact is always on an end. strip_end is None
+    only for a strip by mark with no chosen reading (direction unresolved);
+    a junction by structure always has a strip_end.
+    """
 
     strip_patch_id: PatchId
     strip_end: BevelStripEnd | None

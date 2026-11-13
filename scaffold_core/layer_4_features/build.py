@@ -215,14 +215,20 @@ def strip_constraint(instance: FeatureInstance, candidate: FeatureCandidate) -> 
 #
 # Rule A (by mark) decides every patch with a marked face; Rule B (by
 # structure) looks only at patches none of whose faces is marked. A patch
-# that is neither gets no record.
+# that is neither gets no record. A record by mark is the truth; a record by
+# structure is a candidate the mesh topology suggests.
+#
+# Known limit of Rule A (behaviour by design): a marked strip whose end lies
+# on an unbevelled face (a partial bevel, e.g. only the vertical edges of a
+# pillar chamfered, its caps STRONG or unmarked) fits no reading, and so do
+# marked strips whose junction faces are unmarked: such a strip is kept as a
+# bevel strip with no direction (reading None) and a diagnostic.
 
 BEVEL_FACE_MARKS = frozenset((SourceFaceStrength.MEDIUM, SourceFaceStrength.WEAK))
 BEVEL_UNRESOLVED_CODE = "FEATURE_BEVEL_STRIP_READING_UNRESOLVED"
 UNRESOLVED_NO_LADDER = "no quad ladder relation"
 UNRESOLVED_NO_READING_FITS_MARKS = "no ladder reading fits the marks"
 UNRESOLVED_TWO_READINGS_FIT_MARKS = "two ladder readings fit the marks"
-UNRESOLVED_TWO_READINGS_QUALIFY = "two ladder readings qualify by structure"
 
 # What lies across a boundary edge of a patch (_BevelMesh.across).
 ACROSS_BORDER = "border"  # no other face: the mesh border
@@ -308,107 +314,106 @@ def _bevel_by_mark(mesh, patch_id: PatchId, marks: set) -> tuple[BevelInstance, 
 
 
 def _bevels_by_structure(mesh, unmarked: list[PatchId]) -> dict[PatchId, tuple[BevelInstance, str | None]]:
-    """Rule B over unmarked patches: pure junctions, and strips with an end on one.
+    """Rule B over unmarked patches: a fixpoint over decided ladder readings.
 
-    A reading is end-strict when every end edge borders a patch without a
-    ladder relation, the mesh border or the patch itself (a closed reading
-    has no ends). A patch's strict end edges are the union of the end edges
-    of all its end-strict readings. A pure junction is an unmarked patch
-    without a ladder relation whose every boundary edge is a strict end edge
-    of the neighbouring ladder patch or lies on the mesh border, at least
-    one of them a strict end edge. A strip candidate is an unmarked ladder
-    patch with an end-strict reading that has an end edge on a pure junction
-    and whose every column has its two rail edges on two different other
-    patches. Then, in this order:
-    a. a bevel strip lies between two surfaces that are not bevel strips: a
-       candidate with a strip candidate among its rail neighbours (of any
-       qualifying reading) is dropped, judged against the candidate set
-       before any dropping, so two candidates on each other's rails both go;
-    b. a junction joins at least one strip: a pure junction gets a record
-       only when one of its edges is a strict end edge of a strip kept by a.
+    Across a boundary edge lies the mesh border (no face on the other side
+    within the model; faces outside the selection count as border, as in
+    G1), the patch itself, one other patch, or several faces.
+
+    1. A reading is end-strict when every end edge borders a patch without
+       a ladder relation, the mesh border or the patch itself (a closed
+       reading has no ends). A ladder patch with exactly one end-strict
+       reading is DECIDED with that reading; with two it is UNDECIDED; with
+       none it takes no part.
+    2. An unmarked patch without a ladder relation is a JUNCTION when at
+       least one of its boundary edges is an end edge of a neighbour's
+       decided reading, and every one of them lies on the mesh border, is an
+       end edge of a neighbour's decided reading, or borders an undecided
+       ladder patch. Any other edge (a rail edge of a decided reading, an
+       edge on any other patch, on the patch itself or non-manifold) breaks it.
+    3. An undecided patch whose edges on junctions are end edges in exactly
+       one of its readings becomes decided with that reading; when they
+       point to both readings it is BLOCKED: it stays undecided for good (it
+       still counts as undecided in step 2) and is never decided.
+    Steps 2 and 3 run in rounds, each over the whole state at once, until a
+    round decides or blocks nothing. Decided and blocked only grow, so this
+    ends; a round does not depend on the order of patches or ids. The
+    junctions are those of step 2 on the final state, so a junction of an
+    earlier round that no longer qualifies (one of its edges became a rail
+    edge) is gone; a decision is never taken back.
+    4. A strip candidate is an unmarked decided patch whose decided reading
+       has an end edge on a junction and whose every column has its two rail
+       edges on two different other patches. A candidate with a candidate
+       among its rail neighbours is dropped (judged against the candidate
+       set before dropping): a bevel strip lies between surfaces that are
+       not strips. A junction gets a record only when one of its edges is an
+       end edge of the decided reading of a kept strip.
     """
 
-    strict_end_edges: dict[PatchId, set[SourceEdgeId]] = {}
-    for patch_id, relation in mesh.ladders.items():
-        edges: set[SourceEdgeId] = set()
-        for reading in relation.readings:
-            if mesh.end_strict(patch_id, reading):
-                edges.update(reading.end_a_source_edge_ids)
-                edges.update(reading.end_b_source_edge_ids)
-        strict_end_edges[patch_id] = edges
-
-    junctions: set[PatchId] = set()
-    for patch_id in unmarked:
-        if patch_id in mesh.ladders:
-            continue
-        touching = False
-        pure = True
-        for edge_id in mesh.boundary_edges[patch_id]:
-            kind, other = mesh.across(patch_id, edge_id)
-            if kind == ACROSS_BORDER:
-                continue
-            if kind == ACROSS_PATCH and edge_id in strict_end_edges.get(other, ()):
-                touching = True
-                continue
-            pure = False
-            break
-        if pure and touching:
-            junctions.add(patch_id)
-
-    candidates: dict[PatchId, list[int]] = {}
-    for patch_id in unmarked:
-        relation = mesh.ladders.get(patch_id)
-        if relation is None or patch_id in junctions:
-            continue
-        qualifying = [
-            index
-            for index, reading in enumerate(relation.readings)
-            if mesh.end_strict(patch_id, reading)
-            and any(
-                mesh.across(patch_id, edge_id)[1] in junctions
-                for edge_id in reading.end_a_source_edge_ids + reading.end_b_source_edge_ids
-            )
-            and mesh.rails_on_two_patches(patch_id, reading)
-        ]
-        if qualifying:
-            candidates[patch_id] = qualifying
-
+    decided, _undecided, _blocked, junctions = rule_b_fixpoint(mesh, unmarked)
+    unmarked_set = set(unmarked)
+    candidates = {
+        patch_id
+        for patch_id, index in decided.items()
+        if patch_id in unmarked_set
+        and any(mesh.across(patch_id, edge_id)[1] in junctions for edge_id in mesh.end_edges(patch_id, index))
+        and mesh.rails_on_two_patches(patch_id, mesh.ladders[patch_id].readings[index])
+    }
     strips = {
-        patch_id: qualifying
-        for patch_id, qualifying in candidates.items()
+        patch_id
+        for patch_id in candidates
         if not any(
             neighbour in candidates
-            for index in qualifying
-            for neighbour in mesh.neighbour_patches(
-                patch_id,
-                mesh.ladders[patch_id].readings[index].rail_a_source_edge_ids
-                + mesh.ladders[patch_id].readings[index].rail_b_source_edge_ids,
-            )
+            for neighbour in mesh.neighbour_patches(patch_id, mesh.rail_edges(patch_id, decided[patch_id]))
         )
     }
 
     found: dict[PatchId, tuple[BevelInstance, str | None]] = {}
     for patch_id in unmarked:
-        if patch_id in junctions:
-            if any(
-                mesh.across(patch_id, edge_id)[1] in strips
-                and edge_id in strict_end_edges[mesh.across(patch_id, edge_id)[1]]
-                for edge_id in mesh.boundary_edges[patch_id]
-            ):
-                found[patch_id] = (
-                    _bevel_record(patch_id, FeatureKind.BEVEL_JUNCTION, BevelEvidenceSource.STRUCTURE),
-                    None,
-                )
-        elif patch_id in strips:
-            qualifying = strips[patch_id]
-            if len(qualifying) == 1:
-                found[patch_id] = (_strip_record(mesh, patch_id, BevelEvidenceSource.STRUCTURE, qualifying[0]), None)
-            else:
-                found[patch_id] = (
-                    _bevel_record(patch_id, FeatureKind.BEVEL_STRIP, BevelEvidenceSource.STRUCTURE),
-                    UNRESOLVED_TWO_READINGS_QUALIFY,
-                )
+        if patch_id in strips:
+            found[patch_id] = (_strip_record(mesh, patch_id, BevelEvidenceSource.STRUCTURE, decided[patch_id]), None)
+        elif patch_id in junctions and any(
+            mesh.across(patch_id, edge_id)[1] in strips
+            and edge_id in mesh.end_edges(mesh.across(patch_id, edge_id)[1], decided[mesh.across(patch_id, edge_id)[1]])
+            for edge_id in mesh.boundary_edges[patch_id]
+        ):
+            found[patch_id] = (_bevel_record(patch_id, FeatureKind.BEVEL_JUNCTION, BevelEvidenceSource.STRUCTURE), None)
     return found
+
+
+def rule_b_fixpoint(mesh, unmarked: list[PatchId]) -> tuple[dict[PatchId, int], set[PatchId], set[PatchId], set[PatchId]]:
+    """Rule B steps 1-3: decided readings (patch -> reading index), undecided, blocked and junctions."""
+
+    end_strict = {
+        patch_id: tuple(index for index, reading in enumerate(relation.readings) if mesh.end_strict(patch_id, reading))
+        for patch_id, relation in mesh.ladders.items()
+    }
+    decided = {patch_id: indices[0] for patch_id, indices in end_strict.items() if len(indices) == 1}
+    undecided = {patch_id for patch_id, indices in end_strict.items() if len(indices) == 2}
+    blocked: set[PatchId] = set()
+    open_patches = [patch_id for patch_id in unmarked if patch_id not in mesh.ladders]
+    while True:
+        junctions = {patch_id for patch_id in open_patches if mesh.is_junction(patch_id, decided, undecided)}
+        newly_decided: dict[PatchId, int] = {}
+        newly_blocked: set[PatchId] = set()
+        for patch_id in undecided - blocked:
+            pointed = {
+                index
+                for edge_id in mesh.boundary_edges[patch_id]
+                if mesh.across(patch_id, edge_id)[1] in junctions
+                for index in end_strict[patch_id]
+                if edge_id in mesh.end_edges(patch_id, index)
+            }
+            if len(pointed) == 1:
+                newly_decided[patch_id] = pointed.pop()
+            elif len(pointed) == 2:
+                newly_blocked.add(patch_id)
+        if not newly_decided and not newly_blocked:
+            break
+        decided.update(newly_decided)
+        undecided -= set(newly_decided)
+        blocked |= newly_blocked
+    return decided, undecided, blocked, junctions
 
 
 def _bevel_record(patch_id, kind, source, *, reason=None) -> BevelInstance:
@@ -454,7 +459,13 @@ def _strip_record(mesh, patch_id: PatchId, source: BevelEvidenceSource, reading_
 
 
 def _with_junction_contacts(mesh, record: BevelInstance, accepted_strips: dict) -> BevelInstance:
-    """The accepted bevel strips met along each boundary loop in loop order, other neighbours, border."""
+    """The accepted bevel strips met along each boundary loop in loop order, other neighbours, border.
+
+    A junction never lies across a rail edge of a strip's chosen reading: by
+    mark a rail has no bevel-marked face across, by structure a rail edge
+    breaks a junction. So a contact is on an end of the strip's reading, and
+    strip_end is None only when the strip has no chosen reading (by mark).
+    """
 
     contacts: list[BevelJunctionContact] = []
     others: list[PatchId] = []
@@ -505,6 +516,7 @@ class _BevelMesh:
         self.source = source
         self.patch_ids = tuple(sorted(topology.patches, key=str))
         self.ladders = {relation.patch_id: relation for relation in relations.patch_quad_ladder_relations}
+        self._end_edges: dict[tuple[PatchId, int], frozenset] = {}
         self.patch_of_face: dict[SourceFaceId, PatchId] = {}
         self.faces_of_edge: dict[SourceEdgeId, list[SourceFaceId]] = defaultdict(list)
         for patch_id in self.patch_ids:
@@ -564,6 +576,37 @@ class _BevelMesh:
             if kind == ACROSS_PATCH:
                 seen.setdefault(other, None)
         return tuple(seen)
+
+    def end_edges(self, patch_id: PatchId, reading_index: int) -> frozenset:
+        """The end edges (end A and end B) of one reading of a ladder patch."""
+
+        key = (patch_id, reading_index)
+        if key not in self._end_edges:
+            reading = self.ladders[patch_id].readings[reading_index]
+            self._end_edges[key] = frozenset(reading.end_a_source_edge_ids + reading.end_b_source_edge_ids)
+        return self._end_edges[key]
+
+    def rail_edges(self, patch_id: PatchId, reading_index: int) -> tuple[SourceEdgeId, ...]:
+        reading = self.ladders[patch_id].readings[reading_index]
+        return reading.rail_a_source_edge_ids + reading.rail_b_source_edge_ids
+
+    def is_junction(self, patch_id: PatchId, decided: dict, undecided: set) -> bool:
+        """Rule B step 2 for a patch without a ladder relation, on the given decided / undecided state."""
+
+        touches = False
+        for edge_id in self.boundary_edges[patch_id]:
+            kind, other = self.across(patch_id, edge_id)
+            if kind == ACROSS_BORDER:
+                continue
+            if kind != ACROSS_PATCH:
+                return False
+            if other in decided:
+                if edge_id not in self.end_edges(other, decided[other]):
+                    return False
+                touches = True
+            elif other not in undecided:
+                return False
+        return touches
 
     def end_strict(self, patch_id: PatchId, reading: PatchQuadLadderReading) -> bool:
         """Every end edge borders a patch without a ladder relation, the mesh border or the patch itself."""

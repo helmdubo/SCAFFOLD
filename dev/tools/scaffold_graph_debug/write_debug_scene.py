@@ -71,6 +71,8 @@ RENDER_SETS = {
     "bevels_ladders": (
         "Scaffold_Bevel_Strip",
         "Scaffold_Bevel_Junction",
+        "Scaffold_Bevel_Strip_Structure",
+        "Scaffold_Bevel_Junction_Structure",
         "Scaffold_Bevel_Not_Isolated",
         "Scaffold_Ladder_Rails",
         "Scaffold_Ladder_Ends",
