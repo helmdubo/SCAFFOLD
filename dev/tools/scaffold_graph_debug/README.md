@@ -45,11 +45,17 @@ Rebuild             rerun the pipeline and redraw every layer
 Straighten Strips   Pass 2 option; applies on the next Rebuild (and on Write UV)
 Straighten Bevel Strips
                     Pass 2 option, on by default: every bevel strip marked by Face
-                    Strength is laid from its ladder as a straight island of its own
-                    (STRAIGHT_LADDER) unless the user filter below joins one of its
-                    seams; then it lies in its quilt and the ladder is not applied
-                    (a known defect: it can come out sheared). Applies on the next
-                    Rebuild (and on Write UV).
+                    Strength gets a STRAIGHT_LADDER constraint unless both its rails
+                    are straight on its surface (then it unfolds straight as it is, gets no
+                    constraint and is assembled like any patch; the report names
+                    it). A strip with the constraint is laid from its ladder as a
+                    straight island of its own unless the user filter below joins
+                    one of its seams; then it lies in its quilt, and a frame-free
+                    quilt that stitches exactly one of its rails and lays that rail
+                    keeps the other rail beside it, profile line by profile line
+                    (the report says which strips a quilt keeps together and why it
+                    does not read the others). Applies on the next Rebuild (and on
+                    Write UV).
                     Limit: a triangulated bevel strip has no ladder reading, and
                     with straight long sides Straighten Strips does not take it
                     either, so it gets no layout and stays stitched into the main
@@ -131,8 +137,11 @@ structure) with the unresolved ones and their corner kinds (convex /
 concave / mixed / undefined), bevel junctions by source and bevel-marked
 patches that are not isolated, by reason; when there are STRAIGHT_LADDER
 constraints or marked bevel strips that got none, the bevel strips laid from
-their ladder (islands of frame LADDER of the constraints) and each strip not
-laid with its reason; the number of chain strokes without an axis role; the number of
+their ladder (by itself: islands of frame LADDER; kept together in a quilt;
+of the constraints), each strip in a quilt that is not read with the reason,
+and each strip not laid with its reason (a strip whose rails are both
+straight on its surface: it unfolds straight as it is); the number of chain strokes
+without an axis role; the number of
 solver diagnostics.
 
 ## Layers
@@ -151,7 +160,7 @@ Group Skeleton:
 
 | Toggle | GP layer | Draws |
 | --- | --- | --- |
-| Quilts: rigid frame / frame-free / strip / bevel strip | `Scaffold_Islands_UNFOLDED`, `_FRAME_FREE`, `_STRIP`, `_LADDER` | fill of every patch of an island, one colour per island, layer by the island's frame kind (bevel strip: a marked bevel strip laid from its ladder, frame LADDER) |
+| Quilts: rigid frame / frame-free / strip / bevel strip by itself | `Scaffold_Islands_UNFOLDED`, `_FRAME_FREE`, `_STRIP`, `_LADDER` | fill of every patch of an island, one colour per island, layer by the island's frame kind (bevel strip by itself: a marked bevel strip laid from its ladder as an island of its own, frame LADDER; a strip kept together in a quilt is drawn with its quilt) |
 | Lines | `Scaffold_Skeleton_Lines` | each island line (`line_by_run`): all its runs in one colour |
 | Nodes | `Scaffold_Skeleton_Nodes` | white 3D cross at every skeleton node |
 | Pins | `Scaffold_Pins` | small orange 3D cross at every pinned vertex occurrence of the solve |

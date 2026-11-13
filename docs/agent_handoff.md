@@ -15,12 +15,13 @@ Current phase: G5a - Skeleton Runtime, plus G4a (Layer 4 v0, strip feature,
   and the bevel kinds BEVEL_STRIP / BEVEL_JUNCTION) and the user-filter
   stage scaffold_core/user_filters/ (pass 3, plan Slice AH)
 Architecture: immutable B-rep-inspired interpretation pipeline
-G0 contract: v1.16 (G0.md remains read-only for agents)
+G0 contract: v1.17 (G0.md remains read-only for agents)
 Branch: claude/scaffold-g5a-research-8a1f57; main has everything up to
-  PR #40 (Slices AF and AG-1, G0 v1.15). Slice AH (commits 4e0c667,
-  0b4006f, eb3d99c with the first review fixes, the second review's fixes
-  and its docs, G0 v1.16) is on the branch and not merged yet.
-Tests: 963 passed, 4 skipped, 1 xfailed (python -m pytest from the root).
+  PR #41 (Slice AH with both review fixes and its docs, G0 v1.16).
+  Slice AI (commits db9f7dc, the writer smoke checks, db9d9da, the slice,
+  and e0e0cd5, the review fixes, with its docs and G0 v1.17) is on the
+  branch and not merged yet.
+Tests: 986 passed, 4 skipped, 1 xfailed (python -m pytest from the root).
 ```
 
 Scaffold Core currently contains Layers 0-4, the user-filter stage, the G5a
@@ -121,6 +122,10 @@ Implemented:
     frame when no island patch is curved (plan Slice N); an island without
     one takes in-line run signs from its ordered island rails (plan
     Slice Q); the rails are checked against the frame (plan Slice O);
+  - `quilt_ladders.py` (plan Slice AI) a STRAIGHT_LADDER strip in a
+    frame-free quilt: when exactly one rail is stitched and the quilt lays
+    that rail, the free rail follows its profile-line partners; the
+    ladder gives no axis;
   - `pins.py` run_skeleton_solve output model and invariants (axis-parallel,
     SEAM_SELF length, node/frame and rail/line/frame agreement); pins are
     keyed by topology vertex occurrence (DD-37), so both sides of a seam keep
@@ -772,7 +777,9 @@ DIRECTION SET BY THE USER (2026-11-13), read before any work on islands:
   rounded_wall_noise_top). The "own island" rule of Slice AF is
   provisional. (Status after Slice AH: the over filter exists as pass 3;
   a ladder strip is an island by itself only when no seam of it is
-  joined; see "After Slice AH" below.)
+  joined; see "After Slice AH" below. After Slice AI a strip that
+  unfolds straight as it is gets no ladder, and a quilt keeps a ladder strip's rails
+  together where it can; see "After Slice AI".)
 - Measured for this (scratch study, CFTUV frontier): CFTUV's quilts rest
   on the world vertical (same patch type only, H/V roles, FREE-FREE never
   attaches), it has no overlap check, and it looks joined in Blender only
@@ -788,7 +795,8 @@ DIRECTION SET BY THE USER (2026-11-13), read before any work on islands:
   strips and the column body, rejects the developable walls and every
   ordinary wall patch of four meshes. Laid by arc-length fraction at the
   mean of its two long sides it matches the reference f111 within 0.5%.
-  Not built.
+  Not built. (The band is the next slice, approved by the user; the
+  Slice AI design study is under "After Slice AI".)
 
 After Slice AF (bevel strip layout):
 
@@ -811,6 +819,102 @@ After Slice AF (bevel strip layout):
 - A STRIP patch whose only bent seam goes to a ladder patch does not leave
   its island although that seam is never stitched (no capture shows it).
 
+After Slice AI (bevel strips in quilts, G0 v1.17 DD-54; plan entry Slice
+AI has the numbers, the three variants and the user's decision):
+
+- A strip by mark whose two rails are each one surface line on its own
+  side gets no STRAIGHT_LADDER (INFO "it unfolds straight as it is") and
+  is laid like any patch. The gate does not establish that the strip
+  develops (a conical bevel develops as a curved band and is
+  straightened), only that it unfolds with straight rails. A frame-free quilt keeps a ladder strip's two rails
+  together when exactly one rail is stitched and the quilt lays that rail
+  on an axis (`layer_5_runtime/quilt_ladders.py`). The ladder gives the
+  quilt no axis.
+- Regression, measured: d_cyl_s2 strip f154 now lies unpinned in a
+  7-patch island; Blender's fill gives it a width ratio of 3.33.
+- A strip is read only when the quilt already lays its stitched rail. On
+  the user's mesh f71, f73 and f96 are not read ("its stitched rail is not
+  laid on an axis"); f35 meets the conditions in the top quilt, which has
+  no pins, so its outcome is "it meets the conditions but its quilt pins
+  none of its vertices". The debug report says 1 kept together (f36). No
+  capture has a strip outside a rigid frame ("its patch is outside the
+  quilt's rigid frame, not laid").
+- The gate reads Layer 3's SURFACE_LINE, decided per vertex (a turn
+  under 0.1 rad at each vertex), so a finely tessellated curved rail can
+  read as one surface line and its strip is left unstraightened. On the
+  present captures every strip let through turns at most 0.1 degree in
+  total and every strip kept turns 18 to 167 degrees (reviewer).
+- New fold (filter +Z, user's mesh, after Blender's fill): the bottom
+  quilt has 10 overlapping triangle pairs and 2 self-intersecting faces
+  (f36 face 98, f111 face 123), none before the slice. The stitched rail
+  of f36 turns a corner around f111 over a 1.4 mm OBLIQUE bridge run; the
+  stitched-rail vertex there gets no pin and the fill puts it on the
+  wrong side of its neighbour. Not tying the profile lines at the turn
+  changes nothing; the only variants with 0 overlaps put the shear back
+  (f36 at 22.4 degrees). Kept: the pins are right (pinned-edge error
+  0.0077 mean). Laying that corner belongs to the band slice.
+- Filter off, a strip without a ladder is assembled by structure as
+  before Slice AF; a non-planar strip has no rigid placement, joins
+  through the angle-defect gate without an overlap test, and the quilt
+  loses its rigid frame, whose frame-free layout is never checked for
+  overlap. Overlapping triangle pairs after the fill: b_rect_s2 0 to 15,
+  m_rect_s2_trimain 0 to 15, c_arch_s2 4 to 37, e_arch_s2_n20 0 to 30,
+  f_rect_inarc 32 to 86, d_cyl_s2 317 to 300. Patches that lose a rigid
+  frame: a_cube_s3 5, b_rect_s2 10, m_rect_s2_trimain 10, f_border 1, the
+  user's mesh 6. Pin counts now depend more on vertex numbering (the
+  tie-by-id rules of island assembly, an older defect): over 6 id
+  permutations a_cube_s1 88 to 65..81, g_short 110 to 48..75, the user's
+  mesh 243 to 237..267, b_rect 72 to 34..56, m_rect 72 to 36..46. With
+  the filter on none of this changes. The plan's Slice AI entry has the
+  full numbers.
+- No capture has a ladder strip in a rigid-frame quilt, a strip with
+  exactly one straight rail, or a strip in a quilt with no rail stitched:
+  synthetic tests only.
+- Copying stations follows the stitched rail: one free-rail edge of f36
+  (0.0408 in 3D) is laid at 0.0014 because its partner edge is that short.
+- With `straighten_strips` on, a strip that no longer gets a
+  STRAIGHT_LADDER could get a STRAIGHT_STRIP if its longer pair were its
+  curved ends; no capture has such a strip.
+- Next slice, approved by the user: the band. The design study (prototype
+  and logs in the session scratchpad `ai\band\`, not in the repo) found
+  that it needs no new FeatureKind: it is the STRIP feature (DD-50) with
+  another reading of "four sides". A side is a maximal sequence of runs of
+  the patch's one loop between corners nearer to RIGHT than to STRAIGHT (a
+  turn above 45 degrees; the bridge run of a bridged corner is a corner by
+  itself). A band has exactly four sides, and both long sides turn on the
+  surface by more than 0.1 rad in total (accumulated, not per vertex).
+  Today's rule misses f111 because its loop has three uses and its outer
+  side turns 90 degrees at about 5 degrees per vertex, so it is one
+  SURFACE_LINE. Census over 2720 patches: no building patch accepted;
+  every strip STRIP accepts today kept; one new accept, f111; today's false
+  accepts gone (four one-face L-shaped wall faces, and the column's back
+  face f355, laid today with 37.7 degrees of error). The user's reference
+  lays f111 the same way (both long sides 6.53 m, 3D 6.23 and 6.86). In the
+  bottom quilt (prototype, filter on, `straighten_strips` on): pins 61 to
+  107, fit to the reference RMS 0.0247 to 0.0175, overlapping faces 3 to
+  0. It needs three Layer 5 additions: the band seeds the quilt's axes; a
+  strip whose stitched rail turns a corner is placed by offset from its
+  partners; a 1% length tolerance carried by the constraint. Known
+  problems: the noisy top f0 reads as four sides by no structural rule
+  found (two corners of about 105 to 107 degrees with a short run between
+  them at its left end, not a bridged right angle), so the top quilt stays
+  as it is; the cylinder case gets worse with the filter on (1.24 to 6.18
+  degrees) if a band is straightened inside a quilt. With
+  `straighten_strips` off the prototype changes nothing on any capture.
+  Open decisions for the user: straighten a band inside a quilt or only
+  alone; which option it sits behind and its default; what to do about f0.
+- Direction from the user (2026-11-14) for the band slice: a finely
+  curved chain or rail may ignore sawtooth noise and count as straight;
+  in general each concrete case has to be looked at. The coordinating
+  agent's reading, not the user's: sawtooth turns alternate in sign and
+  cancel (net turn about zero), the turns of a smooth fine arc have one
+  sign and add up, so the accumulated signed turn separates them; the
+  band slice introduces that measure and both rules (the band and the
+  Slice AI gate) should move to it. Before a threshold goes into code,
+  show the user the concrete rails (largest turn per vertex, net turn,
+  absolute turn, with pictures of the disputed ones: the noisy top f0,
+  the column's seam profile, strip f73).
+
 After Slice AH (quilts, G0 v1.16 DD-55; plan entry Slice AH has the
 numbers):
 
@@ -818,19 +922,13 @@ numbers):
   layout, 137 pins, 0 overlaps and 0 flipped faces after Blender's fill;
   the wall ring opens at f94|f211 (the reference at f94|f110, the same
   strip's other rail; no structural fact prefers one).
-- Open defect, the proposed next slice: a ladder strip inside a quilt is
-  not laid by its ladder. The STRAIGHT_LADDER constraint applies only
-  when the strip is an island by itself. In a quilt its runs go through
-  the frame-free line layout: the user's bottom quilt strip f36 is
-  sheared (rails laid at their own lengths 6.86 and 6.97, cross edges of
-  0.074 pinned 3% to 62% too long); the arch cases' strips have no pins
-  and take their width from Blender's fill; d_cyl_s2 pins 64 -> 16.
-  Adding the ladder's equations to the quilt solve was measured and
-  rejected (one width and one length contradict the exact wall lengths;
-  the wall quilt lost all pins). Proposal: the rail shared with a
-  neighbour takes the neighbour's stations, the free rail copies them
-  through the profile lines, the width comes from the ladder, no length
-  equations of the strip's own.
+- Addressed by Slice AI (see above): a ladder strip inside a quilt was
+  not laid by its ladder, and the user's bottom quilt strip f36 was
+  sheared (rails at their own lengths 6.86 and 6.97, cross edges of 0.074
+  pinned 3% to 62% too long). Now the quilt keeps its rails together
+  (shear 0.10 m to 0). Adding the ladder's equations to the quilt solve
+  was measured and rejected (one width and one length contradict the
+  exact wall lengths; the wall quilt lost all pins).
 - The "island by itself" sentences about ladder strips (G0 header, DD-50,
   DD-54, G4a) now say that they hold only without a JOIN.
 - A frame-free quilt lays only the right-corner component that holds its
@@ -856,12 +954,12 @@ numbers):
   interactive UI; undo not verified; the bmesh select history (the active
   element) not measured.
 - The writer fixes of the second review (exact selection restore, the
-  three refusals) have no test that the suite or Tier 3 can fail on. The
-  smoke's selection check runs with every face selected, where nothing is
-  flushed, so it passes with the restore removed. They were verified by
-  the reviewer's Blender scripts (scratch `review_ah2`). To make the
-  smoke effective, deselect part of the faces of one object before the
-  quilt write and add a hidden-target and a hidden-face case.
+  three refusals) are covered by Tier 3 since commit db9f7dc: the
+  `--unwrap-quilts` run calls write_quilt_uvs with partial selections in
+  vertex, edge and face select modes from Object Mode and Edit Mode, a
+  hidden target, a hidden solved face and another object in Edit Mode,
+  and five deliberately broken writers each fail it. Nothing in the
+  headless suite covers the writer.
 - Nothing decides the orientation of a quilt in UV: on the user's mesh the
   wall quilt lies upside down against the reference (straight edge up,
   noisy edge down). A natural home is the user-filter stage, which owns

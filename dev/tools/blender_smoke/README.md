@@ -53,12 +53,54 @@ Options:
                     flag differs, a loop of an unsolved face or of that other
                     object changes, a vertex, edge or face selection flag of
                     the target mesh changes, or the selection or active object
-                    is not restored
+                    is not restored; then the writer checks run (see below)
 --baseline PATH     compare stable fields; exit 1 and print only the diffs
 --update-baseline   rewrite PATH from this run
 ```
 
 Full JSON reports go to `dev/tools/blender_smoke/reports/` (git-ignored).
+
+### Writer checks (`--unwrap-quilts`)
+
+After the main write, `_writer_checks` calls `write_quilt_uvs` again in
+states the main write does not reach (the .blend stores every face selected
+or none, so the main write flushes nothing). Each case starts and ends in
+Object Mode with the select and hide flags, visibility, object selection,
+active object and mesh select mode it found; the target's solved UVs stay as
+the last write made them. Any failed case makes the object an error record
+(`writer checks failed N/M [cases]: ...`, exit 1); `writer_checks` counts the
+cases run.
+
+```text
+partial V/E/F object  targets with at most WRITER_CHECK_FACE_LIMIT (100) solved
+                      faces whose solve was read in Object Mode (every face):
+                      every third face deselected in Object Mode, the other
+                      faces' vertices and edges selected, so entering Edit Mode
+                      flushes; vertex, edge and face select mode
+partial V/E/F edit    targets with at most 100 solved faces: in Edit Mode, every
+                      third solved face deselected and flushed; the solve is the
+                      object's main solve, so the writer selects faces that were
+                      not selected and its restore must clear them (with a fresh
+                      solve of that selection the writer only deselects, and the
+                      restore cannot go wrong that way)
+                      both: no error, and every vertex, edge and face select
+                      flag, the modes, the object selection and the other
+                      object's UVs unchanged
+hidden target         the target hidden (hide_set)
+hidden face object    the first solved face hidden in Object Mode
+hidden face edit      the same face hidden in Edit Mode
+other in edit, ...    the other mesh object in Edit Mode, the target in Object
+                      Mode (passed explicitly) and both in Edit Mode
+                      refusals: the writer must raise, and the target's UVs,
+                      seams, select and hide flags, mode and visibility, the
+                      other object's UVs and mode, the object selection and
+                      the active object must be unchanged
+```
+
+The refusals raise before any operator, so they run on every target; the
+partial cases run one unwrap each and are kept to small targets (on
+buildings.blend: all but walls, walls.003, walls.009, walls.010), which adds
+about 3 s to the run.
 
 ## Keeping agent runs cheap
 
@@ -95,6 +137,7 @@ bevel_ladder_constraints             STRAIGHT_LADDER constraints emitted by Laye
 foreign_loops_changed                loops outside the solved faces touched (must be 0)
 filter_split, filter_join            SeamDirectives of the user filter (--world-up)
 seam_flags_changed                   seam flags that differ after write_quilt_uvs (--unwrap-quilts, must be 0)
+writer_checks                        writer check cases run on the object (--unwrap-quilts)
 pipeline_codes                       diagnostic code histogram
 ms                                   wall time, never baselined
 ```

@@ -10,9 +10,10 @@ Rules:
 - The bevel rule reads Layer 0 face marks and face/edge incidence, Layer 1
   patches, chains and uses, and Layer 3 quad ladders and PatchAdjacency;
   no position, length, normal, world axis, UV or island.
-- The ladder constraint reads the chosen ladder reading, the Layer 2 edge
-  lengths and face fans; no Layer 0 position. It carries every number
-  Layer 5 needs (DD-26).
+- The ladder constraint reads the chosen ladder reading, the Layer 3 shape
+  of its rail uses (PatchChainShapeRelation), the Layer 2 edge lengths and
+  face fans; no Layer 0 position. It carries every number Layer 5 needs
+  (DD-26).
 """
 
 from __future__ import annotations
@@ -26,7 +27,12 @@ from scaffold_core.layer_0_source.snapshot import SourceMeshSnapshot
 from scaffold_core.layer_1_topology.model import SurfaceModel
 from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot
 from scaffold_core.layer_2_geometry.measures import EPSILON
-from scaffold_core.layer_3_relations.model import DihedralKind, PatchQuadLadderReading, RelationSnapshot
+from scaffold_core.layer_3_relations.model import (
+    DihedralKind,
+    PatchChainShapeKind,
+    PatchQuadLadderReading,
+    RelationSnapshot,
+)
 from scaffold_core.layer_4_features.model import (
     BevelCornerKind,
     BevelEvidenceSource,
@@ -51,12 +57,15 @@ from scaffold_core.layer_4_features.model import (
 # (Layer 3) as a straight strip of its own: rails straight and parallel,
 # profile lines across, true width. The constraint carries every number the
 # layout needs (DD-26): Layer 5 opens neither the ladder nor the bevel record.
+# A strip whose two rails are straight on its surface unfolds straight as it
+# is and is not straightened (plan Slice AI): it is laid like any other patch.
 
 LADDER_NOT_LAID_CODE = "FEATURE_BEVEL_STRIP_NOT_LAID"
 NOT_LAID_NO_READING = "no chosen ladder reading"
 NOT_LAID_CLOSED = "the reading is a closed ring"
 NOT_LAID_SHARED_USE = "a use lies on more than one side"
 NOT_LAID_DEGENERATE = "a profile line has no length"
+NOT_LAID_DEVELOPS = "both rails are straight on its surface: it unfolds straight as it is"
 
 
 def ladder_constraints(
@@ -69,12 +78,29 @@ def ladder_constraints(
 
     Only with the option straighten_bevel_strips. A strip by structure
     (a candidate) never emits one. A strip by mark that cannot be laid gets
-    a diagnostic naming the patch and the reason.
+    a diagnostic naming the patch and the reason (a WARNING).
+
+    A strip that already unfolds straight is not straightened
+    (the principle of DD-50, plan Slice AI): when each of its two rails is
+    one use whose shape on the strip's own side (DD-48) is exactly one
+    SURFACE_LINE, it emits no constraint and gets an INFO diagnostic with
+    the same code and the reason NOT_LAID_DEVELOPS. A planar mitred strip
+    and a strip that is a piece of a cylinder are such strips. With one rail
+    straight and the other not, the strip still emits its constraint.
+
+    Known limit: SURFACE_LINE is decided per vertex (a turn under 0.1 rad at
+    each vertex), so a finely tessellated curved rail can read as one
+    surface line, and such a strip is then left unstraightened. On the
+    present captures every strip let through turns at most 0.1 degree in
+    total, and every strip kept turns 18 to 167 degrees.
     """
 
     if not options.straighten_bevel_strips:
         return (), ()
     ladders = {relation.patch_id: relation for relation in relations.patch_quad_ladder_relations}
+    shapes_by_use: dict = defaultdict(list)
+    for shape in relations.patch_chain_shape_relations:
+        shapes_by_use[shape.patch_chain_id].append(shape.kind)
     occurrence = {
         (face_id, fan.source_vertex_id): fan.vertex_id
         for fan in geometry.local_face_fan_facts.values()
@@ -97,13 +123,18 @@ def ladder_constraints(
                 ladder, note = None, NOT_LAID_CLOSED
             elif reading.shared_patch_chain_ids:
                 ladder, note = None, NOT_LAID_SHARED_USE
+            elif all(
+                len(uses) == 1 and shapes_by_use.get(uses[0]) == [PatchChainShapeKind.SURFACE_LINE]
+                for uses in (reading.rail_a_patch_chain_ids, reading.rail_b_patch_chain_ids)
+            ):
+                ladder, note = None, NOT_LAID_DEVELOPS
             else:
                 ladder, note = straight_ladder(reading, occurrence, geometry.edge_length_by_source_edge)
         if ladder is None:
             diagnostics.append(
                 Diagnostic(
                     code=LADDER_NOT_LAID_CODE,
-                    severity=DiagnosticSeverity.WARNING,
+                    severity=DiagnosticSeverity.INFO if note == NOT_LAID_DEVELOPS else DiagnosticSeverity.WARNING,
                     message=f"Bevel strip {record.patch_id}: not laid from its ladder ({note}).",
                     source="layer_4_features.ladder_constraints",
                     entity_ids=(str(record.patch_id),),

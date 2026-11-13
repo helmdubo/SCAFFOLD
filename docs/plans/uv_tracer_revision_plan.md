@@ -2830,7 +2830,9 @@ Stated limits:
   from Blender's fill. On d_cyl_s2 pins drop from 64 to 16. A trial that
   added the ladder's equations to the quilt solve was measured and
   rejected: one width and one length for a strip contradict the exact wall
-  lengths, and the wall quilt lost all its pins.
+  lengths, and the wall quilt lost all its pins. (Addressed by Slice AI:
+  f36 is kept together in its quilt, shear 0.10 m to 0; a strip that
+  develops gets no ladder at all.)
 - A quilt without a rigid frame lays only the right-corner component that
   holds its longest line; the other components stay without axes. The top
   quilt of the user's mesh has one line and no pins (a pin needs both
@@ -2913,7 +2915,236 @@ shares with a neighbour takes the neighbour's stations; the free rail
 copies them through the ladder's profile lines; the width comes from the
 ladder; the strip has no length equations of its own. Also open: the
 orientation of a quilt in UV (which way is up), naturally in the
-user-filter stage.
+user-filter stage. (The ladder strip inside a quilt is done as Slice AI.)
+
+## Slice AI — a strip that unfolds straight is not straightened; in a quilt the ladder keeps the rails together (DONE, 2026-11)
+
+Target: the bevel strips after Slice AH. Commits db9f7dc (smoke),
+db9d9da (the slice) and e0e0cd5 (the review fixes); G0 v1.17 DD-54.
+
+Measured first, two problems:
+
+- A bevel strip confirmed by the mark that already unfolds with straight
+  rails (a planar mitred strip; a rounded bevel of several segments that
+  is a piece of a cylinder) was squared off into a rectangle by its
+  ladder layout. Lone mitred strips had 25 to 66 degrees of corner angle
+  error.
+- Inside a quilt nothing read the ladder, so the two rails of a strip were
+  each laid at their own length and the strip sheared (the user's mesh,
+  bottom quilt, strip f36: cross edges 3% to 62% too long).
+
+Three variants were measured. The user's decision (2026-11-14): "a strip
+that develops is left alone, and in a quilt the rails are kept together".
+Rejected, with their numbers:
+
+- "rails together only" (every marked strip keeps its ladder): the corner
+  strip f94 of the user's wall quilt went from 0.0 to 7.3 degrees of
+  corner angle error;
+- "the strip leads its neighbours" (the ladder gives the strip its axes
+  and drags the neighbour): the user's mesh 4.41 to 5.43 degrees, strip
+  f35 4.8 to 18.5, the cylinder case's strip next to a disc cap 1.7 to
+  22.3.
+
+```text
+Layer 4  bevels.py::ladder_constraints: a strip by mark whose two rails
+         are each one use whose PatchChainShapeRelation on the strip's own
+         side is exactly one SURFACE_LINE emits no STRAIGHT_LADDER. Reason
+         "both rails are straight on its surface: it unfolds straight as
+         it is", FEATURE_BEVEL_STRIP_NOT_LAID at INFO (the other reasons
+         stay WARNING). The principle is DD-50's: a patch that unfolds
+         straight without distortion is not straightened. The gate does
+         not establish that a strip develops (a conical bevel develops, as
+         a curved band, and is straightened); it establishes that the
+         strip unfolds with straight rails. The test is the rail shape,
+         not planarity: 33 strips in the captures have two straight rails
+         and are not planar (cylinder pieces that unfold exactly into
+         straight strips); no strip is planar with a rail that is not a
+         line. One straight rail and one
+         that is not: the strip still emits. Bevel records and rules A and
+         B unchanged.
+Layer 5  new module quilt_ladders.py, called from skeleton.py after line
+         orientation and from pins.py after the stations. Only a quilt
+         without a rigid frame reads a ladder (a rigid frame holds planar
+         patches, each unfolded exactly; a strip outside the frame is not
+         laid and gets a diagnostic). The ladder gives no axis and no
+         sign. A strip is read when exactly one rail is stitched in the
+         quilt, the quilt lays that rail (its longest run, tie by id, has
+         an axis and a sign: the rail axis) and the free rail has no run on
+         the across axis; every run end of the strip must be on the ladder.
+         Read: the free rail's runs on the rail axis lose their signs (no
+         length equation); each free-rail vertex takes the along-rail
+         coordinate of its profile-line partner on the stitched rail and,
+         across, lies on the line between its rail's two corners (one
+         corner pinned: on that corner's row); a vertex whose partner or
+         both corners have no pin is unpinned and counted; a run-end pin is
+         never moved. Width: one stitched end wholly on the across axis
+         gives the free end its length; no end stitched: both ends take the
+         constraint's width; both stitched: no change.
+         After the solve a strip read whose quilt pins none of its run
+         ends loses its ties.
+         Outcome per strip in a quilt: kept together, both rails stitched,
+         its quilt has a rigid frame (quiet); no rail stitched, its
+         stitched rail is not laid on an axis, its free rail has a run on
+         the across axis, a run end is not on the ladder, it meets the
+         conditions but its quilt pins none of its vertices, its patch is
+         outside the quilt's rigid frame, not laid (diagnostics).
+         Reads only the FeatureConstraint, the island's stitched Chains and
+         the Layer 1 use-to-Chain mapping.
+tools    debug add-on report: strips laid by themselves, strips a quilt
+         keeps together, strips in a quilt that are not read with the
+         reason, strips not laid because they unfold straight. On the
+         user's mesh with +Z it reports 1 kept together (f36).
+smoke    --unwrap-quilts calls write_quilt_uvs with partial selections in
+         vertex, edge and face select modes from Object Mode and Edit Mode,
+         a hidden target, a hidden solved face and another object in Edit
+         Mode, and compares the state before and after.
+```
+
+Results:
+
+- Filter off, against main: 11 of 38 captures change (every bevel case
+  with marked strips except b_ring_s1 and h_rect_s2_tri); every other
+  capture is identical. Islands: a_cube_s1 26 to 1, a_cube_s3 26 to 14,
+  b_rect_s2 7 to 3, m_rect_s2_trimain 7 to 3, c_arch_s2 5 to 2, d_cyl_s2
+  9 to 7, e_arch_s2_n20 6 to 3, f_border 3 to 2, f_rect_inarc 7 to 3,
+  g_short 32 to 1, the user's mesh 20 to 8. Mean corner angle error after
+  Blender's fill, whole object: b_rect 10.50 to 0.00 degrees, m_rect 8.40
+  to 0.00, f_rect_inarc 14.73 to 1.48, g_short 3.07 to 0.11, c_arch 4.81
+  to 2.42, e_arch 4.88 to 2.52, the user's mesh 4.74 to 4.60, d_cyl 8.80
+  to 8.39.
+- Filter on (+Z): the only layout change is the user's mesh's bottom
+  quilt. Pins 61 before and after; pinned-edge length error against the
+  3D mean 0.048 to 0.0077, max 0.624 to 0.084; strip f36 shear 0.10 m to
+  0. After the fill the mesh's mean corner angle error goes from 4.41 to
+  2.85 degrees and f36's from 24.6 to 5.1. The wall quilt (76 pins) is
+  unchanged: its corner strip f94 has straight rails and no constraint.
+- Smoke: five deliberately broken writers each fail the `--unwrap-quilts`
+  run; the real writer gives 0 errors.
+
+Stated limits:
+
+- Regression, measured: d_cyl_s2 strip f154 now lies unpinned in a
+  7-patch island; Blender's fill gives it a width ratio of 3.33.
+- A strip is read only when the quilt already lays its stitched rail. On
+  the user's mesh f71, f73 and f96 are not read ("its stitched rail is not
+  laid on an axis"), and f35 meets the conditions in the top quilt, which
+  has no pins at all ("it meets the conditions but its quilt pins none of
+  its vertices").
+- No capture has a strip outside a rigid frame ("its patch is outside the
+  quilt's rigid frame, not laid").
+- The gate reads Layer 3's SURFACE_LINE, which is decided per vertex (a
+  turn under 0.1 rad at each vertex), so a finely tessellated curved rail
+  can read as one surface line and such a strip is left unstraightened.
+  On the present captures every strip let through turns at most 0.1
+  degree in total and every strip kept turns 18 to 167 degrees
+  (reviewer's measurement).
+- New fold, measured by the reviewer and the worker (filter +Z, the
+  user's mesh, after Blender's fill): the bottom quilt has 10 overlapping
+  triangle pairs and 2 self-intersecting faces (f36 face 98, f111 face
+  123), where before the slice it had none. Cause: the stitched rail of
+  f36 turns a corner around f111 over a 1.4 mm bridge run that is
+  OBLIQUE; the stitched-rail vertex on it gets no pin, and Blender's fill
+  puts it on the wrong side of its neighbour. Before the slice the sheared
+  free rail happened to hold that corner open. Variants measured: not
+  tying the profile lines at the turn changes nothing (10 pairs); the
+  only variants with 0 overlaps put the shear back (the free rail keeping
+  its own lengths: 0 pairs, f36 at 22.4 degrees). Decision: keep the
+  slice. The pins are right (pinned-edge error 0.0077 mean); the fold is
+  the fill at an unpinned vertex. Laying that corner (a bridged right
+  corner over one run, DD-52, and a strip placed around a corner) belongs
+  to the band slice.
+- With the filter off a strip without a ladder constraint is assembled by
+  structure, as before Slice AF. Overlapping triangle pairs after
+  Blender's fill, before to after: b_rect_s2 0 to 15 (0.04% of the UV
+  area), m_rect_s2_trimain 0 to 15, c_arch_s2 4 to 37 (1.07% to 1.66%),
+  e_arch_s2_n20 0 to 30 (1.62%), f_rect_inarc 32 to 86 (0.05% to 0.25%),
+  d_cyl_s2 317 to 300. Why the assembly allows it: these strips have
+  straight rails but are not planar, so they have no rigid placement; a
+  part without rigid patches joins through the angle-defect gate with no
+  overlap test, the island then has no rigid frame, and a frame-free
+  layout is never checked for overlap (h_rect_s2_tri had the same 15
+  pairs before the slice). Patches that lose a rigid frame: a_cube_s3 5,
+  b_rect_s2 10, m_rect_s2_trimain 10, f_border 1, the user's mesh 6. Pins
+  lost by main patches: a_cube_s1 7, b_rect_s2 16, m_rect_s2_trimain 16,
+  g_short 15, the user's mesh 3. Pin count over 6 id permutations, before
+  to after: a_cube_s1 88 to 65..81, g_short 110 to 48..75, the user's mesh
+  243 to 237..267, b_rect 72 to 34..56, m_rect 72 to 36..46: the tie-by-id
+  rules of island assembly, an older defect, now decide more islands.
+  With the filter on none of this changes.
+- No capture has a ladder strip in a rigid-frame quilt, a strip with
+  exactly one straight rail, or a strip in a quilt with no rail stitched;
+  these cases are covered by synthetic tests only.
+- Copying stations follows the stitched rail: one free-rail edge of f36
+  (0.0408 in 3D) is laid at 0.0014 because its partner edge on the
+  stitched rail is that short.
+- With `straighten_strips` on, a strip that no longer gets a
+  STRAIGHT_LADDER could get a STRAIGHT_STRIP if its longer pair were its
+  curved ends; no capture has such a strip.
+
+Reviewer gate (independent agent) on db9f7dc and db9d9da: PASS WITH FIXES.
+It confirmed every number, the Layer 4 gate against its own measure on
+every marked strip, f36's ties against its own placement, the boundaries,
+21 of 22 mutants; the smoke's five broken writers each fail the run.
+Fixes applied in e0e0cd5: the two new outcomes (nothing pinned, outside
+the rigid frame), the gate's reason, a test for a rail of two straight
+uses that meet at a bend (it still gets its constraint). The f36 fold is
+stated as a limit.
+
+Checks: 986 passed, 4 skipped, 1 xfailed (963 before; full suite from the
+repo root). Tier 3 default baseline identical (13 objects); quilt smoke 0
+errors. 11 mutants of the new code, all killed, before the review. The 29
+tests that asserted Slice AF's "every marked strip is laid from its
+ladder" were rewritten to keep what they pinned.
+
+Next (approved by the user): the band. A design study with a prototype
+(session scratchpad, not in the repo) found:
+
+- It needs no new FeatureKind: it is the STRIP feature (DD-50) with a
+  different reading of "four sides". A side is a maximal sequence of runs
+  of the patch's one loop between corners that are nearer to RIGHT than
+  to STRAIGHT (a turn above 45 degrees; the bridge run of a bridged corner
+  is a corner by itself). A band has exactly four sides, and both long
+  sides turn on the surface by more than 0.1 rad in total (the
+  accumulated turn, not the turn per vertex).
+- Why today's rule misses the user's bottom patch f111: its loop has
+  three uses, not four, and its outer side turns 90 degrees in total at
+  about 5 degrees per vertex, under the per-vertex limit, so it counts as
+  one SURFACE_LINE.
+- Census over 2720 patches: no building patch is accepted; every strip
+  STRIP accepts today is kept (arch soffit, column body, the cylinder's
+  strips); one new accept, f111; today's false accepts go away (four
+  one-face L-shaped wall faces, and the column's back face f355, which is
+  laid today with 37.7 degrees of error). The user's reference lays f111
+  the same way (both long sides 6.53 m, against 6.23 and 6.86 in 3D).
+- In the bottom quilt with the band (prototype, filter on,
+  `straighten_strips` on): pins 61 to 107, fit to the user's reference
+  RMS 0.0247 to 0.0175, overlapping faces 3 to 0. It needs three additions
+  in Layer 5: the band seeds the quilt's axes; a strip whose stitched rail
+  turns a corner is placed by offset from its partners; a 1% length
+  tolerance carried by the constraint.
+- Known problems: the noisy top patch f0 reads as four sides by no
+  structural rule found (its left end has two corners of about 105 to 107
+  degrees with a short run between them, which is not a bridged right
+  angle), so the top quilt would stay as it is; the cylinder case gets
+  worse with the filter on (1.24 to 6.18 degrees) if a band is
+  straightened inside a quilt. With `straighten_strips` off the prototype
+  changes nothing on any capture.
+- Open decisions for the user: straighten a band inside a quilt or only
+  alone; which option it sits behind and its default; what to do about
+  f0.
+- Direction from the user (2026-11-14), for the band slice: a finely
+  curved chain or rail may ignore sawtooth noise and count as straight;
+  in general each concrete case has to be looked at.
+- The coordinating agent's reading (not the user's): sawtooth turns
+  alternate in sign and cancel (net turn about zero), while the turns of
+  a smooth fine arc have one sign and add up, so the accumulated signed
+  turn separates them. The band slice introduces that measure, and both
+  rules (the band and the Slice AI gate) should move to it. Before a
+  threshold goes into code, the concrete rails are shown to the user
+  (largest turn per vertex, net turn, absolute turn, with pictures of the
+  disputed ones: the noisy top f0, the column's seam profile, strip f73).
+- The band slice also takes the corner of f36 around f111 (see the
+  stated limits above).
 
 ## Decisions the user must approve before the relevant slice
 
@@ -2995,5 +3226,14 @@ user-filter stage.
    DD-55, amendment authorised by the user. Open for the user: the four
    policies listed in Slice AH (junction tie, no usable normal, arch
    soffits, JOIN group order) and the next slice (a ladder strip inside a
-   quilt).
+   quilt; DONE as Slice AI).
+16. Bevel strips (user decision, 2026-11-14, among three measured
+   variants): "a strip that develops is left alone, and in a quilt the
+   rails are kept together". DONE as Slice AI, G0 v1.17 DD-54 (the gate
+   built reads "both rails straight on its surface": the strip unfolds
+   straight as it is). Next slice
+   APPROVED by the user: the band (the STRIP feature with sides split at
+   corners nearer to RIGHT than to STRAIGHT; see the Slice AI entry). Open
+   for the user: straighten a band inside a quilt or only alone, its
+   option and default, and the noisy top patch f0.
 ```

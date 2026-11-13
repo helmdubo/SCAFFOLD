@@ -25,6 +25,8 @@ from .overlay_v2 import (
 )
 from .rail_offsets import RAIL_NORMAL_HOVER_FACTOR
 
+# The outcome of a ladder strip read in its quilt (scaffold_core.layer_5_runtime.quilt_ladders.QUILT_LADDER_READ).
+QUILT_LADDER_READ = "kept together"
 LADDER_RAIL_COLORS = {"A": (0.95, 0.25, 0.6, 1.0), "B": (0.5, 0.95, 0.15, 1.0)}
 LADDER_END_COLOR = (0.6, 0.3, 1.0, 1.0)
 LADDER_COLUMN_COLOR = (0.8, 0.8, 0.8, 0.9)
@@ -263,15 +265,19 @@ def report_lines(payload: dict[str, Any]) -> list[str]:
     laid = payload.get("bevel_ladders", {})
     if laid.get("constraints") or laid.get("not_laid"):
         out.append(
-            f"bevel strips laid from their ladder: {laid.get('islands', 0)} of {laid.get('constraints', 0)} constraints"
+            f"bevel strips laid from their ladder: {laid.get('islands', 0)} by itself, "
+            f"{laid.get('kept_together', 0)} kept together in a quilt, of {laid.get('constraints', 0)} constraints"
         )
+        for patch_id, outcome in laid.get("in_quilt", ()):
+            if outcome != QUILT_LADDER_READ:
+                out.append(f"  in a quilt, not read: {patch_id}: {outcome}")
         for patch_id, reason in laid.get("not_laid", ()):
             out.append(f"  not laid: {patch_id}: {reason}")
     return out
 
 
 def ladder_layout_counts(context, solve) -> dict[str, Any]:
-    """STRAIGHT_LADDER constraints, islands laid by them, and the bevel strips without one and why."""
+    """STRAIGHT_LADDER constraints, how each was laid (by itself, or read in its quilt), and the strips without one."""
 
     features = getattr(context, "feature_snapshot", None)
     constraints = [
@@ -283,9 +289,16 @@ def ladder_layout_counts(context, solve) -> dict[str, Any]:
         for diagnostic in getattr(features, "diagnostics", ()) or ()
         if diagnostic.code == "FEATURE_BEVEL_STRIP_NOT_LAID"
     ]
+    in_quilt = sorted(
+        (str(patch_id), str(outcome))
+        for skeleton in solve.skeletons
+        for patch_id, outcome in (getattr(skeleton, "quilt_ladder_by_patch", None) or {}).items()
+    )
     return {
         "constraints": len(constraints),
         "islands": sum(1 for skeleton in solve.skeletons if skeleton.frame == "LADDER"),
+        "kept_together": sum(1 for _patch_id, outcome in in_quilt if outcome == QUILT_LADDER_READ),
+        "in_quilt": in_quilt,
         "not_laid": not_laid,
     }
 

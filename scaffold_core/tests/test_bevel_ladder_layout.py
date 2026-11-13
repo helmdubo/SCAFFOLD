@@ -5,7 +5,9 @@ Rules:
 - A marked bevel strip laid from its ladder (plan Slice AF): the Layer 4
   STRAIGHT_LADDER constraint (which strips get one, u_i, width, fractions)
   and its Layer 5 layout (own island, frame LADDER, every boundary vertex
-  pinned where the constraint says, unmirrored).
+  pinned where the constraint says, unmirrored). A marked strip whose two
+  rails are straight on its surface unfolds straight as it is: no constraint, an
+  INFO reason, and the structure assembles it (plan Slice AI).
 - Synthetic marked strips with hand-computed numbers, and the bevel cases
   of tests/data/bevel_cases (the user's rounded wall, a cube with three
   segments, the arch window).
@@ -23,6 +25,8 @@ import pytest
 
 from dev.tools.cftuv_parity.parity import corner_turns
 from dev.tools.scaffold_graph_debug.snapshot_io import load_source_snapshot
+from scaffold_core.core.diagnostics import DiagnosticSeverity
+from scaffold_core.layer_0_source.marks import SourceMark, SourceMarkKind
 from scaffold_core.layer_4_features import bevels as feature_bevels
 from scaffold_core.layer_4_features.model import (
     FeatureConstraintKind,
@@ -175,15 +179,52 @@ def _rail_length(context, uses) -> float:
 # --------------------------------------------------------------------------- Layer 4: the constraint
 
 
+# Synthetic strips whose two rails are straight on their surface: they develop as they are (plan Slice AI).
+DEVELOPING = ("straight_3x1", "two_segments")
+
+
+def _not_laid(context) -> dict:
+    return {
+        str(d.entity_ids[0]): (d.evidence["reason"], d.severity)
+        for d in context.feature_snapshot.diagnostics if d.code == feature_bevels.LADDER_NOT_LAID_CODE
+    }
+
+
+def _straight_ladder_of(context):
+    """The layout straight_ladder gives the strip's chosen reading, whether or not a constraint is emitted."""
+
+    (record,) = [r for r in context.feature_snapshot.bevels if r.kind is FeatureKind.BEVEL_STRIP]
+    relation = next(r for r in context.relation_snapshot.patch_quad_ladder_relations if r.patch_id == record.patch_id)
+    occurrence = {
+        (face_id, fan.source_vertex_id): fan.vertex_id
+        for fan in context.geometry_facts.local_face_fan_facts.values()
+        for face_id in fan.source_face_ids
+    }
+    ladder, note = feature_bevels.straight_ladder(
+        relation.readings[record.reading_index], occurrence, context.geometry_facts.edge_length_by_source_edge
+    )
+    assert note is None
+    return record, ladder
+
+
 @pytest.mark.parametrize("name", sorted(SYNTHETIC))
 def test_ladder_constraint_numbers_match_hand_computed_values(name) -> None:
     _base, context, _solve = _synthetic(name)
-    (constraint,) = _ladders(context)
+    record, ladder = _straight_ladder_of(context)
     us, width, fraction = HAND[name]
-    ladder = constraint.ladder
+    if name in DEVELOPING:
+        # No constraint, and why; the layout it would carry keeps its hand-computed numbers.
+        assert _ladders(context) == []
+        assert _not_laid(context) == {
+            str(record.patch_id): (feature_bevels.NOT_LAID_DEVELOPS, DiagnosticSeverity.INFO)
+        }
+        constraint = None
+    else:
+        (constraint,) = _ladders(context)
+        assert constraint.ladder == ladder
+        assert constraint.target_lengths == pytest.approx((us[-1], width), abs=1e-12)
     assert [line.u for line in ladder.profile_lines] == pytest.approx(us, abs=1e-12)
     assert ladder.width == pytest.approx(width, abs=1e-12)
-    assert constraint.target_lengths == pytest.approx((us[-1], width), abs=1e-12)
     assert ladder.length == ladder.profile_lines[-1].u
     inner = [line.across for line in ladder.profile_lines]
     assert all(not across for across in inner[1:-1])  # only the end lines carry their inner vertices
@@ -195,37 +236,101 @@ def test_ladder_constraint_numbers_match_hand_computed_values(name) -> None:
     # The strip's length is the mean of its rails' 3D lengths.
     rails = (_rail_length(context, ladder.rail_a_patch_chain_ids), _rail_length(context, ladder.rail_b_patch_chain_ids))
     assert ladder.length == pytest.approx(sum(rails) / 2.0, abs=1e-12)
-    assert constraint.patch_chain_ids == (
-        ladder.rail_a_patch_chain_ids + ladder.rail_b_patch_chain_ids
-        + ladder.end_a_patch_chain_ids + ladder.end_b_patch_chain_ids
-    )
+    if constraint is not None:
+        assert constraint.patch_chain_ids == (
+            ladder.rail_a_patch_chain_ids + ladder.rail_b_patch_chain_ids
+            + ladder.end_a_patch_chain_ids + ladder.end_b_patch_chain_ids
+        )
 
 
-# Marked strips without a constraint, and why (patch -> reason).
+# Marked strips without a constraint for a reason other than "it develops" (patch -> reason).
 NOT_LAID = {
     "b_ring_s1": {"patch:seed:f8": feature_bevels.NOT_LAID_CLOSED},
     "d_cyl_s2": {"patch:seed:f116": feature_bevels.NOT_LAID_CLOSED},
     "h_rect_s2_tri": {f"patch:seed:f{i}": feature_bevels.NOT_LAID_NO_READING for i in (8, 10, 12, 14)},
 }
+# Marked strips that still get a constraint: a rail that is not one surface line (plan Slice AI).
+LAID = {
+    "c_arch_s2": {"patch:seed:f26"},
+    "d_cyl_s2": {"patch:seed:f112", "patch:seed:f114"},
+    "e_arch_s2_n20": {"patch:seed:f26"},
+    "u_rounded_wall_noise_top": {f"patch:seed:f{i}" for i in (35, 36, 71, 73, 96)},
+}
+
+
+def _rail_is_one_surface_line(context, uses) -> bool:
+    kinds = {}
+    for shape in context.relation_snapshot.patch_chain_shape_relations:
+        kinds.setdefault(shape.patch_chain_id, []).append(shape.kind.value)
+    return len(uses) == 1 and kinds.get(uses[0]) == ["SURFACE_LINE"]
 
 
 @pytest.mark.parametrize("name", CASE_NAMES)
-def test_every_marked_strip_with_an_open_unshared_reading_gets_a_ladder_constraint(name) -> None:
+def test_every_marked_strip_gets_a_ladder_constraint_or_a_reason(name) -> None:
     _base, context, _solve = _case(name)
     features = context.feature_snapshot
     strips = {
-        str(r.patch_id) for r in features.bevels
+        str(r.patch_id): r for r in features.bevels
         if r.kind is FeatureKind.BEVEL_STRIP and r.status is FeatureInstanceStatus.ACCEPTED
     }
     assert strips
     laid = {str(c.patch_id) for c in _ladders(context)}
-    not_laid = {
-        str(d.entity_ids[0]): d.evidence["reason"]
-        for d in features.diagnostics if d.code == feature_bevels.LADDER_NOT_LAID_CODE
-    }
-    assert not_laid == NOT_LAID.get(name, {})
-    assert laid | set(not_laid) == strips and not laid & set(not_laid)
+    not_laid = _not_laid(context)
+    assert laid == LAID.get(name, set())
+    assert {p: reason for p, (reason, _s) in not_laid.items() if reason != feature_bevels.NOT_LAID_DEVELOPS} == (
+        NOT_LAID.get(name, {})
+    )
+    assert laid | set(not_laid) == set(strips) and not laid & set(not_laid)
     assert all(c.instance_id == f"feature_instance:bevel_strip:{c.patch_id}" for c in _ladders(context))
+    # The gate is the rail shape: a strip develops exactly when both rails are one surface line each.
+    for patch_id, record in strips.items():
+        if record.reading_index is None or patch_id in NOT_LAID.get(name, {}):
+            continue
+        straight = all(_rail_is_one_surface_line(context, uses)
+                       for uses in (record.rail_a_patch_chain_ids, record.rail_b_patch_chain_ids))
+        assert straight == (patch_id not in laid), patch_id
+        if straight:
+            assert not_laid[patch_id] == (feature_bevels.NOT_LAID_DEVELOPS, DiagnosticSeverity.INFO)
+    assert all(severity is DiagnosticSeverity.WARNING
+               for reason, severity in not_laid.values() if reason != feature_bevels.NOT_LAID_DEVELOPS)
+
+
+def test_a_strip_with_one_straight_rail_still_gets_its_constraint() -> None:
+    """Rail A straight, rail B bent in the plane: one rail is not a surface line, so the strip is straightened."""
+
+    rail_a = [(float(i), 0.0, 0.0) for i in range(4)]
+    rail_b = [(0.0, 0.2, 0.0), (1.0, 0.7, 0.0), (2.0, 0.7, 0.0), (3.0, 0.2, 0.0)]
+    context = run_pass_2_features(run_pass_1_relations(run_pass_0(make_marked_ladder_strip_source(rail_a, rail_b))))
+    (record,) = [r for r in context.feature_snapshot.bevels if r.kind is FeatureKind.BEVEL_STRIP]
+    assert _rail_is_one_surface_line(context, record.rail_a_patch_chain_ids)
+    assert not _rail_is_one_surface_line(context, record.rail_b_patch_chain_ids)
+    (constraint,) = _ladders(context)
+    assert constraint.patch_id == record.patch_id and _not_laid(context) == {}
+    # Paired negative: both rails straight (the same strip with rail B parallel) emits none.
+    assert _ladders(_synthetic("straight_3x1")[1]) == []
+
+
+def test_a_rail_of_two_straight_uses_meeting_at_a_bend_still_gets_its_constraint() -> None:
+    """The L-shaped strip with a seam across each STRONG row at its corner: each rail is two uses, each one line."""
+
+    rail_a, rail_b, across = SYNTHETIC["l_shaped"]
+    source = make_marked_ladder_strip_source(rail_a, rail_b, across)
+    edge_by_ends = {frozenset(map(str, edge.vertex_ids)): edge_id for edge_id, edge in source.edges.items()}
+    cuts = tuple(
+        SourceMark(kind=SourceMarkKind.SEAM, target_id=edge_by_ends[frozenset(pair)])
+        for pair in (("oa2", "p2_0"), ("p2_1", "ob2"))
+    )
+    context = run_pass_2_features(run_pass_1_relations(run_pass_0(replace(source, marks=tuple(source.marks) + cuts))))
+    (record,) = [r for r in context.feature_snapshot.bevels if r.kind is FeatureKind.BEVEL_STRIP]
+    kinds = {}
+    for shape in context.relation_snapshot.patch_chain_shape_relations:
+        kinds.setdefault(shape.patch_chain_id, []).append(shape.kind.value)
+    for uses in (record.rail_a_patch_chain_ids, record.rail_b_patch_chain_ids):
+        assert len(uses) == 2 and all(kinds.get(use) == ["SURFACE_LINE"] for use in uses)
+    (constraint,) = _ladders(context)
+    assert constraint.patch_id == record.patch_id and _not_laid(context) == {}
+    # Paired negative: a strip whose rails are one straight use each emits none.
+    assert _ladders(_synthetic("straight_3x1")[1]) == []
 
 
 @pytest.mark.parametrize("name", ("a_cube_s1", "a_cube_s3", "g_short", "u_rounded_wall_noise_top"))
@@ -235,12 +340,18 @@ def test_strips_by_structure_never_emit_a_ladder_constraint(name) -> None:
     assert strips and all(r.source.value == "STRUCTURE" for r in strips)
     assert _ladders(context) == []
     assert not [d for d in context.feature_snapshot.diagnostics if d.code == feature_bevels.LADDER_NOT_LAID_CODE]
-    # Paired positive: the same mesh with its marks.
-    assert _ladders(_case(name)[1])
+    # Paired positive: with its marks every strip of the same mesh reaches the ladder rule
+    # (a constraint, or a diagnostic that says why not: these cubes' strips develop).
+    marked = _case(name)[1]
+    reached = {str(c.patch_id) for c in _ladders(marked)} | set(_not_laid(marked))
+    assert reached and reached == {
+        str(r.patch_id) for r in marked.feature_snapshot.bevels
+        if r.kind is FeatureKind.BEVEL_STRIP and r.status is FeatureInstanceStatus.ACCEPTED
+    }
 
 
 def test_a_reading_with_a_shared_use_gets_no_constraint_and_a_diagnostic() -> None:
-    _base, context, _solve = _synthetic("straight_3x1")
+    _base, context, _solve = _synthetic("curved_rails")
     relations = context.relation_snapshot
     (record,) = [r for r in context.feature_snapshot.bevels if r.kind is FeatureKind.BEVEL_STRIP]
     relation = next(r for r in relations.patch_quad_ladder_relations if r.patch_id == record.patch_id)
@@ -284,13 +395,27 @@ def test_triangulated_bevel_strips_get_no_layout_with_strips_on() -> None:
     assert solve == _case("h_rect_s2_tri", FeatureOptions())[2]  # the same as strips off
 
 
-@pytest.mark.parametrize("name", ("u_rounded_wall_noise_top", "a_cube_s3", "c_arch_s2", "d_cyl_s2"))
+@pytest.mark.parametrize("name", ("u_rounded_wall_noise_top", "e_arch_s2_n20", "c_arch_s2", "d_cyl_s2"))
 def test_with_the_bevel_option_off_no_ladder_constraint_and_the_solve_is_todays(name) -> None:
     base, off, solve_off = _case(name, OFF)
     assert _ladders(off) == []
     assert not [d for d in off.feature_snapshot.diagnostics if d.code == feature_bevels.LADDER_NOT_LAID_CODE]
     assert solve_off == run_skeleton_solve(base)  # strips off: as without Pass 2
     assert _ladders(_case(name)[1])
+
+
+@pytest.mark.parametrize("name", ("a_cube_s3", "b_rect_s2", "g_short"))
+def test_marked_strips_that_develop_are_laid_as_without_the_option(name) -> None:
+    """Every marked strip of these cases has two straight rails: with the option on, no constraint and today's solve."""
+
+    base, on, solve_on = _case(name)
+    assert _ladders(on) == []
+    reasons = {reason for reason, _severity in _not_laid(on).values()}
+    assert reasons == {feature_bevels.NOT_LAID_DEVELOPS}
+    assert solve_on == _case(name, OFF)[2] == run_skeleton_solve(base)
+    assert LADDER_LAYOUT not in {s.frame for s in solve_on.skeletons}
+    # Paired positive: a strip with curved rails in the same suite still gets one.
+    assert _ladders(_case("c_arch_s2")[1])
 
 
 def test_a_strip_the_ladder_lays_emits_no_straight_strip() -> None:
@@ -315,7 +440,7 @@ def test_a_strip_the_ladder_lays_emits_no_straight_strip() -> None:
 # --------------------------------------------------------------------------- Layer 5: the layout
 
 
-@pytest.mark.parametrize("name", sorted(SYNTHETIC))
+@pytest.mark.parametrize("name", sorted(set(SYNTHETIC) - set(DEVELOPING)))
 def test_a_synthetic_marked_strip_is_its_own_straight_island(name) -> None:
     _base, context, solve = _synthetic(name)
     (constraint,) = _ladders(context)
@@ -326,7 +451,25 @@ def test_a_synthetic_marked_strip_is_its_own_straight_island(name) -> None:
     assert not [d for d in solve.diagnostics if "contradictory" in d]
 
 
-@pytest.mark.parametrize("name", ("u_rounded_wall_noise_top", "a_cube_s3", "c_arch_s2"))
+@pytest.mark.parametrize("name", DEVELOPING)
+def test_a_synthetic_strip_that_develops_is_assembled_like_any_patch(name) -> None:
+    base, context, solve = _synthetic(name)
+    (record,) = [r for r in context.feature_snapshot.bevels if r.kind is FeatureKind.BEVEL_STRIP]
+    patch_id = str(record.patch_id)
+    assert _ladders(context) == []
+    assert solve == run_skeleton_solve(base)  # as without Pass 2
+    assert LADDER_LAYOUT not in {s.frame for s in solve.skeletons}
+    assert not [d for d in solve.assembly.decisions if d.reason == STITCH_BEVEL_LADDER_REASON]
+    island_id = solve.assembly.island_by_patch_id[patch_id]
+    (island,) = [i for i in solve.assembly.islands if i.id == island_id]
+    assert len(island.patch_ids) > 1  # the structure stitches it to its neighbours
+    # Paired positive: the curved strip of the same fixture is an island by itself.
+    _b, curved, curved_solve = _synthetic("curved_rails")
+    (constraint,) = _ladders(curved)
+    _check_ladder_island(curved, curved_solve, constraint)
+
+
+@pytest.mark.parametrize("name", ("u_rounded_wall_noise_top", "d_cyl_s2", "c_arch_s2"))
 @pytest.mark.parametrize("strips", (False, True), ids=("strips_off", "strips_on"))
 def test_marked_strips_of_the_bevel_cases_are_laid_from_their_ladder(name, strips) -> None:
     _base, context, solve = _case(name, FeatureOptions(straighten_strips=strips))
@@ -341,46 +484,59 @@ def test_marked_strips_of_the_bevel_cases_are_laid_from_their_ladder(name, strip
     assert not [d for d in solve.diagnostics if "contradictory" in d]  # nothing UNCONSTRAINED
 
 
-def test_the_users_junctions_and_walls_keep_their_exact_shape() -> None:
+def test_the_users_junctions_and_walls_keep_their_shape() -> None:
     base, context, solve = _case("u_rounded_wall_noise_top")
     _base, _off, solve_off = _case("u_rounded_wall_noise_top", OFF)
     position = {str(k): v.position for k, v in base.source_snapshot.vertices.items()}
     junctions = [str(r.patch_id) for r in context.feature_snapshot.bevels if r.kind is FeatureKind.BEVEL_JUNCTION]
     assert len(junctions) == 6
+    # The four straight strips (f34, f72, f94, f95) develop and are stitched by the structure
+    # (plan Slice AI): f28 and f29 share the walls' frame-free island and carry its drift
+    # (measured 3.2e-4 relative); the other junctions keep their exact shape.
+    drifting = {"patch:seed:f28", "patch:seed:f29"}
     for patch_id in junctions:
         pins = [v for v in solve.vertices if v.patch_id == patch_id and v.pinned]
         assert len({v.uv for v in pins}) >= 2
         for a, b in itertools.combinations(pins, 2):  # planar triangles: pins at their true distances
             truth = math.dist(position[a.source_vertex_id], position[b.source_vertex_id])
-            assert math.dist(a.uv, b.uv) == pytest.approx(truth, rel=1e-9)
-    # The wall pieces leave the strips' island. f211 develops as before; f110
-    # and f112 lose the 1.3 mm drift their 15-patch island spread (measured
-    # 3.1e-4 and 6.1e-4 relative), and the planar f112 now sits at its true
-    # distances.
-    for patch_id, rel in (("patch:seed:f211", 1e-6), ("patch:seed:f110", 1e-3), ("patch:seed:f112", 1e-3)):
+            assert math.dist(a.uv, b.uv) == pytest.approx(truth, rel=1e-3 if patch_id in drifting else 1e-9)
+    # The wall pieces leave only the curved strips' islands; f211, f110 and f112 develop as without
+    # the option (measured equal).
+    for patch_id, rel in (("patch:seed:f211", 1e-9), ("patch:seed:f110", 1e-9), ("patch:seed:f112", 1e-9)):
         now = {v.vertex_id: v.uv for v in solve.vertices if v.patch_id == patch_id and v.pinned}
         before = {v.vertex_id: v.uv for v in solve_off.vertices if v.patch_id == patch_id and v.pinned}
         assert set(now) == set(before) and len(now) > 2
         for k1, k2 in itertools.combinations(sorted(now), 2):
             assert math.dist(now[k1], now[k2]) == pytest.approx(math.dist(before[k1], before[k2]), rel=rel)
-        skeleton = _skeleton(solve, patch_id)
-        assert max(skeleton.axis_a.residual_max, skeleton.axis_b.residual_max) < 1e-9
+        skeleton, skeleton_off = _skeleton(solve, patch_id), _skeleton(solve_off, patch_id)
+        # The walls' island keeps its 1.3 mm drift, the same as without the option.
+        assert skeleton.axis_b.residual_max == pytest.approx(skeleton_off.axis_b.residual_max, rel=1e-9)
+        assert max(skeleton.axis_a.residual_max, skeleton.axis_b.residual_max) < 2e-3
+    # The planar f112 shares that drift (the walls' frame-free island, residual 1.32e-3): its pins lie
+    # within 1e-3 of their true distances (measured 6.10e-4, the largest pairwise relative error).
     planar = {v.vertex_id: v for v in solve.vertices if v.patch_id == "patch:seed:f112" and v.pinned}
     for a, b in itertools.combinations(planar.values(), 2):
         truth = math.dist(position[a.source_vertex_id], position[b.source_vertex_id])
-        assert math.dist(a.uv, b.uv) == pytest.approx(truth, rel=1e-9)
+        assert math.dist(a.uv, b.uv) == pytest.approx(truth, rel=1e-3)
     patches_with_few_pins = {
         str(p) for p in context.topology_snapshot.patches
         if len({v.uv for v in solve.vertices if v.patch_id == str(p) and v.pinned}) < 2
     }
-    assert patches_with_few_pins == {"patch:seed:f0"}  # the flat curved bottom waits for a band kind
+    # The flat curved bottom waits for a band kind; f111 and the straight strip f95 get fewer than
+    # two pins in the walls' island, as without the option, where the curved strips also have none.
+    assert patches_with_few_pins == {"patch:seed:f0", "patch:seed:f111", "patch:seed:f95"}
+    few_off = {
+        str(p) for p in context.topology_snapshot.patches
+        if len({v.uv for v in solve_off.vertices if v.patch_id == str(p) and v.pinned}) < 2
+    }
+    assert few_off == patches_with_few_pins | {str(c.patch_id) for c in _ladders(context)}
 
 
 def test_a_degenerate_end_line_gets_no_constraint_and_a_diagnostic() -> None:
-    """Rail B starts on rail A's first vertex: profile line 0 has no length."""
+    """Rail B starts on rail A's first vertex: profile line 0 has no length (curved rails, so the strip is laid)."""
 
-    rail_a = [(float(i), 0.0, 0.0) for i in range(4)]
-    rail_b = [(0.0, 0.0, 0.0)] + [(float(i), 0.2, 0.0) for i in range(1, 4)]
+    rail_a, curved_b, _across = SYNTHETIC["curved_rails"]
+    rail_b = rail_a[:1] + curved_b[1:]
     context = run_pass_2_features(run_pass_1_relations(run_pass_0(make_marked_ladder_strip_source(rail_a, rail_b))))
     (record,) = [r for r in context.feature_snapshot.bevels if r.kind is FeatureKind.BEVEL_STRIP]
     assert record.status is FeatureInstanceStatus.ACCEPTED and record.reading_index is not None
@@ -390,7 +546,7 @@ def test_a_degenerate_end_line_gets_no_constraint_and_a_diagnostic() -> None:
     assert diagnostic.evidence["reason"] == feature_bevels.NOT_LAID_DEGENERATE
     assert LADDER_LAYOUT not in {s.frame for s in run_skeleton_solve(context).skeletons}
     # Paired positive: the same strip with a proper end is laid.
-    assert len(_ladders(_synthetic("straight_3x1")[1])) == 1
+    assert len(_ladders(_synthetic("curved_rails")[1])) == 1
 
 
 def test_a_ring_cut_by_one_seam_is_laid_as_a_ladder() -> None:
