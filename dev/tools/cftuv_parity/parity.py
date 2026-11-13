@@ -53,7 +53,43 @@ Scores per object (weights: 3D chain length, unless noted):
   info only     reference UV island count vs Scaffold island count; reference
                 islands split over several Scaffold islands; Scaffold islands
                 holding faces of several reference islands (merged).
-Not measured: UV coordinates, island orientation, scale between islands, packing.
+
+Shape agreement (WHERE the pins are, not only which corners are pinned):
+  common pins   boundary corners (patch, vertex occurrence) pinned in both
+                descriptions, the same keys as pin_cov. Scaffold UV = the
+                pinned UV of that occurrence (metres); reference UV = the UV of
+                the reference-pinned face corner of that key (the smallest
+                (face, vertex) when several).
+  pair test     pairwise distances are invariant to rotation (any angle,
+                quarter turns included), translation and MIRRORING (a mirrored
+                island scores 100%); uniform scale is the object scale s. A
+                pair agrees when
+                |d_scaffold * s - d_reference| <= max(SHAPE_REL_TOL * d_reference,
+                SHAPE_EXTENT_TOL * reference UV extent of the group), the extent
+                being max(du, dv) of the reference UVs of the group's faces.
+                All pairs when there are at most SHAPE_MAX_PAIRS; otherwise every
+                k-th pair (k = ceil(pairs / SHAPE_MAX_PAIRS)) in sorted key order.
+                No randomness.
+  groups        only corners the reference laid rigidly together are compared:
+                a group is the common pins of one patch (or one Scaffold island)
+                that lie in ONE reference UV island (the island of the face the
+                reference UV is read from). A patch or island whose pins lie in
+                several reference islands is compared per reference island and
+                counted as "spread" (patches/islands over several ref islands).
+  not scored    a group with fewer than SHAPE_MIN_POINTS common pins, or no
+                object scale: left out, never counted as 100%.
+  shape/torn    groups from patches. shape = agreeing pairs over all tested
+                pairs of the object (pair-weighted mean); torn = scored groups
+                whose own agreement is below TORN_BELOW ("torn/scored").
+  ishape/itorn  the same over groups from Scaffold islands, which also catches
+                patches placed wrongly against each other inside one island.
+                Coincident points (e.g. the two sides of a rigid seam: same
+                Scaffold UV and same reference UV) are kept once.
+  Strips the reference laid straight (stretch away from 1, Straighten Strips)
+  are compared as they are, since Scaffold replays the same option: a strip
+  the reference straightened and Scaffold did not shows as torn, which is
+  correct.
+Not measured: island orientation, scale between islands, packing.
 """
 
 from __future__ import annotations
@@ -78,6 +114,11 @@ AXIS_TOL_DEG = 1.0
 LINE_TOL = 1e-5  # Scaffold pin cross-coordinate spread over island extent
 STRUCTURED_SHARE = 0.8
 STRETCH_TOL = 0.1  # info: |stretch - 1| above this counts as stretched
+SHAPE_REL_TOL = 0.02  # pair distance tolerance, share of the reference distance
+SHAPE_EXTENT_TOL = 0.01  # tolerance floor, share of the group's reference UV extent
+SHAPE_MAX_PAIRS = 300
+SHAPE_MIN_POINTS = 3
+TORN_BELOW = 0.9
 
 AXIS_LINE = "AXIS_LINE"
 FREE_LINE = "FREE_LINE"
@@ -145,6 +186,7 @@ class Use:
     corners: frozenset = frozenset()
     stretch: float | None = None
     reason: str = ""
+    ref_corner: dict = field(default_factory=dict)  # ref-pinned key -> (face, source vertex)
 
 
 @dataclass
@@ -208,6 +250,149 @@ def score_uses(uses) -> Scores:
         sum(u.length for u in with_stretch if abs(u.stretch - 1.0) > STRETCH_TOL), sum(u.length for u in with_stretch)
     )
     return scores
+
+
+def sample_pairs(count, max_pairs=SHAPE_MAX_PAIRS):
+    """Index pairs (i < j) of count points: all, or every k-th in row order when more than max_pairs."""
+
+    total = count * (count - 1) // 2
+    step = max(1, math.ceil(total / max_pairs))
+    pairs, start = [], 0
+    for i in range(count):
+        row = count - 1 - i
+        first = -(-start // step) * step
+        pairs.extend((i, i + 1 + index - start) for index in range(first, start + row, step))
+        start += row
+    return pairs
+
+
+def shape_agreement(points, scale, extent):
+    """(tested pairs, agreeing pairs) of [(scaffold_uv, reference_uv)] points, or None when not scored."""
+
+    if not scale or len(points) < SHAPE_MIN_POINTS:
+        return None
+    floor = SHAPE_EXTENT_TOL * extent
+    pairs = sample_pairs(len(points))
+    agree = 0
+    for i, j in pairs:
+        d_sc = math.dist(points[i][0], points[j][0]) * scale
+        d_ref = math.dist(points[i][1], points[j][1])
+        agree += abs(d_sc - d_ref) <= max(SHAPE_REL_TOL * d_ref, floor)
+    return len(pairs), agree
+
+
+def summarize_shapes(results):
+    """{"shape", "torn", "scored", "pairs"} over {group: (pairs, agree) or None}."""
+
+    scored = {g: r for g, r in results.items() if r is not None and r[0] > 0}
+    pairs = sum(r[0] for r in scored.values())
+    return {
+        "shape": _share(sum(r[1] for r in scored.values()), pairs),
+        "torn": sum(1 for r in scored.values() if r[1] / r[0] < TORN_BELOW),
+        "scored": len(scored),
+        "pairs": pairs,
+    }
+
+
+def _worst(rows, count=3):
+    torn = [r for r in rows if r["agreement"] < TORN_BELOW]
+    return sorted(torn, key=lambda r: (r["agreement"], -r["faces"]))[:count]
+
+
+def _uv_extent(points):
+    if not points:
+        return 0.0
+    return max(max(p[0] for p in points) - min(p[0] for p in points), max(p[1] for p in points) - min(p[1] for p in points))
+
+
+def shape_scores(uses, context, solve, reference, scale):
+    """Patch and island shape agreement (see module docstring) plus the worst torn groups."""
+
+    ref_uv, _ = _reference_corners(reference)
+    ref_island_of_face = {f: i for i, faces in enumerate(reference["islands"]) for f in faces}
+    pinned_uv = {(v.vertex_id, v.patch_id): v.uv for v in solve.vertices if v.pinned}
+    island_of_patch = solve.assembly.island_by_patch_id
+    topology = context.topology_snapshot
+    common: dict[str, dict] = {}  # patch -> key -> (scaffold uv, reference uv, reference island)
+    for use in uses:
+        for key in use.ref_pins & use.sc_pins:
+            corner = use.ref_corner.get(key)
+            sc_uv = pinned_uv.get((key[1], key[0]))
+            if corner is None or sc_uv is None:
+                continue
+            common.setdefault(use.patch_id, {})[key] = (tuple(sc_uv), ref_uv[corner], ref_island_of_face.get(corner[0]))
+
+    def faces_extent(face_ids, ref_island=None):
+        return _uv_extent([
+            (u, v) for f in face_ids if ref_island is None or ref_island_of_face.get(f) == ref_island
+            for _vertex, u, v, _pin in reference["faces"].get(f, ())
+        ])
+
+    # Group = one patch x one reference island (a patch the reference cut
+    # into several islands is compared per piece).
+    patch_results, patch_rows, patch_spread = {}, [], 0
+    for patch_id in sorted(common):
+        parts: dict = {}
+        for key in sorted(common[patch_id]):
+            sc, ref, ref_island = common[patch_id][key]
+            parts.setdefault(ref_island, []).append((sc, ref))
+        patch_spread += len(parts) > 1
+        patch_faces = [str(f) for f in topology.patches[patch_id].source_face_ids]
+        for ref_island in sorted(parts, key=str):
+            faces = [f for f in patch_faces if ref_island_of_face.get(f) == ref_island]
+            result = shape_agreement(parts[ref_island], scale, faces_extent(faces, ref_island))
+            patch_results[(patch_id, ref_island)] = result
+            if result is not None and result[0] > 0:
+                name = patch_id if len(parts) == 1 else f"{patch_id}&ref{ref_island}"
+                patch_rows.append({"patch": name, "faces": len(faces), "common_pins": len(parts[ref_island]),
+                                   "agreement": round(result[1] / result[0], 4)})
+
+    faces_by_island: dict = {}
+    for face_id, patch_id in solve.patch_by_source_face.items():
+        faces_by_island.setdefault(island_of_patch.get(patch_id), []).append(str(face_id))
+    # Group = one Scaffold island x one reference island: only corners the
+    # reference also laid rigidly together are compared.
+    by_part: dict = {}
+    for patch_id in sorted(common):
+        for key in sorted(common[patch_id]):
+            sc, ref, ref_island = common[patch_id][key]
+            by_part.setdefault((island_of_patch.get(patch_id), ref_island), []).append((sc, ref))
+    ref_islands_of: dict = {}
+    for island_id, ref_island in by_part:
+        ref_islands_of.setdefault(island_id, set()).add(ref_island)
+    island_results, island_rows = {}, []
+    for part in sorted(by_part, key=lambda part: (str(part[0]), str(part[1]))):
+        entries, seen = [], set()
+        for sc, ref in by_part[part]:
+            point = (round(sc[0], 9), round(sc[1], 9), round(ref[0], 7), round(ref[1], 7))
+            if point not in seen:
+                seen.add(point)
+                entries.append((sc, ref))
+        island_id, ref_island = part
+        faces = [f for f in faces_by_island.get(island_id, ()) if ref_island_of_face.get(f) == ref_island]
+        result = shape_agreement(entries, scale, faces_extent(faces, ref_island))
+        island_results[part] = result
+        if result is not None and result[0] > 0:
+            name = str(island_id) if len(ref_islands_of[island_id]) == 1 else f"{island_id}&ref{ref_island}"
+            island_rows.append({"island": name, "faces": len(faces), "common_pins": len(entries),
+                                "agreement": round(result[1] / result[0], 4)})
+    island_spread = sum(1 for refs in ref_islands_of.values() if len(refs) > 1)
+
+    patch_summary = summarize_shapes(patch_results)
+    island_summary = summarize_shapes(island_results)
+    return {
+        **patch_summary,
+        "spread": patch_spread,
+        "ishape": island_summary["shape"],
+        "itorn": island_summary["torn"],
+        "iscored": island_summary["scored"],
+        "ipairs": island_summary["pairs"],
+        "ispread": island_spread,
+        "torn_patches": _worst(patch_rows),
+        "torn_islands": _worst(island_rows),
+        "_agree": sum(r[1] for r in patch_results.values() if r),
+        "_iagree": sum(r[1] for r in island_results.values() if r),
+    }
 
 
 # ---------------------------------------------------------- pipeline reading
@@ -291,10 +476,12 @@ def build_uses(context, solve, reference):
         else:
             ref_class, ref_axis, uv_length, _ = classify_uv_polyline(points)
             length = float(chain_facts.length)
-            keys = {}
+            keys, ref_corner = {}, {}
             for face, source in corners:
                 key = (patch_id, str(corner_vertex.get((face, source), f"{face}:{source}")))
                 keys[key] = keys.get(key, False) or ref_pin[(face, source)]
+                if ref_pin[(face, source)]:
+                    ref_corner[key] = min(ref_corner.get(key, (face, source)), (face, source))
             ref_pins = frozenset(k for k, p in keys.items() if p)
             sc_pins = frozenset(k for k in keys if (k[1], patch_id) in pinned_uv)
             island_id = island_of_patch.get(patch_id)
@@ -314,7 +501,7 @@ def build_uses(context, solve, reference):
                 Use(
                     id=pc_id, patch_id=patch_id, length=length, ref_class=ref_class, ref_axis=ref_axis,
                     uv_length=uv_length, sc_class=sc_class, sc_axis=sc_axis, ref_pins=ref_pins,
-                    sc_pins=sc_pins, corners=frozenset(keys), reason=reason,
+                    sc_pins=sc_pins, corners=frozenset(keys), reason=reason, ref_corner=ref_corner,
                 )
             )
             continue
@@ -452,6 +639,7 @@ def evaluate(name):
         "scores": {k: v for k, v in scores.__dict__.items() if k != "extra"},
         "islands": island_info(solve, reference),
         "gaps": top_gaps(uses, context, solve),
+        "shape": shape_scores(uses, context, solve, reference, scale),
         "_uses": uses,
     }
 
@@ -471,9 +659,13 @@ def _table_row(name, r):
     split = f"{i['ref_split']}/{i['sc_merged']}"
     scale = "" if r["scale"] is None else format(r["scale"], ".3f")
     strips = {True: "on", False: "off"}.get(r.get("straighten_strips"), "")
+    shape = r["shape"]
+    torn = f"{shape['torn']}/{shape['scored']}"
+    itorn = f"{shape['itorn']}/{shape['iscored']}"
     return (
         f"{name:14s} {strips:>6s} {_pct(s['line_recall'])}  {_pct(s['false_lines'])}  {_pct(s['pin_cov'])}  {_pct(s['pin_extra'])}"
-        f"  {_pct(s['axis_agree'])}  {structured:>20s}  {islands:>8s}  {split:>7s}  {scale}"
+        f"  {_pct(s['axis_agree'])}  {structured:>20s}  {islands:>8s}  {split:>7s}  {scale:5s}"
+        f"  {_pct(shape['shape'])} {torn:>8s}  {_pct(shape['ishape'])} {itorn:>7s}"
     )
 
 
@@ -487,7 +679,12 @@ def _total(results):
     ]
     scores = score_uses(prefixed)
     islands = {k: sum(r["islands"][k] for r in results) for k in results[0]["islands"]}
-    return {"scores": {k: v for k, v in scores.__dict__.items() if k != "extra"}, "islands": islands, "scale": None}
+    counts = ("torn", "scored", "pairs", "spread", "itorn", "iscored", "ipairs", "ispread", "_agree", "_iagree")
+    shape = {k: sum(r["shape"][k] for r in results) for k in counts}
+    shape["shape"] = _share(shape["_agree"], shape["pairs"])
+    shape["ishape"] = _share(shape["_iagree"], shape["ipairs"])
+    return {"scores": {k: v for k, v in scores.__dict__.items() if k != "extra"}, "islands": islands, "scale": None,
+            "shape": shape}
 
 
 def main(argv=None) -> None:
@@ -499,6 +696,7 @@ def main(argv=None) -> None:
     results = [evaluate(name) for name in (args.object or OBJECTS)]
     print(
         "object         strips recall  false  pincov  pinext  axisagr  structd ref/sc/both  isl r/s  spl/mrg  scale"
+        "  shape     torn  ishape   itorn"
     )
     for r in results:
         print(_table_row(r["object"], r))
@@ -517,6 +715,18 @@ def main(argv=None) -> None:
                 f"  gap {gap['patch']} faces={gap['faces']} missed={gap['missed']:.2f}"
                 f" reason={gap['reason']} island_diags={gap['island_diagnostics']}"
             )
+        shape = r["shape"]
+        print(
+            f"  shape: groups scored={shape['scored']} pairs={shape['pairs']} patches over several ref islands="
+            f"{shape['spread']}; island groups scored={shape['iscored']} pairs={shape['ipairs']}"
+            f" islands over several ref islands={shape['ispread']}"
+        )
+        for row in shape["torn_patches"]:
+            print(f"  torn patch {row['patch']} faces={row['faces']} common_pins={row['common_pins']}"
+                  f" agreement={_pct(row['agreement']).strip()}")
+        for row in shape["torn_islands"]:
+            print(f"  torn island {row['island']} faces={row['faces']} common_pins={row['common_pins']}"
+                  f" agreement={_pct(row['agreement']).strip()}")
         if args.detail:
             for u in sorted(r["_uses"], key=lambda u: (u.patch_id, u.id)):
                 print(
@@ -527,7 +737,9 @@ def main(argv=None) -> None:
     if args.json:
         payload = {
             "tolerances": {"straight": STRAIGHT_TOL, "axis_deg": AXIS_TOL_DEG, "line": LINE_TOL,
-                           "structured_share": STRUCTURED_SHARE},
+                           "structured_share": STRUCTURED_SHARE, "shape_rel": SHAPE_REL_TOL,
+                           "shape_extent": SHAPE_EXTENT_TOL, "shape_max_pairs": SHAPE_MAX_PAIRS,
+                           "shape_min_points": SHAPE_MIN_POINTS, "torn_below": TORN_BELOW},
             "objects": [{k: v for k, v in r.items() if k != "_uses"} for r in results],
             "total": total if len(results) > 1 else None,
         }

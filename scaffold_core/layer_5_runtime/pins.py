@@ -5,6 +5,10 @@ Rules:
 - Assemble the pinned UV skeleton output model and validation invariants.
 - Entry point run_skeleton_solve orchestrates islands -> skeleton -> pins.
 - Vertices without both axis coordinates stay unpinned (conformal fabric).
+- Stations: every inner source vertex of an axis run whose two ends have a
+  UV is pinned on the straight UV segment between them, at its arc-length
+  fraction along the run. Its identity is its occurrence on the run's own
+  patch side; a run-end pin is never overridden.
 - Invariants are validation outputs, never silently relaxed (G5a).
 """
 
@@ -57,11 +61,18 @@ def run_skeleton_solve(context: Any) -> SolveResult:
     diagnostics: list[str] = []
     residual_max = 0.0
     offset_u = 0.0
+    # (face, source vertex) -> the corner's own occurrence, from the Layer 2
+    # patch-side face fans: each seam side has its own fan.
+    vertex_by_face_corner = {
+        (str(face_id), str(fan.source_vertex_id)): str(fan.vertex_id)
+        for fan in context.geometry_facts.local_face_fan_facts.values()
+        for face_id in fan.source_face_ids
+    }
     for skeleton in skeletons:
         residual_max = max(residual_max, skeleton.axis_a.residual_max, skeleton.axis_b.residual_max)
         diagnostics.extend(skeleton.diagnostics)
         island_vertices, island_violations, width = _island_vertices(
-            skeleton, evidence_by_id, offset_u
+            skeleton, evidence_by_id, offset_u, context.geometry_facts, vertex_by_face_corner, diagnostics
         )
         vertices.extend(island_vertices)
         violations.extend(island_violations)
@@ -71,13 +82,6 @@ def run_skeleton_solve(context: Any) -> SolveResult:
         str(face_id): str(patch_id)
         for patch_id, patch in context.topology_snapshot.patches.items()
         for face_id in patch.source_face_ids
-    }
-    # (face, source vertex) -> the corner's own occurrence, from the Layer 2
-    # patch-side face fans: each seam side has its own fan.
-    vertex_by_face_corner = {
-        (str(face_id), str(fan.source_vertex_id)): str(fan.vertex_id)
-        for fan in context.geometry_facts.local_face_fan_facts.values()
-        for face_id in fan.source_face_ids
     }
     return SolveResult(
         assembly=assembly,
@@ -102,7 +106,7 @@ def run_skeleton_solve(context: Any) -> SolveResult:
     )
 
 
-def _island_vertices(skeleton, evidence_by_id, offset_u):
+def _island_vertices(skeleton, evidence_by_id, offset_u, geometry, vertex_by_face_corner, diagnostics):
     a_coords = skeleton.axis_a.coordinate_by_node
     b_coords = skeleton.axis_b.coordinate_by_node
     uv_by_node: dict[str, tuple[float, float]] = {}
@@ -131,6 +135,13 @@ def _island_vertices(skeleton, evidence_by_id, offset_u):
             pinned=True,
             vertex_id=vertex_id,
         )
+    skipped = _station_pins(
+        skeleton, evidence_by_id, uv_by_node, geometry, vertex_by_face_corner, vertices, min_u - offset_u
+    )
+    if skipped:
+        diagnostics.append(
+            f"{skeleton.island_id}: {skipped} station vertices without one occurrence on their side -> unpinned"
+        )
     for evidence_id, role_name in skeleton.axis_role_by_run.items():
         if role_name not in ("AXIS_A", "AXIS_B"):
             continue
@@ -143,6 +154,94 @@ def _island_vertices(skeleton, evidence_by_id, offset_u):
             violations.append(f"{evidence_id}:{role_name}:{cross_delta:.6f}")
     width = max((uv[0] for uv in uv_by_node.values()), default=0.0) - min_u
     return tuple(vertices.values()), violations, width
+
+
+def _station_pins(skeleton, evidence_by_id, uv_by_node, geometry, vertex_by_face_corner, vertices, shift_u):
+    """Pin the inner source vertices of axis runs whose two ends have a UV.
+
+    A station divides the straight UV segment between the run's end nodes in
+    proportion to arc length along the run (its segment lengths). Its pin is
+    the station vertex's occurrence on this run's patch side, read through
+    the Layer 2 side faces of its two run segments; a vertex without exactly
+    one such occurrence is skipped and counted. Existing pins (run ends, or a
+    station placed before) are never overridden. Returns the skipped count.
+    """
+
+    skipped = 0
+    for evidence_id in sorted(skeleton.axis_role_by_run):
+        if skeleton.axis_role_by_run[evidence_id] not in ("AXIS_A", "AXIS_B"):
+            continue
+        start_node = skeleton.node_by_run_end[(evidence_id, "START")]
+        end_node = skeleton.node_by_run_end[(evidence_id, "END")]
+        if start_node == end_node:
+            continue  # a ring: every station would collapse onto its one node
+        start_uv = uv_by_node.get(start_node)
+        end_uv = uv_by_node.get(end_node)
+        if start_uv is None or end_uv is None:
+            continue
+        e = evidence_by_id[evidence_id]
+        path = _run_path(e, geometry)
+        if path is None:
+            skipped += max(len(e.segment_indices) - 1, 0)
+            continue
+        side_faces = geometry.patch_chain_facts[e.patch_chain_id].segment_side_face_ids
+        total = sum(segment_length for segment_length, _position, _vertex in path)
+        walked = 0.0
+        for (segment_length, position, vertex), (_length, next_position, _next) in zip(path, path[1:]):
+            walked += segment_length
+            occurrences = {
+                vertex_by_face_corner.get((str(side_faces[index]), vertex))
+                for index in (position, next_position)
+                if index < len(side_faces) and side_faces[index] is not None
+            } - {None}
+            if len(occurrences) != 1 or total <= 0.0:
+                skipped += 1
+                continue
+            key = (next(iter(occurrences)), str(e.patch_id))
+            if key in vertices:
+                continue
+            t = walked / total
+            vertices[key] = PinnedVertex(
+                source_vertex_id=vertex,
+                island_id=skeleton.island_id,
+                patch_id=str(e.patch_id),
+                uv=(
+                    start_uv[0] + t * (end_uv[0] - start_uv[0]) - shift_u,
+                    start_uv[1] + t * (end_uv[1] - start_uv[1]),
+                ),
+                pinned=True,
+                vertex_id=key[0],
+            )
+    return skipped
+
+
+def _run_path(e, geometry):
+    """The run's segments walked from its START vertex to its END vertex.
+
+    Each step is (segment length, segment position in the Chain's segment
+    order, source vertex reached). None when the segments are not one path.
+    """
+
+    chain_facts = geometry.chain_facts.get(e.parent_chain_id)
+    if chain_facts is None:
+        return None
+    position_by_index = {segment.segment_index: i for i, segment in enumerate(chain_facts.segments)}
+    if not e.segment_indices or any(index not in position_by_index for index in e.segment_indices):
+        return None
+    segments = [chain_facts.segments[position_by_index[index]] for index in e.segment_indices]
+    current = str(e.start_source_vertex_id)
+    if current not in (str(segments[0].start_source_vertex_id), str(segments[0].end_source_vertex_id)):
+        segments.reverse()
+    path = []
+    for segment in segments:
+        ends = (str(segment.start_source_vertex_id), str(segment.end_source_vertex_id))
+        if current not in ends:
+            return None
+        current = ends[1] if current == ends[0] else ends[0]
+        path.append((segment.length, position_by_index[segment.segment_index], current))
+    if current != str(e.end_source_vertex_id):
+        return None
+    return path
 
 
 def _seam_length_mismatches(context, assembly, evidence_by_id):

@@ -27,10 +27,11 @@ from scaffold_core.layer_0_source.snapshot import (
     SourceMeshSnapshot,
 )
 from scaffold_core.layer_3_relations.model import RunCornerKind
+from scaffold_core.layer_4_features.model import FeatureOptions
 from scaffold_core.layer_5_runtime.islands import IslandAssembly
-from scaffold_core.layer_5_runtime.pins import PinnedVertex, SolveResult, run_skeleton_solve
+from scaffold_core.layer_5_runtime.pins import PinnedVertex, SolveResult, _station_pins, run_skeleton_solve
 from scaffold_core.layer_5_runtime.uv_transfer import write_pinned_uvs
-from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
+from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations, run_pass_2_features
 from scaffold_core.tests.fixtures.bent_hinge import make_bent_hinge_panels_source
 from scaffold_core.tests.fixtures.capped_prism import (
     make_capped_decagon_prism_odd_strips_source,
@@ -53,6 +54,7 @@ from scaffold_core.tests.fixtures.run_corner_sheets import (
     make_folded_l_sheet_source,
     make_folded_sheet_source,
 )
+from scaffold_core.tests.fixtures.strip_patches import make_cut_annulus_source
 from scaffold_core.tests.fixtures.t_vertex_wall import make_t_vertex_wall_source
 from scaffold_core.tests.fixtures.tube_with_cap import make_tube_with_cap_source
 
@@ -216,7 +218,7 @@ def test_seam_length_mismatch_is_reported_when_one_seam_side_is_scaled() -> None
 def test_contradictory_equations_are_excluded_with_diagnostics() -> None:
     # Direct unit check of the UNCONSTRAINED path: three nodes, two
     # consistent equations plus one contradicting the loop sum.
-    from scaffold_core.layer_5_runtime.skeleton import _lstsq
+    from scaffold_core.layer_5_runtime.axis_solve import _lstsq
 
     consistent, residuals = _lstsq([("a", "b", 1.0, "e1"), ("b", "c", 1.0, "e2")])
     assert max(abs(r) for r in residuals) < 1e-9
@@ -431,7 +433,7 @@ def _ladder(rung_length: float):
 
 
 def test_solve_absorbs_modelling_drift_relative_to_the_island_span() -> None:
-    from scaffold_core.layer_5_runtime.skeleton import _solve_axis
+    from scaffold_core.layer_5_runtime.axis_solve import solve_axis as _solve_axis
 
     for rung_length, contradictory in ((10.005, False), (10.05, True)):
         runs, roles, signs, node_by_run_end = _ladder(rung_length)
@@ -446,7 +448,7 @@ def test_framed_solve_uses_the_frame_drift_shared_with_the_jog_check() -> None:
     # plan Slice U: a long thin island (buildings walls.010, 8.5 x 0.5 m) lets
     # a 4.6 mm offset pass the jog check; the solve must absorb the same drift
     # instead of its much smaller span along the short axis.
-    from scaffold_core.layer_5_runtime.skeleton import _solve_axis
+    from scaffold_core.layer_5_runtime.axis_solve import solve_axis as _solve_axis
 
     runs, roles, signs, node_by_run_end = _ladder(10.05)
     own_span: list[str] = []
@@ -1061,7 +1063,8 @@ def test_arch_rim_arcs_share_one_axis_and_end_chains_the_other() -> None:
         assert len(arc_roles) == len(end_roles) == 1
         assert arc_roles | end_roles == {"AXIS_A", "AXIS_B"}
     pins = Counter(vertex.island_id for vertex in result.vertices)
-    assert (pins["island:0"], pins["island:1"], pins["island:2"]) == (37, 27, 3)
+    # 37/27/3 run-end pins plus 3/3/4 station pins on multi-segment axis runs (plan Slice Z)
+    assert (pins["island:0"], pins["island:1"], pins["island:2"]) == (40, 30, 7)
 
 
 @pytest.mark.parametrize(
@@ -1069,7 +1072,7 @@ def test_arch_rim_arcs_share_one_axis_and_end_chains_the_other() -> None:
     [
         ("artist_cyl32.json", "island:0", 68),
         ("artist_cyl_multiseam.json", "island:0", 76),
-        ("artist_cross_band.json", "island:1", 22),
+        ("artist_cross_band.json", "island:1", 26),  # 22 run-end pins + 4 stations (plan Slice Z)
     ],
 )
 def test_frame_free_band_islands_keep_every_run_on_an_axis(capture, island_id, pin_count) -> None:
@@ -1161,10 +1164,12 @@ def test_uv_write_puts_each_seam_side_loop_on_its_own_side(monkeypatch, mode: st
 
 @pytest.mark.parametrize("mode", ("OBJECT", "EDIT"))
 def test_uv_write_never_borrows_a_pin_from_another_patch(monkeypatch, mode: str) -> None:
-    # The two 32-gon caps of artist_cyl32 are islands without pins of their
-    # own. Their loops used to take the band's rim pins (another island), which
-    # laid each cap onto the band's rim row. A loop without a pin of its own
-    # stays unpinned and untouched for U > Unwrap.
+    # The 32-gon caps of artist_cyl32 are their own islands. Their loops used
+    # to take the band's rim pins (another island), which laid each cap onto
+    # the band's rim row. A loop without a pin of its own stays unpinned and
+    # untouched for U > Unwrap. Since plan Slice Z each cap pins the ends of
+    # its four axis runs (the cross coordinate comes from the cap's frame), so
+    # 64 -> 48 rim corners are left without a pin of their own.
     source = _load_capture("artist_cyl32.json")
     result = _solve(source)
     own_pins = {(vertex.source_vertex_id, vertex.patch_id) for vertex in result.vertices}
@@ -1175,7 +1180,11 @@ def test_uv_write_never_borrows_a_pin_from_another_patch(monkeypatch, mode: str)
         for face_id, vertex_id in written
         if (vertex_id, result.patch_by_source_face[face_id]) not in own_pins
     ]
-    assert len(without_own_pin) == 64  # every rim corner of both caps
+    assert len(without_own_pin) == 48  # the cap rim corners off the cap axis runs
+    band = max(result.assembly.islands, key=lambda island: len(island.patch_ids))
+    assert Counter(v.island_id for v in result.vertices if v.island_id != band.id) == {
+        island.id: 8 for island in result.assembly.islands if island.id != band.id
+    }
     for corner in without_own_pin:
         assert written[corner].pin_uv is False and written[corner].uv is None, corner
 
@@ -1242,6 +1251,387 @@ def test_seam_cut_mid_chain_vertex_stays_unpinned_with_diagnostics() -> None:
     ]
     assert len(unresolved) == 4  # two run ends meet at the kink on each seam side
     assert not any(vertex.source_vertex_id == "v_a_m" for vertex in result.vertices)
+
+
+# ------------------------------------------------ plan Slice Z: gauge, stations
+
+
+def _grid_wall_source(xs, ys, skip=(), seams=()) -> SourceMeshSnapshot:
+    """Planar quad grid at z = 0; cells in `skip` are holes, `seams` are edge ids.
+
+    Blender-style ids (v<i + len(xs) j>, f<i + (len(xs) - 1) j>) so the fake
+    BMesh can write it.
+    """
+
+    vertices, edges, faces = {}, {}, {}
+    n = len(xs)
+    for j in range(len(ys) - 1):
+        for i in range(n - 1):
+            if (i, j) in skip:
+                continue
+            corners = ((i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1))
+            ids = tuple(SourceVertexId(f"v{a + n * b}") for a, b in corners)
+            for vertex_id, (a, b) in zip(ids, corners):
+                vertices[vertex_id] = MeshVertexRef(vertex_id, (float(xs[a]), float(ys[b]), 0.0))
+            edge_ids = []
+            for pair in (tuple(sorted(pair)) for pair in zip(ids, ids[1:] + ids[:1])):
+                edge_id = SourceEdgeId(f"e_{pair[0]}_{pair[1]}")
+                edges.setdefault(edge_id, MeshEdgeRef(edge_id, pair))
+                edge_ids.append(edge_id)
+            face_id = SourceFaceId(f"f{i + (n - 1) * j}")
+            faces[face_id] = MeshFaceRef(face_id, ids, tuple(edge_ids))
+    return SourceMeshSnapshot(
+        id=SourceMeshId("grid_wall"),
+        vertices=vertices,
+        edges=edges,
+        faces=faces,
+        selected_face_ids=tuple(faces),
+        marks=tuple(SourceMark(kind=SourceMarkKind.SEAM, target_id=SourceEdgeId(edge)) for edge in seams),
+    )
+
+
+def _window_wall_source() -> SourceMeshSnapshot:
+    # A 10 x 4 wall with a 2 x 2 window; the window loop touches nothing else.
+    return _grid_wall_source((0.0, 3.0, 5.0, 10.0), (0.0, 1.0, 3.0, 4.0), skip={(1, 1)})
+
+
+def _distance(p, q) -> float:
+    return sum((a - b) ** 2 for a, b in zip(p, q)) ** 0.5
+
+
+def test_window_loop_of_a_framed_wall_is_pinned_at_its_true_offsets() -> None:
+    # No chain joins the window loop to the outer loop, so its nodes form
+    # their own equation group on each axis. One gauge for the island left
+    # them pinned at arbitrary coordinates; every group is now anchored to the
+    # rigid frame, so the window sits at its true offsets (plan Slice Z).
+    source = _window_wall_source()
+    result = _solve(source)
+    uv = {vertex.source_vertex_id: vertex.uv for vertex in result.vertices}
+    position = {str(vertex_id): vertex.position for vertex_id, vertex in source.vertices.items()}
+    window, outer = ("v5", "v6", "v9", "v10"), ("v0", "v3", "v12", "v15")
+
+    assert result.skeletons[0].frame == "UNFOLDED"
+    assert result.diagnostics == ()
+    for w in window:
+        for o in outer:
+            assert _distance(uv[w], uv[o]) == pytest.approx(_distance(position[w], position[o]), abs=1e-9), (w, o)
+    # Paired: the outer loop keeps its own exact rectangle.
+    for o in outer:
+        for p in outer:
+            assert _distance(uv[o], uv[p]) == pytest.approx(_distance(position[o], position[p]), abs=1e-9)
+
+
+def _two_group_axis():
+    """AXIS_A runs in two groups (one drifts by 3 mm) plus a node pair with no AXIS_A equation."""
+
+    def run(run_id, run_length):
+        return SimpleNamespace(id=run_id, length=run_length, direction=(1.0, 0.0, 0.0))
+
+    runs = (
+        run("g1", 10.0),
+        run("h1", 2.0), run("h2", 3.0), run("h3", 5.003),
+        SimpleNamespace(id="x", length=0.2, direction=(0.0, 1.0, 0.0)),
+    )
+    ends = {"g1": ("n0", "n1"), "h1": ("n2", "n3"), "h2": ("n3", "n4"), "h3": ("n2", "n4"), "x": ("n5", "n6")}
+    node_by_run_end = {}
+    for run_id, (start, end) in ends.items():
+        node_by_run_end[(run_id, "START")] = start
+        node_by_run_end[(run_id, "END")] = end
+    roles = {"g1": "AXIS_A", "h1": "AXIS_A", "h2": "AXIS_A", "h3": "AXIS_A", "x": "AXIS_B"}
+    signs = {run_id: 1.0 for run_id in roles}
+    return runs, roles, signs, node_by_run_end
+
+
+def test_axis_solve_anchors_every_group_to_the_frame_by_its_mean() -> None:
+    from scaffold_core.layer_5_runtime.axis_solve import solve_axis
+
+    runs, roles, signs, node_by_run_end = _two_group_axis()
+    frame = {"n0": 100.0, "n1": 110.0, "n2": 103.0, "n3": 105.0, "n4": 108.0, "n5": 50.0, "n6": 50.2}
+    diagnostics: list[str] = []
+    solve = solve_axis(
+        "AXIS_A", runs, roles, signs, node_by_run_end, diagnostics, drift=0.01, frame_coordinate_by_node=frame
+    )
+    coords = solve.coordinate_by_node
+
+    assert diagnostics == []
+    assert (coords["n0"], coords["n1"]) == pytest.approx((100.0, 110.0), abs=1e-9)
+    # The drifting group keeps its least-squares lengths, and its mean sits on
+    # the mean of its frame coordinates (not on its first node).
+    group = ("n2", "n3", "n4")
+    assert sum(coords[node] for node in group) / 3 == pytest.approx(sum(frame[node] for node in group) / 3, abs=1e-9)
+    assert coords["n3"] - coords["n2"] == pytest.approx(2.001, abs=1e-6)
+    assert coords["n4"] - coords["n3"] == pytest.approx(3.001, abs=1e-6)
+    assert abs(coords["n2"] - frame["n2"]) > 1e-4
+    # A component with no AXIS_A equation takes its nodes' mean frame coordinate.
+    assert (coords["n5"], coords["n6"]) == pytest.approx((50.1, 50.1), abs=1e-9)
+    assert solve.frame_only_nodes == {"n5", "n6"}
+
+
+def test_frame_free_axis_solve_keeps_only_the_largest_group() -> None:
+    from scaffold_core.layer_5_runtime.axis_solve import solve_axis
+
+    runs, roles, signs, node_by_run_end = _two_group_axis()
+    diagnostics: list[str] = []
+    solve = solve_axis("AXIS_A", runs, roles, signs, node_by_run_end, diagnostics, drift=0.01)
+
+    assert set(solve.coordinate_by_node) == {"n2", "n3", "n4"}
+    assert diagnostics == ["AXIS_A: 2 nodes in 1 equation groups not tied to the gauge -> unpinned"]
+    # Paired: the main group solves exactly as it does alone.
+    main_only = tuple(e for e in runs if e.id.startswith("h"))
+    alone = solve_axis("AXIS_A", main_only, roles, signs, node_by_run_end, [], drift=0.01)
+    assert solve.coordinate_by_node == alone.coordinate_by_node
+    # A tie in size keeps the group holding the lexically smallest node id.
+    tie_runs = (runs[0], SimpleNamespace(id="k", length=4.0, direction=(1.0, 0.0, 0.0)))
+    tie_ends = dict(node_by_run_end)
+    tie_ends[("k", "START")], tie_ends[("k", "END")] = "m0", "m1"
+    tie = solve_axis("AXIS_A", tie_runs, {"g1": "AXIS_A", "k": "AXIS_A"}, {"g1": 1.0, "k": 1.0}, tie_ends, [])
+    assert set(tie.coordinate_by_node) == {"m0", "m1"}
+
+
+def test_stations_pin_inner_vertices_of_a_straight_run_at_arc_length() -> None:
+    # The wall's bottom run has three collinear segments of 3, 2 and 5 m: its
+    # inner vertices sit at 30 % and 50 % of the way, not at thirds.
+    result = _solve(_window_wall_source())
+    uv = {vertex.source_vertex_id: vertex.uv for vertex in result.vertices}
+    start, end = uv["v0"], uv["v3"]
+
+    for vertex, t in (("v1", 0.3), ("v2", 0.5)):
+        expected = tuple(start[i] + t * (end[i] - start[i]) for i in range(2))
+        assert uv[vertex] == pytest.approx(expected, abs=1e-9), vertex
+    assert len(result.vertices) == 16  # 8 run ends + 8 stations: every boundary vertex
+    assert result.axis_parallel_violations == ()
+
+
+def test_stations_follow_a_zigzag_chord_run_on_its_straight_uv_segment() -> None:
+    # The arch front f16 keeps one foot chain as one chord run (plan Slice W);
+    # its inner vertices go onto the run's straight UV segment at their arc
+    # length, while the OBLIQUE foot run gets no stations.
+    context = run_pass_1_relations(run_pass_0(_load_capture("artist_arch_bevel.json")))
+    result = run_skeleton_solve(context)
+    patch_id = "patch:seed:f16"
+    skeleton = _skeleton_by_island(result)[result.assembly.island_by_patch_id[patch_id]]
+    feet = [
+        e for e in context.relation_snapshot.patch_chain_directional_evidence
+        if str(e.patch_id) == patch_id and len(e.segment_indices) > 1
+    ]
+    pin = {(v.source_vertex_id, v.patch_id): v.uv for v in result.vertices}
+    roles = {skeleton.axis_role_by_run[e.id] for e in feet}
+    assert roles == {"AXIS_A", "OBLIQUE"}
+
+    for e in feet:
+        segments = {s.segment_index: s for s in context.geometry_facts.chain_facts[e.parent_chain_id].segments}
+        path = [segments[index] for index in e.segment_indices]
+        if str(path[0].start_source_vertex_id) != str(e.start_source_vertex_id) and str(
+            path[0].end_source_vertex_id
+        ) != str(e.start_source_vertex_id):
+            path.reverse()
+        current, walked, inner = str(e.start_source_vertex_id), 0.0, []
+        for segment in path:
+            current = (
+                str(segment.end_source_vertex_id)
+                if str(segment.start_source_vertex_id) == current
+                else str(segment.start_source_vertex_id)
+            )
+            walked += segment.length
+            inner.append((current, walked))
+        total = walked
+        inner = inner[:-1]
+        assert len(inner) == 4
+        if skeleton.axis_role_by_run[e.id] == "OBLIQUE":
+            assert not any((vertex, patch_id) in pin for vertex, _walked in inner)
+            continue
+        start, end = pin[(str(e.start_source_vertex_id), patch_id)], pin[(str(e.end_source_vertex_id), patch_id)]
+        for vertex, walked in inner:
+            t = walked / total
+            assert pin[(vertex, patch_id)] == pytest.approx(
+                tuple(start[i] + t * (end[i] - start[i]) for i in range(2)), abs=1e-9
+            )
+
+
+def test_station_pins_skip_oblique_runs_unpinned_ends_and_existing_pins() -> None:
+    context = run_pass_1_relations(run_pass_0(_window_wall_source()))
+    result = run_skeleton_solve(context)
+    skeleton = result.skeletons[0]
+    evidence = {e.id: e for e in context.relation_snapshot.patch_chain_directional_evidence}
+    bottom = next(run_id for run_id, e in evidence.items() if (e.start_source_vertex_id, e.end_source_vertex_id) == ("v0", "v3"))
+    a, b = skeleton.axis_a.coordinate_by_node, skeleton.axis_b.coordinate_by_node
+    uv_by_node = {node: (a[node], b[node]) for node in a if node in b}
+    patch = str(evidence[bottom].patch_id)
+    keys = {("vertex:v1", patch), ("vertex:v2", patch)}
+
+    def stations(skeleton_, uv_by_node_, vertices):
+        _station_pins(
+            skeleton_, evidence, uv_by_node_, context.geometry_facts, result.vertex_by_face_corner, vertices, 0.0
+        )
+        return vertices
+
+    assert keys <= set(stations(skeleton, uv_by_node, {}))
+    oblique = replace(skeleton, axis_role_by_run={**skeleton.axis_role_by_run, bottom: "OBLIQUE"})
+    assert not keys & set(stations(oblique, uv_by_node, {}))
+    unpinned_end = {node: value for node, value in uv_by_node.items() if node != skeleton.node_by_run_end[(bottom, "END")]}
+    assert not keys & set(stations(skeleton, unpinned_end, {}))
+    run_end_pin = PinnedVertex("v1", skeleton.island_id, patch, (9.0, 9.0), True, "vertex:v1")
+    kept = stations(skeleton, uv_by_node, {("vertex:v1", patch): run_end_pin})
+    assert kept[("vertex:v1", patch)] is run_end_pin
+    assert ("vertex:v2", patch) in kept
+
+
+def _contradicted_axis():
+    """X-Y 1, Y-Z 1, Z-W 1 and Y-W 5: the Y-Z-W cycle contradicts itself."""
+
+    def run(run_id, run_length):
+        return SimpleNamespace(id=run_id, length=run_length, direction=(1.0, 0.0, 0.0))
+
+    runs = (run("xy", 1.0), run("yz", 1.0), run("zw", 1.0), run("yw", 5.0))
+    node_by_run_end = {}
+    for e in runs:
+        node_by_run_end[(e.id, "START")] = e.id[0].upper()
+        node_by_run_end[(e.id, "END")] = e.id[1].upper()
+    roles = {e.id: "AXIS_A" for e in runs}
+    return runs, roles, {run_id: 1.0 for run_id in roles}, node_by_run_end
+
+
+@pytest.mark.parametrize("framed", (True, False))
+def test_unconstrained_components_get_no_coordinate_with_or_without_a_frame(framed) -> None:
+    # X's only equation touches the contradicted cycle, so X is left without
+    # an equation: a framed island gives it its frame coordinate, a frame-free
+    # island drops it. Y, Z, W stay UNCONSTRAINED, frame or not (HEAD left X
+    # at -5.0, a leftover of the contradicted solve).
+    from scaffold_core.layer_5_runtime.axis_solve import solve_axis
+
+    runs, roles, signs, node_by_run_end = _contradicted_axis()
+    frame = {"X": 10.0, "Y": 11.0, "Z": 12.0, "W": 13.0} if framed else None
+    diagnostics: list[str] = []
+    solve = solve_axis(
+        "AXIS_A", runs, roles, signs, node_by_run_end, diagnostics, drift=0.01, frame_coordinate_by_node=frame
+    )
+
+    assert any("contradictory" in diagnostic for diagnostic in diagnostics)
+    assert solve.unconstrained_components
+    assert dict(solve.coordinate_by_node) == ({"X": 10.0} if framed else {})
+
+
+def test_station_pins_skip_a_ring_run_whose_ends_are_one_node() -> None:
+    context = run_pass_1_relations(run_pass_0(_window_wall_source()))
+    result = run_skeleton_solve(context)
+    skeleton = result.skeletons[0]
+    evidence = {e.id: e for e in context.relation_snapshot.patch_chain_directional_evidence}
+    bottom = next(run_id for run_id, e in evidence.items() if (e.start_source_vertex_id, e.end_source_vertex_id) == ("v0", "v3"))
+    a, b = skeleton.axis_a.coordinate_by_node, skeleton.axis_b.coordinate_by_node
+    uv_by_node = {node: (a[node], b[node]) for node in a if node in b}
+    ring = replace(skeleton, node_by_run_end={
+        **skeleton.node_by_run_end, (bottom, "END"): skeleton.node_by_run_end[(bottom, "START")]
+    })
+    vertices: dict = {}
+    _station_pins(ring, evidence, uv_by_node, context.geometry_facts, result.vertex_by_face_corner, vertices, 0.0)
+
+    patch = str(evidence[bottom].patch_id)
+    assert not {("vertex:v1", patch), ("vertex:v2", patch)} & set(vertices)
+    assert vertices  # the other runs still get their stations
+
+
+def test_station_vertex_touching_both_seam_sides_is_skipped_and_counted() -> None:
+    # v1's two bottom-run segments name two different occurrences (as when a
+    # seam side changes at v1): no single own occurrence, so no guess.
+    from scaffold_core.layer_5_runtime.pins import _island_vertices
+
+    context = run_pass_1_relations(run_pass_0(_window_wall_source()))
+    result = run_skeleton_solve(context)
+    skeleton = result.skeletons[0]
+    evidence = {e.id: e for e in context.relation_snapshot.patch_chain_directional_evidence}
+    bottom = next(e for e in evidence.values() if (e.start_source_vertex_id, e.end_source_vertex_id) == ("v0", "v3"))
+    side_faces = context.geometry_facts.patch_chain_facts[bottom.patch_chain_id].segment_side_face_ids
+    faces_at_v1 = {
+        str(face) for face in side_faces
+        if face is not None and "v1" in {str(v) for v in context.source_snapshot.faces[face].vertex_ids}
+    }
+    assert len(faces_at_v1) == 2
+    split = dict(result.vertex_by_face_corner)
+    split[(max(faces_at_v1), "v1")] = "vertex:v1:other_side"
+    diagnostics: list[str] = []
+    vertices, _violations, _width = _island_vertices(
+        skeleton, evidence, 0.0, context.geometry_facts, split, diagnostics
+    )
+
+    assert not any(vertex.source_vertex_id == "v1" for vertex in vertices)
+    assert any(vertex.source_vertex_id == "v2" for vertex in vertices)
+    assert diagnostics == [
+        f"{skeleton.island_id}: 1 station vertices without one occurrence on their side -> unpinned"
+    ]
+
+
+@pytest.mark.parametrize("mode", ("OBJECT", "EDIT"))
+def test_stitched_seam_gets_station_pins_on_each_side_with_equal_uvs(monkeypatch, mode: str) -> None:
+    # Two coplanar patches stitched along a straight seam of two segments
+    # (1 and 2 m): the seam's inner vertex v4 is a station on both sides.
+    source = _grid_wall_source((0.0, 2.0, 5.0), (0.0, 1.0, 3.0), seams=("e_v1_v4", "e_v4_v7"))
+    result = _solve(source)
+    assert len(result.assembly.islands) == 1 and len(result.assembly.islands[0].patch_ids) == 2
+    stations = [vertex for vertex in result.vertices if vertex.source_vertex_id == "v4"]
+
+    assert {vertex.patch_id for vertex in stations} == set(result.assembly.islands[0].patch_ids)
+    assert stations[0].uv == pytest.approx(stations[1].uv, abs=1e-12)
+    written = _write_with_fake_bmesh(monkeypatch, source, result, mode)
+    corners = [corner for corner in written if corner[1] == "v4"]
+    assert len(corners) == 4
+    assert all(written[corner].pin_uv is True for corner in corners)
+    assert all(written[corner].uv == pytest.approx(stations[0].uv, abs=1e-12) for corner in corners)
+
+
+def test_self_seam_sides_get_their_own_station_pins() -> None:
+    # The straight two-segment SEAM_SELF of the segmented tube: its inner
+    # vertex has one occurrence per seam side, and each side's station is
+    # read through its own side faces, so each face corner at v_a_m takes the
+    # u of its own seam side.
+    result = _solve(make_segmented_cylinder_tube_without_caps_with_one_seam_source())
+    pin = {(vertex.vertex_id, vertex.patch_id): vertex for vertex in result.vertices}
+    patch_of = result.patch_by_source_face
+    stations = [vertex for vertex in result.vertices if vertex.source_vertex_id == "v_a_m"]
+
+    assert len({vertex.vertex_id for vertex in stations}) == 2
+    for face_id in ("f_ab_top", "f_ab_bot", "f_da_top", "f_da_bot"):
+        mid = pin[(result.vertex_by_face_corner[(face_id, "v_a_m")], patch_of[face_id])]
+        rim_vertex = "v_a_t" if face_id.endswith("top") else "v_a_b"
+        rim = pin[(result.vertex_by_face_corner[(face_id, rim_vertex)], patch_of[face_id])]
+        assert mid.uv[0] == pytest.approx(rim.uv[0], abs=1e-9), face_id
+
+
+def _boundary_corners_pinned(context, result, patch_id):
+    """Every face corner of the patch on its boundary chains has its own pin; returns their UVs."""
+
+    topology = context.topology_snapshot
+    boundary = {
+        str(vertex)
+        for pc in topology.patch_chains.values()
+        if str(pc.patch_id) == patch_id
+        for vertex in context.geometry_facts.chain_facts[pc.chain_id].source_vertex_run
+    }
+    pin = {(vertex.vertex_id, vertex.patch_id): vertex.uv for vertex in result.vertices if vertex.pinned}
+    uvs, missing = [], []
+    for face_id in topology.patches[patch_id].source_face_ids:
+        for vertex in context.source_snapshot.faces[face_id].vertex_ids:
+            if str(vertex) not in boundary:
+                continue
+            key = (result.vertex_by_face_corner[(str(face_id), str(vertex))], patch_id)
+            (uvs.append(pin[key]) if key in pin else missing.append(key))
+    return uvs, missing
+
+
+@pytest.mark.parametrize("which", ("arch_front", "cut_annulus"))
+def test_strip_islands_pin_every_boundary_vertex_on_their_rectangle(which) -> None:
+    source = _load_capture("artist_arch_bevel.json") if which == "arch_front" else make_cut_annulus_source()
+    context = run_pass_2_features(run_pass_1_relations(run_pass_0(source)), FeatureOptions(straighten_strips=True))
+    result = run_skeleton_solve(context)
+    patch_id = "patch:seed:f16" if which == "arch_front" else str(context.feature_snapshot.constraints[0].patch_id)
+    skeleton = _skeleton_by_island(result)[result.assembly.island_by_patch_id[patch_id]]
+    assert skeleton.frame == "STRIP"
+
+    uvs, missing = _boundary_corners_pinned(context, result, patch_id)
+    assert uvs and not missing
+    us, vs = [uv[0] for uv in uvs], [uv[1] for uv in uvs]
+    for u, v in uvs:  # every boundary pin lies on a side of the rectangle
+        assert min(abs(u - min(us)), abs(u - max(us)), abs(v - min(vs)), abs(v - max(vs))) < 1e-9, (u, v)
+    assert result.axis_parallel_violations == ()
 
 
 def _pinned_face_areas(context, result) -> list[float]:

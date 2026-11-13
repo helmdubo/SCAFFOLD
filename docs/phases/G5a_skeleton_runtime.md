@@ -38,7 +38,10 @@ skeleton.py  - selection-wide solve:
   (the spike's chain-endpoint bug is contract-forbidden);
   axes = island-local AXIS_A/AXIS_B projected from families in the
   island's unfolded frame (stitch-tree parallel transport);
-  numpy dense lstsq per axis; gauge = seed component pinned;
+  dense least squares per axis and per connected group of equations
+  (axis_solve.py, plan Slice Z); in a rigid frame every group is
+  anchored to the frame by the mean of its nodes' frame coordinate,
+  without a frame only the largest group keeps its coordinates;
   snap and drift (plan Slice S): in the rigid frame a run takes an axis
   only within the planar tolerance angle (~5 degrees), and residuals up
   to 1 mm per metre of the island's span along the axis are drift;
@@ -49,7 +52,12 @@ skeleton.py  - selection-wide solve:
   the island lines (plan Slice Q), Layer 5 checks them against the frame
   and never orders a line.
 
-pins.py      - output model: vertex -> (uv, pinned flag, island id).
+axis_solve.py - the per-axis solve: components, equation groups, gauge,
+  frame anchoring, residual tolerance and UNCONSTRAINED exclusion.
+
+pins.py      - output model: vertex -> (uv, pinned flag, island id);
+  stations (plan Slice Z): an axis run pins its inner source vertices at
+  their arc-length points between its two end pins.
 uv_transfer.py - the ONLY bpy write boundary (G5 rule): writes UVs+pins
   in the mesh's current mode without bpy operators. It does not call
   mode_set or unwrap; the artist runs Blender's U > Unwrap after the
@@ -73,6 +81,14 @@ uv_transfer.py - the ONLY bpy write boundary (G5 rule): writes UVs+pins
    a rigid unfolded frame an ordered island rail runs one way along its
    axis (rail sign times frame sign is constant; rail_frame_conflicts is a
    validation output).
+7. pin/frame agreement (plan Slice Z): in an island with a rigid unfolded
+   frame every pinned run-end node lies within the island's drift of its
+   frame position. No pin comes from an equation group that is not tied
+   to a gauge: such a group is anchored to the frame, or unpinned with a
+   diagnostic when the island has no frame.
+8. stations (plan Slice Z): a station pin lies on the UV segment between
+   its run's two end pins at its arc-length fraction and never replaces
+   a run-end pin.
 ```
 
 ## Non-goals in G5a
@@ -262,3 +278,9 @@ FeatureConstraint (Layer 4, user option `straighten_strips`) takes the
 strip layout instead of the rigid frame or the frame-free branch: frame
 value STRIP, opposite uses on one axis with equal length. With the option
 off nothing changes; the buildings baseline is identical.
+
+After Slice Z (2026-11) pins are consistent and complete: on the 13
+buildings objects the framed pins that sat beyond drift from their frame
+position go 2161 -> 0 (largest distance 152 m -> 5.8 cm), pins 10138 ->
+11112 (948 stations). Roles, islands, invariants and diagnostics are
+unchanged.

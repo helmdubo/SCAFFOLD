@@ -15,9 +15,53 @@ from dev.tools.cftuv_parity.parity import (
     _scaffold_use,
     classify_uv_polyline,
     oblique_causes,
+    sample_pairs,
     score_uses,
+    shape_agreement,
+    summarize_shapes,
     weighted_median,
 )
+
+# A patch outline in metres (Scaffold) and its reference: the same shape
+# turned by a quarter turn, scaled by 0.25 UV per metre and moved.
+SHAPE_M = [(0.0, 0.0), (4.0, 0.0), (4.0, 2.0), (1.0, 3.0), (0.0, 2.0)]
+
+
+def _reference_of(points, scale=0.25):
+    return [(5.0 - scale * v, 7.0 + scale * u) for u, v in points]
+
+
+def test_rotated_scaled_shape_agrees_fully():
+    points = list(zip(SHAPE_M, _reference_of(SHAPE_M)))
+    pairs, agree = shape_agreement(points, 0.25, extent=1.0)
+    assert pairs == 10 and agree == 10
+    summary = summarize_shapes({"P": (pairs, agree)})
+    assert summary == {"shape": 1.0, "torn": 0, "scored": 1, "pairs": 10}
+
+
+def test_one_corner_moved_far_tears_the_patch():
+    moved = list(SHAPE_M)
+    moved[3] = (30.0, -12.0)  # an arbitrary pin coordinate
+    points = list(zip(moved, _reference_of(SHAPE_M)))
+    pairs, agree = shape_agreement(points, 0.25, extent=1.0)
+    assert (pairs, agree) == (10, 6)  # the 4 pairs through the moved corner fail
+    summary = summarize_shapes({"P": (pairs, agree), "Q": (10, 10)})
+    assert summary["torn"] == 1 and summary["scored"] == 2
+    assert summary["shape"] == pytest.approx(16 / 20)
+
+
+def test_fewer_than_three_common_pins_is_not_scored():
+    points = list(zip(SHAPE_M[:2], _reference_of(SHAPE_M[:2])))
+    assert shape_agreement(points, 0.25, extent=1.0) is None
+    assert shape_agreement(list(zip(SHAPE_M, _reference_of(SHAPE_M))), None, extent=1.0) is None
+    assert summarize_shapes({"P": None}) == {"shape": None, "torn": 0, "scored": 0, "pairs": 0}
+
+
+def test_pair_sampling_is_deterministic_and_bounded():
+    assert sample_pairs(4) == [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
+    big = sample_pairs(100)  # 4950 pairs -> every 17th
+    assert len(big) <= 300 and big == sample_pairs(100)
+    assert big[:2] == [(0, 1), (0, 18)] and all(i < j < 100 for i, j in big)
 
 
 def test_straight_polylines_on_axes():

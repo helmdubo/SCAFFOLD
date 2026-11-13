@@ -23,18 +23,21 @@ Rules:
 - Island rails: Layer 3 cuts each family's ScaffoldRail by the island (its
   runs and stitched hinges) and orders the pieces; Layer 5 checks them
   against the unfolded frame and never orders a line itself.
+- The per-axis solve is axis_solve.py: every equation group has its own
+  gauge; a framed island anchors each group to its frame coordinates.
 - Contradictions -> UNCONSTRAINED + diagnostics, never silent smearing.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Mapping
 
 from scaffold_core.layer_2_geometry.measures import EPSILON, cross, dot, normalize
 from scaffold_core.layer_3_relations.model import RunCornerKind, ScaffoldRailSegment
 from scaffold_core.layer_3_relations.scaffold_rails import cut_scaffold_rail, rail_member_endpoints
 from scaffold_core.layer_4_features.model import FeatureConstraintKind
+from scaffold_core.layer_5_runtime.axis_solve import RESIDUAL_TOLERANCE_PER_SPAN, AxisSolve, solve_axis
 from scaffold_core.layer_5_runtime.islands import (
     PLANAR_PATCH_MIN_NORMAL_DOT,
     IslandAssembly,
@@ -53,24 +56,10 @@ from scaffold_core.layer_5_runtime.islands import (
 # tolerance angle (~5 degrees, plan Slice S); steeper runs stay OBLIQUE.
 AXIS_CLASS_MIN_COS = PLANAR_PATCH_MIN_NORMAL_DOT
 NODE_FRAME_TOLERANCE = 1e-6  # relative to the island extent
-RESIDUAL_TOLERANCE = 1e-5
-# Modelling drift the solve absorbs: 1 mm per metre of the island's span
-# along the axis (plan Slice S); larger residuals are contradictions.
-RESIDUAL_TOLERANCE_PER_SPAN = 1e-3
-GAUGE_WEIGHT = 1e6
 UNFOLDED_FRAME = "UNFOLDED"
 FRAME_FREE = "FRAME_FREE"
 STRIP_LAYOUT = "STRIP"  # an applied STRAIGHT_STRIP FeatureConstraint
 _STRIP_AXIS_UNIT = {"AXIS_A": (1.0, 0.0, 0.0), "AXIS_B": (0.0, 1.0, 0.0)}
-
-
-@dataclass(frozen=True)
-class AxisSolve:
-    axis: str
-    coordinate_by_node: Mapping[str, float]
-    residual_max: float
-    unconstrained_components: tuple[int, ...]
-    equation_count: int
 
 
 @dataclass(frozen=True)
@@ -215,6 +204,7 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
     strip_layout = None if strip is None else _strip_layout(strip, runs, node_by_run_end, diagnostics)
     frame = None if strip_layout is not None else _unfolded_frame(island, assembly, geometry, lookups)
     length_of = None
+    frame_coordinates = {"AXIS_A": None, "AXIS_B": None}
     if strip_layout is not None:
         roles, signs, direction_of, length_of = strip_layout
         mismatches = ()
@@ -243,18 +233,35 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
             runs, framed, line_of, direction_of, frame.normal, diagnostics, drift
         )
         mismatches = _node_frame_mismatches(frame, framed, node_by_run_end, lookups.position_of_source)
+        axes = _frame_axes(framed, line_of, direction_of, frame.normal)
+        if axes is not None:
+            frame_coordinates = _frame_coordinates(
+                frame, framed, node_by_run_end, lookups.position_of_source, axes
+            )
     # A strip island takes its axes from the constraint, not from its lines:
     # the rail/line check does not apply to it.
     rail_conflicts = (
         () if strip_layout is not None
         else _island_rail_conflicts(rail_segments, line_of, roles, signs, frame is not None)
     )
-    axis_a = _solve_axis(
-        "AXIS_A", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift, length_of
+    axis_a = solve_axis(
+        "AXIS_A", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift, length_of,
+        frame_coordinates["AXIS_A"],
     )
-    axis_b = _solve_axis(
-        "AXIS_B", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift, length_of
+    axis_b = solve_axis(
+        "AXIS_B", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift, length_of,
+        frame_coordinates["AXIS_B"],
     )
+    # A node with no equation on either axis is not on the skeleton: the
+    # frame alone would pin it, so it keeps no coordinate (stays fabric).
+    frame_only = axis_a.frame_only_nodes & axis_b.frame_only_nodes
+    if frame_only:
+        axis_a, axis_b = (
+            replace(solve, coordinate_by_node={
+                node: value for node, value in solve.coordinate_by_node.items() if node not in frame_only
+            })
+            for solve in (axis_a, axis_b)
+        )
     if strip_layout is not None:
         layout = STRIP_LAYOUT
     else:
@@ -480,6 +487,28 @@ def _unfolded_frame(island, assembly, geometry, lookups) -> _IslandFrame | None:
     return _IslandFrame(rotation, offset, normalize(facts[root].normal))
 
 
+def _frame_axes(framed, line_of, direction_of, normal):
+    """AXIS_A along the longest island line's longest run, AXIS_B = normal x AXIS_A.
+
+    None when no framed run lies on an island line.
+    """
+
+    length_by_line: dict[str, float] = {}
+    runs_by_line: dict[str, list] = {}
+    for e in framed:
+        line_id = line_of.get(e.id)
+        if line_id is None:
+            continue
+        length_by_line[line_id] = length_by_line.get(line_id, 0.0) + e.length
+        runs_by_line.setdefault(line_id, []).append(e)
+    if not length_by_line:
+        return None
+    seed = sorted(length_by_line, key=lambda line_id: (-length_by_line[line_id], line_id))[0]
+    seed_run = max(runs_by_line[seed], key=lambda e: (e.length, e.id))
+    axis_a = normalize(direction_of[seed_run.id])
+    return axis_a, normalize(cross(normal, axis_a))
+
+
 def _frame_roles_and_signs(runs, framed, line_of, direction_of, normal, diagnostics, drift=None):
     """Island-line axis roles and run orientation in the unfolded frame.
 
@@ -492,20 +521,14 @@ def _frame_roles_and_signs(runs, framed, line_of, direction_of, normal, diagnost
 
     roles = {e.id: "OBLIQUE" for e in runs}
     signs = {e.id: 1.0 for e in runs}
-    length_by_line: dict[str, float] = {}
+    axes = _frame_axes(framed, line_of, direction_of, normal)
+    if axes is None:
+        return roles, signs
+    axis_a, axis_b = axes
     runs_by_line: dict[str, list] = {}
     for e in framed:
-        line_id = line_of.get(e.id)
-        if line_id is None:
-            continue
-        length_by_line[line_id] = length_by_line.get(line_id, 0.0) + e.length
-        runs_by_line.setdefault(line_id, []).append(e)
-    if not length_by_line:
-        return roles, signs
-    seed = sorted(length_by_line, key=lambda line_id: (-length_by_line[line_id], line_id))[0]
-    seed_run = max(runs_by_line[seed], key=lambda e: (e.length, e.id))
-    axis_a = normalize(direction_of[seed_run.id])
-    axis_b = normalize(cross(normal, axis_a))
+        if line_of.get(e.id) is not None:
+            runs_by_line.setdefault(line_of[e.id], []).append(e)
     for line_id in sorted(runs_by_line):
         members = runs_by_line[line_id]
         member_roles = set()
@@ -554,8 +577,8 @@ def _frame_extent(frame, runs, position_of_source) -> float:
     return max(max(point[i] for point in points) - min(point[i] for point in points) for i in range(3))
 
 
-def _node_frame_mismatches(frame, runs, node_by_run_end, position_of_source) -> tuple[str, ...]:
-    """Solve nodes whose occurrences sit apart in the rigid unfolded frame."""
+def _frame_points_by_node(frame, runs, node_by_run_end, position_of_source) -> dict[str, list]:
+    """Unfolded frame positions of each solve node, one per framed run end."""
 
     run_by_id = {e.id: e for e in runs}
     points_by_node: dict[str, list] = {}
@@ -567,6 +590,28 @@ def _node_frame_mismatches(frame, runs, node_by_run_end, position_of_source) -> 
         rotated = _rotate(frame.rotation_by_patch[str(e.patch_id)], position_of_source[str(source_vertex)])
         offset = frame.offset_by_patch[str(e.patch_id)]
         points_by_node.setdefault(node, []).append(tuple(rotated[i] + offset[i] for i in range(3)))
+    return points_by_node
+
+
+def _frame_coordinates(frame, runs, node_by_run_end, position_of_source, axes):
+    """Each framed node's mean unfolded position projected on AXIS_A and AXIS_B.
+
+    The axis solve anchors every equation group to these coordinates, so all
+    groups of a framed island share the frame's origin.
+    """
+
+    coordinates: dict[str, dict[str, float]] = {"AXIS_A": {}, "AXIS_B": {}}
+    for node, points in _frame_points_by_node(frame, runs, node_by_run_end, position_of_source).items():
+        mean = tuple(sum(point[i] for point in points) / len(points) for i in range(3))
+        for axis_name, axis in zip(("AXIS_A", "AXIS_B"), axes):
+            coordinates[axis_name][node] = dot(mean, axis)
+    return coordinates
+
+
+def _node_frame_mismatches(frame, runs, node_by_run_end, position_of_source) -> tuple[str, ...]:
+    """Solve nodes whose occurrences sit apart in the rigid unfolded frame."""
+
+    points_by_node = _frame_points_by_node(frame, runs, node_by_run_end, position_of_source)
     points = [point for node_points in points_by_node.values() for point in node_points]
     if not points:
         return ()
@@ -773,28 +818,6 @@ def _bipartition_families(runs, family_of, run_corner_relations, diagnostics):
     return axis_by_family
 
 
-def _components(runs, roles, role_name, node_by_run_end):
-    parents: dict[str, str] = {}
-
-    def find(item: str) -> str:
-        parents.setdefault(item, item)
-        while parents[item] != item:
-            parents[item] = parents[parents[item]]
-            item = parents[item]
-        return item
-
-    for e in runs:
-        start = node_by_run_end[(e.id, "START")]
-        end = node_by_run_end[(e.id, "END")]
-        parents.setdefault(start, start)
-        parents.setdefault(end, end)
-        if roles.get(e.id) == role_name:
-            ra, rb = find(start), find(end)
-            if ra != rb:
-                parents[max(ra, rb)] = min(ra, rb)
-    return {node: find(node) for node in parents}
-
-
 def _co_orient_axis_families(runs, family_of, axis_by_family, signs, node_by_run_end, diagnostics):
     """Co-orient parallel rails of one axis through their linking cross runs.
 
@@ -849,124 +872,6 @@ def _co_orient_axis_families(runs, family_of, axis_by_family, signs, node_by_run
             factor = flip.get(family_id)
             if factor is not None and factor < 0.0 and e.id in signs:
                 signs[e.id] = -signs[e.id]
-
-
-def _solve_axis(
-    axis_name, runs, roles, signs, node_by_run_end, diagnostics, direction_of=None, drift=None, length_of=None
-):
-    """P7 semantics: the A coordinate lives on COLUMN components (nodes
-    connected by AXIS_B runs share one A value) and is constrained by
-    AXIS_A run lengths; symmetric for B on ROW components.
-
-    direction_of supplies run directions in the island frame when one exists.
-    length_of overrides run lengths (a strip island's scaled lengths).
-    """
-
-    own_role = "AXIS_A" if axis_name == "AXIS_A" else "AXIS_B"
-    cross_role = "AXIS_B" if axis_name == "AXIS_A" else "AXIS_A"
-    component_of = _components(runs, roles, cross_role, node_by_run_end)
-    equations = []
-    for e in runs:
-        if roles.get(e.id) != own_role or e.id not in signs:
-            continue  # an unsigned run (unordered island rail) adds no equation
-        start = component_of.get(node_by_run_end[(e.id, "START")])
-        end = component_of.get(node_by_run_end[(e.id, "END")])
-        if start is None or end is None or start == end:
-            continue
-        run_length = e.length if length_of is None else length_of[e.id]
-        equations.append([start, end, signs[e.id] * run_length, e.id, e])
-    # Runs connecting the same two cross-components are mutually parallel
-    # on a developable region: normalize their signs to the group's first
-    # run so parallel columns/rails cannot contradict each other.
-    reference_by_pair = {}
-    for equation in equations:
-        start, end, value, _eid, e = equation
-        pair = (min(start, end), max(start, end))
-        direction = e.direction if direction_of is None else direction_of[e.id]
-        oriented = tuple(c * (1.0 if value >= 0.0 else -1.0) for c in direction)
-        if pair not in reference_by_pair:
-            reference_by_pair[pair] = (oriented, start, end)
-            continue
-        ref_dir, _ref_start, _ref_end = reference_by_pair[pair]
-        # On a developable region runs between the same two rails are
-        # parallel: the coordinate grows along the reference direction,
-        # so the equation sign follows the dot sign alone.
-        if dot(normalize(oriented), normalize(ref_dir)) < 0.0:
-            equation[2] = -value
-    equations = [(eq[0], eq[1], eq[2], eq[3]) for eq in equations]
-    if not equations:
-        return AxisSolve(axis_name, {}, 0.0, (), 0)
-    coords, residuals = _lstsq(equations)
-    if drift is None:
-        span = max(coords.values()) - min(coords.values()) if coords else 0.0
-        drift = RESIDUAL_TOLERANCE_PER_SPAN * span
-    # In a rigid frame the jog check and the solve share one drift (plan Slice U).
-    tolerance = max(RESIDUAL_TOLERANCE, drift)
-    bad = [i for i, r in enumerate(residuals) if abs(r) > tolerance]
-    unconstrained: tuple[int, ...] = ()
-    if bad:
-        bad_components = {equations[i][0] for i in bad} | {equations[i][1] for i in bad}
-        diagnostics.append(
-            f"{axis_name}: {len(bad)} contradictory equations -> UNCONSTRAINED components"
-        )
-        for component in bad_components:
-            coords.pop(component, None)
-        kept = [
-            eq for index, eq in enumerate(equations)
-            if index not in set(bad) and eq[0] not in bad_components and eq[1] not in bad_components
-        ]
-        if kept:
-            coords, residuals = _lstsq(kept)
-        else:
-            residuals = []
-        unconstrained = tuple(sorted({index for index in bad}))
-    residual_max = max((abs(r) for r in residuals), default=0.0)
-    coordinate_by_node = {
-        node: coords[component]
-        for node, component in component_of.items()
-        if component in coords
-    }
-    return AxisSolve(axis_name, coordinate_by_node, residual_max, unconstrained, len(equations))
-
-
-def _lstsq(equations):
-    nodes = sorted({eq[0] for eq in equations} | {eq[1] for eq in equations})
-    index = {node: i for i, node in enumerate(nodes)}
-    n = len(nodes)
-    ata = [[0.0] * n for _ in range(n)]
-    atb = [0.0] * n
-    rows = []
-    for start, end, value, _eid in equations:
-        row = {index[end]: 1.0, index[start]: index[end] != index[start] and -1.0 or 0.0}
-        rows.append((index[start], index[end], value))
-    for i_start, i_end, value in rows:
-        for (a, ca) in ((i_end, 1.0), (i_start, -1.0)):
-            atb[a] += ca * value
-            for (b, cb) in ((i_end, 1.0), (i_start, -1.0)):
-                ata[a][b] += ca * cb
-    # gauge: pin first node to zero
-    ata[0][0] += GAUGE_WEIGHT
-    solution = _solve_dense(ata, atb)
-    coords = {node: solution[index[node]] for node in nodes}
-    residuals = [coords[end] - coords[start] - value for start, end, value, _eid in equations]
-    return coords, residuals
-
-
-def _solve_dense(matrix, vector):
-    n = len(vector)
-    a = [row[:] + [vector[i]] for i, row in enumerate(matrix)]
-    for col in range(n):
-        pivot = max(range(col, n), key=lambda r: abs(a[r][col]))
-        if abs(a[pivot][col]) < 1e-12:
-            continue
-        a[col], a[pivot] = a[pivot], a[col]
-        factor = a[col][col]
-        a[col] = [v / factor for v in a[col]]
-        for row in range(n):
-            if row != col and abs(a[row][col]) > 0.0:
-                scale = a[row][col]
-                a[row] = [rv - scale * cv for rv, cv in zip(a[row], a[col])]
-    return [a[i][n] for i in range(n)]
 
 
 _chain_axis = chain_axis

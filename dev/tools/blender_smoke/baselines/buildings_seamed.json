@@ -19,8 +19,8 @@
   "opposite_side_families": 0,
   "patches": 3,
   "patches_outside_frame": 0,
-  "pinned": 42,
-  "pinned_loops": 72,
+  "pinned": 50,
+  "pinned_loops": 88,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_SEAM_SELF": 1,
    "TOPOLOGY_CHAIN_SHARED": 2
@@ -38,7 +38,7 @@
   "shells": 1,
   "solve_diagnostics": 0,
   "unordered_island_rails": 0,
-  "written_loops": 72
+  "written_loops": 88
  },
  "Cube.002": {
   "axis_runs": 8,
@@ -100,8 +100,8 @@
   "opposite_side_families": 0,
   "patches": 612,
   "patches_outside_frame": 1,
-  "pinned": 3519,
-  "pinned_loops": 4854,
+  "pinned": 3862,
+  "pinned_loops": 5712,
   "pipeline_codes": {
    "PATCH_CHAIN_SHAPE_LAW_MISMATCH": 1,
    "TOPOLOGY_CHAIN_BORDER": 489,
@@ -120,7 +120,7 @@
   "shells": 8,
   "solve_diagnostics": 7,
   "unordered_island_rails": 1,
-  "written_loops": 4854
+  "written_loops": 5712
  },
  "walls.003": {
   "axis_runs": 3488,
@@ -142,8 +142,8 @@
   "opposite_side_families": 0,
   "patches": 612,
   "patches_outside_frame": 1,
-  "pinned": 3519,
-  "pinned_loops": 4849,
+  "pinned": 3860,
+  "pinned_loops": 5704,
   "pipeline_codes": {
    "PATCH_CHAIN_SHAPE_LAW_MISMATCH": 1,
    "TOPOLOGY_CHAIN_BORDER": 489,
@@ -162,7 +162,7 @@
   "shells": 8,
   "solve_diagnostics": 7,
   "unordered_island_rails": 1,
-  "written_loops": 4849
+  "written_loops": 5704
  },
  "walls.004": {
   "axis_runs": 222,
@@ -184,8 +184,8 @@
   "opposite_side_families": 0,
   "patches": 55,
   "patches_outside_frame": 0,
-  "pinned": 224,
-  "pinned_loops": 224,
+  "pinned": 228,
+  "pinned_loops": 228,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 62,
    "TOPOLOGY_CHAIN_SHARED": 32
@@ -203,7 +203,7 @@
   "shells": 27,
   "solve_diagnostics": 2,
   "unordered_island_rails": 0,
-  "written_loops": 224
+  "written_loops": 228
  },
  "walls.005": {
   "axis_runs": 52,
@@ -225,8 +225,8 @@
   "opposite_side_families": 0,
   "patches": 10,
   "patches_outside_frame": 0,
-  "pinned": 55,
-  "pinned_loops": 68,
+  "pinned": 58,
+  "pinned_loops": 72,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 13,
    "TOPOLOGY_CHAIN_SHARED": 13
@@ -244,7 +244,7 @@
   "shells": 1,
   "solve_diagnostics": 0,
   "unordered_island_rails": 0,
-  "written_loops": 68
+  "written_loops": 72
  },
  "walls.006": {
   "axis_runs": 20,
@@ -266,8 +266,8 @@
   "opposite_side_families": 0,
   "patches": 4,
   "patches_outside_frame": 0,
-  "pinned": 20,
-  "pinned_loops": 20,
+  "pinned": 22,
+  "pinned_loops": 22,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 4,
    "TOPOLOGY_CHAIN_SHARED": 5
@@ -285,7 +285,7 @@
   "shells": 1,
   "solve_diagnostics": 0,
   "unordered_island_rails": 0,
-  "written_loops": 20
+  "written_loops": 22
  },
  "walls.007": {
   "axis_runs": 200,
@@ -307,8 +307,8 @@
   "opposite_side_families": 0,
   "patches": 32,
   "patches_outside_frame": 0,
-  "pinned": 201,
-  "pinned_loops": 280,
+  "pinned": 218,
+  "pinned_loops": 328,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 25,
    "TOPOLOGY_CHAIN_SHARED": 84
@@ -326,7 +326,7 @@
   "shells": 1,
   "solve_diagnostics": 0,
   "unordered_island_rails": 0,
-  "written_loops": 280
+  "written_loops": 328
  },
  "walls.008": {
   "axis_runs": 12,
@@ -388,8 +388,8 @@
   "opposite_side_families": 0,
   "patches": 310,
   "patches_outside_frame": 1,
-  "pinned": 1813,
-  "pinned_loops": 2411,
+  "pinned": 2004,
+  "pinned_loops": 2904,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 270,
    "TOPOLOGY_CHAIN_SHARED": 744
@@ -407,7 +407,7 @@
   "shells": 3,
   "solve_diagnostics": 2,
   "unordered_island_rails": 1,
-  "written_loops": 2411
+  "written_loops": 2904
  },
  "walls.010": {
   "axis_runs": 696,
@@ -429,8 +429,8 @@
   "opposite_side_families": 0,
   "patches": 122,
   "patches_outside_frame": 0,
-  "pinned": 704,
-  "pinned_loops": 1048,
+  "pinned": 764,
+  "pinned_loops": 1219,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 90,
    "TOPOLOGY_CHAIN_SHARED": 295
@@ -448,7 +448,7 @@
   "shells": 3,
   "solve_diagnostics": 0,
   "unordered_island_rails": 1,
-  "written_loops": 1048
+  "written_loops": 1219
  },
  "walls.011": {
   "axis_runs": 12,
@@ -470,8 +470,8 @@
   "opposite_side_families": 0,
   "patches": 1,
   "patches_outside_frame": 0,
-  "pinned": 12,
-  "pinned_loops": 24,
+  "pinned": 14,
+  "pinned_loops": 32,
   "pipeline_codes": {
    "TOPOLOGY_CHAIN_BORDER": 3
   },
@@ -488,7 +488,7 @@
   "shells": 1,
   "solve_diagnostics": 0,
   "unordered_island_rails": 0,
-  "written_loops": 24
+  "written_loops": 32
  },
  "walls.012": {
   "axis_runs": 8,
@@ -510,8 +510,8 @@
   "opposite_side_families": 0,
   "patches": 1,
   "patches_outside_frame": 0,
-  "pinned": 9,
-  "pinned_loops": 12,
+  "pinned": 12,
+  "pinned_loops": 18,
   "pipeline_codes": {
    "PATCH_CHAIN_SHAPE_LAW_MISMATCH": 1,
    "TOPOLOGY_CHAIN_BORDER": 1
@@ -529,6 +529,6 @@
   "shells": 1,
   "solve_diagnostics": 0,
   "unordered_island_rails": 0,
-  "written_loops": 12
+  "written_loops": 18
  }
 }
