@@ -155,8 +155,9 @@ def _strip_constraints_by_island(context: Any, assembly: IslandAssembly):
 
     A constraint applies only to an island made of its one patch; otherwise
     the island gets a diagnostic naming the patch (never silently dropped).
-    Island assembly never stitches a ladder patch, so only a strip can share
-    its island.
+    Island assembly stitches a ladder patch only where the user filter joins
+    it to its quilt (plan Slice AH); the quilt then lays it, which is the
+    expected case, so a ladder sharing its island gets no diagnostic.
     """
 
     features = getattr(context, "feature_snapshot", None)
@@ -174,10 +175,9 @@ def _strip_constraints_by_island(context: Any, assembly: IslandAssembly):
             continue
         if tuple(island_by_id[island_id].patch_ids) == (patch_id,):
             applied[island_id] = constraint
-        else:
-            name = "strip" if constraint.kind is FeatureConstraintKind.STRAIGHT_STRIP else "ladder"
+        elif constraint.kind is FeatureConstraintKind.STRAIGHT_STRIP:
             notes.setdefault(island_id, []).append(
-                f"{name} constraint not applied, patch shares its island: {patch_id}"
+                f"strip constraint not applied, patch shares its island: {patch_id}"
             )
     return applied, {island_id: tuple(messages) for island_id, messages in notes.items()}
 

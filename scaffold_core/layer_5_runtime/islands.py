@@ -19,7 +19,19 @@ Rules:
   bent stitch candidate stays stitched. Layer 4 is read only through
   FeatureConstraint.
 - A bevel strip laid from its ladder (a STRAIGHT_LADDER constraint) is an
-  island by itself: no seam of it is stitched.
+  island by itself: no seam of it is stitched, unless the over filter joins
+  one of its seams; then it lies in its quilt and its layout comes from it.
+- An island is a quilt: the patches that lie together in UV, known as data
+  before any unwrap. The over filter of user options (scaffold_core
+  user_filters, plan Slice AH) reaches it only through SeamDirectives: a
+  SPLIT seam is refused before the gate; a JOIN seam is accepted without the
+  angle-defect gate and enters the tree after every other seam, longest
+  first. A JOIN between two rigid parts over a rigid seam keeps the overlap
+  gate; any other JOIN cannot be checked for overlap and joins, keeping the
+  larger rigid part's frame for later checks.
+- The UV cut set (uv_cut_chain_ids) is every Chain shared by two patch uses
+  that the tree did not stitch: seams between quilts, seams left cut inside
+  a quilt and every SEAM_SELF Chain; mesh borders are cuts anyway.
 - Read-only over lower layers; no UV or semantic roles here.
 """
 
@@ -32,9 +44,13 @@ from typing import Any, Mapping
 from scaffold_core.layer_2_geometry.measures import EPSILON, cross, dot, length, normalize
 from scaffold_core.layer_3_relations.direction_families import SHARED_CHAIN_HINGE_MAX_RUNS
 from scaffold_core.layer_4_features.model import FeatureConstraintKind
+from scaffold_core.user_filters.model import SeamDirectiveKind
 
 STITCH_LEAVING_STRIP_REASON = "a straightened strip leaves its island"
 STITCH_BEVEL_LADDER_REASON = "a bevel strip is laid by itself"
+STITCH_SPLIT_BY_FILTER_PREFIX = "split by a user filter: "
+STITCH_JOIN_BY_FILTER_PREFIX = "joined by a user filter: "
+STITCH_NON_TREE_REASON = "non-tree seam stays cut"
 STITCH_DEFECT_TOLERANCE = 1e-3
 PLANAR_PATCH_MIN_NORMAL_DOT = 0.996  # every face-fan normal within ~5 degrees of the patch normal
 OVERLAP_TOLERANCE = 1e-6  # relative to the selection extent; shared edges only touch
@@ -52,6 +68,8 @@ class StitchDecision:
 
 @dataclass(frozen=True)
 class Island:
+    """A quilt: patches that lie together in UV, joined by its stitched (tree) seams."""
+
     id: str
     patch_ids: tuple[str, ...]
     stitched_chain_ids: tuple[str, ...]
@@ -165,9 +183,10 @@ def build_islands(context: Any) -> IslandAssembly:
     # and warped n-gons or bent hinges only fill in what is left; longest
     # seam first inside each group. LEVEL_B_PLACEHOLDER: semantic stitch
     # preferences belong to the future Layer 4 grammar.
+    directive_by_adjacency = _directives_by_adjacency(context, relations.patch_adjacencies.values())
     adjacencies = sorted(
         relations.patch_adjacencies.values(),
-        key=lambda item: _tree_edge_priority(item, rigidity, topology),
+        key=lambda item: _tree_edge_priority(item, rigidity, topology, directive_by_adjacency),
     )
     gate_by_adjacency = {
         str(adjacency.id): _gate(
@@ -181,15 +200,48 @@ def build_islands(context: Any) -> IslandAssembly:
         for adjacency in adjacencies
         if str(adjacency.chain_id) not in self_seam_chain_ids
         and adjacency.first_patch_id != adjacency.second_patch_id
+        and str(adjacency.id) not in directive_by_adjacency
     }
     leaving_patch_ids = _leaving_strip_patch_ids(context, adjacencies, gate_by_adjacency, rigidity)
-    ladder_patch_ids = _constrained_patch_ids(context, FeatureConstraintKind.STRAIGHT_LADDER)
+    # A ladder patch is laid by itself unless the filter joins it to its quilt.
+    joined_patch_ids = {
+        str(patch_id)
+        for adjacency in adjacencies
+        if str(adjacency.id) in directive_by_adjacency
+        and directive_by_adjacency[str(adjacency.id)].kind is SeamDirectiveKind.JOIN
+        for patch_id in (adjacency.first_patch_id, adjacency.second_patch_id)
+    }
+    ladder_patch_ids = _constrained_patch_ids(context, FeatureConstraintKind.STRAIGHT_LADDER) - joined_patch_ids
     for adjacency in adjacencies:
         chain_id = str(adjacency.chain_id)
         first = str(adjacency.first_patch_id)
         second = str(adjacency.second_patch_id)
         if chain_id in self_seam_chain_ids or first == second:
             decisions.append(StitchDecision(chain_id, first, second, False, "SEAM_SELF always splits"))
+            continue
+        directive = directive_by_adjacency.get(str(adjacency.id))
+        if directive is not None and directive.kind is SeamDirectiveKind.SPLIT:
+            decisions.append(StitchDecision(
+                chain_id, first, second, False, STITCH_SPLIT_BY_FILTER_PREFIX + directive.rule
+            ))
+            continue
+        if directive is not None:
+            if find(first) == find(second):
+                decisions.append(StitchDecision(chain_id, first, second, False, STITCH_NON_TREE_REASON))
+                continue
+            joined, placement, refusal = _join_placements(
+                placements[find(first)], placements[find(second)],
+                chain_id, first, second, rigidity, context.geometry_facts, overlap_tolerance, by_filter=True,
+            )
+            if not joined:
+                decisions.append(StitchDecision(chain_id, first, second, False, refusal))
+                continue
+            root = min(find(first), find(second))
+            parents[max(find(first), find(second))] = root
+            placements[root] = placement
+            decisions.append(StitchDecision(
+                chain_id, first, second, True, STITCH_JOIN_BY_FILTER_PREFIX + directive.rule
+            ))
             continue
         accepted, reason, defects = gate_by_adjacency[str(adjacency.id)]
         if first in ladder_patch_ids or second in ladder_patch_ids:
@@ -209,7 +261,7 @@ def build_islands(context: Any) -> IslandAssembly:
             placements[root] = placement
             decisions.append(StitchDecision(chain_id, first, second, True, reason, defects))
         elif accepted:
-            decisions.append(StitchDecision(chain_id, first, second, False, "non-tree seam stays cut", defects))
+            decisions.append(StitchDecision(chain_id, first, second, False, STITCH_NON_TREE_REASON, defects))
         else:
             decisions.append(StitchDecision(chain_id, first, second, False, reason, defects))
 
@@ -266,13 +318,57 @@ def _constrained_patch_ids(context, kind: FeatureConstraintKind) -> set[str]:
     return {str(constraint.patch_id) for constraint in features.constraints if constraint.kind is kind}
 
 
-def _tree_edge_priority(adjacency, rigidity: SeamRigidity, topology) -> tuple[bool, int, str]:
-    """Rigid seams first (plan Slice P), longest seam first inside each group, then by id."""
+def _tree_edge_priority(adjacency, rigidity: SeamRigidity, topology, directive_by_adjacency=None) -> tuple[int, int, str]:
+    """Rigid seams first (plan Slice P), then the other seams, then the seams a user filter joins.
 
-    rigid = is_rigid_seam(
-        rigidity, str(adjacency.chain_id), str(adjacency.first_patch_id), str(adjacency.second_patch_id)
-    )
-    return (not rigid, -_chain_edge_count(topology, adjacency.chain_id), str(adjacency.id))
+    Longest seam first inside each group, then by id. Joined seams come last,
+    so a seam the structure accepts never loses its tree place to them.
+    """
+
+    directive = (directive_by_adjacency or {}).get(str(adjacency.id))
+    if directive is not None and directive.kind is SeamDirectiveKind.JOIN:
+        group = JOIN_SEAM_GROUP
+    else:
+        rigid = is_rigid_seam(
+            rigidity, str(adjacency.chain_id), str(adjacency.first_patch_id), str(adjacency.second_patch_id)
+        )
+        group = 0 if rigid else 1
+    return (group, -_chain_edge_count(topology, adjacency.chain_id), str(adjacency.id))
+
+
+JOIN_SEAM_GROUP = 2  # after the rigid (0) and the other (1) seams
+
+
+def _directives_by_adjacency(context, adjacencies) -> dict:
+    """The user filter's SeamDirective of each adjacency (plan Slice AH); empty without a filter."""
+
+    filters = getattr(context, "filter_snapshot", None)
+    if filters is None or not filters.directives:
+        return {}
+    by_seam = {
+        (str(d.chain_id), frozenset((str(d.first_patch_id), str(d.second_patch_id)))): d for d in filters.directives
+    }
+    result = {}
+    for adjacency in adjacencies:
+        key = (str(adjacency.chain_id), frozenset((str(adjacency.first_patch_id), str(adjacency.second_patch_id))))
+        if key in by_seam:
+            result[str(adjacency.id)] = by_seam[key]
+    return result
+
+
+def uv_cut_chain_ids(topology, assembly: IslandAssembly) -> tuple[str, ...]:
+    """Chains that are UV cuts: shared by two or more patch uses and not stitched by the tree.
+
+    That is every seam between two quilts, every seam left cut inside a quilt
+    (non-tree, refused) and every SEAM_SELF Chain. A Chain with one use is a
+    mesh or selection border and is a cut anyway, so it is not listed.
+    """
+
+    stitched = {decision.chain_id for decision in assembly.decisions if decision.accepted}
+    use_count: dict[str, int] = {}
+    for patch_chain in topology.patch_chains.values():
+        use_count[str(patch_chain.chain_id)] = use_count.get(str(patch_chain.chain_id), 0) + 1
+    return tuple(sorted(chain_id for chain_id, count in use_count.items() if count >= 2 and chain_id not in stitched))
 
 
 def _gate(source, topology, chain_id, angle_by_source_vertex, cut_chains_by_vertex, border_vertices):
@@ -425,18 +521,30 @@ def _initial_placements(context, rigidity: SeamRigidity) -> dict:
     return placements
 
 
-def _join_placements(first_part, second_part, chain_id, first, second, rigidity, geometry, tolerance):
+def _join_placements(
+    first_part, second_part, chain_id, first, second, rigidity, geometry, tolerance, by_filter=False
+):
     """(joined, placement of the joined part, refusal reason).
 
     A part without rigid patches joins freely and the joined part keeps the
     other side's placement. Two rigid parts join only over a rigid seam, and
     only when the smaller part, unfolded about the seam, does not lie over
-    the larger one.
+    the larger one. A seam joined by a user filter (by_filter) between two
+    rigid parts that the frame cannot cross (a non-rigid seam, or a patch
+    outside its part's frame) cannot be checked: it joins, and the joined
+    part keeps the larger part's frame and faces, so later checks see only
+    those.
     """
 
     if first_part is None or second_part is None:
         return True, first_part if second_part is None else second_part, ""
-    if not is_rigid_seam(rigidity, chain_id, first, second):
+    if (
+        not is_rigid_seam(rigidity, chain_id, first, second)
+        or first not in first_part.rotation_by_patch
+        or second not in second_part.rotation_by_patch
+    ):
+        if by_filter:
+            return True, first_part if len(first_part.triangles) >= len(second_part.triangles) else second_part, ""
         return False, None, "frame cannot cross between rigid parts"
     if len(second_part.triangles) > len(first_part.triangles):
         first_part, second_part, first, second = second_part, first_part, second, first

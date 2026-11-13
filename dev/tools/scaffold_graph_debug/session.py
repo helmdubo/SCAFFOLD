@@ -39,17 +39,26 @@ def build_payload(
     object_name: str,
     capture: bool = True,
     straighten_bevel_strips: bool = True,
+    world_up: tuple[float, float, float] | None = None,
+    horizontal_angle_degrees: float = 45.0,
 ) -> dict[str, Any]:
-    """Pass 0, 1, 2, the skeleton solve (islands + skeletons + pins) once, then the payload.
+    """Pass 0, 1, 2, 3 (the user filter), the skeleton solve (quilts + skeletons + pins) once, then the payload.
 
     capture writes the read mesh to reports/last_mesh_snapshot.json (panel use).
+    world_up None runs no filter (the pipeline default).
     """
 
     _add_repo_root_to_path()
     from scaffold_core.layer_0_source.blender_io import read_source_mesh_from_blender
     from scaffold_core.layer_4_features.model import FeatureOptions
     from scaffold_core.layer_5_runtime.pins import run_skeleton_solve
-    from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations, run_pass_2_features
+    from scaffold_core.pipeline.passes import (
+        run_pass_0,
+        run_pass_1_relations,
+        run_pass_2_features,
+        run_pass_3_filters,
+    )
+    from scaffold_core.user_filters.model import FilterOptions
     from .overlay_v2 import build_debug_payload
 
     source = read_source_mesh_from_blender(reader_context)
@@ -69,8 +78,25 @@ def build_payload(
             straighten_bevel_strips=bool(straighten_bevel_strips),
         ),
     )
+    context = run_pass_3_filters(context, FilterOptions(world_up, horizontal_angle_degrees))
     solve = run_skeleton_solve(context)
     return build_debug_payload(context, solve, object_name=object_name)
+
+
+WORLD_UP_BY_AXIS = {
+    "+X": (1.0, 0.0, 0.0), "-X": (-1.0, 0.0, 0.0),
+    "+Y": (0.0, 1.0, 0.0), "-Y": (0.0, -1.0, 0.0),
+    "+Z": (0.0, 0.0, 1.0), "-Z": (0.0, 0.0, -1.0),
+}
+
+
+def filter_from_settings(settings: Any) -> tuple[tuple[float, float, float] | None, float]:
+    """(world_up, horizontal angle) of the panel's filter options; world_up None when the filter is off."""
+
+    angle = float(getattr(settings, "horizontal_angle", 45.0))
+    if not bool(getattr(settings, "split_vertical_from_horizontal", True)):
+        return None, angle
+    return WORLD_UP_BY_AXIS[str(getattr(settings, "world_up_axis", "+Z"))], angle
 
 
 def visibility_from_settings(settings: Any) -> dict[str, bool]:
@@ -126,11 +152,14 @@ def show_or_refresh(context: Any) -> tuple[dict[str, Any], str]:
         source_object.select_set(True)
         context.view_layer.objects.active = source_object
 
+    world_up, horizontal_angle = filter_from_settings(settings)
     payload = build_payload(
         context,
         straighten_strips=bool(settings.straighten_strips),
         straighten_bevel_strips=bool(getattr(settings, "straighten_bevel_strips", True)),
         object_name=source_object.name,
+        world_up=world_up,
+        horizontal_angle_degrees=horizontal_angle,
     )
     if context.active_object and context.active_object.mode != "OBJECT":
         bpy.ops.object.mode_set(mode="OBJECT")

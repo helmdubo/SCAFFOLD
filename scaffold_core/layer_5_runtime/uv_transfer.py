@@ -3,10 +3,16 @@ Layer: 5 - Runtime
 
 Rules:
 - The ONLY bpy write boundary in scaffold_core (G5a phase rule).
-- Writes pinned skeleton UVs via bmesh in the mesh's current mode; it does
-  NOT call any bpy operator (mode_set/unwrap), so it cannot trigger an
-  operator-context segfault. The artist runs U > Unwrap for the conformal
-  fill; Blender respects the pins this writes.
+- write_pinned_uvs writes pinned skeleton UVs via bmesh in the mesh's
+  current mode and calls no bpy operator; the artist runs U > Unwrap for the
+  conformal fill, and Blender respects the pins it writes.
+- write_quilt_uvs (plan Slice AH) lays the quilts: it writes the same pins,
+  sets the seam flags of the solved faces' edges to exactly the UV cut set
+  of the solve (so each quilt is one chart), runs Blender's conformal unwrap
+  on the solved faces and restores every seam flag and the selection in a
+  finally block. The user's seams are never changed. From Object Mode it
+  enters Edit Mode for the unwrap and returns (the unwrap operator needs
+  Edit Mode); from Edit Mode it calls no mode_set.
 - bpy/bmesh are imported lazily inside the function so headless suites
   never load them.
 """
@@ -85,6 +91,69 @@ def write_pinned_uvs(blender_context: Any, result: SolveResult) -> dict[str, Any
         "axis_parallel_violations": len(result.axis_parallel_violations),
         "next_step": "press U > Unwrap to fill the fabric (pins are respected)",
     }
+
+
+def write_quilt_uvs(blender_context: Any, result: SolveResult) -> dict[str, Any]:
+    """Write the pins, then lay each quilt as one chart by Blender's conformal unwrap.
+
+    For the unwrap only, a solved face's edge is a seam exactly when it is a
+    UV cut of the solve (SolveResult.uv_cut_source_edge_ids); the seams the
+    tree stitched are not cuts. Every seam flag, and the vertex, edge and face
+    selection, are restored afterwards, even when the unwrap fails.
+    """
+
+    import bpy
+    import bmesh
+
+    summary = write_pinned_uvs(blender_context, result)
+    mesh_object = _resolve_mesh_object(blender_context)
+    mesh = mesh_object.data
+    view_layer = bpy.context.view_layer
+    previous_active = view_layer.objects.active
+    started_in_edit = mesh_object.mode == "EDIT"
+    if not started_in_edit:
+        view_layer.objects.active = mesh_object
+        bpy.ops.object.mode_set(mode="EDIT")
+    cut = result.uv_cut_source_edge_ids
+    solved = {int(face_id[1:]) for face_id in result.patch_by_source_face}
+    bm = bmesh.from_edit_mesh(mesh)
+    bm.edges.index_update()
+    bm.faces.index_update()
+    seams = [edge.seam for edge in bm.edges]
+    selection = (
+        [vertex.select for vertex in bm.verts],
+        [edge.select for edge in bm.edges],
+        [face.select for face in bm.faces],
+    )
+    cut_edges = 0
+    try:
+        for edge in bm.edges:
+            if any(face.index in solved for face in edge.link_faces):
+                edge.seam = f"e{edge.index}" in cut
+                cut_edges += int(edge.seam)
+        for face in bm.faces:
+            face.select_set(face.index in solved)
+        bmesh.update_edit_mesh(mesh)
+        bpy.ops.uv.unwrap(method="CONFORMAL", fill_holes=False, margin=0.0)
+    finally:
+        bm = bmesh.from_edit_mesh(mesh)
+        for edge, seam in zip(bm.edges, seams):
+            edge.seam = seam
+        for items, flags in zip((bm.verts, bm.edges, bm.faces), selection):
+            for item, flag in zip(items, flags):
+                item.select = flag
+        bmesh.update_edit_mesh(mesh)
+        restored = sum(1 for edge, seam in zip(bm.edges, seams) if edge.seam != seam)
+        if not started_in_edit:
+            bpy.ops.object.mode_set(mode="OBJECT")
+            view_layer.objects.active = previous_active
+    summary.update({
+        "quilts": len(result.assembly.islands),
+        "uv_cut_edges": cut_edges,
+        "seam_flags_changed": restored,
+        "next_step": "quilts laid by the conformal unwrap; seams unchanged",
+    })
+    return summary
 
 
 def _resolve_mesh_object(blender_context: Any) -> Any:

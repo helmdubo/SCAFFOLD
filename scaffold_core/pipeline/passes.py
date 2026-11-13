@@ -22,6 +22,8 @@ from scaffold_core.layer_3_relations.build import build_relation_snapshot
 from scaffold_core.layer_4_features.build import build_feature_snapshot
 from scaffold_core.layer_4_features.model import FeatureOptions
 from scaffold_core.pipeline.context import PassTiming, PipelineContext
+from scaffold_core.user_filters.build import build_filter_snapshot
+from scaffold_core.user_filters.model import FilterOptions
 
 
 def run_pass_0(source_snapshot: SourceMeshSnapshot) -> PipelineContext:
@@ -119,4 +121,32 @@ def run_pass_2_features(context: PipelineContext, options: FeatureOptions = Feat
         feature_snapshot=feature_snapshot,
         diagnostics=context.diagnostics.extend(feature_snapshot.diagnostics),
         pass_timings=context.pass_timings + (PassTiming("pass_2.feature_snapshot", features_seconds),),
+    )
+
+
+def run_pass_3_filters(context: PipelineContext, options: FilterOptions = FilterOptions()) -> PipelineContext:
+    """Run Pass 3, the over filter of user options, after Pass 2; Layers 0-4 are read, never written.
+
+    With options.world_up None the snapshot is empty and the solve equals a
+    run without this pass.
+    """
+
+    if context.topology_snapshot is None or context.geometry_facts is None or context.relation_snapshot is None:
+        raise ValueError("Pass 3 requires topology_snapshot, geometry_facts and relation_snapshot.")
+
+    filters_started = perf_counter()
+    filter_snapshot = build_filter_snapshot(
+        context.topology_snapshot,
+        context.geometry_facts,
+        context.relation_snapshot,
+        context.feature_snapshot,
+        options,
+    )
+    filters_seconds = perf_counter() - filters_started
+
+    return replace(
+        context,
+        filter_snapshot=filter_snapshot,
+        diagnostics=context.diagnostics.extend(filter_snapshot.diagnostics),
+        pass_timings=context.pass_timings + (PassTiming("pass_3.filter_snapshot", filters_seconds),),
     )

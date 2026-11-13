@@ -9,16 +9,22 @@ Rules:
 
 Usage:
   blender -b reference.blend --python write_scaffold_layer.py -- \
-      --objects Arc,collumn --straighten Arc,collumn --out result.blend
+      --objects Arc,collumn --straighten Arc,collumn --out result.blend \
+      [--world-up 0,0,1 | --no-filter] [--angle 45] [--pins-only] [--no-unwrap]
 
 Per object: Pass 0, Pass 1, Pass 2 (Straighten Strips on for --straighten;
-Straighten Bevel Strips on unless --no-bevel-strips),
-the skeleton solve, pins written to a new UV layer "Scaffold", then Blender's
-conformal unwrap fills the rest (pins are respected). The layer is scaled by
---scale (default 0.25, the reference's UV units per metre) so both layers have
-the same density. Charts are packed in rows so the layer can be read; a patch
-without pins comes out of the unwrap at an arbitrary scale and is rescaled to
-its 3D area first. This is a viewing aid, not Scaffold packing.
+Straighten Bevel Strips on unless --no-bevel-strips), Pass 3 (the user filter
+"vertical apart from horizontal", on by default with +Z up; --no-filter runs
+the pipeline default, no filter), the skeleton solve, then the quilts are laid
+into a new UV layer "Scaffold" by the core write boundary
+(uv_transfer.write_quilt_uvs: pins, then Blender's conformal unwrap with each
+quilt as one chart; the mesh's seams are restored). --pins-only writes the
+pins and runs Blender's unwrap on the mesh's own seams, as before Slice AH;
+--no-unwrap writes the pins alone. The layer is scaled by --scale (default
+0.25, the reference's UV units per metre) so both layers have the same
+density. Charts are packed in rows so the layer can be read; a chart without
+pins comes out of the unwrap at an arbitrary scale and is rescaled to its 3D
+area first. This is a viewing aid, not Scaffold packing.
 """
 
 from __future__ import annotations
@@ -37,8 +43,14 @@ import bpy  # noqa: E402 - executed by Blender only
 from scaffold_core.layer_0_source.blender_io import read_source_mesh_from_blender  # noqa: E402
 from scaffold_core.layer_4_features.model import FeatureOptions  # noqa: E402
 from scaffold_core.layer_5_runtime.pins import run_skeleton_solve  # noqa: E402
-from scaffold_core.layer_5_runtime.uv_transfer import write_pinned_uvs  # noqa: E402
-from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations, run_pass_2_features  # noqa: E402
+from scaffold_core.layer_5_runtime.uv_transfer import write_pinned_uvs, write_quilt_uvs  # noqa: E402
+from scaffold_core.pipeline.passes import (  # noqa: E402
+    run_pass_0,
+    run_pass_1_relations,
+    run_pass_2_features,
+    run_pass_3_filters,
+)
+from scaffold_core.user_filters.model import FilterOptions  # noqa: E402
 
 LAYER_NAME = "Scaffold"
 
@@ -52,7 +64,12 @@ def main() -> int:
     parser.add_argument("--scale", type=float, default=0.25)
     parser.add_argument("--no-unwrap", action="store_true")
     parser.add_argument("--no-bevel-strips", action="store_true", help="Pass 2 with straighten_bevel_strips off")
+    parser.add_argument("--world-up", default="0,0,1", help="Pass 3 user filter up axis (default +Z)")
+    parser.add_argument("--no-filter", action="store_true", help="Pass 3 without the user filter")
+    parser.add_argument("--angle", type=float, default=45.0, help="Pass 3 horizontal angle in degrees")
+    parser.add_argument("--pins-only", action="store_true", help="pins + unwrap on the mesh's own seams")
     args = parser.parse_args(argv)
+    args.world_up = None if args.no_filter else tuple(float(value) for value in args.world_up.split(","))
     straighten = {name for name in args.straighten.split(",") if name}
 
     for name in [item for item in args.objects.split(",") if item]:
@@ -80,6 +97,7 @@ def _write_object(obj, straighten_strips: bool, args) -> str:
     context = run_pass_2_features(context, FeatureOptions(
         straighten_strips=straighten_strips, straighten_bevel_strips=not args.no_bevel_strips,
     ))
+    context = run_pass_3_filters(context, FilterOptions(world_up=args.world_up, horizontal_angle_degrees=args.angle))
     solve = run_skeleton_solve(context)
 
     mesh = obj.data
@@ -88,10 +106,17 @@ def _write_object(obj, straighten_strips: bool, args) -> str:
         mesh.uv_layers.remove(existing)
     layer = mesh.uv_layers.new(name=LAYER_NAME)
     mesh.uv_layers.active = layer
-    summary = write_pinned_uvs(SimpleNamespace(object=obj), solve)
-
-    unwrapped = "skipped"
-    if not args.no_unwrap:
+    if not args.no_unwrap and not args.pins_only:
+        try:
+            summary = write_quilt_uvs(SimpleNamespace(object=obj), solve)
+            unwrapped = f"quilts (seam flags changed: {summary['seam_flags_changed']})"
+        except Exception as error:  # report, keep what was written
+            summary = {"written_loops": 0}
+            unwrapped = f"failed: {error}"
+    else:
+        summary = write_pinned_uvs(SimpleNamespace(object=obj), solve)
+        unwrapped = "skipped"
+    if args.pins_only and not args.no_unwrap:
         try:
             bpy.ops.object.mode_set(mode="EDIT")
             bpy.ops.mesh.select_all(action="SELECT")
@@ -105,26 +130,33 @@ def _write_object(obj, straighten_strips: bool, args) -> str:
                 bpy.ops.object.mode_set(mode="OBJECT")
 
     layer = mesh.uv_layers[LAYER_NAME]
-    free_charts = _lay_out_charts(mesh, layer, solve)
+    free_charts = _lay_out_charts(mesh, layer, solve, unwrapped.startswith("quilts"))
     for item in layer.data:
         item.uv = (item.uv[0] * args.scale, item.uv[1] * args.scale)
     pinned = sum(1 for item in layer.data if item.pin_uv)
     layouts = {}
     for skeleton in solve.skeletons:
         layouts[skeleton.frame] = layouts.get(skeleton.frame, 0) + 1
+    directives: dict[str, int] = {}
+    for directive in context.filter_snapshot.directives:
+        directives[directive.kind.value] = directives.get(directive.kind.value, 0) + 1
     return (
-        f"{obj.name} strips={'on' if straighten_strips else 'off'} islands={len(solve.skeletons)} {layouts} "
+        f"{obj.name} strips={'on' if straighten_strips else 'off'} "
+        f"filter={'off' if args.world_up is None else args.world_up} directives={directives} "
+        f"quilts={len(solve.skeletons)} {layouts} "
         f"written_loops={summary['written_loops']} pinned_loops={pinned} of {len(layer.data)} "
         f"unwrap={unwrapped} charts_without_pins={free_charts} diagnostics={len(solve.diagnostics)}"
     )
 
 
-def _lay_out_charts(mesh, layer, solve) -> int:
+def _lay_out_charts(mesh, layer, solve, quilts_laid: bool) -> int:
     """Make the layer readable: restore the density of charts without pins and pack all charts.
 
-    A chart is one Scaffold island, except that a patch without any pinned
-    corner is a chart of its own: Blender's unwrap leaves it at an arbitrary
-    scale and place. Only whole charts move or scale; no structure changes.
+    A chart is one Scaffold quilt (island). A quilt without any pinned corner
+    comes out of Blender's unwrap at an arbitrary scale and place and is
+    rescaled to its 3D area; with --pins-only (the mesh's own seams), every
+    patch without a pinned corner is such a chart of its own. Only whole
+    charts move or scale; no structure changes.
     """
 
     patch_of_face = solve.patch_by_source_face
@@ -138,20 +170,30 @@ def _lay_out_charts(mesh, layer, solve) -> int:
         loops_of_patch.setdefault(patch_id, []).extend(polygon.loop_indices)
         faces_of_patch.setdefault(patch_id, []).append(polygon)
 
+    # One chart per quilt, or per patch when the quilts were not laid as charts.
+    chart_of_patch = {
+        patch_id: island_of_patch.get(patch_id, patch_id) if quilts_laid else patch_id for patch_id in loops_of_patch
+    }
+    loops_of_chart: dict[str, list[int]] = {}
+    faces_of_chart: dict[str, list] = {}
+    for patch_id, loop_indices in loops_of_patch.items():
+        loops_of_chart.setdefault(chart_of_patch[patch_id], []).extend(loop_indices)
+        faces_of_chart.setdefault(chart_of_patch[patch_id], []).extend(faces_of_patch[patch_id])
     charts: dict[str, list[int]] = {}
     free_charts = 0
-    for patch_id, loop_indices in loops_of_patch.items():
+    for chart_id, loop_indices in loops_of_chart.items():
         if any(layer.data[i].pin_uv for i in loop_indices):
-            charts.setdefault(island_of_patch.get(patch_id, patch_id), []).extend(loop_indices)
+            key = chart_id if quilts_laid else island_of_patch.get(chart_id, chart_id)
+            charts.setdefault(key, []).extend(loop_indices)
             continue
         free_charts += 1
-        area_3d = sum(polygon.area for polygon in faces_of_patch[patch_id])
-        area_uv = sum(_uv_area(layer, polygon) for polygon in faces_of_patch[patch_id])
+        area_3d = sum(polygon.area for polygon in faces_of_chart[chart_id])
+        area_uv = sum(_uv_area(layer, polygon) for polygon in faces_of_chart[chart_id])
         if area_3d > 0.0 and area_uv > 0.0:
             factor = (area_3d / area_uv) ** 0.5
             for i in loop_indices:
                 layer.data[i].uv = (layer.data[i].uv[0] * factor, layer.data[i].uv[1] * factor)
-        charts[f"free:{patch_id}"] = list(loop_indices)
+        charts[f"free:{chart_id}"] = list(loop_indices)
 
     boxes = []
     for key, loop_indices in charts.items():

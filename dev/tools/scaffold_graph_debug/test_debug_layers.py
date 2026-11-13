@@ -687,3 +687,24 @@ def test_junction_markers_one_per_node_and_endpoint_junction(case) -> None:
         else:  # a 3D "*": four body diagonals
             assert len(segments) == 4
             assert all(sum(1 for value in segment if abs(value) > 1e-12) == 3 for segment in segments)
+
+
+def test_report_shows_the_user_filter_and_the_quilts() -> None:
+    from scaffold_core.pipeline.passes import run_pass_3_filters
+    from scaffold_core.user_filters.model import FilterOptions
+
+    source = load_source_snapshot("scaffold_core/tests/data/bevel_cases/u_rounded_wall_noise_top.capture.json")
+    context = run_pass_3_filters(
+        run_pass_2_features(run_pass_1_relations(run_pass_0(source))), FilterOptions(world_up=(0.0, 0.0, 1.0))
+    )
+    solve = run_skeleton_solve(context)
+    payload = build_debug_payload(context, solve, object_name="u_rounded_wall_noise_top")
+    report = payload["report"]
+
+    assert "user filter: up=(0.0, 0.0, 1.0) angle=45: horizontal=14 vertical=6" in report
+    assert "  SPLIT (vertical apart from horizontal): 12" in report
+    assert "  JOIN (a bevel lies with its surfaces): 24" in report
+    assert f"quilts: 3 (largest 7 patches); UV cut chains: {len(solve.uv_cut_chain_ids)}, stitched: 17" in report
+    assert "stitched: joined by a user filter: a bevel lies with its surfaces: 17" in report
+    assert "cut: split by a user filter: vertical apart from horizontal: 12" in report
+    assert "user filter: off" in _run("artist_walls_004")[2]["report"]

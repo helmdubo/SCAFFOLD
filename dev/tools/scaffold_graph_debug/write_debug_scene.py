@@ -13,9 +13,12 @@ Usage:
       --objects Arc,collumn --straighten Arc --out debug.blend \
       [--render-dir pngs --render Arc,collumn --facade Main_wall --line-thickness 4]
       [--sets patches_chains,bevels_ladders,face_mark] [--no-bevel-strips]
+      [--world-up 0,0,1 | --no-filter] [--angle 45]
 
 Per object: Pass 0, 1, 2 (Straighten Strips on for --straighten; Straighten
-Bevel Strips on unless --no-bevel-strips), the skeleton solve, the overlay with the panel's default layer visibility and line
+Bevel Strips on unless --no-bevel-strips), Pass 3 (the user filter, on with
++Z like the panel's default; --world-up picks another up axis, --no-filter
+turns it off), the skeleton solve, the overlay with the panel's default layer visibility and line
 thickness 1.0, then the source mesh is hidden like Analyze does, so the saved
 file opens on the overlay. After the copy is saved, --render writes Workbench
 PNGs of layer sets per named object from an oblique view (by default three:
@@ -98,7 +101,11 @@ def main() -> int:
     parser.add_argument("--width", type=int, default=1200)
     parser.add_argument("--sets", default=",".join(DEFAULT_RENDER_SETS))
     parser.add_argument("--no-bevel-strips", action="store_true", help="Pass 2 with straighten_bevel_strips off")
+    parser.add_argument("--world-up", default="0,0,1", help="Pass 3 user filter up axis (the panel's default +Z)")
+    parser.add_argument("--no-filter", action="store_true", help="Pass 3 without the user filter")
+    parser.add_argument("--angle", type=float, default=45.0, help="Pass 3 horizontal angle in degrees")
     args = parser.parse_args(argv)
+    world_up = None if args.no_filter else tuple(float(value) for value in args.world_up.split(","))
     straighten = {name for name in args.straighten.split(",") if name}
     default_visibility = {spec.layer: spec.default for spec in LAYER_SPECS}
 
@@ -113,6 +120,7 @@ def main() -> int:
         payload = build_payload(
             SimpleNamespace(object=obj), straighten_strips=name in straighten, object_name=name, capture=False,
             straighten_bevel_strips=not args.no_bevel_strips,
+            world_up=world_up, horizontal_angle_degrees=args.angle,
         )
         counts = render_debug_overlay(obj, payload, default_visibility, show_labels=False)
         write_report_text(name, payload["report"])

@@ -30,7 +30,13 @@ import bpy  # noqa: E402 - executed by Blender only
 from scaffold_core.layer_0_source.blender_io import read_source_mesh_from_blender  # noqa: E402
 from scaffold_core.layer_4_features.model import FeatureOptions  # noqa: E402
 from scaffold_core.layer_5_runtime.pins import run_skeleton_solve  # noqa: E402
-from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations, run_pass_2_features  # noqa: E402
+from scaffold_core.pipeline.passes import (  # noqa: E402
+    run_pass_0,
+    run_pass_1_relations,
+    run_pass_2_features,
+    run_pass_3_filters,
+)
+from scaffold_core.user_filters.model import FilterOptions  # noqa: E402
 
 
 RESIDUAL_OK_LIMIT = 1.0e-4
@@ -66,6 +72,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--write-uv", action="store_true", help="exercise the UV write boundary")
     parser.add_argument("--capture-dir", default="", help="dump SourceMeshSnapshot JSON per object")
     parser.add_argument("--straighten-strips", action="store_true", help="run Pass 2 with straighten_strips")
+    parser.add_argument("--world-up", default="", help="run Pass 2 and the Pass 3 user filter with this up axis")
+    parser.add_argument(
+        "--unwrap-quilts", action="store_true", help="with --write-uv: lay the quilts (write_quilt_uvs)"
+    )
     parser.add_argument("--out", required=True)
     return parser.parse_args(argv)
 
@@ -90,8 +100,19 @@ def _run_object(obj, args: argparse.Namespace) -> dict:
         context = run_pass_1_relations(run_pass_0(source))
         if args.straighten_strips:
             context = run_pass_2_features(context, FeatureOptions(straighten_strips=True))
+        world_up = tuple(float(value) for value in args.world_up.split(",")) if args.world_up else None
+        if world_up is not None:
+            if context.feature_snapshot is None:
+                context = run_pass_2_features(context)
+            context = run_pass_3_filters(context, FilterOptions(world_up=world_up))
         record.update(_pipeline_metrics(source, context))
         solve = run_skeleton_solve(context)
+        if world_up is not None:
+            # the user filter (absent without --world-up): its directives and the quilts they make
+            for kind in ("SPLIT", "JOIN"):
+                record[f"filter_{kind.lower()}"] = sum(
+                    1 for directive in context.filter_snapshot.directives if directive.kind.value == kind
+                )
         record.update(_solve_metrics(solve))
         record.update(_corner_turn_metrics(context, solve))
         if args.straighten_strips:
@@ -103,7 +124,7 @@ def _run_object(obj, args: argparse.Namespace) -> dict:
                 1 for constraint in context.feature_snapshot.constraints if constraint.kind.value == "STRAIGHT_LADDER"
             )
         if args.write_uv:
-            record.update(_write_uv_metrics(obj, solve, source, args.selection))
+            record.update(_write_uv_metrics(obj, solve, source, args.selection, args.unwrap_quilts))
     except Exception as error:  # report, never abort the batch
         if obj.mode != "OBJECT":
             bpy.ops.object.mode_set(mode="OBJECT")
@@ -207,10 +228,14 @@ def _corner_turn_metrics(context, solve) -> dict:
     return {"corners_against_law": checked - with_law, "mirrored_islands": mirrored}
 
 
-def _write_uv_metrics(obj, solve, source, selection: str) -> dict:
-    """Write pins through the G5 boundary and prove no loop outside the selection changed."""
+def _write_uv_metrics(obj, solve, source, selection: str, unwrap_quilts: bool = False) -> dict:
+    """Write pins through the G5 boundary and prove no loop outside the selection changed.
 
-    from scaffold_core.layer_5_runtime.uv_transfer import write_pinned_uvs
+    With unwrap_quilts the quilts are laid (write_quilt_uvs), and the record
+    also says how many seam flags differ after the write (must be 0).
+    """
+
+    from scaffold_core.layer_5_runtime.uv_transfer import write_pinned_uvs, write_quilt_uvs
 
     solved_faces = {int(str(face_id)[1:]) for face_id in source.selected_face_ids}
     foreign_before = _foreign_loop_state(obj, solved_faces)
@@ -218,15 +243,23 @@ def _write_uv_metrics(obj, solve, source, selection: str) -> dict:
     if edit:
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode="EDIT")
+    seams_before = [edge.use_seam for edge in obj.data.edges]
     try:
-        summary = write_pinned_uvs(SimpleNamespace(object=obj), solve)
+        writer = write_quilt_uvs if unwrap_quilts else write_pinned_uvs
+        summary = writer(SimpleNamespace(object=obj), solve)
     finally:
         if edit:
             bpy.ops.object.mode_set(mode="OBJECT")
     foreign_after = _foreign_loop_state(obj, solved_faces)
     uv_layer = obj.data.uv_layers.active
     pinned_loops = sum(1 for loop_uv in uv_layer.data if loop_uv.pin_uv) if uv_layer else 0
+    extra = {}
+    if unwrap_quilts:
+        extra["seam_flags_changed"] = sum(
+            1 for edge, before in zip(obj.data.edges, seams_before) if edge.use_seam != before
+        )
     return {
+        **extra,
         "written_loops": summary["written_loops"],
         "pinned_loops": pinned_loops,
         "foreign_loops_changed": sum(

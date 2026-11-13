@@ -60,10 +60,10 @@ LAYER_SPECS = (
     LayerSpec("show_boundary", "Scaffold_Loops_Boundary", "Boundary", GROUP_STRUCTURE, True),
     LayerSpec("show_holes", "Scaffold_Loops_Holes", "Holes", GROUP_STRUCTURE, True),
     LayerSpec("show_chains", "Scaffold_Chains", "Chains", GROUP_STRUCTURE, True),
-    LayerSpec("show_islands_unfolded", "Scaffold_Islands_UNFOLDED", "Islands: rigid frame", GROUP_SKELETON, False),
-    LayerSpec("show_islands_frame_free", "Scaffold_Islands_FRAME_FREE", "Islands: frame-free", GROUP_SKELETON, False),
-    LayerSpec("show_islands_strip", "Scaffold_Islands_STRIP", "Islands: strip", GROUP_SKELETON, False),
-    LayerSpec("show_islands_ladder", "Scaffold_Islands_LADDER", "Islands: bevel strip", GROUP_SKELETON, False),
+    LayerSpec("show_islands_unfolded", "Scaffold_Islands_UNFOLDED", "Quilts: rigid frame", GROUP_SKELETON, False),
+    LayerSpec("show_islands_frame_free", "Scaffold_Islands_FRAME_FREE", "Quilts: frame-free", GROUP_SKELETON, False),
+    LayerSpec("show_islands_strip", "Scaffold_Islands_STRIP", "Quilts: strip", GROUP_SKELETON, False),
+    LayerSpec("show_islands_ladder", "Scaffold_Islands_LADDER", "Quilts: bevel strip", GROUP_SKELETON, False),
     LayerSpec("show_lines", "Scaffold_Skeleton_Lines", "Lines", GROUP_SKELETON, True),
     LayerSpec("show_nodes", "Scaffold_Skeleton_Nodes", "Nodes", GROUP_SKELETON, True),
     LayerSpec("show_pins", "Scaffold_Pins", "Pins", GROUP_SKELETON, False),
@@ -104,7 +104,9 @@ LEGENDS = {
         "Labels: P<patch>C<position in loop>",
     ),
     GROUP_SKELETON: (
-        "Islands: fill per island, by frame kind",
+        "Quilts (islands): fill per quilt, by frame kind",
+        "  a quilt is what lies together in UV; the user filter",
+        "  splits or joins seams (counts in the text report)",
         "Lines: one colour per island line",
         "Nodes: white crosses; Pins: orange crosses",
         "Seams: green dashed = stitched, red = cut",
@@ -299,6 +301,7 @@ def build_debug_payload(context: Any, solve: Any, *, object_name: str = "") -> d
         "ladder_counts": overlay_ladders.ladder_counts(relations),
         "bevel_counts": overlay_ladders.bevel_counts(bevels),
         "bevel_ladders": overlay_ladders.ladder_layout_counts(context, solve),
+        "filter": _filter_summary(context),
         "face_strength_counts": {
             item["face_strength"]: len(item["face_ids"]) for item in layers["Scaffold_Source_Face_Strength"]
         },
@@ -1063,6 +1066,27 @@ def _junction_items(look, relations) -> list[dict[str, Any]]:
 # --------------------------------------------------------------------------- report
 
 
+def _filter_summary(context: Any) -> dict[str, Any]:
+    """The user filter (Pass 3) as counts: options, patch classes, directives by kind and rule."""
+
+    snapshot = getattr(context, "filter_snapshot", None)
+    if snapshot is None or snapshot.options.world_up is None:
+        return {"on": False}
+    return {
+        "on": True,
+        "world_up": list(snapshot.options.world_up),
+        "angle": snapshot.options.horizontal_angle_degrees,
+        "classes": dict(Counter(record.patch_class.value for record in snapshot.patch_classes)),
+        "directives": {
+            f"{kind} ({rule})": count
+            for (kind, rule), count in sorted(Counter(
+                (directive.kind.value, directive.rule) for directive in snapshot.directives
+            ).items())
+        },
+        "diagnostics": [diagnostic.message for diagnostic in snapshot.diagnostics],
+    }
+
+
 def format_report(payload: dict[str, Any], solve: Any) -> str:
     """Compact text report: islands, stitch decisions, patch types, diagnostics."""
 
@@ -1073,6 +1097,24 @@ def format_report(payload: dict[str, Any], solve: Any) -> str:
     pins_by_island = Counter(vertex.island_id for vertex in solve.vertices if vertex.pinned)
     name = payload.get("object_name") or "selection"
     out = [f"Scaffold debug report: {name}"]
+    summary = payload.get("filter") or {"on": False}
+    if summary["on"]:
+        classes = summary["classes"]
+        out.append(
+            f"user filter: up={tuple(summary['world_up'])} angle={summary['angle']:g}: "
+            f"horizontal={classes.get('HORIZONTAL', 0)} vertical={classes.get('VERTICAL', 0)}"
+        )
+        for directive, count in summary["directives"].items():
+            out.append(f"  {directive}: {count}")
+        for message in summary["diagnostics"]:
+            out.append(f"  filter: {message}")
+    else:
+        out.append("user filter: off")
+    largest = max((len(island.patch_ids) for island in solve.assembly.islands), default=0)
+    out.append(
+        f"quilts: {len(solve.assembly.islands)} (largest {largest} patches); UV cut chains: "
+        f"{len(getattr(solve, 'uv_cut_chain_ids', ()))}, stitched: {len(getattr(solve, 'stitched_chain_ids', ()))}"
+    )
     out.append(f"islands: {len(solve.assembly.islands)}")
     for island in solve.assembly.islands:
         out.append(

@@ -85,7 +85,12 @@ Tests: `python -m pytest dev/tools/cftuv_parity`.
 ## Look at a result
 
 `write_scaffold_layer.py` writes Scaffold's UVs as a second UV layer
-("Scaffold") into a copy of the scene. To see both layers side by side without
+("Scaffold") into a copy of the scene. It runs the user filter "vertical apart
+from horizontal" with +Z up by default (`--no-filter` for the pipeline
+default, `--world-up` for another axis) and lays each quilt as one chart
+through `uv_transfer.write_quilt_uvs`; `--pins-only` writes the pins and
+unwraps on the mesh's own seams as before. The scoreboard itself
+(`parity.py`) runs without the filter unless `--world-up 0,0,1` is given. To see both layers side by side without
 opening Blender's UI, dump them (read-only, the .blend is never saved) and
 render PNGs with Pillow:
 

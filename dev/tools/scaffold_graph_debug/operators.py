@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import sys
+from collections import Counter
 from pathlib import Path
 
 import bpy
-from bpy.props import BoolProperty, FloatProperty, PointerProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, PointerProperty, StringProperty
 from bpy_extras.io_utils import ExportHelper
 
 from .build_stamp import get_build_stamp, resolve_build_stamp, set_build_stamp
@@ -81,6 +82,28 @@ class SCAFFOLDGRAPH_Settings(bpy.types.PropertyGroup):
             "island of its own (applies on Rebuild and Write UV)"
         ),
         default=True,
+    )
+    split_vertical_from_horizontal: BoolProperty(
+        name="Split vertical from horizontal",
+        description=(
+            "User filter (Pass 3): patches facing the up axis within the angle are horizontal, the rest "
+            "vertical; seams between the two are split, bevels lie with their surfaces (applies on Rebuild "
+            "and Write UV)"
+        ),
+        default=True,
+    )
+    world_up_axis: EnumProperty(
+        name="Up axis",
+        description="The world vertical of the user filter",
+        items=[(axis, axis, f"{axis} is up") for axis in ("+Z", "-Z", "+Y", "-Y", "+X", "-X")],
+        default="+Z",
+    )
+    horizontal_angle: FloatProperty(
+        name="Angle",
+        description="A patch is horizontal when its normal lies within this many degrees of the up axis",
+        default=45.0,
+        min=0.0,
+        max=90.0,
     )
     show_labels: BoolProperty(name="Labels", default=False, update=_on_visibility_changed)
     line_thickness: FloatProperty(
@@ -223,18 +246,26 @@ class SCAFFOLDGRAPH_OT_ExportJson(bpy.types.Operator, ExportHelper):
 class SCAFFOLDGRAPH_OT_WriteUV(bpy.types.Operator):
     bl_idname = "scaffold_graph_debug.write_uv_g5a"
     bl_label = "Write UV (G5a)"
-    bl_description = "Run the G5a skeleton solve and write pinned UVs"
+    bl_description = "Run the G5a skeleton solve and write pinned UVs (U > Unwrap fills the rest)"
+
+    unwrap_quilts = False
 
     def execute(self, context):
         try:
-            from .session import _add_repo_root_to_path
+            from .session import _add_repo_root_to_path, filter_from_settings
 
             _add_repo_root_to_path()
             from scaffold_core.layer_0_source.blender_io import read_source_mesh_from_blender
             from scaffold_core.layer_4_features.model import FeatureOptions
             from scaffold_core.layer_5_runtime.pins import run_skeleton_solve
-            from scaffold_core.layer_5_runtime.uv_transfer import write_pinned_uvs
-            from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations, run_pass_2_features
+            from scaffold_core.layer_5_runtime.uv_transfer import write_pinned_uvs, write_quilt_uvs
+            from scaffold_core.pipeline.passes import (
+                run_pass_0,
+                run_pass_1_relations,
+                run_pass_2_features,
+                run_pass_3_filters,
+            )
+            from scaffold_core.user_filters.model import FilterOptions
 
             source = read_source_mesh_from_blender(context)
             if not source.selected_face_ids:
@@ -245,10 +276,19 @@ class SCAFFOLDGRAPH_OT_WriteUV(bpy.types.Operator):
                 straighten_strips=bool(settings.straighten_strips),
                 straighten_bevel_strips=bool(settings.straighten_bevel_strips),
             )
-            result = run_skeleton_solve(run_pass_2_features(run_pass_1_relations(run_pass_0(source)), options))
-            report = write_pinned_uvs(context, result)
+            world_up, angle = filter_from_settings(settings)
+            pipeline = run_pass_3_filters(
+                run_pass_2_features(run_pass_1_relations(run_pass_0(source)), options),
+                FilterOptions(world_up=world_up, horizontal_angle_degrees=angle),
+            )
+            result = run_skeleton_solve(pipeline)
+            writer = write_quilt_uvs if self.unwrap_quilts else write_pinned_uvs
+            report = writer(context, result)
+            directives = Counter(d.kind.value for d in pipeline.filter_snapshot.directives)
             summary = (
-                f"islands:{len(result.assembly.islands)} "
+                f"quilts:{len(result.assembly.islands)} "
+                f"filter:{'off' if world_up is None else settings.world_up_axis} "
+                f"split:{directives.get('SPLIT', 0)} join:{directives.get('JOIN', 0)} "
                 f"pinned:{report['pinned_vertices']} loops:{report['written_loops']} "
                 f"residual:{result.residual_max:.1e} "
                 f"axis_violations:{len(result.axis_parallel_violations)} "
@@ -258,11 +298,23 @@ class SCAFFOLDGRAPH_OT_WriteUV(bpy.types.Operator):
             print(f"[scaffold G5a] {report['next_step']}")
             for line in result.diagnostics:
                 print(f"[scaffold G5a] diag: {line}")
-            self.report({"INFO"}, summary + " | U > Unwrap to fill")
+            self.report({"INFO"}, summary + (" | quilts unwrapped" if self.unwrap_quilts else " | U > Unwrap to fill"))
         except Exception as exc:  # noqa: BLE001 - surface errors to the artist
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
         return {"FINISHED"}
+
+
+class SCAFFOLDGRAPH_OT_WriteUVQuilts(SCAFFOLDGRAPH_OT_WriteUV):
+    bl_idname = "scaffold_graph_debug.write_uv_quilts"
+    bl_label = "Write UV and unwrap quilts"
+    bl_description = (
+        "Run the solve, write pinned UVs and lay each quilt as one chart by Blender's conformal unwrap; "
+        "the mesh's seams are restored afterwards"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    unwrap_quilts = True
 
 
 class SCAFFOLDGRAPH_PT_Panel(bpy.types.Panel):
@@ -289,7 +341,12 @@ class SCAFFOLDGRAPH_PT_Panel(bpy.types.Panel):
         col.operator("scaffold_graph_debug.refresh", text="Rebuild", icon="FILE_REFRESH")
         col.prop(settings, "straighten_strips", toggle=True)
         col.prop(settings, "straighten_bevel_strips", toggle=True)
-        col.label(text="Straighten options apply on Rebuild")
+        col.prop(settings, "split_vertical_from_horizontal", toggle=True)
+        row = col.row(align=True)
+        row.enabled = bool(settings.split_vertical_from_horizontal)
+        row.prop(settings, "world_up_axis", text="Up")
+        row.prop(settings, "horizontal_angle")
+        col.label(text="Straighten and filter options apply on Rebuild")
         col.prop(settings, "line_thickness", slider=True)
         if settings.source_object:
             col.label(text=f"Source: {settings.source_object}")
@@ -301,6 +358,7 @@ class SCAFFOLDGRAPH_PT_Panel(bpy.types.Panel):
 
         row = layout.row(align=True)
         row.operator("scaffold_graph_debug.write_uv_g5a", icon="UV")
+        layout.operator("scaffold_graph_debug.write_uv_quilts", icon="UV_DATA")
         layout.operator("scaffold_graph_debug.export_json", text="SCAFFOLD JSON", icon="EXPORT")
 
     def _draw_group(self, layout, settings, group: str) -> None:
@@ -335,6 +393,7 @@ class SCAFFOLDGRAPH_PT_Panel(bpy.types.Panel):
 classes = (
     SCAFFOLDGRAPH_OT_ExportJson,
     SCAFFOLDGRAPH_OT_WriteUV,
+    SCAFFOLDGRAPH_OT_WriteUVQuilts,
     SCAFFOLDGRAPH_Settings,
     SCAFFOLDGRAPH_OT_Analyze,
     SCAFFOLDGRAPH_OT_Refresh,

@@ -213,3 +213,65 @@ def test_layers_0_to_3_import_nothing_from_layer_4() -> None:
         if "layer_4_features" in imported.split(".")
     ]
     assert not violations
+
+
+# The over filter of user options (plan Slice AH): scaffold_core/user_filters
+# sits between Layer 4 and Layer 5. It imports Layers 0-4 read-only and never
+# Layer 5; Layers 0-4 never import it; Layer 5 reads only its SeamDirectives.
+USER_FILTER_PACKAGE = "user_filters"
+WORLD_VERTICAL_WORDS = ("world_up", "world up", "worldup", "vertical", "horizontal", "patchclass")
+
+
+def test_user_filters_import_nothing_from_layer_5() -> None:
+    violations = [
+        f"{path.relative_to(PACKAGE_ROOT)} imports {imported}"
+        for path, imported in _imports_of_package(USER_FILTER_PACKAGE)
+        if "layer_5_runtime" in imported.split(".")
+    ]
+    assert (PACKAGE_ROOT / USER_FILTER_PACKAGE).is_dir()
+    assert not violations
+
+
+def test_layers_0_to_4_import_nothing_from_user_filters() -> None:
+    violations = [
+        f"{path.relative_to(PACKAGE_ROOT)} imports {imported}"
+        for package in (
+            "core", "layer_0_source", "layer_1_topology", "layer_2_geometry", "layer_3_relations", "layer_4_features",
+        )
+        for path, imported in _imports_of_package(package)
+        if USER_FILTER_PACKAGE in imported.split(".")
+    ]
+    assert not violations
+
+
+def _words_of(path: Path) -> list[str]:
+    """Identifiers, attribute names and string constants (docstrings included) of a module."""
+
+    words: list[str] = []
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Name):
+            words.append(node.id)
+        elif isinstance(node, ast.Attribute):
+            words.append(node.attr)
+        elif isinstance(node, ast.arg):
+            words.append(node.arg)
+        elif isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            words.append(node.name)
+        elif isinstance(node, ast.alias):
+            words.append(node.name)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            words.append(node.value)
+    return words
+
+
+def test_no_world_vertical_outside_the_user_filters() -> None:
+    violations = []
+    for path in _source_files():
+        if _layer_index(_module_parts_from_file(path)) is None and "core" not in _module_parts_from_file(path)[:1]:
+            continue
+        for word in _words_of(path):
+            lowered = word.lower()
+            for forbidden in WORLD_VERTICAL_WORDS:
+                if forbidden in lowered:
+                    violations.append(f"{path.relative_to(PACKAGE_ROOT)}: {forbidden!r} in {word[:60]!r}")
+    assert not violations

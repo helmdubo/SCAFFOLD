@@ -17,6 +17,7 @@ from scaffold_core.layer_1_topology.model import SurfaceModel
 from scaffold_core.layer_2_geometry.facts import GeometryFactSnapshot
 from scaffold_core.layer_3_relations.model import RelationSnapshot
 from scaffold_core.layer_4_features.model import FeatureSnapshot
+from scaffold_core.user_filters.model import FilterSnapshot
 
 
 @dataclass(frozen=True)
@@ -36,5 +37,6 @@ class PipelineContext:
     geometry_facts: GeometryFactSnapshot | None = None
     relation_snapshot: RelationSnapshot | None = None
     feature_snapshot: FeatureSnapshot | None = None
+    filter_snapshot: FilterSnapshot | None = None
     diagnostics: DiagnosticReport = DiagnosticReport()
     pass_timings: tuple[PassTiming, ...] = ()
