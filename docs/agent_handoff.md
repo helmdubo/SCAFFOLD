@@ -12,25 +12,31 @@ Read this after `AGENTS.md` and before changing code.
 Project: Scaffold
 Core package: scaffold_core/
 Current phase: G5a - Skeleton Runtime, plus G4a (Layer 4 v0, strip feature,
-  and the bevel kinds BEVEL_STRIP / BEVEL_JUNCTION)
+  and the bevel kinds BEVEL_STRIP / BEVEL_JUNCTION) and the user-filter
+  stage scaffold_core/user_filters/ (pass 3, plan Slice AH)
 Architecture: immutable B-rep-inspired interpretation pipeline
-G0 contract: v1.15 (G0.md remains read-only for agents)
+G0 contract: v1.16 (G0.md remains read-only for agents)
+Branch: claude/scaffold-g5a-research-8a1f57; main has everything up to
+  PR #40 (Slices AF and AG-1, G0 v1.15). Slice AH (commits 4e0c667,
+  0b4006f, eb3d99c with the first review fixes, the second review's fixes
+  and its docs, G0 v1.16) is on the branch and not merged yet.
+Tests: 963 passed, 4 skipped, 1 xfailed (python -m pytest from the root).
 ```
 
-Scaffold Core currently contains Layers 0-3, the G5a Layer 5 runtime,
-pipeline diagnostics and tests. Layer 4, public API and UI packages remain
-deferred:
+Scaffold Core currently contains Layers 0-4, the user-filter stage, the G5a
+Layer 5 runtime, pipeline diagnostics and tests. Public API and UI packages
+remain deferred:
 
 ```text
-scaffold_core/layer_4_features/
 scaffold_core/api/
 scaffold_core/ui/
 scaffold/
 ```
 
 Do not create deferred phase directories during G5a. Layer 5 may consume
-Layers 0-3 read-only; relation contracts remain frozen unless the task
-explicitly authorizes a G3 repair.
+Layers 0-4 read-only (Layer 4 only through FeatureConstraint) and the
+user-filter stage only through SeamDirective; relation contracts remain
+frozen unless the task explicitly authorizes a G3 repair.
 
 Root `scaffold_blender_inspection.json` is a user-only debug artifact and may
 be stale. Do not use it as an architecture reference; use code, docs and tests
@@ -120,13 +126,24 @@ Implemented:
     keyed by topology vertex occurrence (DD-37), so both sides of a seam keep
     their own UV;
   - `uv_transfer.py` the only bpy write boundary; a loop takes only the pin
-    of its own vertex occurrence in its own patch.
+    of its own vertex occurrence in its own patch. `write_pinned_uvs`
+    writes pins only; `write_quilt_uvs` (plan Slice AH) also lays each
+    quilt as one chart by Blender's conformal unwrap and restores the
+    user's seams.
+- User-filter stage (`scaffold_core/user_filters/`, pass 3, G0 DD-55, plan
+  Slice AH): with the user option `world_up` (a direction in the mesh's
+  own space; None by default, then nothing is emitted) each patch is
+  HORIZONTAL or VERTICAL and seams get SeamDirectives: SPLIT between the
+  two classes, JOIN between a bevel by mark and a patch of its class.
+  Layer 5 islands are quilts and read only the SeamDirectives; the solve
+  states the UV cut set. The vertical is not WorldOrientation.
 - Debug add-on `dev/tools/scaffold_graph_debug/` (plan Slice AC): Analyze
-  runs Passes 0-2 and the Layer 5 solve and draws fixed Grease Pencil
+  runs Passes 0-3 (pass 3 since Slice AH) and the Layer 5 solve and draws fixed Grease Pencil
   layers from pipeline records only (patches, loops, chains per use by
   island axis, islands by frame kind, island lines, nodes, pins, stitch
   decisions, side shapes, corners, Layer 4 patch types); `Write UV (G5a)`
-  button. It computes display offsets and nothing else: do not add
+  and `Write UV and unwrap quilts` buttons, and the user-filter options
+  (on, +Z, 45 degrees by default in the panel). It computes display offsets and nothing else: do not add
   derived structure to it, add a record to the core instead.
 - ScaffoldTrace / ScaffoldRail v1 Layer 3 evidence views
   (`layer_3_relations/scaffold_rails.py`): ordered through hinge stations;
@@ -220,7 +237,8 @@ Not implemented:
 - ScaffoldJunction kinds beyond SELF_SEAM/CROSS_PATCH
 - ScaffoldCircuit
 - ScaffoldRail branch resolution
-- WorldOrientation
+- WorldOrientation (the world vertical of the user-filter stage is a user
+  option, not WorldOrientation)
 - Layer 4 Feature Grammar
 - public API
 - product UI/add-on wrapper beyond the dev debug add-on
@@ -752,7 +770,9 @@ DIRECTION SET BY THE USER (2026-11-13), read before any work on islands:
   its wall, and Slice AF even refuses every seam of a laid bevel strip.
   The user objected to the result (20 small islands on
   rounded_wall_noise_top). The "own island" rule of Slice AF is
-  provisional.
+  provisional. (Status after Slice AH: the over filter exists as pass 3;
+  a ladder strip is an island by itself only when no seam of it is
+  joined; see "After Slice AH" below.)
 - Measured for this (scratch study, CFTUV frontier): CFTUV's quilts rest
   on the world vertical (same patch type only, H/V roles, FREE-FREE never
   attaches), it has no overlap check, and it looks joined in Blender only
@@ -791,6 +811,75 @@ After Slice AF (bevel strip layout):
 - A STRIP patch whose only bent seam goes to a ladder patch does not leave
   its island although that seam is never stitched (no capture shows it).
 
+After Slice AH (quilts, G0 v1.16 DD-55; plan entry Slice AH has the
+numbers):
+
+- The user's mesh with +Z: 3 quilts with the patch sets of the reference
+  layout, 137 pins, 0 overlaps and 0 flipped faces after Blender's fill;
+  the wall ring opens at f94|f211 (the reference at f94|f110, the same
+  strip's other rail; no structural fact prefers one).
+- Open defect, the proposed next slice: a ladder strip inside a quilt is
+  not laid by its ladder. The STRAIGHT_LADDER constraint applies only
+  when the strip is an island by itself. In a quilt its runs go through
+  the frame-free line layout: the user's bottom quilt strip f36 is
+  sheared (rails laid at their own lengths 6.86 and 6.97, cross edges of
+  0.074 pinned 3% to 62% too long); the arch cases' strips have no pins
+  and take their width from Blender's fill; d_cyl_s2 pins 64 -> 16.
+  Adding the ladder's equations to the quilt solve was measured and
+  rejected (one width and one length contradict the exact wall lengths;
+  the wall quilt lost all pins). Proposal: the rail shared with a
+  neighbour takes the neighbour's stations, the free rail copies them
+  through the profile lines, the width comes from the ladder, no length
+  equations of the strip's own.
+- The "island by itself" sentences about ladder strips (G0 header, DD-50,
+  DD-54, G4a) now say that they hold only without a JOIN.
+- A frame-free quilt lays only the right-corner component that holds its
+  longest line; other components stay without axes. The top quilt of the
+  user's mesh has one line and no pins (a pin needs both axes).
+- Equal-length rings of JOIN seams still open by id (g_short: ten seams of
+  equal 3D length); harmless on symmetric meshes (cube, ring).
+- Older than Slice AH, found by its study: with the filter off the island
+  sets depend on vertex numbering on some meshes (b_rect_s2, b_ring_s1,
+  f_rect_inarc, h_rect_s2_tri, m_rect_s2_trimain, several walls objects):
+  the edge-count tie-break in the first two tree groups and the
+  order-dependent overlap gate. 3D length everywhere would change the
+  output without the filter and the Tier 3 baseline: a separate slice.
+- Policies not decided by the user: a junction tie is HORIZONTAL; no
+  usable normal is VERTICAL; arch soffits are HORIZONTAL and split from
+  their walls; JOIN seams enter the tree after the other seams (the order
+  "between rigid and other" was measured: no clear winner).
+- Charts are not placed or packed; quilts overlap each other in UV.
+- write_quilt_uvs: tested headless on Blender 4.5 and 4.3.2 (13 objects,
+  no crash, 0 seam flags and 0 selection flags changed, also with partial
+  selections and a forced unwrap failure); it refuses a hidden target,
+  hidden solved faces and any other object in Edit Mode. Not tested in the
+  interactive UI; undo not verified; the bmesh select history (the active
+  element) not measured.
+- Nothing decides the orientation of a quilt in UV: on the user's mesh the
+  wall quilt lies upside down against the reference (straight edge up,
+  noisy edge down). A natural home is the user-filter stage, which owns
+  the vertical.
+- Older than Slice AH: Layer 2's absolute `EPSILON = 1e-9`
+  (`layer_2_geometry/measures.py`) makes some lower-layer facts depend on
+  mesh scale (at scale 0.001 the sliver face of g_short gets zero area and
+  a zero normal), which changes the order of seams outside the JOIN group
+  and the pins at that scale. The filter and the JOIN order themselves are
+  scale-free (38 captures at 0.001 and 1000).
+- Study of the user's "straighten shell" prototype (pure numpy UV relaxer
+  outside the repo: rigid shape matching per polygon towards the flat 3D
+  shape, plus straight-line constraints on tagged chains), fed with
+  Scaffold's pins and lines: as a fill it beats Blender's conformal unwrap
+  on a chart without pins (edge length error 6.5% -> 2.9%, area error
+  11.3% -> 3.8%) and slightly on pinned charts. Its line constraints add
+  nothing today (every vertex of every skeleton line is already pinned: 0
+  unpinned on the user's pinned quilts and on the 297 quilts of `walls`).
+  Straightening the other sides has no axis from structure (0 of 31
+  pieces) and without one breaks the layout (edge error 40%, 13 flipped
+  faces on the top quilt). Starting without Blender's unwrap works on two
+  of three quilts. Conclusion: a candidate to replace Blender's fill;
+  automatic straightening needs a Layer 4 kind ("band") that declares the
+  axis. `scaffold_core` has no numpy; adopting it is a separate decision.
+
 After Slice AG-1 (speed): the Layer 5 solve is now the largest cost (about
 7 s on building_walls: overlap checks in island assembly, `_key` scans,
 the dense solver, `_node_map`) and grows faster than linear. The study in
@@ -804,7 +893,10 @@ After Slices AE-1 and AE-2 (bevels):
 - Wanted next by the user: filters that select bevel strips as
   horizontal, vertical, under a ceiling, outer or inner corner (decals).
   The world vertical is a user option of the filter, never an input of
-  Layers 1-3. Not built; there is no filter stage yet.
+  Layers 1-3. Since Slice AH the filter stage exists with one filter
+  (vertical apart from horizontal, a bevel with its surfaces); the
+  filters "under a ceiling", "outer corner" and "inner corner" are not
+  built.
 - The corner kind of a strip compares whole-patch normals (PatchAdjacency)
   and is MIXED or UNDEFINED beside a curved neighbour; a filter needs a
   local dihedral along the rail.
@@ -868,7 +960,9 @@ of duplicating core graph logic. Do not import Blender into Scaffold Core.
 - Do not put Feature, runtime solve, pin or UV facts in Layer 3.
 - Do not feed WorldOrientation labels into base Alignment.
 - Do not use WORLD_UP in AlignmentClass, PatchAxes, endpoint relations,
-  LoopCorner or ScaffoldNode.
+  LoopCorner or ScaffoldNode. The world vertical lives only in
+  `scaffold_core/user_filters/` (a guard test checks it) and reaches
+  Layer 5 only as SeamDirectives.
 - Do not import higher layers from lower layers.
 - Do not import `pipeline.passes` or `pipeline.validator` from layer code.
 - Do not touch `G0.md` unless the task is explicitly an architecture amendment.

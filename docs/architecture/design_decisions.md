@@ -39,7 +39,7 @@ No code rename is required as part of this documentation cleanup.
 | `ScaffoldTrace` | Future connected sequence of ScaffoldEdges through ScaffoldNodes. |
 | `ScaffoldCircuit` | Future closed ScaffoldTrace. |
 | `ScaffoldRail` | Future direction-stable ScaffoldTrace usable as a conditional axis. |
-| `WorldOrientation` | Future/deferred parallel semantic overlay. |
+| `WorldOrientation` | Future/deferred parallel semantic overlay. The world vertical of the user-filter stage (DD-55) is a user option, not WorldOrientation. |
 
 Future terms reserve naming and constraints only. They must not be implemented
 outside explicit phase work.
@@ -50,20 +50,20 @@ outside explicit phase work.
 - **DD-02 - PatchChain is mandatory.** All oriented boundary use is represented through `PatchChain`.
 - **DD-03 - Topology and geometry are separate.** Layer 1 stores incidence/orientation; Layer 2 stores measured geometry.
 - **DD-04 - H/V is not a primary stored role.** H/V-like labels are derived runtime/debug labels.
-- **DD-05 - WALL/FLOOR/SLOPE is not a primary patch type.** World-facing semantics are deferred semantic overlays, not Layer 1 facts.
+- **DD-05 - WALL/FLOOR/SLOPE is not a primary patch type.** World-facing semantics are deferred semantic overlays, not Layer 1 facts. The HORIZONTAL / VERTICAL class of the user-filter stage (DD-55) is a user filter's verdict inside that stage, not a patch type.
 - **DD-06 - Relations are derived caches with provenance.** Relations store confidence, evidence, source and snapshot context.
 - **DD-07 - Alignment membership is per PatchChain.** A Chain may have multiple PatchChains with different AlignmentClass memberships.
 - **DD-08 - Patch axes are derived from AlignmentClasses.** PatchAxes is Layer 3 classification, not solve output.
 - **DD-09 - Continuation is a Layer 3 relation.** Old ContinuationEdge becomes ChainContinuationRelation.
 - **DD-10 - Dihedral is a PatchAdjacency relation.** Signed dihedral references patch pair, shared Chain and both PatchChains.
-- **DD-11 - WorldOrientation is a deferred derived relation namespace.** SurfaceRole, WorldEdgeKind and WorldCornerKind are future derived semantics.
-- **DD-12 - Base WorldOrientation does not depend on Runtime/Solve.** Solve output must not redefine world semantics.
-- **DD-13 - Alignment and PatchAxes do not use WorldOrientation.** AlignmentClass and PatchAxes consume patch-local directional evidence only. They must not use WORLD_UP vector bias, SurfaceRole labels or WorldOrientation labels.
-- **DD-14 - Runtime solve consumes lower layers only.** Runtime solve must not discover or mutate topology, geometry or base relations.
+- **DD-11 - WorldOrientation is a deferred derived relation namespace.** SurfaceRole, WorldEdgeKind and WorldCornerKind are future derived semantics. The world vertical of the user-filter stage (DD-55) is a user option of that stage, not WorldOrientation, and creates none of these records.
+- **DD-12 - Base WorldOrientation does not depend on Runtime/Solve.** Solve output must not redefine world semantics. Still holds: the user-filter stage runs before Layer 5 and reads no solve output.
+- **DD-13 - Alignment and PatchAxes do not use WorldOrientation.** AlignmentClass and PatchAxes consume patch-local directional evidence only. They must not use WORLD_UP vector bias, SurfaceRole labels or WorldOrientation labels. Still holds: the world vertical of the user-filter stage feeds nothing into Layers 1-4.
+- **DD-14 - Runtime solve consumes lower layers only.** Runtime solve must not discover or mutate topology, geometry or base relations. It also consumes the user-filter stage (DD-55), and only its SeamDirectives.
 - **DD-15 - Feature recognition returns candidates, not decisions.** Rules produce FeatureCandidates; resolver produces FeatureInstances.
 - **DD-16 - Full rebuild is preferred in v1.** Correctness and debuggability beat incremental complexity.
 - **DD-17 - User overrides are inputs, not topology mutations.** Overrides affect rebuild interpretation.
-- **DD-18 - Skeleton solve supports optional FeatureConstraints.** FeatureConstraints are the Layer 4 to Layer 5 bridge.
+- **DD-18 - Skeleton solve supports optional FeatureConstraints.** FeatureConstraints are the Layer 4 to Layer 5 bridge. SeamDirectives of the user-filter stage (DD-55) are a separate input of Layer 5 island assembly; they carry no feature.
 - **DD-19 - Two-pass maximum in v1.** No iterative feature/solve convergence loop.
 - **DD-20 - Suppressed candidates are retained.** Suppressed/rejected/weak candidates are inspectable diagnostics.
 - **DD-21 - Detail generation is external.** Detail/decal/wear systems consume Scaffold APIs.
@@ -71,7 +71,7 @@ outside explicit phase work.
 - **DD-23 - Architecture allows N AlignmentClasses per patch; v1 resolves at most two.** Non-orthogonal/curved/N-family cases are future work.
 - **DD-24 - Direction clustering is conservative in v1.** Straight-like PatchChains only, chord direction only, fixed tolerance.
 - **DD-25 - Layer 3 is frozen after Pass 1.** Pass 2 may consume Layer 3 but must not write to it.
-- **DD-26 - FeatureConstraint is first-class.** FeatureConstraint is the only channel from accepted features into solve.
+- **DD-26 - FeatureConstraint is first-class.** FeatureConstraint is the only channel from accepted features into solve. The user-filter stage (DD-55) is not a feature: it reaches the solve only through SeamDirectives.
 - **DD-27 - G1 Patch segmentation is seam-only by default.** Patch flood fill is blocked by border, non-manifold selected edge, explicit Scaffold boundary mark, and Blender UV Seam. Blender Sharp is not a default boundary source.
 - **DD-28 - G1 Shell detection ignores Patch boundaries.** Shells are selected-face edge-connected components. Seams and explicit Patch boundaries may split Patches but do not split Shells. Vertex-only contact does not connect Shells.
 
@@ -427,6 +427,22 @@ Implemented v0 consumption rule:
   SURFACE_*_CONTINUATION_CANDIDATE relation kinds.
 - ScaffoldContinuityComponent v0 must not propagate directly through
   SurfaceFlowCompatibilityEvidence.
+
+## DD-43 to DD-54
+
+Recorded in `G0.md` only.
+
+## DD-55 - The user-filter stage and quilts
+
+Summary; `G0.md` DD-55 is the full text (plan Slice AH).
+
+- By default everything connected is one quilt, decided from structure; only a user filter splits; the user's seams stay as markup. A Layer 5 island is a quilt: the patches that lie together in UV as one chart, known as data before any unwrap.
+- The stage `scaffold_core/user_filters/` runs once as pass 3, after Layer 4 and before Layer 5. It reads Layers 1-4 and writes nothing into them.
+- Option `FilterOptions(world_up=None, horizontal_angle_degrees=45.0)`. With `world_up` None the stage emits nothing and every output equals a run without it. `world_up` is a direction in the mesh's own space.
+- A patch is HORIZONTAL when the angle between its Layer 2 normal and the vertical, acos(|n . up|), is at most the option's angle, else VERTICAL; a patch with no usable normal (Layer 2 `area_vector_length` at most 1e-3 of its Layer 2 area) is VERTICAL with a diagnostic. A bevel by mark takes its class by rule (a strip from its neighbours that are not bevels, a junction from its strips; a tie is HORIZONTAL).
+- SeamDirective SPLIT between patches of different classes; JOIN between patches of one class when one of them is a bevel by mark. Layer 5 reads only the SeamDirectives: SPLIT is never stitched, JOIN is stitched without the angle gate and enters the tree after the other seams, longest 3D length (to 9 significant digits) first.
+- The solve states the UV cut set: every seam the tree did not stitch, counted by edge sides, so a slit seam inside one patch and a SEAM_SELF Chain are cuts.
+- The vertical is not WorldOrientation: it lives only in this stage, feeds nothing into Layers 1-4 and reaches Layer 5 only as SeamDirectives. A guard test keeps it out of every other package.
 
 ## PatchChain directional evidence
 

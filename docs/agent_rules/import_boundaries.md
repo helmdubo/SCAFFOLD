@@ -12,6 +12,20 @@ Layer 0 → Layer 1 → Layer 2 → Layer 3 → Layer 4 → Layer 5
 
 Lower layers must not import higher layers.
 
+The user-filter stage (G0 DD-55, plan Slice AH) is a package between Layer 4
+and Layer 5, not a numbered layer:
+
+```text
+Layer 0 → Layer 1 → Layer 2 → Layer 3 → Layer 4 → user_filters → Layer 5
+```
+
+```text
+scaffold_core/user_filters/ imports core, ids, Layer 2 measures and the
+  Layer 4 model; it never imports Layer 5.
+Layer 5 (layer_5_runtime/islands.py) and pipeline/ import it.
+Layers 0-4 and core must not import it.
+```
+
 ## Pipeline rule
 
 `pipeline/` orchestrates passes.
@@ -40,11 +54,13 @@ Layer builder functions may type-reference `PipelineContext` when needed, but mu
 
 ## Phase directory boundaries
 
-During G5a, Layer 5 runtime exists and may consume Layers 0-3 read-only.
-The following directories remain future/deferred:
+During G5a, Layer 5 runtime exists and may consume Layers 0-4 read-only
+(Layer 4 only through FeatureConstraint) and the user-filter stage (only
+through SeamDirective). Layer 4 (`scaffold_core/layer_4_features/`, plan
+decision 14) and `scaffold_core/user_filters/` (plan Slice AH) are open. The
+following directories remain future/deferred:
 
 ```text
-scaffold_core/layer_4_features/
 scaffold_core/api/
 scaffold_core/ui/
 ```
@@ -62,3 +78,7 @@ scaffold_core/layer_5_runtime/uv_transfer.py
 ## Enforced by test
 
 `scaffold_core/tests/test_forbidden_imports.py` must scan imports and fail on boundary violations.
+It also checks that the user-filter stage imports no Layer 5, that Layers
+0-4 import nothing from it, and that no module of `core`, `constants` or a
+layer package names the world vertical or the patch classes (the words
+world_up, vertical, horizontal, patch_class and their spellings).

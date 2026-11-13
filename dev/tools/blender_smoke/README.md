@@ -51,8 +51,9 @@ Options:
                     a second visible mesh object is selected beside the target,
                     and the object fails (error record, exit 1) when a seam
                     flag differs, a loop of an unsolved face or of that other
-                    object changes, or the selection or active object is not
-                    restored
+                    object changes, a vertex, edge or face selection flag of
+                    the target mesh changes, or the selection or active object
+                    is not restored
 --baseline PATH     compare stable fields; exit 1 and print only the diffs
 --update-baseline   rewrite PATH from this run
 ```

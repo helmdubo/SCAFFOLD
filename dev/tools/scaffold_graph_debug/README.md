@@ -46,7 +46,10 @@ Straighten Strips   Pass 2 option; applies on the next Rebuild (and on Write UV)
 Straighten Bevel Strips
                     Pass 2 option, on by default: every bevel strip marked by Face
                     Strength is laid from its ladder as a straight island of its own
-                    (STRAIGHT_LADDER); applies on the next Rebuild (and on Write UV).
+                    (STRAIGHT_LADDER) unless the user filter below joins one of its
+                    seams; then it lies in its quilt and the ladder is not applied
+                    (a known defect: it can come out sheared). Applies on the next
+                    Rebuild (and on Write UV).
                     Limit: a triangulated bevel strip has no ladder reading, and
                     with straight long sides Straighten Strips does not take it
                     either, so it gets no layout and stays stitched into the main
@@ -63,8 +66,11 @@ Split vertical from horizontal
                     neighbour (else vertical), a bevel junction the majority of
                     its strips (a tie is horizontal), and a bevel lies with its
                     surfaces (its seams to patches of its class are joined
-                    without the angle gate). Applies on the next Rebuild and on
-                    both Write UV buttons. Turn it off to see the structure alone
+                    without the angle gate). The Up axis is a world axis; the
+                    panel turns it into the object's own space by the object's
+                    rotation and scale (a non-uniform scale is not handled).
+                    Applies on the next Rebuild and on both Write UV buttons.
+                    Turn it off to see the structure alone
 Structure / Skeleton / Patches: sides and types / Layer 3 (detail) / Ladders / Bevels
                     collapsible groups, one eye toggle per layer, legend underneath
 Write UV (G5a)      writes the pins only (U > Unwrap fills the rest)
@@ -72,7 +78,12 @@ Write UV and unwrap quilts
                     writes the pins and lays every quilt as one chart by
                     Blender's conformal unwrap (uv_transfer.write_quilt_uvs): for
                     the unwrap only, the seams the quilt stitched are not cuts;
-                    the mesh's seam flags and selection are restored afterwards
+                    a chart with fewer than two pins is rescaled to its 3D area;
+                    the mesh's seam flags and selection are restored afterwards.
+                    Only the target object is unwrapped: from Object Mode the
+                    other objects are deselected for the call and selected again
+                    afterwards; it refuses when the object is hidden, a solved
+                    face is hidden, or another object is in Edit Mode
 SCAFFOLD JSON       unchanged
 ```
 
@@ -270,7 +281,8 @@ not call `bpy.ops.uv.unwrap`. `Write UV and unwrap quilts` runs the same solve
 and then `uv_transfer.write_quilt_uvs`, which also runs the conformal unwrap
 with each quilt as one chart. In Edit Mode, selected faces define the run. In
 Object Mode, selecting one mesh object means all faces of that object are
-used. Then run Blender's manual command:
+used. After `Write UV (G5a)` only, run Blender's manual command (it uses the
+mesh's own seams, so a seam the quilt stitched stays a cut there):
 
 ```text
 UV Editor -> U -> Unwrap

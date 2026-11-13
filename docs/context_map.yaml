@@ -34,6 +34,7 @@ phase_allowed_dirs:
     - scaffold_core/layer_2_geometry
     - scaffold_core/layer_3_relations
     - scaffold_core/layer_5_runtime
+    - scaffold_core/user_filters
     - scaffold_core/pipeline
     - scaffold_core/tests
 
@@ -127,6 +128,10 @@ task_routes:
   g5a_runtime:
     - docs/phases/G5a_skeleton_runtime.md
     - docs/agent_rules/blender_boundaries.md
+    - docs/agent_rules/import_boundaries.md
+  user_filters:
+    - G0.md
+    - docs/phases/G5a_skeleton_runtime.md
     - docs/agent_rules/import_boundaries.md
   source_snapshot:
     - docs/layers/layer_0_source.md
