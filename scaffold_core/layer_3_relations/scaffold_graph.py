@@ -27,8 +27,12 @@ def build_scaffold_graph(
     """Build graph edges for final PatchChains and one connectivity graph."""
 
     node_id_by_vertex_id = _node_id_by_vertex_id(scaffold_nodes)
+    confidence_by_node_id = {
+        node.id: node.confidence
+        for node in scaffold_nodes
+    }
     edges = tuple(
-        _edge_for_patch_chain(topology, patch_chain, node_id_by_vertex_id, scaffold_nodes)
+        _edge_for_patch_chain(topology, patch_chain, node_id_by_vertex_id, confidence_by_node_id)
         for patch_chain in sorted(topology.patch_chains.values(), key=lambda item: str(item.id))
     )
     graph = ScaffoldGraph(
@@ -53,12 +57,12 @@ def _edge_for_patch_chain(
     topology: SurfaceModel,
     patch_chain: PatchChain,
     node_id_by_vertex_id: dict[VertexId, str],
-    scaffold_nodes: tuple[ScaffoldNode, ...],
+    confidence_by_node_id: dict[str, float],
 ) -> ScaffoldEdge:
     start_vertex_id, end_vertex_id = patch_chain_vertices(topology, patch_chain.id)
     start_node_id = node_id_by_vertex_id[start_vertex_id]
     end_node_id = node_id_by_vertex_id[end_vertex_id]
-    node_confidence = _endpoint_node_confidence(scaffold_nodes, start_node_id, end_node_id)
+    node_confidence = _endpoint_node_confidence(confidence_by_node_id, start_node_id, end_node_id)
     return ScaffoldEdge(
         id=_edge_id(patch_chain.id),
         patch_chain_id=patch_chain.id,
@@ -73,14 +77,10 @@ def _edge_for_patch_chain(
 
 
 def _endpoint_node_confidence(
-    scaffold_nodes: tuple[ScaffoldNode, ...],
+    confidence_by_node_id: dict[str, float],
     start_node_id: str,
     end_node_id: str,
 ) -> float:
-    confidence_by_node_id = {
-        node.id: node.confidence
-        for node in scaffold_nodes
-    }
     return min(confidence_by_node_id[start_node_id], confidence_by_node_id[end_node_id])
 
 

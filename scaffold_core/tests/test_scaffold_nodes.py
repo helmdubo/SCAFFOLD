@@ -179,6 +179,27 @@ def test_scaffold_node_code_does_not_introduce_deferred_terms() -> None:
     assert not identifiers & FORBIDDEN_TOKENS
 
 
+def test_scaffold_node_member_ids_equal_a_scan_over_all_records() -> None:
+    # The builder indexes records by vertex id; each node must still list
+    # exactly the records a full scan would find, sorted by id.
+    snapshot = run_pass_1_relations(
+        run_pass_0(make_segmented_cylinder_tube_without_caps_with_one_seam_source())
+    ).relation_snapshot
+
+    assert snapshot.scaffold_nodes
+    for node in snapshot.scaffold_nodes:
+        vertex_ids = set(node.vertex_ids)
+        assert node.loop_corner_ids == tuple(sorted(
+            corner.id for corner in snapshot.loop_corners if corner.vertex_id in vertex_ids
+        ))
+        assert node.patch_chain_endpoint_sample_ids == tuple(sorted(
+            sample.id for sample in snapshot.patch_chain_endpoint_samples if sample.vertex_id in vertex_ids
+        ))
+        assert node.patch_chain_endpoint_relation_ids == tuple(sorted(
+            relation.id for relation in snapshot.patch_chain_endpoint_relations if relation.vertex_id in vertex_ids
+        ))
+
+
 def _node_for_source(nodes, source_vertex_id: str):
     return next(
         node
