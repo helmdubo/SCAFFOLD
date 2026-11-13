@@ -653,6 +653,35 @@ class RunCornerRelation:
 
 
 @dataclass(frozen=True)
+class RunBridgedCornerRelation:
+    """Evidence-only right corner of one patch surface turned over one bridge run.
+
+    In one patch and loop the arriving run's END meets the bridge run's START
+    and the bridge's END meets the leaving run's START, both at a
+    RunCornerRelation of kind OTHER. A run is straight on the surface, so the
+    boundary turns only at the two corners; interior_angle_sum is the angle
+    the two corners make together (first + second - pi): within the DD-45
+    tolerance of pi/2 (convex) or 3*pi/2 (reflex), as for a RIGHT corner.
+    Each record spans exactly one bridge run (two consecutive corners); a
+    chain of OTHER corners may give overlapping records. It sets no role and
+    creates no family, crossing, rail or node.
+    """
+
+    id: str
+    patch_id: PatchId
+    arriving_directional_evidence_id: str
+    bridge_directional_evidence_id: str
+    leaving_directional_evidence_id: str
+    arriving_corner_id: str
+    leaving_corner_id: str
+    arriving_interior_angle_sum: float
+    leaving_interior_angle_sum: float
+    interior_angle_sum: float
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
     chain_continuations: tuple[ChainContinuationRelation, ...] = ()
@@ -667,6 +696,7 @@ class RelationSnapshot:
     scaffold_junctions: tuple[ScaffoldJunction, ...] = ()
     run_endpoint_junctions: tuple[RunEndpointJunction, ...] = ()
     run_corner_relations: tuple[RunCornerRelation, ...] = ()
+    run_bridged_corner_relations: tuple[RunBridgedCornerRelation, ...] = ()
     side_surface_continuity_evidence: tuple[SideSurfaceContinuityEvidence, ...] = ()
     surface_flow_compatibility_evidence: tuple[SurfaceFlowCompatibilityEvidence, ...] = ()
     scaffold_node_incident_edge_relations: tuple[ScaffoldNodeIncidentEdgeRelation, ...] = ()

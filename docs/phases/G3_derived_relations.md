@@ -110,6 +110,7 @@ Current terminology for the final boundary graph model:
 | `ScaffoldRail` | Implemented v1 (G0 DD-47): direction-stable ScaffoldTrace usable as a conditional axis. |
 | `PatchChainShapeRelation` | Implemented v0 (G0 DD-48): per PatchChain use, each piece between surface corners is a surface line, a surface curve or unresolved. One reader: the per-use chord shortcut of directional runs (DD-30). |
 | `RunCornerRelation` | Implemented v0 (G0 DD-49): the corner between two run ends on one patch surface, STRAIGHT, RIGHT or OTHER. Read by the Layer 5 frame-free axis bipartition and line orientation (G0 DD-51). |
+| `RunBridgedCornerRelation` | Implemented v0 (G0 DD-52): a right corner turned over one bridge run (two consecutive OTHER corners whose turns add up to a right angle). Read by the Layer 5 frame-free axis bipartition, line orientation and bridge equations. |
 
 Endpoint samples, endpoint relations, LocalFaceFanGeometryFacts and ScaffoldNodes
 are evidence or derived relation records; they are not Layer 1 topology.
@@ -863,3 +864,16 @@ with the patch's interior angle there: STRAIGHT (the IN_PATCH_GEODESIC
 case), RIGHT (90 or 270 degrees) or OTHER. It shares its pairing and its
 angle source with DD-45. Evidence only; Layer 5 reads the RIGHT corners to
 split the lines of a frame-free island into two axes.
+
+## RunBridgedCornerRelation v0
+
+Implemented (G0 DD-52, plan Slice AD). A directional run is straight on its
+patch surface, so the boundary turns only at corners. One record for an
+arriving run, a bridge run and a leaving run of one loop whose two corners
+are RunCornerRelations of kind OTHER and whose turns add up to a right
+angle (the combined angle theta1 + theta2 - pi is RIGHT by the DD-49
+rule). No length is read; only two consecutive corners are summed, so a
+chain of OTHER corners may give overlapping records. Built from the corner
+records alone (`run_corners.py`). Evidence only; Layer 5 reads it in
+islands without a rigid frame as it reads a RIGHT corner, and lays the
+bridge by its two turns.

@@ -93,7 +93,10 @@ Corner turn (information; the corner law of a solved, unmirrored layout):
   at a Layer 3 RunCornerRelation of kind RIGHT the run with endpoint role END
   arrives and the run with role START leaves, both along the patch's boundary
   loop. A convex corner (interior_angle_sum < pi) must turn left in the solved
-  coordinates of the two runs' ends, a reflex corner right. Checked: both runs
+  coordinates of the two runs' ends, a reflex corner right. A
+  RunBridgedCornerRelation (a right corner turned over one bridge run) is
+  checked the same way between its arriving and its leaving run, with its
+  combined angle. Checked: both runs
   in one island, all four run-end coordinates solved, a clear turn
   (|cross| >= TURN_MIN_SINE times the two lengths). turn = corners with the
   law / corners checked; mirrored = islands with more corners against the law
@@ -413,6 +416,7 @@ def corner_turns(relations, solve):
     }
     with_by_island: Counter = Counter()
     against_by_island: Counter = Counter()
+    turns = []  # (arriving run, leaving run, interior angle)
     for corner in relations.run_corner_relations:
         if corner.kind.value != "RIGHT":
             continue
@@ -420,7 +424,12 @@ def corner_turns(relations, solve):
             corner.first_endpoint_role.value: corner.first_directional_evidence_id,
             corner.second_endpoint_role.value: corner.second_directional_evidence_id,
         }
-        arriving, leaving = run_by_role.get("END"), run_by_role.get("START")
+        turns.append((run_by_role.get("END"), run_by_role.get("START"), corner.interior_angle_sum))
+    turns.extend(
+        (corner.arriving_directional_evidence_id, corner.leaving_directional_evidence_id, corner.interior_angle_sum)
+        for corner in getattr(relations, "run_bridged_corner_relations", ())
+    )
+    for arriving, leaving, angle in turns:
         skeleton = skeleton_of_run.get(arriving)
         if leaving is None or skeleton is None or skeleton_of_run.get(leaving) is not skeleton:
             continue
@@ -439,7 +448,7 @@ def corner_turns(relations, solve):
         cross = first[0] * second[1] - first[1] * second[0]
         if abs(cross) < TURN_MIN_SINE * math.hypot(*first) * math.hypot(*second) or cross == 0.0:
             continue
-        if (cross > 0.0) == (corner.interior_angle_sum < math.pi):
+        if (cross > 0.0) == (angle < math.pi):
             with_by_island[skeleton.island_id] += 1
         else:
             against_by_island[skeleton.island_id] += 1
@@ -569,6 +578,7 @@ def build_uses(context, solve, reference):
 
 _OBLIQUE_DIAGNOSTICS = (
     ("axis bipartition conflict", "OBLIQUE_CONFLICT"),
+    ("island line not reached by right corners", "OBLIQUE_UNLINKED"),
     ("island line not straight", "OBLIQUE_LINE_BENT"),
     ("island line jogs", "OBLIQUE_JOG"),
     ("patch outside the rigid island frame", "OBLIQUE_OUTSIDE_FRAME"),
@@ -590,15 +600,28 @@ def oblique_causes(skeleton):
 
 
 def _oblique_reason(runs, skeleton, patch_id, causes):
+    """One reason per use: the first non-axis run that is not a laid bridge decides.
+
+    A bridge laid by a bridged right corner is the mildest reason: the use
+    reports OBLIQUE_BRIDGE only when every non-axis run of it is such a bridge.
+    """
+
+    bridges = getattr(skeleton, "bridge_vector_by_run", {})
+    unlaid = False
     for run in runs:
         if skeleton.axis_role_by_run.get(run.id) == "AXIS_A" or skeleton.axis_role_by_run.get(run.id) == "AXIS_B":
             continue
+        if run.id in bridges:
+            continue
+        unlaid = True
         line = skeleton.line_by_run.get(run.id)
         for subject in (line, run.id, patch_id):
             if subject in causes:
                 return causes[subject]
         if line is None:
             return "OBLIQUE_NO_LINE"
+    if not unlaid and any(run.id in bridges for run in runs):
+        return "OBLIQUE_BRIDGE"  # laid by bridged right corners, not axis runs
     # Frame-free: the line never met an AXIS line orthogonally; framed: off-axis.
     return "OBLIQUE_UNLINKED" if skeleton.frame == "FRAME_FREE" else "OBLIQUE_OFF_AXIS"
 

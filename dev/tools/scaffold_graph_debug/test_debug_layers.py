@@ -23,6 +23,7 @@ from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations, run_
 from scaffold_core.tests.fixtures.beveled_wall_corner import make_beveled_wall_corner_source
 from scaffold_core.tests.fixtures.cylinder_tube import make_cylinder_tube_without_caps_with_two_seams_source
 from scaffold_core.tests.fixtures.extruded_cross import make_extruded_cross_source
+from scaffold_core.tests.fixtures.run_corner_sheets import make_notched_sheet_source
 from scaffold_core.tests.fixtures.tube_with_cap import make_tube_with_cap_source
 
 
@@ -191,13 +192,38 @@ def test_structure_nodes_pins_and_corners_follow_their_records(case) -> None:
     assert len(layers["Scaffold_Pins"]) == sum(vertex.pinned for vertex in solve.vertices)
 
     corners = [corner for corner in relations.run_corner_relations if corner.kind.value != "STRAIGHT"]
-    assert {item["corner_id"] for item in layers["Scaffold_Patch_Corners"]} == {corner.id for corner in corners}
+    corner_ids = {corner.id for corner in corners} | {corner.id for corner in relations.run_bridged_corner_relations}
+    assert {item["corner_id"] for item in layers["Scaffold_Patch_Corners"]} == corner_ids
     for item in layers["Scaffold_Patch_Corners"]:
-        if item["kind"] == "RIGHT":
+        if item["kind"] == "BRIDGED_RIGHT":
+            assert item["category"] == "BRIDGED_RIGHT"
+        elif item["kind"] == "RIGHT":
             assert item["category"] == ("RIGHT_CONVEX" if item["interior_angle_sum"] < math.pi else "RIGHT_REFLEX")
         else:
             assert item["category"] == "OTHER"
     assert len(layers["Scaffold_L3_Families"]) == len(relations.patch_chain_directional_evidence)
+
+
+def test_bridged_right_corner_is_drawn_once_at_its_bridge_run_midpoint() -> None:
+    context = run_pass_1_relations(run_pass_0(make_notched_sheet_source(folded=True)))
+    payload = build_debug_payload(context, run_skeleton_solve(context), object_name="notched_sheet")
+    relations = context.relation_snapshot
+    evidence = {e.id: e for e in relations.patch_chain_directional_evidence}
+    position = {str(k): v.position for k, v in context.source_snapshot.vertices.items()}
+    items = [item for item in payload["layers"]["Scaffold_Patch_Corners"] if item["kind"] == "BRIDGED_RIGHT"]
+
+    assert {item["corner_id"] for item in items} == {corner.id for corner in relations.run_bridged_corner_relations}
+    assert len(items) == 4
+    for item in items:
+        bridge = evidence[item["bridge_run_id"]]
+        assert len(item["strokes"]) == 3
+        midpoint = [
+            (position[str(bridge.start_source_vertex_id)][k] + position[str(bridge.end_source_vertex_id)][k]) / 2.0
+            for k in range(3)
+        ]
+        center = [sum(point[k] for point in item["strokes"][0]["points"]) / 2.0 for k in range(3)]
+        # The marker sits on the bridge's displayed polyline (offset inward by a few marker units).
+        assert math.dist(center, midpoint) < 0.1
 
 
 def test_strip_option_moves_the_arch_front_between_strip_layers() -> None:

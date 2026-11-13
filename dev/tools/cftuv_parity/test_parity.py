@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -16,6 +17,7 @@ from dev.tools.cftuv_parity.parity import (
     Use,
     _replay,
     _scaffold_use,
+    build_uses,
     corner_turns,
     classify_uv_polyline,
     oblique_causes,
@@ -156,6 +158,22 @@ def test_scaffold_use_line_and_failures():
     assert _scaffold_use(runs, conflict, "P", on_line, 3.0, causes)[2] == "OBLIQUE_CONFLICT"
     unlinked = _skeleton({"r1": "OBLIQUE", "r2": "OBLIQUE"}, frame="FRAME_FREE")
     assert _scaffold_use(runs, unlinked, "P", on_line, 3.0)[2] == "OBLIQUE_UNLINKED"
+    unreached = _skeleton(
+        {"r1": "OBLIQUE", "r2": "OBLIQUE"}, frame="FRAME_FREE",
+        diagnostics=("island line not reached by right corners: line:r1 -> OBLIQUE",),
+    )
+    assert oblique_causes(unreached) == {"line:r1": "OBLIQUE_UNLINKED"}
+    # A use whose only non-axis runs are laid bridges reports OBLIQUE_BRIDGE;
+    # any other non-axis run of the use is worse and decides the reason.
+    bridge = _skeleton({"r1": "OBLIQUE", "r2": "AXIS_A"}, frame="FRAME_FREE")
+    bridge.bridge_vector_by_run = {"r1": (0.02, 0.02)}
+    assert _scaffold_use(runs, bridge, "P", on_line, 3.0)[2] == "OBLIQUE_BRIDGE"
+    bridge_and_unreached = _skeleton({"r1": "OBLIQUE", "r2": "OBLIQUE"}, frame="FRAME_FREE")
+    bridge_and_unreached.bridge_vector_by_run = {"r1": (0.02, 0.02)}
+    assert _scaffold_use(runs, bridge_and_unreached, "P", on_line, 3.0)[2] == "OBLIQUE_UNLINKED"
+    bridge_and_unreached.diagnostics = ("island line not reached by right corners: line:r2 -> OBLIQUE",)
+    causes = oblique_causes(bridge_and_unreached)
+    assert _scaffold_use(runs, bridge_and_unreached, "P", on_line, 3.0, causes)[2] == "OBLIQUE_UNLINKED"
     assert _scaffold_use([], skeleton, "P", on_line, 3.0)[2] == "NO_RUNS"
 
 
@@ -194,3 +212,44 @@ def test_reference_column_back_face_leaves_its_island_as_a_strip():
         if {decision.first_patch_id, decision.second_patch_id} == {back, "patch:seed:f1"}
     }
     assert reasons == {"angle defect exceeds stitch limit"}
+
+
+def test_reference_main_wall_outer_loops_keep_only_their_chamfer_bridges_oblique():
+    # The door notches of both outer loops are chamfered by 2.8 cm runs that
+    # meet their neighbours at 225 degrees: right corners turned over one
+    # bridge run (Slice AD). Every other outer run takes an axis; the
+    # chamfers stay OBLIQUE and are laid by their bridge vectors.
+    context, solve = _replay(REFERENCE_DIR / "Main_wall.capture.json", STRAIGHTEN_STRIPS["Main_wall"])
+    reference = json.loads((REFERENCE_DIR / "Main_wall.uv.json").read_text(encoding="utf-8"))
+    evidence = {e.id: e for e in context.relation_snapshot.patch_chain_directional_evidence}
+    outer = {str(loop.id) for loop in context.topology_snapshot.loops.values() if loop.kind.value == "OUTER"}
+    oblique = {
+        run_id
+        for skeleton in solve.skeletons
+        for run_id, role in skeleton.axis_role_by_run.items()
+        if role == "OBLIQUE" and str(evidence[run_id].loop_id) in outer
+    }
+    bridges = {run_id for skeleton in solve.skeletons for run_id in skeleton.bridge_vector_by_run}
+
+    assert {skeleton.frame for skeleton in solve.skeletons} == {"FRAME_FREE"}
+    assert len(oblique) == 6
+    assert oblique == bridges
+    assert all(evidence[run_id].length < 0.03 for run_id in oblique)
+    # The three 1.46 m notch tops bridge their two chamfers; they have axes and no vector.
+    tops = {
+        c.bridge_directional_evidence_id
+        for c in context.relation_snapshot.run_bridged_corner_relations
+        if abs(evidence[c.bridge_directional_evidence_id].length - 1.46) < 1e-3
+    }
+    role_of = {run_id: role for skeleton in solve.skeletons for run_id, role in skeleton.axis_role_by_run.items()}
+    assert len(tops) == 3
+    assert {role_of[run_id] for run_id in tops} == {"AXIS_A"}
+    assert not tops & bridges
+    assert not [d for skeleton in solve.skeletons for d in skeleton.diagnostics if "UNCONSTRAINED" in d]
+    uses, _unread, _scale = build_uses(context, solve, reference)
+    ref_pins = set().union(*(use.ref_pins for use in uses))
+    sc_pins = set().union(*(use.sc_pins for use in uses))
+    assert len(ref_pins) == 66 and ref_pins <= sc_pins
+    # Scaffold also pins the two ends of the notch top of patch f0; the
+    # reference pins those corners on both notches of f1 but not on f0.
+    assert sc_pins - ref_pins == {("patch:seed:f0", "vertex:v1022"), ("patch:seed:f0", "vertex:v1023")}

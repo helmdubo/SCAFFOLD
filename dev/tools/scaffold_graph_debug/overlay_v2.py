@@ -97,6 +97,7 @@ LEGENDS = {
         "  orange = unresolved",
         "Corners: green = right convex, magenta = right reflex,",
         "  orange = other (straight corners not drawn)",
+        "  blue = right corner bridged over one run (on that run)",
         "Types: Layer 4 verdict per patch",
         "  strip = straightened (option on)",
         "  strip (option off) = would be straightened",
@@ -137,6 +138,7 @@ CORNER_COLORS = {
     "RIGHT_CONVEX": (0.2, 0.9, 0.3, 1.0),
     "RIGHT_REFLEX": (1.0, 0.2, 0.9, 1.0),
     "OTHER": (1.0, 0.55, 0.0, 1.0),
+    "BRIDGED_RIGHT": (0.25, 0.45, 1.0, 1.0),
 }
 CORNER_WIDTH = 4
 SIDE_WIDTH = 6
@@ -884,6 +886,23 @@ def _corner_items(look, relations, run_offsets) -> list[dict[str, Any]]:
             "category": category,
             "interior_angle_sum": float(corner.interior_angle_sum),
             "strokes": [_stroke(segment, f"corner_{category}", color, CORNER_WIDTH) for segment in _cross(center, half)],
+        })
+    # A right corner turned over one bridge run: one marker at the bridge's
+    # midpoint, on its displayed (offset) polyline.
+    for corner in sorted(getattr(relations, "run_bridged_corner_relations", ()), key=lambda item: item.id):
+        offset = run_offsets.get(corner.bridge_directional_evidence_id)
+        if offset is None or not offset["polyline"]:
+            continue
+        center = _arc_midpoint(offset["polyline"])
+        color = CORNER_COLORS["BRIDGED_RIGHT"]
+        items.append({
+            "corner_id": corner.id,
+            "patch_id": str(corner.patch_id),
+            "kind": "BRIDGED_RIGHT",
+            "category": "BRIDGED_RIGHT",
+            "interior_angle_sum": float(corner.interior_angle_sum),
+            "bridge_run_id": corner.bridge_directional_evidence_id,
+            "strokes": [_stroke(segment, "corner_BRIDGED_RIGHT", color, CORNER_WIDTH) for segment in _cross(center, half)],
         })
     return items
 

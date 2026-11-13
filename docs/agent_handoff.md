@@ -140,6 +140,11 @@ Implemented:
 - RunCornerRelation v0 (`layer_3_relations/run_corners.py`, G0 DD-49): the
   corner between two run ends on one patch surface, STRAIGHT, RIGHT or
   OTHER; the Layer 5 frame-free axis bipartition reads the RIGHT corners.
+- RunBridgedCornerRelation v0 (`layer_3_relations/run_corners.py`, G0
+  DD-52, plan Slice AD): a right corner turned over one bridge run (two
+  consecutive OTHER corners whose turns add up to a right angle, e.g. a
+  chamfered corner). A frame-free island reads it like a RIGHT corner
+  and lays the bridge by one vector equation per axis.
 - Pipeline tooling: Chain -> PatchChain incidence index
   (`layer_3_relations/patch_chain_incidence.py`), per-pass stage timings in
   `PipelineContext.pass_timings` (reported by inspection), and a networkx
@@ -685,10 +690,10 @@ twisted or mirrored, check this law first.
 
 Open after Slice AA:
 
-- Main_wall: the stepped bottom of the +X wall stays OBLIQUE (3 cm chamfers
-  make 225 degree corners, kind OTHER, which break the right-corner walk
-  that assigns axes); 632 run ends on seam-cut mid-chain vertices stay
-  unpinned.
+- Main_wall: the chamfered door notches are solved by Slice AD (bridged
+  right corners): every OUTER run but the six chamfers has an axis, all
+  66 reference pins are covered. 632 run ends on seam-cut mid-chain
+  vertices (the slits of the window reveals) stay unpinned.
 - `solve_axis` still normalizes equations between the same two cross
   components by a raw 3D dot; it flips nothing on the 25 captures now.
   `_segments_follow_chain` (Layer 2) and `_patch_chain_reverses_source_path`
@@ -706,10 +711,16 @@ Open after Slice AA:
 
 Seen in the Slice AC debugger (state of the core, not fixed):
 
-- Main_wall: only the outer loop gets axes (36 runs). All 1047 runs of
-  the window holes are OBLIQUE (695 m of 971 m of boundary): an inner
-  loop of a frame-free island has no right corner shared with the outer
-  loop, so nothing ties its two directions to the island's axes.
+- Main_wall: all 1047 runs of the window holes are OBLIQUE (650 m). The
+  holes are the glass outlines at the bottom of window reveals that lie
+  in the facade's own patch; 56 of 78 are wrapped by non-developable
+  reveal corners (holonomy up to 73 degrees), and no Layer 3 record ties
+  a hole to the outer loop. The CFTUV reference pins none of them (all
+  66 pins are on the outer loops); they come out straight from Blender's
+  unwrap in both. User decision (2026-11-13): leave them out of the
+  skeleton, as in the reference. Main_wall is the only frame-free
+  island with holes on 52 captures; in rigid frames holes get axes and
+  pins. Each unreached line now carries a diagnostic.
 - A bent side of a strip is one island line per run (Arc's strip island
   has 29 lines, the column's strips 49 and 38): the skeleton has no
   entity for a curved side as a whole; the constraint's four sides are

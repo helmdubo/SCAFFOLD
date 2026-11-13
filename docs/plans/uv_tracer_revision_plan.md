@@ -2476,6 +2476,81 @@ Slice AC debugger" in `docs/agent_handoff.md`.
 
 Tests 515 -> 575.
 
+## Slice AD — a right corner turned over one bridge run (DONE, 2026-11)
+
+Started as "axes for the window holes of Main_wall" (seen in the Slice AC
+debugger). Measured first:
+
+```text
+holes        the 78 inner loops are glass outlines at the bottom of window
+             reveals; the reveals are faces of the facade's own patch
+             (the facade-level window outline is interior fold edges)
+geometry     both patches are piecewise planar with straight folds but not
+             developable: saddle defects up to 35 degrees at the bevelled
+             reveal corners; holonomy around 56 of 78 holes is 41-73 deg
+ties         no Layer 3 record ties a hole to the outer loop: every hole
+             family has one run; a whole-patch unfolding does not close
+             (gaps up to 1.8 m)
+reference    CFTUV pins no hole: all 66 pins are on the outer loops; hole
+             runs are axis-aligned in its UV only through Blender's unwrap
+census       Main_wall is the only frame-free island with an inner loop on
+             52 captures; in rigid frames 1773 of 1784 hole runs have axes
+```
+
+User decision (AskUserQuestion, 2026-11-13): "as in the reference" - the
+holes of such islands stay out of the skeleton; take the real gap on
+Main_wall instead, the outer loops.
+
+That gap: door notches whose corners are chamfered by a 0.028 m run. Each
+chamfer meets its neighbours at 225 degree corners (kind OTHER), so the
+right-corner walk stopped there: 12 OUTER runs OBLIQUE (6 chamfers, 3 notch
+tops, a 3-line piece of 40.6 m cut off from the seed), 58 pins against the
+reference's 66, and lines outside the seed's component were OBLIQUE with no
+diagnostic.
+
+Principle: a directional run is straight on its patch surface, so the
+boundary turns only at corners. For three consecutive runs A, C, B the turn
+from A to B is the sum of the two corner turns; when it is a right angle, A
+and B are at a right angle exactly as at a RIGHT corner, and C's direction
+against both is known. No length threshold.
+
+```text
+Layer 3   RunBridgedCornerRelation v0 (G0 DD-52), built from RunCornerRelations
+          of kind OTHER; 34 records on 52 captures (17 in rigid frames, unused)
+Layer 5   frame-free islands only: the bipartition and the line orientation
+          read it like a RIGHT corner; an OBLIQUE bridge is laid by one
+          vector equation per axis; a line the corners never reach gets a
+          diagnostic
+tools     parity and Tier 3 check the corner turn law at bridged corners;
+          the debugger's Corners layer marks them
+```
+
+Main_wall, before -> after: OUTER runs AXIS_A / AXIS_B / OBLIQUE 24 / 12 /
+12 -> 28 / 14 / 6 (the six chamfers, laid by vectors); pins 58 -> 68 (all
+66 reference pins covered; 2 more on the notch top of patch f0, which the
+reference pins on the other two notches but not there); parity pin
+coverage 88% -> 100%; turn law 20/20 -> 31/31; no UNCONSTRAINED. The f1
+outer loop now closes, and the mesh's outline misses closure by 11.3 mm
+(real geometry); the solve spreads it, 0.4 mm on the worst run, inside the
+drift. Line recall stays 54%: the missing lines are the window holes.
+
+On 50 capture x option runs nothing else changes in roles, signs, pins or
+coordinates; rigid-frame and strip islands are identical; the Tier 3
+baseline is identical. Diagnostics grow only by the new "island line not
+reached by right corners" (Main_wall +1047, Arc and artist_arch_bevel +39,
+collumn +48 with strips off).
+
+Known limit (pinned by a test): within the DD-45 tolerance a bridged corner
+whose turns miss the right angle by a few degrees is laid as exactly
+right, like a RIGHT corner; a miss above the drift gives UNCONSTRAINED with
+a diagnostic.
+
+Left alone: `skeleton.py` is past 1000 lines; the frame-free block
+(bipartition, line orientation, bridge vectors, unreached lines) is the
+natural module to split out.
+
+Tests 575 -> 599.
+
 ## Decisions the user must approve before the relevant slice
 
 ```text
