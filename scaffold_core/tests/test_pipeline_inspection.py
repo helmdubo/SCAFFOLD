@@ -241,6 +241,13 @@ def test_inspection_default_output_is_compact() -> None:
         "run_corner_relation_count": 8,
         "run_corner_kind_counts": {"STRAIGHT": 4, "RIGHT": 4, "OTHER": 0},
         "run_bridged_corner_relation_count": 0,
+        # The top square reads both ways; the open box of five quads has
+        # three-quad poles at its bottom corners, so no reading.
+        "patch_quad_ladder_relation_count": 1,
+        "patch_quad_ladder_two_reading_count": 1,
+        "patch_quad_ladder_closed_count": 0,
+        "patch_quad_ladder_patches_not_all_quads": 0,
+        "patch_quad_ladder_quad_patches_without_reading": 1,
     }
 
 

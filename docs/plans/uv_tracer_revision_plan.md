@@ -2551,6 +2551,89 @@ natural module to split out.
 
 Tests 575 -> 599.
 
+## Slices AE-1 and AE-2 — bevel strips and junctions (DONE, 2026-11)
+
+Asked by the user: classify bevel geometry at patch level, so that there is
+structure inside such patches. Input as the user stated it: a Bevel was
+applied; its faces are bounded by seams and cut by seams into strips and
+corner junctions, each its own patch; shapes may be curved or noisy.
+
+Measured first (26 generated meshes with ground truth from Blender's Face
+Strength attribute; the session "Unbevel" was asked how it finds strips):
+
+```text
+by straight sides and corner angles     exact on 1 case of 26
+by mesh structure (quad ladder)         exact wherever a strip ends at a
+                                        junction, a border or is a ring:
+                                        curved, on a cylinder, 20% noise,
+                                        multi-segment, short
+cannot by structure                     strips that meet at a miter without
+                                        junction faces (same topology as a
+                                        window reveal); triangulated bevels
+"band" as a patch kind                  rejected: on building_walls 398 of
+                                        610 patches are single quads
+```
+
+User decisions (AskUserQuestion, 2026-11-13): the kinds are set by the
+Blender mark where it exists and by a strict structural rule without it; a
+plain ladder is a Layer 3 record, not a kind. The user's example mesh
+rounded_wall_noise_top (258 faces, 9 strips, 6 junctions, marks and seams
+as described) is test data.
+
+AE-1: Layer 0 reads the Face Strength mark; Layer 3 PatchQuadLadderRelation
+v0 (G0 DD-53); debugger group Ladders. AE-2: Layer 4 kinds BEVEL_STRIP and
+BEVEL_JUNCTION (G0 DD-54); debugger group Bevels. Records only: no
+constraint, Layer 5 unchanged (digest on 50 capture runs identical, Tier 3
+baseline identical).
+
+```text
+case                              by mark          by structure
+user's rounded_wall_noise_top     9 / 9, 6 / 6     9 / 9, 6 / 6
+cubes (1, 3 segments), short edge all              all
+windows, arch, ring, cylinder,    all              none (known limit)
+  border strip, inner-arc miter
+triangulated window               strips, no       none
+                                  direction
+other captures (no bevels)        -                none, except one one-quad
+                                                   strip with a triangle cap
+                                                   on walls (same topology
+                                                   as a one-segment bevel)
+```
+
+First version of the structural rule called an n-gon-capped cylinder cut
+into wall pieces a bevelled prism (6 strips, 2 junctions). Two conditions
+from the definition removed it: a strip's rail neighbours are not strips,
+and a junction joins at least one strip.
+
+The AE-2 reviewer then showed that with non-quad main surfaces the rule
+turned every main surface into a junction (a cube with triangulated main
+faces): a one-segment strip has two end-strict readings, and the rule
+counted the ends of both. Rule B is now a fixpoint from decided readings
+(G0 DD-54): a strip with one end-strict reading is decided, junctions are
+found from decided ends, junctions decide the undecided strips beside
+them. Result: the four exact cases stay exact, the triangulated-main
+cubes give nothing, and what remains is the topology-only false positive
+(a quad band capped by non-quad patches: the top of an open slab; one
+single-quad strip on the building captures, not in the repo). Rule B
+records are candidates and are drawn on their own debugger layers.
+
+Each strip keeps what the user's future filters need (horizontal, vertical,
+under a ceiling, outer or inner corner for decals): rails, the neighbour
+patches on each rail, the corner kind.
+
+Reviewer gates (independent agents): AE-1 PASS WITH FIXES (an own
+brute-force finder agreed with the relation on 953 patches of 25 captures
+and about 3600 random synthetic patches; fixes: two test gaps, a red suite
+caused by the architect adding the user's case after the test run). AE-2
+PASS WITH FIXES (an own implementation of both rules agreed with the code
+everywhere; it found the non-quad-main defect of rule B, a Rule A limit on
+partial bevels and five test gaps; 21 mutations). The fixpoint form of rule
+B was written after that gate: it has the worker's mutation checks (10 of
+11 killed, 1 equivalent) and an id-permutation test, and no second
+independent review yet.
+
+Tests 599 -> 786.
+
 ## Decisions the user must approve before the relevant slice
 
 ```text

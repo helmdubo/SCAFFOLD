@@ -3,6 +3,11 @@
 Dump the exact SourceMeshSnapshot a Blender overlay rebuild consumed, so the
 Architect can replay the artist's geometry through the pipeline without
 Blender. Debug-side only; scaffold_core stays untouched.
+
+A capture may carry an optional "face_strength" map, face id -> WEAK /
+MEDIUM / STRONG (Blender's Face Strength mark, Layer 0); it is written only
+for marked faces and absent when the mesh has no marks, and loading maps a
+missing entry to None.
 """
 
 from __future__ import annotations
@@ -43,6 +48,16 @@ def dump_source_snapshot(snapshot: Any, path: str | Path) -> Path:
             for mark in snapshot.marks
         ],
     }
+    # Optional, still format v1: written only when some face carries a Blender
+    # Face Strength mark, so captures of unmarked meshes stay byte-identical
+    # and older loaders (which ignore unknown keys) still read the file.
+    face_strength = {
+        str(face_id): ref.face_strength.value
+        for face_id, ref in snapshot.faces.items()
+        if getattr(ref, "face_strength", None) is not None
+    }
+    if face_strength:
+        payload["face_strength"] = face_strength
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, indent=1), encoding="utf-8")
@@ -56,7 +71,7 @@ def load_source_snapshot(path: str | Path) -> Any:
         SourceMeshId,
         SourceVertexId,
     )
-    from scaffold_core.layer_0_source.marks import SourceMark, SourceMarkKind
+    from scaffold_core.layer_0_source.marks import SourceFaceStrength, SourceMark, SourceMarkKind
     from scaffold_core.layer_0_source.snapshot import (
         MeshEdgeRef,
         MeshFaceRef,
@@ -76,11 +91,13 @@ def load_source_snapshot(path: str | Path) -> Any:
         )
         for k, v in data["edges"].items()
     }
+    face_strength = data.get("face_strength", {})
     faces = {
         SourceFaceId(k): MeshFaceRef(
             SourceFaceId(k),
             tuple(SourceVertexId(v) for v in f["vertex_ids"]),
             tuple(SourceEdgeId(e) for e in f["edge_ids"]),
+            SourceFaceStrength(face_strength[k]) if k in face_strength else None,
         )
         for k, f in data["faces"].items()
     }

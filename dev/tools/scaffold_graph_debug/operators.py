@@ -25,12 +25,16 @@ GROUP_EXPAND_PROPS = {
     "Skeleton": "expand_skeleton",
     "Patches: sides and types": "expand_patches",
     "Layer 3 (detail)": "expand_layer3",
+    "Ladders": "expand_ladders",
+    "Bevels": "expand_bevels",
 }
 GROUP_EXPAND_DEFAULTS = {
     "expand_structure": True,
     "expand_skeleton": True,
     "expand_patches": True,
     "expand_layer3": False,
+    "expand_ladders": False,
+    "expand_bevels": False,
 }
 
 

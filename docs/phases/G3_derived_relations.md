@@ -111,6 +111,7 @@ Current terminology for the final boundary graph model:
 | `PatchChainShapeRelation` | Implemented v0 (G0 DD-48): per PatchChain use, each piece between surface corners is a surface line, a surface curve or unresolved. One reader: the per-use chord shortcut of directional runs (DD-30). |
 | `RunCornerRelation` | Implemented v0 (G0 DD-49): the corner between two run ends on one patch surface, STRAIGHT, RIGHT or OTHER. Read by the Layer 5 frame-free axis bipartition and line orientation (G0 DD-51). |
 | `RunBridgedCornerRelation` | Implemented v0 (G0 DD-52): a right corner turned over one bridge run (two consecutive OTHER corners whose turns add up to a right angle). Read by the Layer 5 frame-free axis bipartition, line orientation and bridge equations. |
+| `PatchQuadLadderRelation` | Implemented v0 (G0 DD-53): the zero, one or two ladder readings of a patch whose faces are all quads (columns between two rails, two ends or a closed ring). Pure topology. Read by the Layer 4 bevel rule (G0 DD-54). |
 
 Endpoint samples, endpoint relations, LocalFaceFanGeometryFacts and ScaffoldNodes
 are evidence or derived relation records; they are not Layer 1 topology.
@@ -877,3 +878,17 @@ chain of OTHER corners may give overlapping records. Built from the corner
 records alone (`run_corners.py`). Evidence only; Layer 5 reads it in
 islands without a rigid frame as it reads a RIGHT corner, and lays the
 bridge by its two turns.
+
+## PatchQuadLadderRelation v0
+
+Implemented (G0 DD-53, plan Slice AE-1; `quad_ladders.py`). A patch whose
+faces are all quads may be read as a ladder: columns are edge-ring walks
+across the patch over interior edges, and a reading is a set of columns
+that covers every face once and forms one path (two rails, two ends) or one
+orientable cycle (a closed ring). A patch has zero, one or two readings;
+all are kept in a fixed order that carries no meaning, and none is chosen.
+A reading stores its columns, rails, ends, the uses they lie on and the
+profile lines that tie rail A vertex i to rail B vertex i. It is the first
+Layer 3 record built from the Layer 0 face cycles, and it reads no
+geometry at all, so noise and curvature cannot change it. Evidence only;
+the Layer 4 bevel rule chooses a reading.

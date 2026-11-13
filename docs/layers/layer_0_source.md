@@ -17,6 +17,12 @@ Layer 0 converts Blender/BMesh state into immutable source data that the rest of
 - checksums / fingerprints
 - source selection scope
 - Blender mesh-read boundary
+- the raw Blender Face Strength mark per face (`MeshFaceRef.face_strength`:
+  WEAK / MEDIUM / STRONG, or none), read from the FACE-domain int attribute
+  `__mod_weightednormals_faceweight` where it exists (G0 v1.14). It states
+  what Blender stored and changes no segmentation; its one reader is the
+  Layer 4 bevel rule (G0 DD-54). JSON captures carry it as the optional
+  `face_strength` map
 
 ## Does not own
 

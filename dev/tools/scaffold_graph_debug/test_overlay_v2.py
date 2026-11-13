@@ -67,6 +67,27 @@ def test_snapshot_capture_records_empty_selection_fallback(tmp_path) -> None:
     assert "empty selected_face_ids" in payload["selection_fallback_reason"]
 
 
+def test_face_strength_mark_round_trips_through_the_capture(tmp_path) -> None:
+    source = load_source_snapshot("scaffold_core/tests/data/bevel_cases/a_cube_s3.capture.json")
+    counts: dict[str, int] = {}
+    for face in source.faces.values():
+        counts[face.face_strength.value] = counts.get(face.face_strength.value, 0) + 1
+    assert counts == {"STRONG": 6, "MEDIUM": 36, "WEAK": 56}
+
+    again = load_source_snapshot(dump_source_snapshot(source, tmp_path / "marked.json"))
+    assert again.faces == source.faces
+    assert json.loads((tmp_path / "marked.json").read_text())["format"] == "scaffold_source_snapshot_v1"
+
+
+def test_captures_without_the_mark_load_unmarked_and_dump_unchanged(tmp_path) -> None:
+    path = "scaffold_core/tests/data/artist_walls_006.json"
+    source = load_source_snapshot(path)
+    assert all(face.face_strength is None for face in source.faces.values())
+    dumped = json.loads(dump_source_snapshot(source, tmp_path / "plain.json").read_text())
+    assert "face_strength" not in dumped
+    assert dumped == {key: value for key, value in json.loads(open(path, encoding="utf-8").read()).items()}
+
+
 def test_artist_arch_bevel_chain_shape_pieces_per_patch_side() -> None:
     context, payload = _context_payload(load_source_snapshot("scaffold_core/tests/data/artist_arch_bevel.json"))
     records = context.relation_snapshot.patch_chain_shape_relations

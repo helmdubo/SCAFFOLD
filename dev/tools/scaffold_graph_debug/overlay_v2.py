@@ -39,7 +39,9 @@ GROUP_STRUCTURE = "Structure"
 GROUP_SKELETON = "Skeleton"
 GROUP_PATCHES = "Patches: sides and types"
 GROUP_LAYER3 = "Layer 3 (detail)"
-GROUPS = (GROUP_STRUCTURE, GROUP_SKELETON, GROUP_PATCHES, GROUP_LAYER3)
+GROUP_LADDERS = "Ladders"
+GROUP_BEVELS = "Bevels"
+GROUPS = (GROUP_STRUCTURE, GROUP_SKELETON, GROUP_PATCHES, GROUP_LAYER3, GROUP_LADDERS, GROUP_BEVELS)
 
 
 @dataclass(frozen=True)
@@ -74,6 +76,20 @@ LAYER_SPECS = (
     LayerSpec("show_types_other", "Scaffold_Types_Other", "Types: other", GROUP_PATCHES, False),
     LayerSpec("show_families", "Scaffold_L3_Families", "Family Colors", GROUP_LAYER3, False),
     LayerSpec("show_junctions", "Scaffold_L3_Junctions", "Junctions", GROUP_LAYER3, False),
+    LayerSpec("show_ladder_rails", "Scaffold_Ladder_Rails", "Ladder rails", GROUP_LADDERS, False),
+    LayerSpec("show_ladder_ends", "Scaffold_Ladder_Ends", "Ladder ends", GROUP_LADDERS, False),
+    LayerSpec("show_ladder_columns", "Scaffold_Ladder_Columns", "Ladder columns", GROUP_LADDERS, False),
+    LayerSpec("show_face_strength", "Scaffold_Source_Face_Strength", "Source face mark", GROUP_LADDERS, False),
+    LayerSpec("show_bevel_strip", "Scaffold_Bevel_Strip", "Bevel strip", GROUP_BEVELS, False),
+    LayerSpec("show_bevel_junction", "Scaffold_Bevel_Junction", "Bevel junction", GROUP_BEVELS, False),
+    LayerSpec(
+        "show_bevel_strip_structure", "Scaffold_Bevel_Strip_Structure", "Bevel strip (by structure)", GROUP_BEVELS, False
+    ),
+    LayerSpec(
+        "show_bevel_junction_structure", "Scaffold_Bevel_Junction_Structure", "Bevel junction (by structure)",
+        GROUP_BEVELS, False,
+    ),
+    LayerSpec("show_bevel_not_isolated", "Scaffold_Bevel_Not_Isolated", "Bevel, not isolated", GROUP_BEVELS, False),
 )
 LAYER_BY_PROP = {spec.prop: spec.layer for spec in LAYER_SPECS}
 
@@ -107,6 +123,24 @@ LEGENDS = {
         "Family Colors: Layer 3 direction family per run",
         "Junctions: + ScaffoldNode, * run-endpoint junction",
         "  yellow = branch (valence > 2)",
+    ),
+    GROUP_LADDERS: (
+        "Layer 3 quad ladder: the reading Layer 4 chose",
+        "  for a bevel strip, else the first reading",
+        "Ladder rails: pink = rail A, lime = rail B",
+        "Ladder ends: violet (none on a closed ring)",
+        "Ladder columns: thin grey lines between columns",
+        "Source face mark: Blender Face Strength,",
+        "  red = weak, blue = medium, grey = strong",
+    ),
+    GROUP_BEVELS: (
+        "Layer 4 bevel records",
+        "Bevel strip: orange; Bevel junction: purple",
+        "  (set by the Face Strength mark)",
+        "(by structure): light orange / light purple,",
+        "  found by mesh structure, not confirmed by a mark",
+        "Bevel, not isolated: red = suppressed record of a",
+        "  bevel-marked patch (seams missing or mixed marks)",
     ),
 }
 
@@ -234,6 +268,16 @@ def build_debug_payload(context: Any, solve: Any, *, object_name: str = "") -> d
         layers[PATCH_TYPE_LAYERS[type_name]] = items
     layers["Scaffold_L3_Families"] = _family_items(relations, run_offsets)
     layers["Scaffold_L3_Junctions"] = _junction_items(look, relations)
+    from . import overlay_ladders  # its layer code imports this module's drawing helpers
+
+    bevels = getattr(getattr(context, "feature_snapshot", None), "bevels", ()) or ()
+    for layer_name, items in overlay_ladders.bevel_items(look, bevels).items():
+        layers[layer_name] = items
+    rails, ends, columns = overlay_ladders.ladder_items(look, relations, overlay_ladders.chosen_readings(bevels))
+    layers["Scaffold_Ladder_Rails"] = rails
+    layers["Scaffold_Ladder_Ends"] = ends
+    layers["Scaffold_Ladder_Columns"] = columns
+    layers["Scaffold_Source_Face_Strength"] = overlay_ladders.face_strength_items(look)
 
     labels = _labels(look, role_by_run)
     counts = {
@@ -249,6 +293,11 @@ def build_debug_payload(context: Any, solve: Any, *, object_name: str = "") -> d
         "labels": labels,
         "chain_shape_pieces": chain_shape_pieces,
         "patch_types": patch_types,
+        "ladder_counts": overlay_ladders.ladder_counts(relations),
+        "bevel_counts": overlay_ladders.bevel_counts(bevels),
+        "face_strength_counts": {
+            item["face_strength"]: len(item["face_ids"]) for item in layers["Scaffold_Source_Face_Strength"]
+        },
         "counts": counts,
         "fallback_side_edges": sorted(list(edge) for edge in look.fallback_edges),
     }
@@ -1037,6 +1086,9 @@ def format_report(payload: dict[str, Any], solve: Any) -> str:
     out.append("patch types: " + ", ".join(
         f"{PATCH_TYPE_NAMES[type_name]}={type_counts.get(type_name, 0)}" for type_name in PATCH_TYPES
     ))
+    from . import overlay_ladders
+
+    out.extend(overlay_ladders.report_lines(payload))
     unroled = sum(1 for item in payload["layers"]["Scaffold_Chains"] if item["role"] not in ROLE_COLORS)
     out.append(f"chain strokes without an axis role: {unroled} of {len(payload['layers']['Scaffold_Chains'])}")
     undrawn = [

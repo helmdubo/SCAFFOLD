@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 from scaffold_core.layer_0_source.blender_io import read_source_mesh_from_blender
-from scaffold_core.layer_0_source.marks import SourceMarkKind
+from scaffold_core.layer_0_source.marks import SourceFaceStrength, SourceMarkKind
 
 
 def _fake_context(*, mode: str = "EDIT", face_selected: bool = True) -> SimpleNamespace:
@@ -70,6 +70,35 @@ def test_read_source_mesh_from_blender_object_mode_selects_all_faces() -> None:
     source = read_source_mesh_from_blender(_fake_context(mode="OBJECT", face_selected=False))
 
     assert tuple(str(face_id) for face_id in source.selected_face_ids) == ("f0",)
+
+
+def _with_face_attribute(context: SimpleNamespace, value: int, *, domain: str = "FACE", data_type: str = "INT"):
+    attribute = SimpleNamespace(domain=domain, data_type=data_type, data=[SimpleNamespace(value=value)])
+    context.object.data.attributes = {"__mod_weightednormals_faceweight": attribute}
+    return context
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    (
+        (-16384, SourceFaceStrength.WEAK),
+        (0, SourceFaceStrength.MEDIUM),
+        (16384, SourceFaceStrength.STRONG),
+        (7, None),
+    ),
+)
+def test_read_source_mesh_from_blender_reads_the_face_strength_mark(value, expected) -> None:
+    source = read_source_mesh_from_blender(_with_face_attribute(_fake_context(), value))
+
+    assert source.faces["f0"].face_strength is expected
+
+
+def test_face_strength_is_none_without_the_attribute_or_on_another_domain() -> None:
+    assert read_source_mesh_from_blender(_fake_context()).faces["f0"].face_strength is None
+    other_domain = _with_face_attribute(_fake_context(), 0, domain="POINT")
+    assert read_source_mesh_from_blender(other_domain).faces["f0"].face_strength is None
+    other_type = _with_face_attribute(_fake_context(), 0, data_type="FLOAT")
+    assert read_source_mesh_from_blender(other_type).faces["f0"].face_strength is None
 
 
 def test_read_source_mesh_from_blender_requires_active_mesh_object() -> None:

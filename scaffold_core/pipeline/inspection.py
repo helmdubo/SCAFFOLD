@@ -23,7 +23,8 @@ from scaffold_core.layer_3_relations.model import PatchChainShapeKind, RelationS
 from scaffold_core.layer_3_relations.patch_chain_incidence import (
     build_chain_patch_chain_incidence_index,
 )
-from scaffold_core.layer_4_features.model import FeatureInstanceStatus, FeatureSnapshot
+from scaffold_core.layer_3_relations.quad_ladders import is_ladder_quad
+from scaffold_core.layer_4_features.model import FeatureInstanceStatus, FeatureKind, FeatureSnapshot
 from scaffold_core.pipeline.context import PipelineContext
 
 
@@ -41,6 +42,12 @@ def inspect_pipeline_context(context: PipelineContext, detail: str = "compact") 
         report["geometry"] = geometry_summary_to_dict(context.geometry_facts, detail=detail)
     if context.relation_snapshot is not None:
         report["relations"] = relation_summary_to_dict(context.relation_snapshot, detail=detail)
+        if context.topology_snapshot is not None and context.source_snapshot is not None:
+            report["relations"].update(_quad_ladder_absence_counts(context))
+    if context.source_snapshot is not None:
+        face_strength_counts = _face_strength_counts(context.source_snapshot)
+        if face_strength_counts:
+            report["source_face_strength_counts"] = face_strength_counts
     if context.feature_snapshot is not None:
         report["features"] = feature_summary_to_dict(context.feature_snapshot)
     if (
@@ -99,6 +106,30 @@ def feature_summary_to_dict(features: FeatureSnapshot) -> InspectionDict:
             }
             for constraint in features.constraints
         ],
+        "bevels": _bevel_counts(features),
+    }
+
+
+def _bevel_counts(features: FeatureSnapshot) -> InspectionDict:
+    """Bevel records by kind, source and status or reason; strips without a chosen reading; corner kinds."""
+
+    by_kind: dict[str, dict[str, int]] = {}
+    unresolved = 0
+    corners: dict[str, int] = {}
+    for record in features.bevels:
+        status = record.suppression_reason.value if record.suppression_reason is not None else record.status.value
+        row = by_kind.setdefault(record.kind.value, {})
+        key = f"{record.source.value} {status}"
+        row[key] = row.get(key, 0) + 1
+        if record.status is FeatureInstanceStatus.ACCEPTED and record.kind is FeatureKind.BEVEL_STRIP:
+            corners[record.corner_kind.value] = corners.get(record.corner_kind.value, 0) + 1
+            if record.reading_index is None:
+                unresolved += 1
+    return {
+        "record_count": len(features.bevels),
+        "by_kind": {kind: dict(sorted(row.items())) for kind, row in sorted(by_kind.items())},
+        "unresolved_strip_readings": unresolved,
+        "strip_corner_kinds": dict(sorted(corners.items())),
     }
 
 
@@ -230,6 +261,15 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         "run_corner_relation_count": len(relations.run_corner_relations),
         "run_corner_kind_counts": _run_corner_kind_counts(relations),
         "run_bridged_corner_relation_count": len(relations.run_bridged_corner_relations),
+        "patch_quad_ladder_relation_count": len(relations.patch_quad_ladder_relations),
+        "patch_quad_ladder_two_reading_count": sum(
+            1 for relation in relations.patch_quad_ladder_relations if len(relation.readings) == 2
+        ),
+        "patch_quad_ladder_closed_count": sum(
+            1
+            for relation in relations.patch_quad_ladder_relations
+            if any(reading.is_closed for reading in relation.readings)
+        ),
     }
     if detail != "full":
         return summary
@@ -420,6 +460,36 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         ],
     })
     return summary
+
+
+def _quad_ladder_absence_counts(context: PipelineContext) -> dict[str, int]:
+    """Patches without a quad ladder record: not all quads, or all quads with no reading."""
+
+    source = context.source_snapshot
+    with_record = {relation.patch_id for relation in context.relation_snapshot.patch_quad_ladder_relations}
+    not_all_quads = 0
+    without_reading = 0
+    for patch_id, patch in context.topology_snapshot.patches.items():
+        if patch_id in with_record:
+            continue
+        if all(is_ladder_quad(source.faces.get(face_id)) for face_id in patch.source_face_ids):
+            without_reading += 1
+        else:
+            not_all_quads += 1
+    return {
+        "patch_quad_ladder_patches_not_all_quads": not_all_quads,
+        "patch_quad_ladder_quad_patches_without_reading": without_reading,
+    }
+
+
+def _face_strength_counts(source: SourceMeshSnapshot) -> dict[str, int]:
+    """Source faces by their raw Blender Face Strength mark; empty when no face has one."""
+
+    counts: dict[str, int] = {}
+    for face in source.faces.values():
+        if face.face_strength is not None:
+            counts[face.face_strength.value] = counts.get(face.face_strength.value, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def _patch_chain_shape_kind_counts(relations: RelationSnapshot) -> dict[str, int]:

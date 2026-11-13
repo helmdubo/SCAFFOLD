@@ -83,6 +83,7 @@ def run_pass_1_relations(context: PipelineContext) -> PipelineContext:
     relation_snapshot = build_relation_snapshot(
         context.topology_snapshot,
         context.geometry_facts,
+        context.source_snapshot,
     )
     relations_seconds = perf_counter() - relations_started
 
@@ -109,6 +110,7 @@ def run_pass_2_features(context: PipelineContext, options: FeatureOptions = Feat
         context.geometry_facts,
         context.relation_snapshot,
         options,
+        source=context.source_snapshot,
     )
     features_seconds = perf_counter() - features_started
 

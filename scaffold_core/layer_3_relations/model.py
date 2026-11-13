@@ -21,6 +21,7 @@ from scaffold_core.ids import (
     PatchChainId,
     PatchId,
     SourceEdgeId,
+    SourceFaceId,
     SourceVertexId,
     VertexId,
 )
@@ -682,6 +683,73 @@ class RunBridgedCornerRelation:
 
 
 @dataclass(frozen=True)
+class PatchQuadLadderReading:
+    """One way to read an all-quad patch as a ladder of edge-ring columns.
+
+    Pure topology: no position, length, normal or direction is read. Each
+    column is an edge-ring walk across the patch from a rail A boundary edge
+    to a rail B boundary edge (source faces in walk order, rail A first);
+    every patch face lies in exactly one column and every column has
+    faces_per_column faces. Consecutive columns share one whole profile line.
+    profile_vertex_ids[i] runs from rail A vertex i to rail B vertex i over
+    the profile edges profile_edge_ids[i] (faces_per_column edges); rail A
+    edge i joins profile lines i and i + 1. An open reading has one more
+    profile line than columns, and its first and last lines are the two ends;
+    a closed reading (a ring) has one profile line per column and no ends.
+    A profile line may be a closed walk: read along a ring cut by one full
+    seam, each column runs around from one side of the seam to the other,
+    so its profile lines start and end at the same source vertex.
+    The patch_chain_ids name the uses each side lies on, in side order;
+    shared_patch_chain_ids are uses that lie on more than one side.
+    Which side is rail A or B, which end is end A or B, and where the
+    columns start are id-based tie rules (patch face order, then source edge
+    order) with no meaning of their own.
+    """
+
+    columns: tuple[tuple[SourceFaceId, ...], ...]
+    faces_per_column: int
+    is_closed: bool
+    rail_a_source_edge_ids: tuple[SourceEdgeId, ...]
+    rail_b_source_edge_ids: tuple[SourceEdgeId, ...]
+    rail_a_patch_chain_ids: tuple[PatchChainId, ...]
+    rail_b_patch_chain_ids: tuple[PatchChainId, ...]
+    end_a_source_edge_ids: tuple[SourceEdgeId, ...]
+    end_b_source_edge_ids: tuple[SourceEdgeId, ...]
+    end_a_patch_chain_ids: tuple[PatchChainId, ...]
+    end_b_patch_chain_ids: tuple[PatchChainId, ...]
+    profile_vertex_ids: tuple[tuple[SourceVertexId, ...], ...]
+    profile_edge_ids: tuple[tuple[SourceEdgeId, ...], ...]
+    shared_patch_chain_ids: tuple[PatchChainId, ...]
+
+
+@dataclass(frozen=True)
+class PatchQuadLadderRelation:
+    """Evidence-only ladder readings of one all-quad patch (zero, one or two).
+
+    A patch whose faces are all quads may be crossed by edge-ring columns in
+    up to two ways (a quad grid has two: across and along). All readings are
+    kept, in a fixed order: more columns first, then by the first face of the
+    first column, then by the first rail A edge (patch face order and source
+    edge order). This order has no meaning: a tie in column count is decided
+    by ids. Layer 3 does not choose a reading. closed_column_count counts
+    edge rings of the patch that close on themselves (an annulus read along
+    its length); they are never ladder columns. A Moebius ring has no closed
+    reading (its columns cannot be oriented one way). Only patches with at
+    least one reading get a record. It reads the Layer 0 faces of the patch
+    (vertex cycles and edges) and Layer 1 chains and uses; it sets no role
+    and reads no geometry.
+    """
+
+    id: str
+    patch_id: PatchId
+    face_count: int
+    readings: tuple[PatchQuadLadderReading, ...]
+    closed_column_count: int
+    confidence: float
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
 class RelationSnapshot:
     patch_adjacencies: Mapping[str, PatchAdjacency] = field(default_factory=dict)
     chain_continuations: tuple[ChainContinuationRelation, ...] = ()
@@ -708,4 +776,5 @@ class RelationSnapshot:
     alignment_classes: tuple[AlignmentClass, ...] = ()
     patch_axes: Mapping[PatchId, PatchAxes] = field(default_factory=dict)
     patch_chain_shape_relations: tuple[PatchChainShapeRelation, ...] = ()
+    patch_quad_ladder_relations: tuple[PatchQuadLadderRelation, ...] = ()
     diagnostics: tuple[Diagnostic, ...] = ()
