@@ -272,3 +272,24 @@ def _alignment_class(
         kind=AlignmentClassKind.LINEAR,
         confidence=1.0,
     )
+
+def test_patch_axes_scores_equal_a_scan_over_all_class_members() -> None:
+    # The builder indexes member lengths by patch; each candidate score must
+    # still be the member-order sum a full scan gives (an int 0 when empty).
+    snapshot = run_pass_1_relations(
+        run_pass_0(make_closed_shared_boundary_loop_source())
+    ).relation_snapshot
+    evidence_by_id = {item.id: item for item in snapshot.patch_chain_directional_evidence}
+    class_by_id = {item.id: item for item in snapshot.alignment_classes}
+
+    assert snapshot.patch_axes
+    for patch_id, patch_axes in snapshot.patch_axes.items():
+        scores = patch_axes.evidence[0].data["candidate_scores"]
+        assert len(scores) == len(snapshot.alignment_classes)
+        for score in scores:
+            expected = sum(
+                evidence_by_id[member_id].length
+                for member_id in class_by_id[score["alignment_class_id"]].member_directional_evidence_ids
+                if evidence_by_id[member_id].patch_id == patch_id
+            )
+            assert repr(score["patch_length_score"]) == repr(expected)

@@ -56,6 +56,13 @@ def build_run_endpoint_junctions(
             patch_ids_by_key.setdefault(key, set()).add(directional_evidence.patch_id)
             confidence_by_key.setdefault(key, []).append(directional_evidence.confidence)
 
+    node_ids_by_source_vertex: dict[SourceVertexId, list[str]] = {}
+    node_ids_by_vertex: dict[VertexId, list[str]] = {}
+    for node in scaffold_nodes:
+        for node_source_vertex_id in node.source_vertex_ids:
+            node_ids_by_source_vertex.setdefault(node_source_vertex_id, []).append(node.id)
+        for node_vertex_id in node.vertex_ids:
+            node_ids_by_vertex.setdefault(node_vertex_id, []).append(node.id)
     junctions = [
         _junction(
             key,
@@ -64,7 +71,8 @@ def build_run_endpoint_junctions(
             occurrences_by_key[key],
             patch_ids_by_key[key],
             confidence_by_key[key],
-            scaffold_nodes,
+            node_ids_by_source_vertex,
+            node_ids_by_vertex,
         )
         for key in topology_vertex_ids_by_key
     ]
@@ -290,7 +298,8 @@ def _junction(
     occurrences: list[tuple[str, PatchChainEndpointRole]],
     patch_ids: set,
     confidence_values: list[float],
-    scaffold_nodes: tuple[ScaffoldNode, ...],
+    node_ids_by_source_vertex: dict[SourceVertexId, list[str]],
+    node_ids_by_vertex: dict[VertexId, list[str]],
 ) -> RunEndpointJunction:
     sorted_vertex_ids = tuple(sorted(topology_vertex_ids, key=str))
     sorted_occurrences = tuple(
@@ -301,7 +310,8 @@ def _junction(
     )
     sorted_patch_ids = tuple(sorted(patch_ids, key=str))
     anchor_scaffold_node_id = _anchor_scaffold_node_id(
-        scaffold_nodes,
+        node_ids_by_source_vertex,
+        node_ids_by_vertex,
         source_vertex_id,
         sorted_vertex_ids,
     )
@@ -329,22 +339,18 @@ def _junction_id(key: tuple[str, str]) -> str:
 
 
 def _anchor_scaffold_node_id(
-    scaffold_nodes: tuple[ScaffoldNode, ...],
+    node_ids_by_source_vertex: dict[SourceVertexId, list[str]],
+    node_ids_by_vertex: dict[VertexId, list[str]],
     source_vertex_id: SourceVertexId | None,
     topology_vertex_ids: tuple[VertexId, ...],
 ) -> str | None:
     if source_vertex_id is not None:
-        matches = tuple(
-            node.id
-            for node in scaffold_nodes
-            if source_vertex_id in node.source_vertex_ids
-        )
+        matches = tuple(node_ids_by_source_vertex.get(source_vertex_id, ()))
     else:
-        vertex_id_set = frozenset(topology_vertex_ids)
         matches = tuple(
-            node.id
-            for node in scaffold_nodes
-            if vertex_id_set & frozenset(node.vertex_ids)
+            node_id
+            for vertex_id in frozenset(topology_vertex_ids)
+            for node_id in node_ids_by_vertex.get(vertex_id, ())
         )
     return sorted(matches)[0] if matches else None
 

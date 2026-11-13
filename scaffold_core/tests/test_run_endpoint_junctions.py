@@ -384,3 +384,23 @@ def test_run_endpoint_junctions_are_full_detail_inspection_only() -> None:
     )
     assert mid_chain_junction["anchor_scaffold_node_id"] is None
     assert len(mid_chain_junction["incident_run_endpoint_occurrences"]) == 2
+
+def test_junction_anchor_equals_a_scan_over_all_scaffold_nodes() -> None:
+    # The builder indexes nodes by vertex; the anchor must still be the
+    # smallest id among all nodes holding the junction vertex.
+    for make_source in CANONICAL_FIXTURES:
+        relations = _run(make_source()).relation_snapshot
+        for junction in relations.run_endpoint_junctions:
+            if junction.source_vertex_id is not None:
+                matches = [
+                    node.id
+                    for node in relations.scaffold_nodes
+                    if junction.source_vertex_id in node.source_vertex_ids
+                ]
+            else:
+                matches = [
+                    node.id
+                    for node in relations.scaffold_nodes
+                    if set(junction.topology_vertex_ids) & set(node.vertex_ids)
+                ]
+            assert junction.anchor_scaffold_node_id == (min(matches) if matches else None)

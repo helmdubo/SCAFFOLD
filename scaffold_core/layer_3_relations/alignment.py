@@ -58,8 +58,16 @@ def build_patch_axes(
     """Select up to two dominant alignment classes per Patch."""
 
     directional_evidence_by_id = {directional_evidence.id: directional_evidence for directional_evidence in directional_evidence_items}
+    # Per class, member lengths by patch in member order (the order of the score sum).
+    member_lengths_by_patch = []
+    for alignment_class in alignment_classes:
+        lengths_by_patch: dict[PatchId, list[float]] = {}
+        for directional_evidence_id in alignment_class.member_directional_evidence_ids:
+            directional_evidence = directional_evidence_by_id[directional_evidence_id]
+            lengths_by_patch.setdefault(directional_evidence.patch_id, []).append(directional_evidence.length)
+        member_lengths_by_patch.append(lengths_by_patch)
     return {
-        patch_id: _patch_axes_for_patch(patch_id, directional_evidence_by_id, alignment_classes)
+        patch_id: _patch_axes_for_patch(patch_id, member_lengths_by_patch, alignment_classes)
         for patch_id in sorted(topology.patches, key=str)
     }
 
@@ -150,14 +158,14 @@ def _evidence(members: tuple[PatchChainDirectionalEvidence, ...]) -> Evidence:
 
 def _patch_axes_for_patch(
     patch_id: PatchId,
-    directional_evidence_by_id: dict[str, PatchChainDirectionalEvidence],
+    member_lengths_by_patch: list[dict[PatchId, list[float]]],
     alignment_classes: tuple[AlignmentClass, ...],
 ) -> PatchAxes:
     scored = tuple(
         item
         for item in (
-            _patch_alignment_score(patch_id, alignment_class, directional_evidence_by_id)
-            for alignment_class in alignment_classes
+            _patch_alignment_score(patch_id, alignment_class, lengths_by_patch)
+            for alignment_class, lengths_by_patch in zip(alignment_classes, member_lengths_by_patch)
         )
     )
     viable = tuple(item for item in scored if item[1] > EPSILON)
@@ -194,16 +202,11 @@ def _patch_axes_for_patch(
 def _patch_alignment_score(
     patch_id: PatchId,
     alignment_class: AlignmentClass,
-    directional_evidence_by_id: dict[str, PatchChainDirectionalEvidence],
+    lengths_by_patch: dict[PatchId, list[float]],
 ) -> tuple[AlignmentClass, float]:
     return (
         alignment_class,
-        sum(
-            directional_evidence.length
-            for directional_evidence_id in alignment_class.member_directional_evidence_ids
-            for directional_evidence in (directional_evidence_by_id[directional_evidence_id],)
-            if directional_evidence.patch_id == patch_id
-        ),
+        sum(lengths_by_patch.get(patch_id, ())),
     )
 
 

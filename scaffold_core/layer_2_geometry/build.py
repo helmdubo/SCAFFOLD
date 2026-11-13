@@ -591,6 +591,10 @@ def _build_local_face_fan_geometry_facts(
     selected_face_ids = tuple(face_to_patch_id)
     edge_incidence = _selected_edge_incidence(source, selected_face_ids)
     boundary_mark_edge_ids = _marked_patch_boundary_edge_ids(source)
+    edge_ids_by_vertex: dict[SourceVertexId, list[SourceEdgeId]] = defaultdict(list)
+    for source_edge_id, source_edge in source.edges.items():
+        for edge_vertex_id in dict.fromkeys(source_edge.vertex_ids):
+            edge_ids_by_vertex[edge_vertex_id].append(source_edge_id)
 
     facts: dict[str, LocalFaceFanGeometryFacts] = {}
     for patch in topology.patches.values():
@@ -608,6 +612,7 @@ def _build_local_face_fan_geometry_facts(
                 face_to_patch_id,
                 edge_incidence,
                 boundary_mark_edge_ids,
+                edge_ids_by_vertex,
             )
             for component_index, component_face_ids in enumerate(components):
                 vertex_id = _vertex_id_for_fan_component(
@@ -645,6 +650,7 @@ def _source_vertex_face_components(
     face_to_patch_id: dict[SourceFaceId, PatchId],
     edge_incidence: dict[SourceEdgeId, tuple[SourceFaceId, ...]],
     boundary_mark_edge_ids: set[SourceEdgeId],
+    edge_ids_by_vertex: dict[SourceVertexId, list[SourceEdgeId]],
 ) -> tuple[tuple[SourceFaceId, ...], ...]:
     face_set = set(source_face_ids)
     if len(face_set) <= 1:
@@ -664,9 +670,7 @@ def _source_vertex_face_components(
         if first_root != second_root:
             parents[second_root] = first_root
 
-    for source_edge_id, source_edge in source.edges.items():
-        if source_vertex_id not in source_edge.vertex_ids:
-            continue
+    for source_edge_id in edge_ids_by_vertex.get(source_vertex_id, ()):
         if _is_patch_boundary_edge(
             source_edge_id,
             edge_incidence.get(source_edge_id, ()),

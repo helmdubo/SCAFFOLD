@@ -174,6 +174,7 @@ def build_scaffold_node_incident_edge_relations(
             occurrences_by_node_id.get(node.id, ()),
             key=_occurrence_sort_key,
         ))
+        duplicated_chain_keys = _same_patch_chain_keys_with_recurrence(occurrences)
         for first, second in combinations(occurrences, 2):
             endpoint_relation = _endpoint_relation_for_occurrences(
                 first,
@@ -188,6 +189,7 @@ def build_scaffold_node_incident_edge_relations(
                 side_surface_evidence_by_pair.get(_node_occurrence_pair_key(node.id, first, second)),
                 surface_flow_evidence_by_pair.get(_node_occurrence_pair_key(node.id, first, second)),
                 occurrences,
+                duplicated_chain_keys,
             ))
     return tuple(relations)
 
@@ -372,12 +374,13 @@ def _incident_edge_relation(
     side_surface_evidence: SideSurfaceContinuityEvidence | None,
     surface_flow_evidence: SurfaceFlowCompatibilityEvidence | None,
     node_occurrences: tuple[_IncidentEdgeOccurrence, ...],
+    duplicated_chain_keys: frozenset[tuple[ChainId, PatchId]],
 ) -> ScaffoldNodeIncidentEdgeRelation:
     first_edge = first.scaffold_edge
     second_edge = second.scaffold_edge
     direction_dot, normal_dot = _dot_values(first, second, endpoint_relation)
     base_kind = _incident_edge_kind(first, second, endpoint_relation, direction_dot, normal_dot)
-    recurrence_evidence_present = _has_recurrent_previous_chain(first, second, node_occurrences)
+    recurrence_evidence_present = _has_recurrent_previous_chain(first, second, duplicated_chain_keys)
     should_promote_sliding = _should_promote_surface_sliding(
         first,
         second,
@@ -897,9 +900,8 @@ def _patch_axes_role(patch_axes: PatchAxes | None, direction_family_id: str) -> 
 def _has_recurrent_previous_chain(
     first: _IncidentEdgeOccurrence,
     second: _IncidentEdgeOccurrence,
-    node_occurrences: tuple[_IncidentEdgeOccurrence, ...],
+    duplicated_chain_keys: frozenset[tuple[ChainId, PatchId]],
 ) -> bool:
-    duplicated_chain_keys = _same_patch_chain_keys_with_recurrence(node_occurrences)
     first_key = (first.scaffold_edge.chain_id, first.scaffold_edge.patch_id)
     second_key = (second.scaffold_edge.chain_id, second.scaffold_edge.patch_id)
     return first_key in duplicated_chain_keys and second_key not in duplicated_chain_keys
