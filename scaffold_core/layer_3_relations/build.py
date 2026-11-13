@@ -60,7 +60,12 @@ def build_relation_snapshot(
     geometry: GeometryFactSnapshot,
     source: SourceMeshSnapshot | None = None,
 ) -> RelationSnapshot:
-    """Build G3a derived relations; the quad ladder readings need the source faces."""
+    """Build G3a derived relations.
+
+    The quad ladder readings need the Layer 0 source faces: without source
+    (the default, kept for callers that only need the other relations)
+    patch_quad_ladder_relations is empty. Pass 1 always passes it.
+    """
 
     chain_patch_chain_incidence = build_chain_patch_chain_incidence_index(topology)
     patch_adjacencies: dict[str, PatchAdjacency] = {}

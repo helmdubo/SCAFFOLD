@@ -40,7 +40,8 @@ GROUP_SKELETON = "Skeleton"
 GROUP_PATCHES = "Patches: sides and types"
 GROUP_LAYER3 = "Layer 3 (detail)"
 GROUP_LADDERS = "Ladders"
-GROUPS = (GROUP_STRUCTURE, GROUP_SKELETON, GROUP_PATCHES, GROUP_LAYER3, GROUP_LADDERS)
+GROUP_BEVELS = "Bevels"
+GROUPS = (GROUP_STRUCTURE, GROUP_SKELETON, GROUP_PATCHES, GROUP_LAYER3, GROUP_LADDERS, GROUP_BEVELS)
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,9 @@ LAYER_SPECS = (
     LayerSpec("show_ladder_ends", "Scaffold_Ladder_Ends", "Ladder ends", GROUP_LADDERS, False),
     LayerSpec("show_ladder_columns", "Scaffold_Ladder_Columns", "Ladder columns", GROUP_LADDERS, False),
     LayerSpec("show_face_strength", "Scaffold_Source_Face_Strength", "Source face mark", GROUP_LADDERS, False),
+    LayerSpec("show_bevel_strip", "Scaffold_Bevel_Strip", "Bevel strip", GROUP_BEVELS, False),
+    LayerSpec("show_bevel_junction", "Scaffold_Bevel_Junction", "Bevel junction", GROUP_BEVELS, False),
+    LayerSpec("show_bevel_not_isolated", "Scaffold_Bevel_Not_Isolated", "Bevel, not isolated", GROUP_BEVELS, False),
 )
 LAYER_BY_PROP = {spec.prop: spec.layer for spec in LAYER_SPECS}
 
@@ -114,12 +118,19 @@ LEGENDS = {
         "  yellow = branch (valence > 2)",
     ),
     GROUP_LADDERS: (
-        "Layer 3 quad ladder, first reading of each patch",
+        "Layer 3 quad ladder: the reading Layer 4 chose",
+        "  for a bevel strip, else the first reading",
         "Ladder rails: pink = rail A, lime = rail B",
         "Ladder ends: violet (none on a closed ring)",
         "Ladder columns: thin grey lines between columns",
         "Source face mark: Blender Face Strength,",
         "  red = weak, blue = medium, grey = strong",
+    ),
+    GROUP_BEVELS: (
+        "Layer 4 bevel records, by mark or by structure",
+        "Bevel strip: orange; Bevel junction: purple",
+        "Bevel, not isolated: red = bevel-marked patch",
+        "  without a record (seams missing or mixed marks)",
     ),
 }
 
@@ -200,6 +211,16 @@ FACE_STRENGTH_COLORS = {
     "MEDIUM": (0.3, 0.7, 1.0, 1.0),
     "STRONG": (0.55, 0.55, 0.55, 1.0),
 }
+BEVEL_LAYERS = {
+    "BEVEL_STRIP": "Scaffold_Bevel_Strip",
+    "BEVEL_JUNCTION": "Scaffold_Bevel_Junction",
+    "SUPPRESSED": "Scaffold_Bevel_Not_Isolated",
+}
+BEVEL_COLORS = {
+    "BEVEL_STRIP": (1.0, 0.6, 0.1, 1.0),
+    "BEVEL_JUNCTION": (0.6, 0.25, 0.95, 1.0),
+    "SUPPRESSED": (1.0, 0.1, 0.1, 1.0),
+}
 PATCH_TYPE_NAMES = {
     "STRIP": "strip",
     "STRIP_OFF": "strip (option off, would straighten)",
@@ -258,7 +279,10 @@ def build_debug_payload(context: Any, solve: Any, *, object_name: str = "") -> d
         layers[PATCH_TYPE_LAYERS[type_name]] = items
     layers["Scaffold_L3_Families"] = _family_items(relations, run_offsets)
     layers["Scaffold_L3_Junctions"] = _junction_items(look, relations)
-    rails, ends, columns = _ladder_items(look, relations)
+    bevels = getattr(getattr(context, "feature_snapshot", None), "bevels", ()) or ()
+    for layer_name, items in _bevel_items(look, bevels).items():
+        layers[layer_name] = items
+    rails, ends, columns = _ladder_items(look, relations, _chosen_readings(bevels))
     layers["Scaffold_Ladder_Rails"] = rails
     layers["Scaffold_Ladder_Ends"] = ends
     layers["Scaffold_Ladder_Columns"] = columns
@@ -279,6 +303,7 @@ def build_debug_payload(context: Any, solve: Any, *, object_name: str = "") -> d
         "chain_shape_pieces": chain_shape_pieces,
         "patch_types": patch_types,
         "ladder_counts": _ladder_counts(relations),
+        "bevel_counts": _bevel_counts(bevels),
         "face_strength_counts": {
             item["face_strength"]: len(item["face_ids"]) for item in layers["Scaffold_Source_Face_Strength"]
         },
@@ -1043,13 +1068,18 @@ def _junction_items(look, relations) -> list[dict[str, Any]]:
 # --------------------------------------------------------------------------- Ladders
 
 
-def _ladder_items(look, relations):
-    """Rails, ends and column lines of the first reading of each PatchQuadLadderRelation."""
+def _ladder_items(look, relations, chosen: dict[str, int]):
+    """Rails, ends and column lines of one reading per PatchQuadLadderRelation.
+
+    The reading Layer 4 chose for a bevel strip (chosen: patch id -> index),
+    else the first reading.
+    """
 
     rails, ends, columns = [], [], []
     for relation in sorted(getattr(relations, "patch_quad_ladder_relations", ()), key=lambda item: item.id):
-        reading = relation.readings[0]
         patch_id = str(relation.patch_id)
+        reading_index = chosen.get(patch_id, 0)
+        reading = relation.readings[reading_index]
         profile = [[str(vertex) for vertex in line] for line in reading.profile_vertex_ids]
         first_column, last_column = reading.columns[0], reading.columns[-1]
         rail_paths = {"A": [line[0] for line in profile], "B": [line[-1] for line in profile]}
@@ -1062,6 +1092,7 @@ def _ladder_items(look, relations):
             rails.append({
                 "relation_id": relation.id,
                 "patch_id": patch_id,
+                "reading_index": reading_index,
                 "rail": rail,
                 "source_edge_ids": [
                     str(edge) for edge in (reading.rail_a_source_edge_ids if rail == "A" else reading.rail_b_source_edge_ids)
@@ -1079,6 +1110,7 @@ def _ladder_items(look, relations):
                 ends.append({
                     "relation_id": relation.id,
                     "patch_id": patch_id,
+                    "reading_index": reading_index,
                     "end": end,
                     "source_edge_ids": [str(edge) for edge in edges],
                     "strokes": [_stroke(offset["polyline"], "ladder_end", LADDER_END_COLOR, LADDER_RAIL_WIDTH)]
@@ -1098,6 +1130,7 @@ def _ladder_items(look, relations):
         columns.append({
             "relation_id": relation.id,
             "patch_id": patch_id,
+            "reading_index": reading_index,
             "column_count": len(reading.columns),
             "faces_per_column": reading.faces_per_column,
             "is_closed": reading.is_closed,
@@ -1152,6 +1185,55 @@ def _face_strength_items(look) -> list[dict[str, Any]]:
     ]
 
 
+def _chosen_readings(bevels) -> dict[str, int]:
+    """Patch id -> the reading Layer 4 chose, for accepted bevel strips with a resolved direction."""
+
+    return {
+        str(record.patch_id): record.reading_index
+        for record in bevels
+        if record.kind.value == "BEVEL_STRIP" and record.status.value == "ACCEPTED" and record.reading_index is not None
+    }
+
+
+def _bevel_items(look, bevels) -> dict[str, list[dict[str, Any]]]:
+    """Fill per accepted bevel strip / junction, and per suppressed (bevel-marked, not a clean patch) record."""
+
+    items: dict[str, list[dict[str, Any]]] = {layer: [] for layer in BEVEL_LAYERS.values()}
+    for record in sorted(bevels, key=lambda item: look.patch_rank.get(str(item.patch_id), 0)):
+        patch = look.patch_by_id.get(str(record.patch_id))
+        if patch is None:
+            continue
+        group = record.kind.value if record.status.value == "ACCEPTED" else "SUPPRESSED"
+        items[BEVEL_LAYERS[group]].append({
+            "id": record.id,
+            "patch_id": str(record.patch_id),
+            "kind": record.kind.value,
+            "source": record.source.value,
+            "status": record.status.value,
+            "reason": record.suppression_reason.value if record.suppression_reason is not None else None,
+            "reading_index": record.reading_index,
+            "corner_kind": record.corner_kind.value,
+            "strokes": _fill_strokes(look, patch.source_face_ids, f"bevel_{group.lower()}", BEVEL_COLORS[group]),
+        })
+    return items
+
+
+def _bevel_counts(bevels) -> dict[str, Any]:
+    accepted = [record for record in bevels if record.status.value == "ACCEPTED"]
+    strips = [record for record in accepted if record.kind.value == "BEVEL_STRIP"]
+    return {
+        "strips_by_source": dict(sorted(Counter(record.source.value for record in strips).items())),
+        "junctions_by_source": dict(sorted(Counter(
+            record.source.value for record in accepted if record.kind.value == "BEVEL_JUNCTION"
+        ).items())),
+        "unresolved": sum(1 for record in strips if record.reading_index is None),
+        "suppressed_by_reason": dict(sorted(Counter(
+            record.suppression_reason.value for record in bevels if record.suppression_reason is not None
+        ).items())),
+        "strip_corner_kinds": dict(sorted(Counter(record.corner_kind.value for record in strips).items())),
+    }
+
+
 def _ladder_counts(relations) -> dict[str, int]:
     records = getattr(relations, "patch_quad_ladder_relations", ())
     return {
@@ -1201,6 +1283,15 @@ def format_report(payload: dict[str, Any], solve: Any) -> str:
         out.append("faces by source face mark: " + ", ".join(
             f"{kind.lower()}={face_strength.get(kind, 0)}" for kind in FACE_STRENGTH_KINDS
         ))
+    bevel_counts = payload.get("bevel_counts", {})
+    if any(bevel_counts.get(key) for key in ("strips_by_source", "junctions_by_source", "suppressed_by_reason")):
+        out.append(
+            "bevel strips: " + _count_text(bevel_counts.get("strips_by_source", {}))
+            + f"; unresolved {bevel_counts.get('unresolved', 0)}"
+            + "; corners " + _count_text(bevel_counts.get("strip_corner_kinds", {}))
+        )
+        out.append("bevel junctions: " + _count_text(bevel_counts.get("junctions_by_source", {})))
+        out.append("bevel-marked, not isolated: " + _count_text(bevel_counts.get("suppressed_by_reason", {})))
     unroled = sum(1 for item in payload["layers"]["Scaffold_Chains"] if item["role"] not in ROLE_COLORS)
     out.append(f"chain strokes without an axis role: {unroled} of {len(payload['layers']['Scaffold_Chains'])}")
     undrawn = [
@@ -1211,6 +1302,10 @@ def format_report(payload: dict[str, Any], solve: Any) -> str:
     out.append(f"edges with fallback side: {len(payload.get('fallback_side_edges', ()))}")
     out.append(f"solver diagnostics: {len(solve.diagnostics)}")
     return "\n".join(out)
+
+
+def _count_text(counts: dict[str, int]) -> str:
+    return ", ".join(f"{key.lower()}={value}" for key, value in counts.items()) or "none"
 
 
 # --------------------------------------------------------------------------- vector helpers

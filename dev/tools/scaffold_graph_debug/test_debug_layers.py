@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 import math
 from collections import Counter
+from types import SimpleNamespace
 
 import pytest
 
@@ -287,12 +288,33 @@ def _bevel_payload(name: str):
     return context, build_debug_payload(context, solve, object_name=name)
 
 
+def _drawn_reading_index(context) -> dict[str, int]:
+    """Relation id -> the reading the ladder layers must draw: Layer 4's choice for a bevel strip, else 0."""
+
+    chosen = {
+        str(record.patch_id): record.reading_index
+        for record in context.feature_snapshot.bevels
+        if record.kind.value == "BEVEL_STRIP" and record.status.value == "ACCEPTED" and record.reading_index is not None
+    }
+    return {
+        record.id: chosen.get(str(record.patch_id), 0)
+        for record in context.relation_snapshot.patch_quad_ladder_relations
+    }
+
+
 @pytest.mark.parametrize("name", LADDER_CASES)
-def test_ladder_layers_draw_the_first_reading_of_each_ladder_record(name) -> None:
+def test_ladder_layers_draw_the_chosen_bevel_reading_else_the_first(name) -> None:
     context, payload = _bevel_payload(name)
-    records = {record.id: record for record in context.relation_snapshot.patch_quad_ladder_relations}
-    assert records
+    relations = {record.id: record for record in context.relation_snapshot.patch_quad_ladder_relations}
+    assert relations
+    drawn = _drawn_reading_index(context)
+    # Every case here has bevel strips; on the cube some of them are read the second way.
+    assert any(index != 0 for index in drawn.values()) or name != "a_cube_s3"
+    records = {record_id: SimpleNamespace(readings=(relation.readings[drawn[record_id]],))
+               for record_id, relation in relations.items()}
     layers = payload["layers"]
+    for layer in ("Scaffold_Ladder_Rails", "Scaffold_Ladder_Ends", "Scaffold_Ladder_Columns"):
+        assert all(item["reading_index"] == drawn[item["relation_id"]] for item in layers[layer])
     rails = layers["Scaffold_Ladder_Rails"]
     assert sorted((item["relation_id"], item["rail"]) for item in rails) == sorted(
         (record_id, rail) for record_id in records for rail in ("A", "B")
@@ -338,6 +360,63 @@ def test_source_face_mark_layer_fills_each_marked_face_once_by_class(name) -> No
         }
         assert all(stroke["fill"] for stroke in item["strokes"])
     assert "faces by source face mark: weak=" in payload["report"]
+
+
+@pytest.mark.parametrize("name", LADDER_CASES + ("u_rounded_wall_noise_top", "h_rect_s2_tri"))
+def test_bevel_layers_fill_each_bevel_record_once_by_kind(name) -> None:
+    context, payload = _bevel_payload(name)
+    bevels = context.feature_snapshot.bevels
+    assert bevels
+    layers = payload["layers"]
+    expected = {
+        layer: sorted(
+            str(record.patch_id)
+            for record in bevels
+            if (record.kind.value if record.status.value == "ACCEPTED" else "SUPPRESSED") == group
+        )
+        for group, layer in overlay_v2.BEVEL_LAYERS.items()
+    }
+    for group, layer in overlay_v2.BEVEL_LAYERS.items():
+        assert sorted(item["patch_id"] for item in layers[layer]) == expected[layer]
+        for item in layers[layer]:
+            faces = context.topology_snapshot.patches[item["patch_id"]].source_face_ids
+            assert item["strokes"] and all(stroke["fill"] for stroke in item["strokes"])
+            assert len(item["strokes"]) >= len(faces)
+            assert {tuple(stroke["color"]) for stroke in item["strokes"]} == {tuple(overlay_v2.BEVEL_COLORS[group])}
+    counts = payload["bevel_counts"]
+    strips = [r for r in bevels if r.kind.value == "BEVEL_STRIP" and r.status.value == "ACCEPTED"]
+    assert sum(counts["strips_by_source"].values()) == len(strips)
+    assert counts["unresolved"] == sum(1 for r in strips if r.reading_index is None)
+    assert "bevel strips: source_mark=" in payload["report"]
+    assert f"unresolved {counts['unresolved']}" in payload["report"]
+
+
+def test_bevel_layers_show_a_bevel_patch_that_is_not_isolated() -> None:
+    from dataclasses import replace
+
+    from scaffold_core.layer_0_source.marks import SourceFaceStrength
+
+    # One face of a many-face main surface marked as a bevel face: that patch is shown red.
+    source = load_source_snapshot("scaffold_core/tests/data/bevel_cases/u_rounded_wall_noise_top.capture.json")
+    topology = run_pass_0(source).topology_snapshot
+    patch = next(patch for patch in topology.patches.values() if len(patch.source_face_ids) > 1
+                 and source.faces[patch.source_face_ids[0]].face_strength is SourceFaceStrength.STRONG)
+    faces = dict(source.faces)
+    face_id = patch.source_face_ids[0]
+    faces[face_id] = replace(faces[face_id], face_strength=SourceFaceStrength.MEDIUM)
+    context = run_pass_2_features(run_pass_1_relations(run_pass_0(replace(source, faces=faces))), FeatureOptions())
+    payload = build_debug_payload(context, run_skeleton_solve(context), object_name="u_rounded_wall_noise_top")
+    (item,) = payload["layers"]["Scaffold_Bevel_Not_Isolated"]
+    assert item["patch_id"] == str(patch.id)
+    assert item["reason"] == "bevel faces not isolated by seams"
+    assert "bevel-marked, not isolated: bevel faces not isolated by seams=1" in payload["report"]
+
+
+def test_unmarked_meshes_without_bevels_draw_no_bevel_layer() -> None:
+    _context, _solve, payload = _run("artist_walls_004")
+    for layer in overlay_v2.BEVEL_LAYERS.values():
+        assert payload["layers"][layer] == []
+    assert "bevel strips" not in payload["report"]
 
 
 def test_unmarked_meshes_draw_no_source_face_mark() -> None:

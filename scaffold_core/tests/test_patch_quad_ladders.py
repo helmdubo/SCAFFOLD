@@ -25,7 +25,10 @@ from scaffold_core.layer_2_geometry.build import build_geometry_facts
 from scaffold_core.layer_3_relations import quad_ladders
 from scaffold_core.layer_3_relations.build import build_relation_snapshot
 from scaffold_core.layer_3_relations.quad_ladders import (
+    REASON_CLOSED_COLUMNS,
+    REASON_COLUMNS_NOT_ALIGNED,
     REASON_NOT_ALL_QUADS,
+    REASON_NOT_ORIENTABLE,
     REASON_NOT_TWO_WAY,
     build_patch_quad_ladder_relations,
     patch_quad_ladder_relations_with_reasons,
@@ -38,9 +41,12 @@ from scaffold_core.tests.fixtures.cylinder_tube import (
 )
 from scaffold_core.tests.fixtures.quad_ladders import (
     make_five_quad_pole_source,
+    make_mobius_quad_strip_source,
     make_quad_grid_source,
+    make_quad_grid_with_inner_seam_source,
     make_quad_grid_with_triangle_source,
     make_quad_ring_source,
+    make_quad_ring_with_one_seam_edge_source,
 )
 
 BEVEL_CASES = Path(__file__).with_name("data") / "bevel_cases"
@@ -140,6 +146,29 @@ def test_a_five_quad_pole_has_no_reading() -> None:
     relations, reasons = patch_quad_ladder_relations_with_reasons(build_topology_snapshot(source), source)
     assert relations == ()
     assert list(reasons.values()) == [(REASON_NOT_TWO_WAY,)]
+
+
+def _no_record(source) -> tuple[str, ...]:
+    relations, reasons = patch_quad_ladder_relations_with_reasons(build_topology_snapshot(source), source)
+    assert relations == ()
+    (patch_reasons,) = reasons.values()
+    return patch_reasons
+
+
+def test_a_seam_on_one_inner_edge_of_a_grid_leaves_no_reading() -> None:
+    # The seam cuts part of a profile line: the column side line is partly
+    # boundary and partly shared, so neither way of reading aligns.
+    assert _no_record(make_quad_grid_with_inner_seam_source()) == (REASON_COLUMNS_NOT_ALIGNED, REASON_COLUMNS_NOT_ALIGNED)
+
+
+def test_a_seam_on_one_edge_of_a_ring_leaves_no_reading() -> None:
+    # Across the ring the profile line through the seam edge is partly
+    # boundary; along the ring the rings close on themselves.
+    assert _no_record(make_quad_ring_with_one_seam_edge_source()) == (REASON_COLUMNS_NOT_ALIGNED, REASON_CLOSED_COLUMNS)
+
+
+def test_a_moebius_strip_has_no_closed_reading() -> None:
+    assert _no_record(make_mobius_quad_strip_source(3)) == (REASON_NOT_ORIENTABLE, REASON_CLOSED_COLUMNS)
 
 
 @pytest.mark.parametrize(
@@ -254,7 +283,7 @@ def _case(name: str):
 
 
 def test_the_bevel_cases_are_present() -> None:
-    assert len(CASE_NAMES) == 12
+    assert len(CASE_NAMES) == 13
 
 
 @pytest.mark.parametrize("name", CASE_NAMES)
@@ -265,35 +294,45 @@ def test_face_strength_mark_is_the_ground_truth_class(name) -> None:
         assert face.face_strength is expected[truth["faces"][str(face_id)][0]]
 
 
-@pytest.mark.parametrize("name", [name for name in CASE_NAMES if name != "h_rect_s2_tri"])
+USER_CASE = "u_rounded_wall_noise_top"
+GENERATED_CASES = [name for name in CASE_NAMES if name != USER_CASE]
+
+
+def _neighbour_classes(name: str, patch_id, use_ids) -> set[str]:
+    """Ground-truth classes of the patches across the given uses ("BORDER_OR_SELF" when none)."""
+
+    _source, _truth, topology, _by_patch, _reasons, kind = _case(name)
+    out = set()
+    for use_id in use_ids:
+        chain_id = topology.patch_chains[use_id].chain_id
+        others = {use.patch_id for use in topology.patch_chains.values() if use.chain_id == chain_id} - {patch_id}
+        out |= {kind[other] for other in others} or {"BORDER_OR_SELF"}
+    return out
+
+
+def _readings_between_main_surfaces(name: str, patch_id, ends=frozenset({"STRIP", "JUNCTION", "BORDER_OR_SELF"})):
+    """Readings whose rails border only OTHER patches and whose ends border only the given classes."""
+
+    relation = _case(name)[3][patch_id]
+    return [
+        reading
+        for reading in relation.readings
+        if _neighbour_classes(name, patch_id, reading.rail_a_patch_chain_ids) == {"OTHER"}
+        and _neighbour_classes(name, patch_id, reading.rail_b_patch_chain_ids) == {"OTHER"}
+        and _neighbour_classes(name, patch_id, reading.end_a_patch_chain_ids + reading.end_b_patch_chain_ids) <= ends
+        and not reading.shared_patch_chain_ids
+    ]
+
+
+@pytest.mark.parametrize("name", [name for name in GENERATED_CASES if name != "h_rect_s2_tri"])
 def test_every_strip_patch_reads_as_a_ladder_between_its_main_surfaces(name) -> None:
     _source, truth, topology, by_patch, _reasons, kind = _case(name)
-    patches_of_chain: dict = {}
-    for use in topology.patch_chains.values():
-        patches_of_chain.setdefault(use.chain_id, set()).add(use.patch_id)
-
-    def neighbours(patch_id, use_ids):
-        out = set()
-        for use_id in use_ids:
-            others = patches_of_chain[topology.patch_chains[use_id].chain_id] - {patch_id}
-            out |= {kind[other] for other in others} or {"BORDER_OR_SELF"}
-        return out
-
     strips = [patch_id for patch_id, value in kind.items() if value == "STRIP"]
     assert strips
     closed_runs = []
     for patch_id in strips:
-        relation = by_patch.get(patch_id)
-        assert relation is not None, patch_id
-        matching = [
-            reading
-            for reading in relation.readings
-            if neighbours(patch_id, reading.rail_a_patch_chain_ids) == {"OTHER"}
-            and neighbours(patch_id, reading.rail_b_patch_chain_ids) == {"OTHER"}
-            and neighbours(patch_id, reading.end_a_patch_chain_ids + reading.end_b_patch_chain_ids)
-            <= {"STRIP", "JUNCTION", "BORDER_OR_SELF"}
-            and not reading.shared_patch_chain_ids
-        ]
+        assert by_patch.get(patch_id) is not None, patch_id
+        matching = _readings_between_main_surfaces(name, patch_id)
         assert len(matching) == 1, patch_id
         reading = matching[0]
         assert reading.faces_per_column == truth["segments"]
@@ -304,6 +343,28 @@ def test_every_strip_patch_reads_as_a_ladder_between_its_main_surfaces(name) -> 
         assert reading.is_closed == (len(topology.patches[patch_id].loop_ids) == 2)
         closed_runs.append(reading.is_closed)
     assert sum(closed_runs) == {"b_ring_s1": 1, "d_cyl_s2": 1}.get(name, 0)
+
+
+def test_the_users_mesh_strips_junctions_and_wall() -> None:
+    # The user's own mesh: one-segment bevel strips (no segments entry and no
+    # original element in its ground truth), one-triangle junctions.
+    source, _truth, topology, by_patch, reasons, kind = _case(USER_CASE)
+    strips = [patch_id for patch_id, value in kind.items() if value == "STRIP"]
+    junctions = [patch_id for patch_id, value in kind.items() if value == "JUNCTION"]
+    assert (len(strips), len(junctions)) == (9, 6)
+    for patch_id in strips:
+        matching = _readings_between_main_surfaces(USER_CASE, patch_id, ends=frozenset({"JUNCTION", "BORDER_OR_SELF"}))
+        assert len(matching) == 1, patch_id
+        assert matching[0].faces_per_column == 1
+        assert not matching[0].is_closed
+    for patch_id in junctions:
+        (face_id,) = topology.patches[patch_id].source_face_ids
+        assert len(source.faces[face_id].vertex_ids) == 3
+        assert patch_id not in by_patch
+        assert reasons[patch_id] == (REASON_NOT_ALL_QUADS,)
+    walls = [patch_id for patch_id in by_patch if kind[patch_id] == "OTHER"]
+    assert len(walls) == 1
+    assert len(by_patch[walls[0]].readings) == 2
 
 
 @pytest.mark.parametrize("name", CASE_NAMES)

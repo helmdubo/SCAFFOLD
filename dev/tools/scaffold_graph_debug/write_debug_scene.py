@@ -12,12 +12,15 @@ Usage:
   blender -b scene.blend --python write_debug_scene.py -- \
       --objects Arc,collumn --straighten Arc --out debug.blend \
       [--render-dir pngs --render Arc,collumn --facade Main_wall --line-thickness 4]
+      [--sets patches_chains,bevels_ladders,face_mark]
 
 Per object: Pass 0, 1, 2 (Straighten Strips on for --straighten), the skeleton
 solve, the overlay with the panel's default layer visibility and line
 thickness 1.0, then the source mesh is hidden like Analyze does, so the saved
 file opens on the overlay. After the copy is saved, --render writes Workbench
-PNGs of three layer sets per named object from an oblique view, and --facade
+PNGs of layer sets per named object from an oblique view (by default three:
+patches_chains, islands_lines_seams, types; --sets picks others, e.g.
+bevels_ladders, face_mark), and --facade
 one Patches+Chains PNG per named object looking at its longest side. Renders
 use --line-thickness (the panel's Line thickness multiplier); the saved file
 keeps 1.0.
@@ -65,7 +68,17 @@ RENDER_SETS = {
         "Scaffold_Types_Other",
         "Scaffold_Loops_Boundary",
     ),
+    "bevels_ladders": (
+        "Scaffold_Bevel_Strip",
+        "Scaffold_Bevel_Junction",
+        "Scaffold_Bevel_Not_Isolated",
+        "Scaffold_Ladder_Rails",
+        "Scaffold_Ladder_Ends",
+        "Scaffold_Ladder_Columns",
+    ),
+    "face_mark": ("Scaffold_Source_Face_Strength", "Scaffold_Loops_Boundary"),
 }
+DEFAULT_RENDER_SETS = ("patches_chains", "islands_lines_seams", "types")
 OBLIQUE_VIEW = Vector((1.0, -1.3, 0.8))
 
 
@@ -80,6 +93,7 @@ def main() -> int:
     parser.add_argument("--facade", default="")
     parser.add_argument("--line-thickness", type=float, default=1.0)
     parser.add_argument("--width", type=int, default=1200)
+    parser.add_argument("--sets", default=",".join(DEFAULT_RENDER_SETS))
     args = parser.parse_args(argv)
     straighten = {name for name in args.straighten.split(",") if name}
     default_visibility = {spec.layer: spec.default for spec in LAYER_SPECS}
@@ -112,6 +126,7 @@ def main() -> int:
         for name in args.render.split(",")
         if name in built
         for set_name, layers in RENDER_SETS.items()
+        if set_name in args.sets.split(",")
     ] + [
         (name, "facade_patches_chains", RENDER_SETS["patches_chains"], "facade")
         for name in args.facade.split(",")

@@ -1,7 +1,7 @@
 # Bevel test cases
 
-Twelve small meshes bevelled by Blender's Bevel modifier (Face Strength = All),
-for the quad ladder relation (`scaffold_core/layer_3_relations/quad_ladders.py`)
+Twelve small generated meshes bevelled by Blender's Bevel modifier (Face
+Strength = All), plus one real mesh from the user, for the quad ladder relation (`scaffold_core/layer_3_relations/quad_ladders.py`)
 and the Layer 0 face strength mark.
 
 Generator: `dev/tools/blender_smoke/build_bevel_cases.py`

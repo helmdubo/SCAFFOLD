@@ -51,6 +51,11 @@ Full JSON reports go to `dev/tools/blender_smoke/reports/` (git-ignored).
 - For iteration, dump captures once with `--capture-dir` and replay them in
   pure Python; do not relaunch Blender per experiment.
 - Commit only small, representative captures to `scaffold_core/tests/data/`.
+- `build_bevel_cases.py OUT_DIR [case ...]` (run inside Blender:
+  `blender -b --factory-startup --python dev/tools/blender_smoke/build_bevel_cases.py -- OUT_DIR`)
+  builds the generated bevel test meshes of
+  `scaffold_core/tests/data/bevel_cases/` with their Face Strength marks and
+  ground truth; it never saves a .blend.
 - `probes/` holds capture replays for measuring open items:
   `probes/cross_island.py DIR` (families across islands),
   `probes/diag_census.py DIR` (island diagnostics, OBLIQUE runs) and

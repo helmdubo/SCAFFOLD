@@ -23,7 +23,8 @@ from scaffold_core.layer_3_relations.model import PatchChainShapeKind, RelationS
 from scaffold_core.layer_3_relations.patch_chain_incidence import (
     build_chain_patch_chain_incidence_index,
 )
-from scaffold_core.layer_4_features.model import FeatureInstanceStatus, FeatureSnapshot
+from scaffold_core.layer_3_relations.quad_ladders import is_ladder_quad
+from scaffold_core.layer_4_features.model import FeatureInstanceStatus, FeatureKind, FeatureSnapshot
 from scaffold_core.pipeline.context import PipelineContext
 
 
@@ -105,6 +106,30 @@ def feature_summary_to_dict(features: FeatureSnapshot) -> InspectionDict:
             }
             for constraint in features.constraints
         ],
+        "bevels": _bevel_counts(features),
+    }
+
+
+def _bevel_counts(features: FeatureSnapshot) -> InspectionDict:
+    """Bevel records by kind, source and status or reason; strips without a chosen reading; corner kinds."""
+
+    by_kind: dict[str, dict[str, int]] = {}
+    unresolved = 0
+    corners: dict[str, int] = {}
+    for record in features.bevels:
+        status = record.suppression_reason.value if record.suppression_reason is not None else record.status.value
+        row = by_kind.setdefault(record.kind.value, {})
+        key = f"{record.source.value} {status}"
+        row[key] = row.get(key, 0) + 1
+        if record.status is FeatureInstanceStatus.ACCEPTED and record.kind is FeatureKind.BEVEL_STRIP:
+            corners[record.corner_kind.value] = corners.get(record.corner_kind.value, 0) + 1
+            if record.reading_index is None:
+                unresolved += 1
+    return {
+        "record_count": len(features.bevels),
+        "by_kind": {kind: dict(sorted(row.items())) for kind, row in sorted(by_kind.items())},
+        "unresolved_strip_readings": unresolved,
+        "strip_corner_kinds": dict(sorted(corners.items())),
     }
 
 
@@ -447,10 +472,7 @@ def _quad_ladder_absence_counts(context: PipelineContext) -> dict[str, int]:
     for patch_id, patch in context.topology_snapshot.patches.items():
         if patch_id in with_record:
             continue
-        if all(
-            face_id in source.faces and len(source.faces[face_id].vertex_ids) == 4
-            for face_id in patch.source_face_ids
-        ):
+        if all(is_ladder_quad(source.faces.get(face_id)) for face_id in patch.source_face_ids):
             without_reading += 1
         else:
             not_all_quads += 1

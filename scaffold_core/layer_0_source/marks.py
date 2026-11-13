@@ -29,7 +29,9 @@ class SourceFaceStrength(str, Enum):
 
     Read from the FACE-domain int attribute that Blender's Bevel modifier
     (Face Strength mode) and the Weighted Normal modifier share. A raw source
-    mark: it states the stored value, not what the face is.
+    mark: it states the stored value, not what the face is. Stored values
+    other than the three below map to None (no mark), as does a mesh
+    without the attribute.
     """
 
     WEAK = "WEAK"

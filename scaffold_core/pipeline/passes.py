@@ -110,6 +110,7 @@ def run_pass_2_features(context: PipelineContext, options: FeatureOptions = Feat
         context.geometry_facts,
         context.relation_snapshot,
         options,
+        source=context.source_snapshot,
     )
     features_seconds = perf_counter() - features_started
 

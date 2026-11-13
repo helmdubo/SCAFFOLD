@@ -3,6 +3,11 @@
 Dump the exact SourceMeshSnapshot a Blender overlay rebuild consumed, so the
 Architect can replay the artist's geometry through the pipeline without
 Blender. Debug-side only; scaffold_core stays untouched.
+
+A capture may carry an optional "face_strength" map, face id -> WEAK /
+MEDIUM / STRONG (Blender's Face Strength mark, Layer 0); it is written only
+for marked faces and absent when the mesh has no marks, and loading maps a
+missing entry to None.
 """
 
 from __future__ import annotations

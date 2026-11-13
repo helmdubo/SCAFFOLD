@@ -696,8 +696,14 @@ class PatchQuadLadderReading:
     edge i joins profile lines i and i + 1. An open reading has one more
     profile line than columns, and its first and last lines are the two ends;
     a closed reading (a ring) has one profile line per column and no ends.
+    A profile line may be a closed walk: read along a ring cut by one full
+    seam, each column runs around from one side of the seam to the other,
+    so its profile lines start and end at the same source vertex.
     The patch_chain_ids name the uses each side lies on, in side order;
     shared_patch_chain_ids are uses that lie on more than one side.
+    Which side is rail A or B, which end is end A or B, and where the
+    columns start are id-based tie rules (patch face order, then source edge
+    order) with no meaning of their own.
     """
 
     columns: tuple[tuple[SourceFaceId, ...], ...]
@@ -724,10 +730,14 @@ class PatchQuadLadderRelation:
     up to two ways (a quad grid has two: across and along). All readings are
     kept, in a fixed order: more columns first, then by the first face of the
     first column, then by the first rail A edge (patch face order and source
-    edge order). Layer 3 does not choose a reading. closed_column_count
-    counts edge rings of the patch that close on themselves (an annulus read
-    along its length); they are never ladder columns. Only patches with at
-    least one reading get a record. It sets no role and reads no geometry.
+    edge order). This order has no meaning: a tie in column count is decided
+    by ids. Layer 3 does not choose a reading. closed_column_count counts
+    edge rings of the patch that close on themselves (an annulus read along
+    its length); they are never ladder columns. A Moebius ring has no closed
+    reading (its columns cannot be oriented one way). Only patches with at
+    least one reading get a record. It reads the Layer 0 faces of the patch
+    (vertex cycles and edges) and Layer 1 chains and uses; it sets no role
+    and reads no geometry.
     """
 
     id: str

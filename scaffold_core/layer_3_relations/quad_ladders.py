@@ -30,10 +30,15 @@ REASON_NOT_ALL_QUADS = "not_all_quads"
 REASON_SELF_CROSSING_COLUMN = "self_crossing_column"
 REASON_NOT_TWO_WAY = "columns_not_two_way"
 REASON_CLOSED_COLUMNS = "closed_columns"
-REASON_FOLDED_COLUMN = "folded_column"
 REASON_COLUMNS_NOT_ALIGNED = "columns_not_aligned"
 REASON_NOT_ONE_PATH_OR_RING = "columns_not_one_path_or_ring"
 REASON_NOT_ORIENTABLE = "ring_not_orientable"
+
+
+def is_ladder_quad(face) -> bool:
+    """A face a ladder can hold: four corners, four different vertices."""
+
+    return face is not None and len(face.vertex_ids) == QUAD_VERTEX_COUNT and len(set(face.vertex_ids)) == QUAD_VERTEX_COUNT
 
 
 def build_patch_quad_ladder_relations(
@@ -108,7 +113,7 @@ class _PatchLadders:
         self.edge_faces: dict[SourceEdgeId, list[SourceFaceId]] = defaultdict(list)
         for face_id in self.face_ids:
             face = self.source.faces.get(face_id)
-            if face is None or len(face.vertex_ids) != QUAD_VERTEX_COUNT or len(set(face.vertex_ids)) != QUAD_VERTEX_COUNT:
+            if not is_ladder_quad(face):
                 return False
             by_ends = {}
             for edge_id in face.edge_ids:
@@ -159,7 +164,14 @@ class _PatchLadders:
         return sequence, None, True  # unreachable on a finite patch: the walk is reversible
 
     def _strands(self):
-        """Every edge ring of the patch, as (face, entry position) steps with its two boundary ends."""
+        """Every edge ring of the patch, as (face, entry position) steps with its two boundary ends.
+
+        The walk is reversible (a face has one opposite edge per edge and an
+        interior edge two faces), so a strand never meets a (face, pair) of
+        its own except at its start, where it closes, nor one of an earlier
+        strand. A column that crosses itself does so through the other pair
+        of the same face, which readings() rejects.
+        """
 
         strand_of: dict[tuple[SourceFaceId, int], int] = {}
         strands = []
@@ -177,18 +189,13 @@ class _PatchLadders:
                         for step_face, step_position in reversed(backward[1:])
                     ] + forward
                 index = len(strands)
-                folded = False
                 for step_face, step_position in steps:
-                    key = (step_face, step_position % 2)
-                    if key in strand_of:
-                        folded = True
-                    strand_of[key] = index
+                    strand_of[(step_face, step_position % 2)] = index
                 strands.append({
                     "steps": steps,
                     "start_edge": start_edge,
                     "end_edge": end_edge,
                     "closed": closed,
-                    "folded": folded,
                 })
         return strands, strand_of
 
@@ -241,8 +248,6 @@ class _PatchLadders:
     def _reading(self, members):
         if any(strand["closed"] for strand in members):
             return REASON_CLOSED_COLUMNS
-        if any(strand["folded"] for strand in members):
-            return REASON_FOLDED_COLUMN
         columns = []
         for strand in members:
             column = self._column(strand)
