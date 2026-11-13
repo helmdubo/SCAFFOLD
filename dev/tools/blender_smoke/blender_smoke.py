@@ -40,6 +40,10 @@ from scaffold_core.user_filters.model import FilterOptions  # noqa: E402
 
 
 RESIDUAL_OK_LIMIT = 1.0e-4
+# --unwrap-quilts writer checks: the partial-selection cases (one unwrap each)
+# run only on targets with at most this many solved faces, to keep the run short
+WRITER_CHECK_FACE_LIMIT = 100
+SELECT_MODES = {"VERT": (True, False, False), "EDGE": (False, True, False), "FACE": (False, False, True)}
 SNAPSHOT_IO_PATH = REPO_ROOT / "dev" / "tools" / "scaffold_graph_debug" / "snapshot_io.py"
 
 
@@ -246,7 +250,8 @@ def _write_uv_metrics(obj, solve, source, selection: str, unwrap_quilts: bool = 
     differs, a loop of an unsolved face or of the other object changes, a
     vertex, edge or face selection flag of the target's mesh changes (read
     in the mode the writer was called in), or the object selection or the
-    active object is not restored.
+    active object is not restored. It then runs the writer checks
+    (_writer_checks) and adds their count as writer_checks.
     """
 
     from scaffold_core.layer_5_runtime.uv_transfer import write_pinned_uvs, write_quilt_uvs
@@ -299,6 +304,7 @@ def _write_uv_metrics(obj, solve, source, selection: str, unwrap_quilts: bool = 
                 f"{foreign_changed}, other object loops {other_changed}, mesh selection flags {flags_changed}, "
                 f"selection kept {selection_kept}, active kept {active_kept}"
             )
+        extra["writer_checks"] = _writer_checks(obj, solve, solved_faces, other, edit)
     return {
         **extra,
         "written_loops": summary["written_loops"],
@@ -319,6 +325,227 @@ def _selection_flags(obj) -> tuple:
         return tuple([item.select for item in items] for items in (bm.verts, bm.edges, bm.faces))
     mesh = obj.data
     return tuple([item.select for item in items] for items in (mesh.vertices, mesh.edges, mesh.polygons))
+
+
+def _writer_checks(obj, solve, solved_faces: set[int], other, solved_in_edit: bool) -> int:
+    """Call write_quilt_uvs again in states the main write does not reach; raise when one goes wrong.
+
+    Partial selection (targets with at most WRITER_CHECK_FACE_LIMIT solved
+    faces, one unwrap per case, in vertex, edge and face select mode): the
+    solve stays the object's main solve. In Object Mode (only when that
+    solve was read in Object Mode, so it covers every face, as Layer 0 reads
+    it there) every third face is deselected; entering Edit Mode then flushes
+    the flags. In Edit Mode the selection is a subset of the solved faces,
+    so the writer selects faces that were not selected and its restore must
+    clear them. Every vertex, edge and face select flag, the other object's
+    UVs, the modes and the object selection must be unchanged after the write.
+    Refusals (every target; they raise before any operator): the target
+    hidden, a solved face hidden (Object Mode and Edit Mode), the other mesh
+    object in Edit Mode with the target in Object Mode and with both in Edit
+    Mode. The writer must raise, and the target's UVs, seams, select and hide
+    flags, both modes, visibility, the other object's UVs, the object
+    selection and the active object must be unchanged. Each case starts and
+    ends in Object Mode with the flags, visibility, selection and select mode
+    it found; the target's solved UVs are left as the last write made them.
+    """
+
+    from scaffold_core.layer_5_runtime.uv_transfer import write_quilt_uvs
+
+    first_solved = min(solved_faces)
+    cases = []
+    if len(solved_faces) <= WRITER_CHECK_FACE_LIMIT:
+        for select_mode in SELECT_MODES:
+            if not solved_in_edit:
+                cases.append((f"partial {select_mode} object", select_mode, False, lambda: _partial_object(obj)))
+            cases.append((f"partial {select_mode} edit", select_mode, False, lambda: _partial_edit(obj, solved_faces)))
+    cases.append(("hidden target", None, True, lambda: obj.hide_set(True)))
+    cases.append(("hidden face object", None, True, lambda: setattr(obj.data.polygons[first_solved], "hide", True)))
+    cases.append(("hidden face edit", None, True, lambda: _hide_face_edit(obj, first_solved)))
+    if other is not None:
+        cases.append(("other in edit, target object", None, True, lambda: _enter_edit([other])))
+        cases.append(("other in edit, target edit", None, True, lambda: _enter_edit([obj, other])))
+    failures = []
+    failed = []
+    for name, select_mode, refuse, prepare in cases:
+        saved = _saved_scene(obj, other)
+        try:
+            if select_mode is not None:
+                bpy.context.scene.tool_settings.mesh_select_mode = SELECT_MODES[select_mode]
+            prepare()
+            before = _writer_state(obj, other)
+            try:
+                write_quilt_uvs(SimpleNamespace(object=obj), solve)
+                error = None
+            except Exception as raised:  # the refusal under test
+                error = raised
+            after = _writer_state(obj, other)
+            ignored = () if refuse else ("target uv",)  # a write lays the target's solved UVs
+            changed = [
+                f"{key} {_changed_count(before[key], after[key])}"
+                for key in before if key not in ignored and before[key] != after[key]
+            ]
+            if refuse and error is None:
+                failures.append(f"{name}: no error")
+            elif not refuse and error is not None:
+                failures.append(f"{name}: {type(error).__name__} {str(error)[:60]}")
+            if changed:
+                failures.append(f"{name}: changed {', '.join(changed)}")
+            if failures and failures[-1].startswith(f"{name}:") and name not in failed:
+                failed.append(name)
+        finally:
+            _restore_scene(obj, other, saved)
+    if failures:
+        # the failed case names first: the error record is cut at 200 characters
+        raise RuntimeError(f"writer checks failed {len(failed)}/{len(cases)} [{'|'.join(failed)}]: " + "; ".join(failures))
+    return len(cases)
+
+
+def _partial_object(obj) -> None:
+    """Object Mode: every third face unselected, vertices and edges selected exactly by the selected faces."""
+
+    mesh = obj.data
+    faces = [polygon.index % 3 != 0 for polygon in mesh.polygons]
+    vertices = [False] * len(mesh.vertices)
+    edges = [False] * len(mesh.edges)
+    for polygon in mesh.polygons:
+        if faces[polygon.index]:
+            for loop_index in polygon.loop_indices:
+                vertices[mesh.loops[loop_index].vertex_index] = True
+                edges[mesh.loops[loop_index].edge_index] = True
+    for items, flags in zip((mesh.vertices, mesh.edges, mesh.polygons), (vertices, edges, faces)):
+        items.foreach_set("select", flags)
+    mesh.update()
+
+
+def _partial_edit(obj, solved_faces: set[int]) -> None:
+    """Edit Mode (target only): every third solved face unselected, flushed in the current select mode."""
+
+    import bmesh
+
+    _enter_edit([obj])
+    bm = bmesh.from_edit_mesh(obj.data)
+    for face in bm.faces:
+        face.select_set(False)
+    for face in bm.faces:
+        if face.index in solved_faces and face.index % 3 != 0:
+            face.select_set(True)
+    bm.select_flush_mode()
+    bmesh.update_edit_mesh(obj.data)
+
+
+def _hide_face_edit(obj, face_index: int) -> None:
+    import bmesh
+
+    _enter_edit([obj])
+    bm = bmesh.from_edit_mesh(obj.data)
+    bm.faces.ensure_lookup_table()
+    bm.faces[face_index].hide_set(True)
+    bmesh.update_edit_mesh(obj.data)
+
+
+def _enter_edit(objects: list) -> None:
+    """Exactly these objects in Edit Mode, the first one active."""
+
+    view_layer = bpy.context.view_layer
+    for item in view_layer.objects:
+        item.select_set(item in objects)
+    view_layer.objects.active = objects[0]
+    bpy.ops.object.mode_set(mode="EDIT")
+    if any(item.mode != "EDIT" for item in objects):
+        raise RuntimeError("writer check setup: Edit Mode not entered")
+
+
+def _writer_state(obj, other) -> dict:
+    view_layer = bpy.context.view_layer
+    state = {
+        "selected objects": sorted(item.name for item in view_layer.objects if item.select_get()),
+        "active object": getattr(view_layer.objects.active, "name", None),
+    }
+    for label, item in (("target", obj), ("other", other)):
+        if item is not None:
+            state[f"{label} mode"] = item.mode
+            state[f"{label} hidden"] = (item.hide_get(), item.visible_get())
+            state.update({f"{label} {key}": value for key, value in _mesh_state(item).items()})
+    return state
+
+
+def _mesh_state(obj) -> dict:
+    """UVs with pins, seams, select and hide flags of obj's mesh, from the edit mesh in Edit Mode."""
+
+    if obj.mode == "EDIT":
+        import bmesh
+
+        bm = bmesh.from_edit_mesh(obj.data)
+        layer = bm.loops.layers.uv.active
+        uv = [
+            (round(loop[layer].uv[0], 6), round(loop[layer].uv[1], 6), loop[layer].pin_uv)
+            for face in bm.faces for loop in face.loops
+        ] if layer is not None else []
+        groups = (("vertex", bm.verts), ("edge", bm.edges), ("face", bm.faces))
+        seams = [edge.seam for edge in bm.edges]
+    else:
+        uv = _foreign_loop_state(obj, set())
+        mesh = obj.data
+        groups = (("vertex", mesh.vertices), ("edge", mesh.edges), ("face", mesh.polygons))
+        seams = [edge.use_seam for edge in mesh.edges]
+    state = {"uv": uv, "seam": seams}
+    for name, items in groups:
+        state[f"{name} select"] = [item.select for item in items]
+        state[f"{name} hide"] = [item.hide for item in items]
+    return state
+
+
+def _changed_count(before, after):
+    if isinstance(before, list) and isinstance(after, list) and len(before) == len(after):
+        return sum(1 for a, b in zip(before, after) if a != b)
+    return f"{before!r}->{after!r}"[:40]
+
+
+def _saved_scene(obj, other) -> dict:
+    """Object Mode state a writer check may change: select and hide flags, visibility, selection, select mode."""
+
+    view_layer = bpy.context.view_layer
+    meshes = {}
+    for item in (obj, other):
+        if item is not None:
+            mesh = item.data
+            meshes[item.name] = {
+                (index, attribute): _flags(items, attribute)
+                for index, items in enumerate((mesh.vertices, mesh.edges, mesh.polygons))
+                for attribute in ("select", "hide")
+            }
+    return {
+        "meshes": meshes,
+        "hidden": {item.name: item.hide_get() for item in (obj, other) if item is not None},
+        "selected": [item for item in view_layer.objects if item.select_get()],
+        "active": view_layer.objects.active,
+        "select_mode": tuple(bpy.context.scene.tool_settings.mesh_select_mode),
+    }
+
+
+def _restore_scene(obj, other, saved: dict) -> None:
+    view_layer = bpy.context.view_layer
+    for item in (obj, other):
+        if item is not None and item.mode == "EDIT":
+            view_layer.objects.active = item
+            bpy.ops.object.mode_set(mode="OBJECT")
+    for item in (obj, other):
+        if item is not None:
+            item.hide_set(saved["hidden"][item.name])
+            mesh = item.data
+            for (index, attribute), flags in saved["meshes"][item.name].items():
+                (mesh.vertices, mesh.edges, mesh.polygons)[index].foreach_set(attribute, flags)
+            mesh.update()
+    bpy.context.scene.tool_settings.mesh_select_mode = saved["select_mode"]
+    for item in view_layer.objects:
+        item.select_set(item in saved["selected"])
+    view_layer.objects.active = saved["active"]
+
+
+def _flags(items, attribute: str) -> list[bool]:
+    flags = [False] * len(items)
+    items.foreach_get(attribute, flags)
+    return flags
 
 
 def _other_mesh_object(obj):
