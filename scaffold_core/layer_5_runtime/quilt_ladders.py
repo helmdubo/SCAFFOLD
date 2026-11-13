@@ -7,8 +7,9 @@ Rules:
   the strip's two rails together (plan Slice AI). An island of the strip
   alone is laid from the constraint by skeleton.py (frame LADDER).
 - Only a frame-free quilt reads it. A quilt with a rigid unfolded frame
-  holds only planar patches, and each is unfolded exactly: the strip there
-  needs nothing.
+  holds only planar patches, and each patch in the frame is unfolded
+  exactly: the strip there needs nothing. A strip outside that frame (behind
+  a warped patch or a bent hinge) is not laid and says so.
 - The ladder gives no axis and no sign: the frame-free bipartition and line
   orientation run as without it. After orientation a strip is read only
   when exactly one of its rails is stitched in the quilt, the quilt lays
@@ -28,6 +29,8 @@ Rules:
   relation or bevel record.
 - Every strip in a quilt gets an outcome; each "not read" outcome but the
   expected ones (both rails stitched, a rigid frame) is also a diagnostic.
+  A strip read whose quilt pins none of its run ends gets its own outcome
+  after the solve (QUILT_LADDER_NOTHING_PINNED), not "kept together".
 """
 
 from __future__ import annotations
@@ -44,6 +47,8 @@ QUILT_LADDER_NO_RAIL_STITCHED = "no rail stitched"
 QUILT_LADDER_RAIL_NOT_LAID = "its stitched rail is not laid on an axis"
 QUILT_LADDER_FREE_RAIL_ACROSS = "its free rail has a run on the across axis"
 QUILT_LADDER_OFF_LADDER = "a run end is not on the ladder"
+QUILT_LADDER_NOTHING_PINNED = "it meets the conditions but its quilt pins none of its vertices"
+QUILT_LADDER_OUTSIDE_FRAME = "its patch is outside the quilt's rigid frame, not laid"
 # Outcomes that are expected and stay out of the diagnostics.
 QUIET_OUTCOMES = frozenset((QUILT_LADDER_READ, QUILT_LADDER_BOTH_STITCHED, QUILT_LADDER_RIGID_FRAME))
 NOT_READ_PREFIX = "ladder strip in a quilt not read"
@@ -124,6 +129,49 @@ def read_quilt_ladders(constraints, island, runs, roles, signs, vertex_by_run_en
                                  patch_chain_by_id)
         ties.extend(_ties(ladder, patch_id, free, 0 if rail_axis == "AXIS_A" else 1))
     return (length_of if changed else None), tuple(ties), outcomes
+
+
+def rigid_frame_outcomes(constraints, framed_patch_ids, diagnostics) -> dict[str, str]:
+    """Outcomes in a quilt with a rigid unfolded frame: a strip in the frame is unfolded exactly.
+
+    A strip whose patch the frame does not reach (behind a warped patch or a
+    bent hinge) is laid by no axis: it gets its own outcome and a diagnostic.
+    """
+
+    outcomes = {}
+    for constraint in sorted(constraints, key=lambda item: str(item.patch_id)):
+        patch_id = str(constraint.patch_id)
+        if patch_id in framed_patch_ids:
+            outcomes[patch_id] = QUILT_LADDER_RIGID_FRAME
+        else:
+            outcomes[patch_id] = QUILT_LADDER_OUTSIDE_FRAME
+            diagnostics.append(f"{NOT_READ_PREFIX}, {QUILT_LADDER_OUTSIDE_FRAME}: {patch_id}")
+    return outcomes
+
+
+def drop_strips_without_pins(outcomes, ties, runs, node_by_run_end, uv_nodes, diagnostics):
+    """A strip read whose quilt gives none of its run ends both coordinates keeps nothing together.
+
+    uv_nodes holds the solve nodes with both coordinates. Such a strip gets
+    the outcome QUILT_LADDER_NOTHING_PINNED with a diagnostic and loses its
+    ties. Returns the outcomes and the ties.
+    """
+
+    empty = {
+        patch_id for patch_id, outcome in outcomes.items()
+        if outcome == QUILT_LADDER_READ and not any(
+            node_by_run_end[(e.id, role)] in uv_nodes
+            for e in runs if str(e.patch_id) == patch_id for role in ("START", "END")
+        )
+    }
+    for patch_id in sorted(empty):
+        diagnostics.append(f"{NOT_READ_PREFIX}, {QUILT_LADDER_NOTHING_PINNED}: {patch_id}")
+    if not empty:
+        return outcomes, ties
+    return (
+        {patch_id: QUILT_LADDER_NOTHING_PINNED if patch_id in empty else outcome for patch_id, outcome in outcomes.items()},
+        tuple(tie for tie in ties if tie.key[1] not in empty),
+    )
 
 
 def _read_strip(ladder, patch_runs, roles, signs, stitched, patch_chain_by_id):

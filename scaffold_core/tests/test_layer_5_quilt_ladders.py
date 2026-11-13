@@ -170,6 +170,48 @@ def test_the_bottom_strip_f36_keeps_its_rails_together_in_its_quilt() -> None:
     assert alone.patch_ids == (F36,)
 
 
+def test_a_strip_whose_quilt_pins_none_of_its_vertices_is_not_kept_together_and_says_so() -> None:
+    # f35 meets the conditions in the top quilt, but the quilt gives none of its run ends both coordinates.
+    _plain, up = _rounded()
+    solve = run_skeleton_solve(up)
+    _island, skeleton = _skeleton(solve, "patch:seed:f35")
+    assert skeleton.quilt_ladder_by_patch["patch:seed:f35"] == quilt_ladders.QUILT_LADDER_NOTHING_PINNED
+    assert _not_read(solve, "patch:seed:f35") == [
+        f"{quilt_ladders.NOT_READ_PREFIX}, {quilt_ladders.QUILT_LADDER_NOTHING_PINNED}: patch:seed:f35"
+    ]
+    assert skeleton.ladder_ties == () and _pins(solve, "patch:seed:f35") == {}
+
+
+def test_drop_strips_without_pins_keeps_a_strip_with_one_pinned_run_end() -> None:
+    class Run:
+        def __init__(self, run_id, patch_id):
+            self.id, self.patch_id = run_id, patch_id
+
+    corners = (("c0", "p"), ("c1", "p"))
+    ties = (quilt_ladders.LadderTie(("v", "p"), "s", ("w", "p"), corners, 0.5, 0),
+            quilt_ladders.LadderTie(("x", "q"), "s2", ("y", "q"), corners, 0.5, 0))
+    runs = (Run("rp", "p"), Run("rq", "q"))
+    node = {("rp", "START"): "n1", ("rp", "END"): "n2", ("rq", "START"): "n3", ("rq", "END"): "n4"}
+    read = quilt_ladders.QUILT_LADDER_READ
+    diagnostics: list[str] = []
+    outcomes, kept = quilt_ladders.drop_strips_without_pins({"p": read, "q": read}, ties, runs, node, {"n2"}, diagnostics)
+    assert outcomes == {"p": read, "q": quilt_ladders.QUILT_LADDER_NOTHING_PINNED}
+    assert kept == ties[:1]
+    assert diagnostics == [f"{quilt_ladders.NOT_READ_PREFIX}, {quilt_ladders.QUILT_LADDER_NOTHING_PINNED}: q"]
+
+
+def test_a_strip_outside_the_rigid_frame_of_its_quilt_says_so() -> None:
+    # Reachable only behind a warped patch or a bent hinge; no capture or fixture builds one, so the rule is tested alone.
+    class Constraint:
+        def __init__(self, patch_id):
+            self.patch_id = patch_id
+
+    diagnostics: list[str] = []
+    outcomes = quilt_ladders.rigid_frame_outcomes((Constraint("in"), Constraint("out")), {"in": None}, diagnostics)
+    assert outcomes == {"in": quilt_ladders.QUILT_LADDER_RIGID_FRAME, "out": quilt_ladders.QUILT_LADDER_OUTSIDE_FRAME}
+    assert diagnostics == [f"{quilt_ladders.NOT_READ_PREFIX}, {quilt_ladders.QUILT_LADDER_OUTSIDE_FRAME}: out"]
+
+
 def test_a_strip_with_both_rails_stitched_is_not_read_and_says_nothing() -> None:
     plain, up = _rounded()
     flipped = [

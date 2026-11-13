@@ -85,7 +85,7 @@ class FeatureOptions:
     curved on the surface as a rectangle. straighten_bevel_strips (on by
     default) lays every bevel strip confirmed by the Face Strength mark from
     its ladder as a straight strip, except a strip whose two rails are
-    straight on its surface (it develops as it is); it changes nothing on a
+    straight on its surface (it unfolds straight as it is); it changes nothing on a
     mesh without marks.
     """
 

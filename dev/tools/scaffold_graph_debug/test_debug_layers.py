@@ -410,7 +410,7 @@ def test_bevel_strips_laid_from_their_ladder_have_their_island_layer_and_report_
     # Five strips have a curved rail and a constraint; the four straight ones develop (plan Slice AI).
     assert len(ladder_islands) == 5
     assert {item["island_id"] for item in payload["layers"]["Scaffold_Islands_LADDER"]} == ladder_islands
-    develops = "both rails are straight on its surface: it develops as it is"
+    develops = "both rails are straight on its surface: it unfolds straight as it is"
     assert payload["bevel_ladders"] == {
         "constraints": 5, "islands": 5, "kept_together": 0, "in_quilt": [],
         "not_laid": [(f"patch:seed:f{i}", develops) for i in (34, 72, 94, 95)],
@@ -437,14 +437,17 @@ def test_the_report_says_which_bevel_strips_a_quilt_keeps_together_and_which_it_
     assert overlay_ladders.QUILT_LADDER_READ == quilt_ladders.QUILT_LADDER_READ
     not_laid_on_an_axis = quilt_ladders.QUILT_LADDER_RAIL_NOT_LAID
     laid = payload["bevel_ladders"]
-    assert laid["constraints"] == 5 and laid["islands"] == 0 and laid["kept_together"] == 2
+    # f35 meets the conditions in the top quilt, but that quilt pins none of its vertices: not kept together.
+    nothing_pinned = quilt_ladders.QUILT_LADDER_NOTHING_PINNED
+    assert laid["constraints"] == 5 and laid["islands"] == 0 and laid["kept_together"] == 1
     assert laid["in_quilt"] == sorted([
-        ("patch:seed:f35", quilt_ladders.QUILT_LADDER_READ), ("patch:seed:f36", quilt_ladders.QUILT_LADDER_READ),
+        ("patch:seed:f35", nothing_pinned), ("patch:seed:f36", quilt_ladders.QUILT_LADDER_READ),
         ("patch:seed:f71", not_laid_on_an_axis), ("patch:seed:f73", not_laid_on_an_axis),
         ("patch:seed:f96", not_laid_on_an_axis),
     ])
     report = payload["report"]
-    assert "bevel strips laid from their ladder: 0 by itself, 2 kept together in a quilt, of 5 constraints" in report
+    assert "bevel strips laid from their ladder: 0 by itself, 1 kept together in a quilt, of 5 constraints" in report
+    assert f"  in a quilt, not read: patch:seed:f35: {nothing_pinned}" in report
     assert f"  in a quilt, not read: patch:seed:f73: {not_laid_on_an_axis}" in report
     assert "  in a quilt, not read: patch:seed:f36" not in report
     # The bevel strip layer draws the strips laid by themselves only: none here.

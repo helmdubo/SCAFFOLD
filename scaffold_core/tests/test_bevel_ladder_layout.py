@@ -6,7 +6,7 @@ Rules:
   STRAIGHT_LADDER constraint (which strips get one, u_i, width, fractions)
   and its Layer 5 layout (own island, frame LADDER, every boundary vertex
   pinned where the constraint says, unmirrored). A marked strip whose two
-  rails are straight on its surface develops as it is: no constraint, an
+  rails are straight on its surface unfolds straight as it is: no constraint, an
   INFO reason, and the structure assembles it (plan Slice AI).
 - Synthetic marked strips with hand-computed numbers, and the bevel cases
   of tests/data/bevel_cases (the user's rounded wall, a cube with three
@@ -26,6 +26,7 @@ import pytest
 from dev.tools.cftuv_parity.parity import corner_turns
 from dev.tools.scaffold_graph_debug.snapshot_io import load_source_snapshot
 from scaffold_core.core.diagnostics import DiagnosticSeverity
+from scaffold_core.layer_0_source.marks import SourceMark, SourceMarkKind
 from scaffold_core.layer_4_features import bevels as feature_bevels
 from scaffold_core.layer_4_features.model import (
     FeatureConstraintKind,
@@ -309,6 +310,29 @@ def test_a_strip_with_one_straight_rail_still_gets_its_constraint() -> None:
     assert _ladders(_synthetic("straight_3x1")[1]) == []
 
 
+def test_a_rail_of_two_straight_uses_meeting_at_a_bend_still_gets_its_constraint() -> None:
+    """The L-shaped strip with a seam across each STRONG row at its corner: each rail is two uses, each one line."""
+
+    rail_a, rail_b, across = SYNTHETIC["l_shaped"]
+    source = make_marked_ladder_strip_source(rail_a, rail_b, across)
+    edge_by_ends = {frozenset(map(str, edge.vertex_ids)): edge_id for edge_id, edge in source.edges.items()}
+    cuts = tuple(
+        SourceMark(kind=SourceMarkKind.SEAM, target_id=edge_by_ends[frozenset(pair)])
+        for pair in (("oa2", "p2_0"), ("p2_1", "ob2"))
+    )
+    context = run_pass_2_features(run_pass_1_relations(run_pass_0(replace(source, marks=tuple(source.marks) + cuts))))
+    (record,) = [r for r in context.feature_snapshot.bevels if r.kind is FeatureKind.BEVEL_STRIP]
+    kinds = {}
+    for shape in context.relation_snapshot.patch_chain_shape_relations:
+        kinds.setdefault(shape.patch_chain_id, []).append(shape.kind.value)
+    for uses in (record.rail_a_patch_chain_ids, record.rail_b_patch_chain_ids):
+        assert len(uses) == 2 and all(kinds.get(use) == ["SURFACE_LINE"] for use in uses)
+    (constraint,) = _ladders(context)
+    assert constraint.patch_id == record.patch_id and _not_laid(context) == {}
+    # Paired negative: a strip whose rails are one straight use each emits none.
+    assert _ladders(_synthetic("straight_3x1")[1]) == []
+
+
 @pytest.mark.parametrize("name", ("a_cube_s1", "a_cube_s3", "g_short", "u_rounded_wall_noise_top"))
 def test_strips_by_structure_never_emit_a_ladder_constraint(name) -> None:
     _base, context, _solve = _case(name, marks=False)
@@ -488,7 +512,8 @@ def test_the_users_junctions_and_walls_keep_their_shape() -> None:
         # The walls' island keeps its 1.3 mm drift, the same as without the option.
         assert skeleton.axis_b.residual_max == pytest.approx(skeleton_off.axis_b.residual_max, rel=1e-9)
         assert max(skeleton.axis_a.residual_max, skeleton.axis_b.residual_max) < 2e-3
-    # The planar f112 shares that drift: its pins lie within 1e-3 of their true distances (measured 3.1e-4).
+    # The planar f112 shares that drift (the walls' frame-free island, residual 1.32e-3): its pins lie
+    # within 1e-3 of their true distances (measured 6.10e-4, the largest pairwise relative error).
     planar = {v.vertex_id: v for v in solve.vertices if v.patch_id == "patch:seed:f112" and v.pinned}
     for a, b in itertools.combinations(planar.values(), 2):
         truth = math.dist(position[a.source_vertex_id], position[b.source_vertex_id])

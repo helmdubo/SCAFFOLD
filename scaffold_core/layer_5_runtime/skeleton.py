@@ -257,7 +257,7 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
     frame_coordinates = {"AXIS_A": None, "AXIS_B": None}
     bridge_vectors: dict[str, tuple[float, float]] = {}
     ladder_ties: tuple[quilt_ladders.LadderTie, ...] = ()
-    ladder_outcomes = {str(c.patch_id): quilt_ladders.QUILT_LADDER_RIGID_FRAME for c in ladders}
+    ladder_outcomes: dict[str, str] = {}
     if strip_layout is not None:
         roles, signs, direction_of, length_of = strip_layout
         mismatches = ()
@@ -286,6 +286,7 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
         drift = None  # no frame: the solve measures drift along each axis
     else:
         framed = tuple(e for e in runs if str(e.patch_id) in frame.rotation_by_patch)
+        ladder_outcomes = quilt_ladders.rigid_frame_outcomes(ladders, frame.rotation_by_patch, diagnostics)
         direction_of = {e.id: e.direction for e in runs}
         direction_of.update({
             e.id: _rotate(frame.rotation_by_patch[str(e.patch_id)], e.direction) for e in framed
@@ -327,6 +328,11 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
                 node: value for node, value in solve.coordinate_by_node.items() if node not in frame_only
             })
             for solve in (axis_a, axis_b)
+        )
+    if ladder_ties:
+        ladder_outcomes, ladder_ties = quilt_ladders.drop_strips_without_pins(
+            ladder_outcomes, ladder_ties, runs, node_by_run_end,
+            set(axis_a.coordinate_by_node) & set(axis_b.coordinate_by_node), diagnostics,
         )
     if strip_layout is not None:
         layout = STRIP_LAYOUT

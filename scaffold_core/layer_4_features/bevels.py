@@ -57,15 +57,15 @@ from scaffold_core.layer_4_features.model import (
 # (Layer 3) as a straight strip of its own: rails straight and parallel,
 # profile lines across, true width. The constraint carries every number the
 # layout needs (DD-26): Layer 5 opens neither the ladder nor the bevel record.
-# A strip whose two rails are straight on its surface develops as it is and
-# is not straightened (plan Slice AI): it is laid like any other patch.
+# A strip whose two rails are straight on its surface unfolds straight as it
+# is and is not straightened (plan Slice AI): it is laid like any other patch.
 
 LADDER_NOT_LAID_CODE = "FEATURE_BEVEL_STRIP_NOT_LAID"
 NOT_LAID_NO_READING = "no chosen ladder reading"
 NOT_LAID_CLOSED = "the reading is a closed ring"
 NOT_LAID_SHARED_USE = "a use lies on more than one side"
 NOT_LAID_DEGENERATE = "a profile line has no length"
-NOT_LAID_DEVELOPS = "both rails are straight on its surface: it develops as it is"
+NOT_LAID_DEVELOPS = "both rails are straight on its surface: it unfolds straight as it is"
 
 
 def ladder_constraints(
@@ -80,13 +80,19 @@ def ladder_constraints(
     (a candidate) never emits one. A strip by mark that cannot be laid gets
     a diagnostic naming the patch and the reason (a WARNING).
 
-    A strip that already develops without distortion is not straightened
+    A strip that already unfolds straight is not straightened
     (the principle of DD-50, plan Slice AI): when each of its two rails is
     one use whose shape on the strip's own side (DD-48) is exactly one
     SURFACE_LINE, it emits no constraint and gets an INFO diagnostic with
     the same code and the reason NOT_LAID_DEVELOPS. A planar mitred strip
     and a strip that is a piece of a cylinder are such strips. With one rail
     straight and the other not, the strip still emits its constraint.
+
+    Known limit: SURFACE_LINE is decided per vertex (a turn under 0.1 rad at
+    each vertex), so a finely tessellated curved rail can read as one
+    surface line, and such a strip is then left unstraightened. On the
+    present captures every strip let through turns at most 0.1 degree in
+    total, and every strip kept turns 18 to 167 degrees.
     """
 
     if not options.straighten_bevel_strips:

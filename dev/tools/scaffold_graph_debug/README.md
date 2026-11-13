@@ -46,7 +46,7 @@ Straighten Strips   Pass 2 option; applies on the next Rebuild (and on Write UV)
 Straighten Bevel Strips
                     Pass 2 option, on by default: every bevel strip marked by Face
                     Strength gets a STRAIGHT_LADDER constraint unless both its rails
-                    are straight on its surface (then it develops as it is, gets no
+                    are straight on its surface (then it unfolds straight as it is, gets no
                     constraint and is assembled like any patch; the report names
                     it). A strip with the constraint is laid from its ladder as a
                     straight island of its own unless the user filter below joins
@@ -140,7 +140,7 @@ constraints or marked bevel strips that got none, the bevel strips laid from
 their ladder (by itself: islands of frame LADDER; kept together in a quilt;
 of the constraints), each strip in a quilt that is not read with the reason,
 and each strip not laid with its reason (a strip whose rails are both
-straight on its surface: it develops as it is); the number of chain strokes
+straight on its surface: it unfolds straight as it is); the number of chain strokes
 without an axis role; the number of
 solver diagnostics.
 
