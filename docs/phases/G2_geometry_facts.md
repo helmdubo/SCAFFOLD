@@ -66,7 +66,14 @@ Patch:
   area
   area-weighted normal
   area-weighted centroid
+  area_vector_length (plan Slice AH): the length of the sum of the
+    patch's triangle area vectors, the unnormalised normal; a raw
+    measurement (equal to the area on a planar patch, about 0 when the
+    vectors cancel)
   degenerate-area diagnostic
+  GEOMETRY_FACE_NEAR_ZERO_AREA (DEGRADED, plan Slice AH): a face whose
+    area is at most 1e-6 of its perimeter squared (no width at its own
+    scale; a square has 1/16)
 
 Chain:
   length

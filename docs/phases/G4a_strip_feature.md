@@ -80,6 +80,9 @@ every seam its stitch gate accepts is a straight hinge (every use of the
 Chain carries at most one run): straightening only rescales such a side,
 so the patch leaves its island and the constraint applies. A constrained
 patch with a bent seam among them stays stitched and is not applied.
+A seam that the user filter joins (plan Slice AH, G0 DD-55) is stitched
+whatever this rule says; a constrained patch with such a seam shares its
+quilt and the constraint is not applied (with the diagnostic above).
 ```
 
 ## Results (2026-11)
@@ -121,8 +124,13 @@ and no shared use, emits a STRAIGHT_LADDER constraint (plan Slice AF,
 option straighten_bevel_strips, on by default): u per profile line (the
 mean of the rails' arc lengths), the two rail vertices of each line, the
 width (mean profile length). Layer 5 pins every boundary vertex of the
-patch where the constraint says (frame LADDER). The patch is an island by
-itself for now (provisional, see the plan).
+patch where the constraint says (frame LADDER) when the patch is an island
+by itself, which it is when no seam of it is joined by the user filter.
+When the filter joins one of its seams (plan Slice AH, G0 DD-55) the patch
+lies in its quilt, the constraint is not applied there, and no diagnostic
+says so (the expected case). The quilt's own layout then lays its runs, and
+a strip whose two rails get their own lengths comes out sheared: a known
+defect, see the plan's Slice AH entry.
 
 Rule A, by the Layer 0 Face Strength mark (authoritative where any face of
 the patch is marked): all MEDIUM -> strip, all WEAK -> junction; MEDIUM and
@@ -164,7 +172,11 @@ layout at all: its strips are no longer STRIP either, stay stitched into
 the main island and leave it without a rigid frame (h_rect_s2_tri with
 strips on: 72 pins on Slice AE, 36 now, equal to strips off).
 
-Later (not built): user filters that select strips as horizontal, vertical,
-under a ceiling, outer or inner corner. The world vertical enters there, as
-a user option, never in Layers 1-3. The corner kind beside a curved
-neighbour needs a more local source than whole-patch normals.
+User filters: the first one is built (plan Slice AH, G0 DD-55, pass 3,
+`scaffold_core/user_filters/`). With the user's world vertical a bevel
+strip by mark takes the class (HORIZONTAL or VERTICAL) of its rail
+neighbours, a junction the majority class of its strips, and a bevel by mark
+is joined to the patches of its class. The world vertical is a user option
+of that stage, never an input of Layers 1-4. Not built: filters that select
+strips as under a ceiling, outer or inner corner. The corner kind beside a
+curved neighbour needs a more local source than whole-patch normals.

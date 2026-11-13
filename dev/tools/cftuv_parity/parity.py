@@ -2,13 +2,14 @@
 
 Pure Python, no Blender. From the repository root:
 
-    python dev/tools/cftuv_parity/parity.py [--object NAME] [--json OUT] [--detail]
+    python dev/tools/cftuv_parity/parity.py [--object NAME] [--json OUT] [--detail] [--world-up 0,0,1]
 
 Inputs live in dev/tools/cftuv_parity/reference/: <name>.capture.json (the
 SourceMeshSnapshot of the object) and <name>.uv.json (reference UVs written by
 extract_reference.py). Scaffold is replayed from the capture
-(run_pass_0 -> run_pass_1_relations -> run_pass_2_features -> run_skeleton_solve),
-with straighten_strips as in STRAIGHTEN_STRIPS. The common frame is
+(run_pass_0 -> run_pass_1_relations -> run_pass_2_features -> run_pass_3_filters
+-> run_skeleton_solve), with straighten_strips as in STRAIGHTEN_STRIPS and no
+user filter unless --world-up names an up axis. The common frame is
 Scaffold's own PatchChain uses: one side of one Chain in one Patch. The tool
 defines no Scaffold relation; it only reads pipeline output.
 
@@ -461,17 +462,24 @@ def corner_turns(relations, solve):
 # ---------------------------------------------------------- pipeline reading
 
 
-def _replay(capture: Path, straighten_strips: bool = False):
+def _replay(capture: Path, straighten_strips: bool = False, world_up=None):
     sys.path.insert(0, str(REPO_ROOT))
     from dev.tools.scaffold_graph_debug.snapshot_io import load_source_snapshot
     from scaffold_core.layer_4_features.model import FeatureOptions
     from scaffold_core.layer_5_runtime.pins import run_skeleton_solve
-    from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations, run_pass_2_features
+    from scaffold_core.pipeline.passes import (
+        run_pass_0,
+        run_pass_1_relations,
+        run_pass_2_features,
+        run_pass_3_filters,
+    )
+    from scaffold_core.user_filters.model import FilterOptions
 
     context = run_pass_2_features(
         run_pass_1_relations(run_pass_0(load_source_snapshot(capture))),
         FeatureOptions(straighten_strips=straighten_strips),
     )
+    context = run_pass_3_filters(context, FilterOptions(world_up=world_up))
     return context, run_skeleton_solve(context)
 
 
@@ -700,10 +708,10 @@ def top_gaps(uses, context, solve, count=3):
     return rows
 
 
-def evaluate(name):
+def evaluate(name, world_up=None):
     reference = json.loads((REFERENCE_DIR / f"{name}.uv.json").read_text())
     straighten = STRAIGHTEN_STRIPS.get(name, False)
-    context, solve = _replay(REFERENCE_DIR / f"{name}.capture.json", straighten)
+    context, solve = _replay(REFERENCE_DIR / f"{name}.capture.json", straighten, world_up)
     uses, unread, scale = build_uses(context, solve, reference)
     scores = score_uses(uses)
     return {
@@ -770,8 +778,15 @@ def main(argv=None) -> None:
     parser.add_argument("--object", action="append")
     parser.add_argument("--json")
     parser.add_argument("--detail", action="store_true")
+    parser.add_argument(
+        "--world-up", default="",
+        help="run the Pass 3 user filter with this up axis, e.g. 0,0,1 (default: no filter, the pipeline default)",
+    )
     args = parser.parse_args(argv)
-    results = [evaluate(name) for name in (args.object or OBJECTS)]
+    world_up = tuple(float(value) for value in args.world_up.split(",")) if args.world_up else None
+    if world_up is not None:
+        print(f"user filter: vertical apart from horizontal, up={world_up}")
+    results = [evaluate(name, world_up) for name in (args.object or OBJECTS)]
     print(
         "object         strips recall  false  pincov  pinext  axisagr  structd ref/sc/both  isl r/s  spl/mrg  scale"
         "  shape     torn  ishape   itorn"

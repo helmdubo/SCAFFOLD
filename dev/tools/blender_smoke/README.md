@@ -41,6 +41,19 @@ Options:
                     Smoke runs Layer 4 only with this flag: without it, it
                     does not exercise bevel strips at all, although
                     Straighten Bevel Strips is on by default everywhere else
+--world-up X,Y,Z    run Pass 2 and the Pass 3 user filter with this up axis and
+                    add metrics filter_split / filter_join; default off keeps
+                    baselines (the pipeline default is no filter). The axis is
+                    in world space and turned into each object's space by its
+                    matrix_world; a non-uniform object scale is not handled
+--unwrap-quilts     with --write-uv: write through write_quilt_uvs (pins, then
+                    each quilt laid as one chart) and add seam_flags_changed;
+                    a second visible mesh object is selected beside the target,
+                    and the object fails (error record, exit 1) when a seam
+                    flag differs, a loop of an unsolved face or of that other
+                    object changes, a vertex, edge or face selection flag of
+                    the target mesh changes, or the selection or active object
+                    is not restored
 --baseline PATH     compare stable fields; exit 1 and print only the diffs
 --update-baseline   rewrite PATH from this run
 ```
@@ -80,6 +93,8 @@ strip_islands                        islands laid by a STRAIGHT_STRIP constraint
 ladder_islands                       islands laid by a STRAIGHT_LADDER constraint, a marked bevel strip (--straighten-strips)
 bevel_ladder_constraints             STRAIGHT_LADDER constraints emitted by Layer 4 (--straighten-strips)
 foreign_loops_changed                loops outside the solved faces touched (must be 0)
+filter_split, filter_join            SeamDirectives of the user filter (--world-up)
+seam_flags_changed                   seam flags that differ after write_quilt_uvs (--unwrap-quilts, must be 0)
 pipeline_codes                       diagnostic code histogram
 ms                                   wall time, never baselined
 ```

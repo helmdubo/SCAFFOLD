@@ -122,4 +122,14 @@ def _face_strength_values(mesh: object) -> list[int] | None:
         return None
     if getattr(attribute, "domain", None) != "FACE" or getattr(attribute, "data_type", None) != "INT":
         return None
+    if getattr(mesh, "is_editmode", False):
+        # In Edit Mode attribute data is not reachable through the mesh (it
+        # reads as empty); the values live in the edit BMesh face layer.
+        import bmesh
+
+        edit_mesh = bmesh.from_edit_mesh(mesh)
+        layer = edit_mesh.faces.layers.int.get(FACE_STRENGTH_ATTRIBUTE)
+        if layer is None:
+            return None
+        return [int(face[layer]) for face in edit_mesh.faces]
     return [int(item.value) for item in attribute.data]

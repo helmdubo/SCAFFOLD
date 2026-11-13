@@ -4,7 +4,8 @@ Phase start authorized by the user after artist validation of stage-1
 structure (rails/families/junctions/seam verdicts on real meshes).
 Layer 4 v0 exists since plan Slice Y: G5a reads it only through
 FeatureConstraint (DD-18, DD-26): STRAIGHT_STRIP and, since plan Slice AF,
-STRAIGHT_LADDER.
+STRAIGHT_LADDER. The user-filter stage exists since plan Slice AH (G0
+DD-55): G5a reads it only through SeamDirective.
 
 ## Consumed API (validated by tracer + overlay consumption)
 
@@ -14,7 +15,38 @@ LocalFaceFan), Layer 3: ConnectedDirectionFamily v1 (per-use, geodesic),
 RunEndpointJunction, ScaffoldNode/PatchAdjacency/ScaffoldJunction,
 PatchChainDirectionalEvidence, PatchAxes, ScaffoldRail v1 through the
 island cut view (cut_scaffold_rail, plan Slice O).
+User-filter stage (pass 3): FilterSnapshot.directives (SeamDirective) only;
+never the patch classes or the world vertical.
 ```
+
+## User-filter stage (pass 3, plan Slice AH, G0 DD-55)
+
+```text
+scaffold_core/user_filters/ runs after pass 2 and before Layer 5
+(run_pass_3_filters; PipelineContext.filter_snapshot). It is not a layer.
+Option: FilterOptions(world_up=None, horizontal_angle_degrees=45.0).
+  world_up None: no class, no directive; every output equals a run
+  without the stage.
+  world_up is a direction in the mesh's own space (Layer 0 reads
+  vertex.co). The tools that have Blender turn a world axis into that
+  space by the object's matrix; a non-uniform object scale is not handled.
+Class of a patch (PatchClassRecord): HORIZONTAL when acos(|n . up|) is at
+  most the angle (n: the Layer 2 patch normal), else VERTICAL. A patch
+  with no usable normal (a zero normal or area, or face area vectors that
+  cancel: Layer 2 area_vector_length at most 1e-3 of the Layer 2 area) is
+  VERTICAL with a diagnostic. The stage reads Layers 1-4, no Layer 0 data.
+  A bevel strip by mark is HORIZONTAL when a rail neighbour that is not a
+  bevel by mark is HORIZONTAL; without rail neighbours (no ladder reading)
+  the same rule runs over every adjacent patch that is not a bevel by
+  mark; with none, its own normal decides. A bevel junction by mark takes
+  the majority class of its strips; a tie is HORIZONTAL. Structural bevel
+  candidates are ordinary patches here.
+SeamDirective, one per seam between two different patches:
+  SPLIT when the two classes differ;
+  JOIN when they agree and at least one patch is a bevel by mark;
+  no directive otherwise.
+```
+
 
 ## Module contract (scaffold_core/layer_5_runtime/)
 
@@ -32,6 +64,21 @@ islands.py   - island assembly: spanning tree of stitch decisions.
   stays cut when the smaller part, unfolded about the seam, would lie
   over the larger one; a non-rigid seam between two rigid parts stays
   cut; islands.unfold_rotation is the one unfolding for gate and frame.
+  Quilts (plan Slice AH, G0 DD-55): an island is a quilt, the patches that
+  lie together in UV as one chart. A SPLIT seam is never stitched. A JOIN
+  seam is stitched without the angle gate when its patches are in
+  different parts; it keeps the overlap gate only between two rigid parts
+  over a rigid seam, otherwise it joins and the larger part's frame is
+  kept. Tree order: rigid seams, then the other seams (more edges first),
+  then the JOIN seams (longer 3D length, PatchAdjacency.shared_length to
+  9 significant digits, first), then by id. A STRAIGHT_LADDER patch with a JOIN seam lies in its
+  quilt and is not laid by its ladder.
+  UV cut set (islands.uv_cut_chain_ids; SolveResult.uv_cut_chain_ids and
+  uv_cut_source_edge_ids): every Chain with a source edge walked on two
+  sides by the patch uses that no accepted decision stitched: seams
+  between quilts, seams left cut inside a quilt, every SEAM_SELF Chain and
+  every slit seam inside one patch. Mesh borders are cuts anyway and are
+  not listed.
 
 skeleton.py  - selection-wide solve:
   nodes = ScaffoldNode UNION RunEndpointJunction (rail atoms);
@@ -64,10 +111,25 @@ axis_solve.py - the per-axis solve: components, equation groups, gauge,
 pins.py      - output model: vertex -> (uv, pinned flag, island id);
   stations (plan Slice Z): an axis run pins its inner source vertices at
   their arc-length points between its two end pins.
-uv_transfer.py - the ONLY bpy write boundary (G5 rule): writes UVs+pins
-  in the mesh's current mode without bpy operators. It does not call
-  mode_set or unwrap; the artist runs Blender's U > Unwrap after the
-  pins are written so the conformal fill is owned by Blender UI state.
+uv_transfer.py - the ONLY bpy write boundary (G5 rule).
+  write_pinned_uvs writes UVs+pins in the mesh's current mode without bpy
+  operators. It does not call mode_set or unwrap; the artist runs
+  Blender's U > Unwrap after the pins are written so the conformal fill
+  is owned by Blender UI state.
+  write_quilt_uvs (plan Slice AH) acts on the target object only. Before
+  changing anything it refuses when the target is not visible, when a
+  solved face is hidden (the unwrap skips hidden faces and then lays the
+  visible ones differently) or when any other object is in Edit Mode. From
+  Object Mode it saves the mesh's selection flags, deselects the other
+  objects and enters Edit Mode. It writes the pins
+  there, sets the seam flag of every edge of a solved face to "is a UV
+  cut" for the duration of the call, selects the solved faces and runs
+  Blender's conformal unwrap, so each quilt is one chart. A chart with
+  fewer than two distinct pins is then rescaled so that its UV area is
+  its 3D area times LAYOUT_UV_PER_MESH_UNIT squared. Finally it restores
+  the seam flags, the exact vertex, edge and face selection flags, the
+  mode, the object selection and the active object, also when the unwrap
+  fails.
 ```
 
 ## Invariants (validation outputs, not hopes)
@@ -109,7 +171,10 @@ uv_transfer.py - the ONLY bpy write boundary (G5 rule): writes UVs+pins
 
 Texel scale policy, packing, trim semantics, Layer 4 grammar,
 WorldOrientation, curved-chain refinement (OQ-11 remainder), and
-ScaffoldTrace/ScaffoldRail construction.
+ScaffoldTrace/ScaffoldRail construction. The world vertical of the
+user-filter stage is not WorldOrientation; Layer 5 never reads it.
+Placement and packing of charts are not done: quilts may overlap each
+other in UV.
 
 Since plan Slice Q, G5a has no rail order or in-line sign derivation of its
 own: lines and the signs of islands without a rigid frame come from the
@@ -198,7 +263,11 @@ uv_transfer.py:
   found through the face corner's Layer 2 face fan; there is no fallback to
   another patch's pin (Task Card M2);
   uses bmesh in Edit Mode and Object Mode (from_edit_mesh / from_mesh);
-  calls no bpy operators and performs no automatic unwrap.
+  write_pinned_uvs calls no bpy operators and performs no automatic
+  unwrap; write_quilt_uvs (plan Slice AH) adds mode_set from Object Mode
+  and one conformal unwrap with the UV cut set as seams, and restores the
+  seam flags and the selection (see the module contract, and
+  docs/agent_rules/blender_boundaries.md for what was tested).
 ```
 
 ## Blender workflow
@@ -206,9 +275,15 @@ uv_transfer.py:
 ```text
 1. Select the target mesh faces, or select one mesh object in Object Mode
    to use all faces of that object.
-2. Press Write UV (G5a) in the Scaffold Graph debug panel.
-3. Check the info-bar summary and console diagnostics.
-4. In the UV Editor run U > Unwrap to fill the fabric between pinned rails.
+2. Set the user filter in the Scaffold Graph debug panel if wanted
+   (Split vertical from horizontal, Up axis, Angle; on, +Z and 45 by
+   default in the panel).
+3. Press Write UV (G5a), or Write UV and unwrap quilts.
+4. Check the info-bar summary and console diagnostics.
+5. After Write UV (G5a) only: in the UV Editor run U > Unwrap to fill the
+   fabric between pinned rails. That unwrap uses the mesh's own seams, so
+   seams the quilts stitched stay cuts there. Write UV and unwrap quilts
+   runs the unwrap itself with each quilt as one chart.
 ```
 
 Expected currently validated behavior:
@@ -309,10 +384,22 @@ AXIS_B, no equation solved (residual 0), no stations. Invariants 1, 2, 4
 and 9 hold on such islands; 3, 5 and 7 do not apply (no stitched seam, no
 frame); 6 is not checked, as for STRIP (the axes come from the
 constraint); 8 adds nothing (every vertex is already pinned). Every seam
-of such a patch is refused in island assembly, which is provisional (see
-the plan). If a run end is not in the constraint the island keeps its
+of such a patch is refused in island assembly unless a user filter joins
+one of its seams (plan Slice AH); then the patch lies in its quilt and the
+constraint is not applied. If a run end is not in the constraint the island keeps its
 normal layout with a diagnostic. The buildings baseline is identical (no
 marks there); the smoke tool runs Layer 4 only with --straighten-strips.
+
+After Slice AH (2026-11) the Tier 3 default baseline is identical: the
+smoke tool runs without the user filter unless `--world-up` is given, and
+with no filter every output equals a run without pass 3. `--unwrap-quilts`
+checks write_quilt_uvs (seam flags unchanged, unsolved faces and other
+objects untouched, vertex, edge and face selection flags and the object
+selection restored). On the reference Main_wall of the parity scene (not
+part of this baseline; filter off, written from Object Mode): with the
+slit-seam rule
+the UV cut set went from 12 to 312 edges; after the quilt write flipped
+faces 152 -> 98 and the mean corner angle error 6.62 -> 2.86 degrees.
 
 After Slice Z (2026-11) pins are consistent and complete: on the 13
 buildings objects the framed pins that sat beyond drift from their frame

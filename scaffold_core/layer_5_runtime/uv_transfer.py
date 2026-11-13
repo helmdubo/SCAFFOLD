@@ -3,10 +3,33 @@ Layer: 5 - Runtime
 
 Rules:
 - The ONLY bpy write boundary in scaffold_core (G5a phase rule).
-- Writes pinned skeleton UVs via bmesh in the mesh's current mode; it does
-  NOT call any bpy operator (mode_set/unwrap), so it cannot trigger an
-  operator-context segfault. The artist runs U > Unwrap for the conformal
-  fill; Blender respects the pins this writes.
+- write_pinned_uvs writes pinned skeleton UVs via bmesh in the mesh's
+  current mode and calls no bpy operator; the artist runs U > Unwrap for the
+  conformal fill, and Blender respects the pins it writes.
+- write_quilt_uvs (plan Slice AH) lays the quilts: it writes the same pins,
+  sets the seam flags of the solved faces' edges to exactly the UV cut set
+  of the solve (so each quilt is one chart), runs Blender's conformal unwrap
+  on the solved faces and restores every seam flag and the vertex, edge and
+  face selection in a finally block. The user's seams are never changed.
+  From Object Mode it takes only the target object into Edit Mode (the
+  unwrap operator needs Edit Mode and unwraps every object in it), writes
+  the pins there and returns, restoring the object selection, the active
+  object and the mesh's selection flags (saved before Edit Mode, which
+  flushes them) also when the unwrap fails; from Edit Mode it calls no
+  mode_set. It refuses before changing anything when the target is not
+  visible or a solved face is hidden (the unwrap skips both), or another
+  object is in Edit Mode. No other object's UVs change.
+- After the unwrap, write_quilt_uvs restores the layout's scale of every
+  chart (a connected set of solved faces under the cut set) that has fewer
+  than two distinct pinned UV positions: Blender gives such a chart a scale
+  of its own. The chart is scaled uniformly so that its UV area is its 3D
+  area (bmesh, the mesh's own coordinates) times LAYOUT_UV_PER_MESH_UNIT
+  squared, about its one pin (pinned loops are never written), otherwise
+  about the centroid of its UVs. Charts with two or more distinct pins are
+  never touched. No rotation, packing or translation: an unpinned chart
+  stays where Blender put it, scaled about its centre, and may overlap
+  another chart. A chart with zero UV or zero 3D area is left as it is and
+  counted.
 - bpy/bmesh are imported lazily inside the function so headless suites
   never load them.
 """
@@ -16,6 +39,13 @@ from __future__ import annotations
 from typing import Any
 
 from scaffold_core.layer_5_runtime.pins import SolveResult
+
+# The pinned layout's scale. Layer 5 lays the Layer 2 lengths as they are,
+# measured in the mesh's own coordinates (Layer 0 reads vertex.co), so one UV
+# unit is one mesh unit; nothing in the solve scales them.
+LAYOUT_UV_PER_MESH_UNIT = 1.0
+# Two pinned UV positions closer than this count as one.
+PIN_POSITION_TOLERANCE = 1e-6
 
 
 def write_pinned_uvs(blender_context: Any, result: SolveResult) -> dict[str, Any]:
@@ -85,6 +115,224 @@ def write_pinned_uvs(blender_context: Any, result: SolveResult) -> dict[str, Any
         "axis_parallel_violations": len(result.axis_parallel_violations),
         "next_step": "press U > Unwrap to fill the fabric (pins are respected)",
     }
+
+
+def write_quilt_uvs(blender_context: Any, result: SolveResult) -> dict[str, Any]:
+    """Write the pins, then lay each quilt as one chart by Blender's conformal unwrap.
+
+    For the unwrap only, a solved face's edge is a seam exactly when it is a
+    UV cut of the solve (SolveResult.uv_cut_source_edge_ids); the seams the
+    tree stitched are not cuts. Every seam flag, and the vertex, edge and face
+    selection, are restored afterwards, even when the unwrap fails. Between
+    the unwrap and the restore, a chart with fewer than two distinct pins is
+    given the layout's scale (see the module rules); the result counts the
+    charts by pins and reports the rescaled charts' linear scale range.
+    """
+
+    import bpy
+    import bmesh
+
+    mesh_object = _resolve_mesh_object(blender_context)
+    if mesh_object is None:
+        raise ValueError("Active object is not a mesh; select the mesh and retry.")
+    mesh = mesh_object.data
+    view_layer = bpy.context.view_layer
+    if not mesh_object.visible_get():
+        # The unwrap operator skips an object that is not visible.
+        raise RuntimeError(f"the target object is hidden; unhide it and retry: {mesh_object.name}")
+    started_in_edit = mesh_object.mode == "EDIT"
+    others = sorted(o.name for o in view_layer.objects if o != mesh_object and o.mode == "EDIT")
+    if others:
+        raise RuntimeError(
+            "other objects are in Edit Mode and the unwrap would change their UVs too; "
+            f"leave Edit Mode on them and retry: {', '.join(others[:5])}"
+        )
+    solved = {int(face_id[1:]) for face_id in result.patch_by_source_face}
+    if started_in_edit:
+        face_hidden = [face.hide for face in bmesh.from_edit_mesh(mesh).faces]
+    else:
+        face_hidden = [polygon.hide for polygon in mesh.polygons]
+    hidden = sum(1 for index, hide in enumerate(face_hidden) if hide and index in solved)
+    if hidden:
+        # The unwrap skips hidden faces, so their charts would not be laid as one.
+        raise RuntimeError(f"{hidden} solved faces are hidden; reveal them and retry")
+    previous_active = view_layer.objects.active
+    previous_selected = [o for o in view_layer.objects if o.select_get()]
+    element_selection = None
+    if not started_in_edit:
+        # Entering Edit Mode flushes the selection, so the flags are saved here.
+        element_selection = [
+            _select_flags(items) for items in (mesh.vertices, mesh.edges, mesh.polygons)
+        ]
+        # Only the target enters Edit Mode, so the unwrap sees no other object.
+        for other in previous_selected:
+            other.select_set(False)
+        mesh_object.select_set(True)
+        view_layer.objects.active = mesh_object
+    try:
+        if not started_in_edit:
+            bpy.ops.object.mode_set(mode="EDIT")
+        # Pins are written in Edit Mode, the mode of the unwrap.
+        summary = write_pinned_uvs(blender_context, result)
+        summary.update(_unwrap_quilts(bpy, bmesh, mesh, result))
+    finally:
+        if not started_in_edit:
+            if mesh_object.mode == "EDIT":
+                bpy.ops.object.mode_set(mode="OBJECT")
+            for items, flags in zip((mesh.vertices, mesh.edges, mesh.polygons), element_selection):
+                items.foreach_set("select", flags)
+            mesh.update()
+            mesh_object.select_set(mesh_object in previous_selected)
+            for other in previous_selected:
+                other.select_set(True)
+            view_layer.objects.active = previous_active
+    return summary
+
+
+def _unwrap_quilts(bpy: Any, bmesh: Any, mesh: Any, result: SolveResult) -> dict[str, Any]:
+    """Seams to the cut set, conformal unwrap, loose charts rescaled, seams and selection restored (Edit Mode)."""
+
+    cut = result.uv_cut_source_edge_ids
+    solved = {int(face_id[1:]) for face_id in result.patch_by_source_face}
+    bm = bmesh.from_edit_mesh(mesh)
+    bm.edges.index_update()
+    bm.faces.index_update()
+    seams = [edge.seam for edge in bm.edges]
+    selection = (
+        [vertex.select for vertex in bm.verts],
+        [edge.select for edge in bm.edges],
+        [face.select for face in bm.faces],
+    )
+    cut_edges = 0
+    try:
+        for edge in bm.edges:
+            if any(face.index in solved for face in edge.link_faces):
+                edge.seam = f"e{edge.index}" in cut
+                cut_edges += int(edge.seam)
+        for face in bm.faces:
+            face.select_set(face.index in solved)
+        bmesh.update_edit_mesh(mesh)
+        bpy.ops.uv.unwrap(method="CONFORMAL", fill_holes=False, margin=0.0)
+        bm = bmesh.from_edit_mesh(mesh)
+        rescale = _rescale_loose_charts(bm, solved, cut)
+        bmesh.update_edit_mesh(mesh)
+    finally:
+        bm = bmesh.from_edit_mesh(mesh)
+        for edge, seam in zip(bm.edges, seams):
+            edge.seam = seam
+        # bmesh's select flushes to shared elements: clear everything, then set
+        # only the True flags, vertices, then edges, then faces.
+        for items in (bm.verts, bm.edges, bm.faces):
+            for item in items:
+                item.select = False
+        for items, flags in zip((bm.verts, bm.edges, bm.faces), selection):
+            for item, flag in zip(items, flags):
+                if flag:
+                    item.select = True
+        bmesh.update_edit_mesh(mesh)
+        restored = sum(1 for edge, seam in zip(bm.edges, seams) if edge.seam != seam)
+    return {
+        "quilts": len(result.assembly.islands),
+        "uv_cut_edges": cut_edges,
+        "seam_flags_changed": restored,
+        **rescale,
+        "next_step": "quilts laid by the conformal unwrap; seams unchanged",
+    }
+
+
+def chart_rescale_factor(
+    uv_area: float, area_3d: float, layout_scale: float = LAYOUT_UV_PER_MESH_UNIT
+) -> float | None:
+    """Linear factor that gives a chart of uv_area the UV area area_3d * layout_scale**2.
+
+    None for a degenerate chart (no UV area or no 3D area): it is left alone.
+    """
+
+    if not (uv_area > 0.0 and area_3d > 0.0 and layout_scale > 0.0):
+        return None
+    return (area_3d / uv_area) ** 0.5 * layout_scale
+
+
+def polygon_uv_area(points: list[tuple[float, float]]) -> float:
+    """Unsigned shoelace area of one face's UV polygon."""
+
+    count = len(points)
+    return abs(sum(
+        points[k][0] * points[(k + 1) % count][1] - points[(k + 1) % count][0] * points[k][1]
+        for k in range(count)
+    )) / 2.0
+
+
+def _rescale_loose_charts(bm: Any, solved: set[int], cut: frozenset[str]) -> dict[str, Any]:
+    """Give every chart with fewer than two distinct pinned UV positions the layout's scale."""
+
+    bm.edges.index_update()
+    bm.faces.index_update()
+    uv_layer = bm.loops.layers.uv.verify()
+    by_pins ={"0": 0, "1": 0, "2+": 0}
+    rescaled = 0
+    degenerate = 0
+    before: list[float] = []
+    after: list[float] = []
+    seen: set[int] = set()
+    for start in bm.faces:
+        if start.index not in solved or start.index in seen:
+            continue
+        chart, stack = [], [start]
+        seen.add(start.index)
+        while stack:  # one chart: solved faces joined by an edge that is not a UV cut
+            face = stack.pop()
+            chart.append(face)
+            for edge in face.edges:
+                if f"e{edge.index}" in cut:
+                    continue
+                for other in edge.link_faces:
+                    if other.index in solved and other.index not in seen:
+                        seen.add(other.index)
+                        stack.append(other)
+        loops = [loop for face in chart for loop in face.loops]
+        pins = [tuple(loop[uv_layer].uv) for loop in loops if loop[uv_layer].pin_uv]
+        if any(
+            max(abs(pin[0] - pins[0][0]), abs(pin[1] - pins[0][1])) > PIN_POSITION_TOLERANCE for pin in pins
+        ):
+            by_pins["2+"] += 1
+            continue  # the pins hold this chart's scale
+        by_pins["1" if pins else "0"] += 1
+        area_3d = sum(face.calc_area() for face in chart)
+        uv_area = sum(polygon_uv_area([tuple(loop[uv_layer].uv) for loop in face.loops]) for face in chart)
+        factor = chart_rescale_factor(uv_area, area_3d)
+        if factor is None:
+            degenerate += 1
+            continue
+        if pins:
+            pivot = pins[0]
+        else:
+            pivot = (
+                sum(loop[uv_layer].uv[0] for loop in loops) / len(loops),
+                sum(loop[uv_layer].uv[1] for loop in loops) / len(loops),
+            )
+        for loop in loops:
+            if loop[uv_layer].pin_uv:
+                continue  # a pin is never written
+            u, v = loop[uv_layer].uv
+            loop[uv_layer].uv = (pivot[0] + (u - pivot[0]) * factor, pivot[1] + (v - pivot[1]) * factor)
+        rescaled += 1
+        before.append((uv_area / area_3d) ** 0.5 / LAYOUT_UV_PER_MESH_UNIT)
+        new_area = sum(polygon_uv_area([tuple(loop[uv_layer].uv) for loop in face.loops]) for face in chart)
+        after.append((new_area / area_3d) ** 0.5 / LAYOUT_UV_PER_MESH_UNIT)
+    return {
+        "charts_by_pins": by_pins,
+        "charts_rescaled": rescaled,
+        "charts_degenerate": degenerate,
+        "rescaled_scale_before": (min(before), max(before)) if before else None,
+        "rescaled_scale_after": (min(after), max(after)) if after else None,
+    }
+
+
+def _select_flags(items: Any) -> list[bool]:
+    flags = [False] * len(items)
+    items.foreach_get("select", flags)
+    return flags
 
 
 def _resolve_mesh_object(blender_context: Any) -> Any:

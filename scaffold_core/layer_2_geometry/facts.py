@@ -34,6 +34,9 @@ class PatchGeometryFacts:
     area: float
     normal: Vector3
     centroid: Vector3
+    # Length of the sum of the patch's triangle area vectors (the unnormalised
+    # normal): the area for a planar patch, about 0 when they cancel.
+    area_vector_length: float
 
 
 @dataclass(frozen=True)

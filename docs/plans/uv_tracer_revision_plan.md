@@ -2711,6 +2711,210 @@ Not done from the audit: removing the Layer 3 records nothing reads,
 Layer 5 speed, an order of failure in the axis solve. Deferred: the
 `confidence` fields, a direction field inside a patch, an own relaxation.
 
+## Slice AH — quilts: a user filter with the world vertical, each quilt laid as one chart (DONE, 2026-11)
+
+Target: the user's rounded_wall_noise_top after Slice AF (20 small
+islands; the user: too many). Commits 4e0c667, 0b4006f and eb3d99c (the
+review fixes); G0 v1.16 DD-55.
+
+The user's direction (see "DIRECTION SET BY THE USER" in
+`docs/agent_handoff.md`): by default everything connected is one quilt,
+decided from structure; only a user filter splits ("these are walls, that
+is a floor or a ceiling"); the user's seams always stay as markup. A
+quilt is a set of patches that lie together in UV as one chart, known as
+data before any unwrap; a Layer 5 island is a quilt. The user authorised
+the G0 amendment.
+
+```text
+user_filters  new stage scaffold_core/user_filters/, pass 3
+              (run_pass_3_filters, PipelineContext.filter_snapshot), after
+              Layer 4 and before Layer 5. Option FilterOptions(world_up=None,
+              horizontal_angle_degrees=45.0); world_up is a direction in the
+              mesh's own space. With world_up None it emits nothing.
+              A patch is HORIZONTAL when acos(|n . up|) <= the angle (n: the
+              Layer 2 patch normal), else VERTICAL; no usable normal (face
+              area vectors that cancel: Layer 2 area_vector_length at most
+              1e-3 of the Layer 2 area) is VERTICAL with a diagnostic. The
+              stage reads Layers 1-4, no Layer 0 data.
+              A bevel strip by mark (DD-54 rule A) is HORIZONTAL when a rail
+              neighbour that is not a bevel by mark is HORIZONTAL; without
+              rail neighbours (no ladder reading) every adjacent patch that
+              is not a bevel by mark is read the same way; with none, its own
+              normal. A junction by mark takes the majority class of its
+              strips, a tie is HORIZONTAL. Structural candidates are ordinary
+              patches here.
+              SeamDirective: SPLIT on a seam between two different patches of
+              different classes; JOIN on a seam between two different patches
+              of one class when at least one is a bevel by mark.
+Layer 5       islands.py: a SPLIT seam is never stitched; a JOIN seam is
+              stitched without the angle gate. Tree order: rigid seams, the
+              other seams (more edges first), the JOIN seams (longer 3D
+              length first, PatchAdjacency.shared_length to 9 significant
+              digits, so the key does not depend on the mesh's scale), then
+              id.
+              uv_cut_chain_ids / SolveResult.uv_cut_source_edge_ids: every
+              seam the tree did not stitch, counted by edge sides, so a slit
+              seam inside one patch and a SEAM_SELF Chain are cuts.
+              A ladder patch with a JOIN lies in its quilt; its
+              STRAIGHT_LADDER constraint is not applied there.
+write         uv_transfer.write_quilt_uvs: refuses first when the target is
+              not visible, a solved face is hidden or another object is in
+              Edit Mode; pins, then the solved faces' seam flags set to the
+              UV cut set for the call, Blender's conformal unwrap (each quilt
+              one chart), charts with fewer than two pins rescaled to their
+              3D area; seams, the exact vertex, edge and face selection
+              flags, mode and object selection restored. write_pinned_uvs is
+              unchanged.
+Layer 0       the Face Strength mark is read from the edit BMesh face layer
+              in Edit Mode (the attribute data is empty there).
+Layer 2       GEOMETRY_FACE_NEAR_ZERO_AREA (DEGRADED): face area at most
+              1e-6 of its perimeter squared. New raw fact
+              PatchGeometryFacts.area_vector_length: the length of the sum
+              of the patch's triangle area vectors.
+guard         test_forbidden_imports.py keeps the vertical and the patch
+              classes out of every other package; the unused constant
+              WORLD_UP is removed from scaffold_core/constants.py.
+tools         debug panel: Split vertical from horizontal, Up axis, Angle
+              (on, +Z, 45) and the operator "Write UV and unwrap quilts";
+              write_debug_scene.py and write_scaffold_layer.py default to the
+              filter on (+Z); the smoke tool and parity.py default to off.
+              Tools turn a world axis into the object's own space.
+```
+
+Why 3D length orders the JOIN seams: most JOIN seams are one or two edges,
+so an edge count ties them and the id chose where a ring of joined patches
+opens. Measured: the user's mesh gave 85, 136 or 137 pins depending on its
+vertex numbering; with the 3D length 137 in every numbering.
+
+Results:
+
+- With the filter off every output is identical to the run without pass 3
+  (islands, decisions, pins, vertex UVs, diagnostics on 38 captures, with
+  strips on and off). Tier 3 default baseline identical.
+- rounded_wall_noise_top, filter +Z: 3 quilts whose patch sets equal the
+  reference layout's; 137 pins; after Blender's fill 0 overlaps and 0
+  flipped faces; mean corner angle error 4.74 degrees on main, 4.41 now.
+  The wall ring opens at f94|f211; the reference opens at f94|f110, the
+  same strip on its other rail. No structural fact was found that prefers
+  one of the two.
+- Bevel test cases, mean corner angle error main / now: f_rect_inarc
+  14.73 / 2.20; b_rect_s2 10.50 / 0.00; c_arch_s2 4.81 / 1.60 (strip widths
+  1.07, 1.06, 1.06 of true); e_arch_s2_n20 4.88 / 1.59 (widths 1.05, 1.11,
+  1.00; 10 pins); g_short 3.07 / 1.62; d_cyl_s2 8.70 / 9.19 (pins 64 to 16).
+- building_walls with the filter: quilts 106 -> 294; parity `ishape` 78% ->
+  87%.
+- Main_wall (filter off, written from Object Mode): the UV cut set went
+  from 12 to 312 edges with the slit-seam rule; after the quilt write flipped faces 152 -> 98, mean corner angle
+  error 6.62 -> 2.86 degrees.
+- GEOMETRY_FACE_NEAR_ZERO_AREA fires once over every capture: g_short face
+  f30, 0.53 long and 6e-8 wide, which the layout correctly lays as a line.
+- write_quilt_uvs headless on Blender 4.5 and 4.3.2: 13 objects, no crash,
+  0 seam flags changed; 0 vertex, edge or face selection flags changed in
+  vertex, edge and face select modes, with partial selections and with a
+  forced unwrap failure. One hidden solved face changed 444 of 968 loops of
+  the visible faces, hence the refusal.
+- The no-usable-normal ratio over 2720 patches of all captures: no patch
+  changes side of the threshold with the Layer 2 fact; the lowest ratios
+  are a closed tube at 0, artist_cross_band f1 at 1.79e-4, then d_cyl_s2
+  f0 at 0.065.
+- Scale: 38 captures scaled by 0.001 and by 1000 with +Z give the same
+  classes, directives, set of stitch decisions, islands and JOIN order.
+
+Stated limits:
+
+- A ladder strip inside a quilt is not laid by its ladder. Its runs go
+  through the quilt's line layout. On the user's mesh the bottom quilt's
+  strip f36 is sheared: its two rails are each laid at their own length
+  (6.86 and 6.97), so cross edges of length 0.074 are pinned 3% to 62% too
+  long. On the arch cases the strips have no pins and get their width
+  from Blender's fill. On d_cyl_s2 pins drop from 64 to 16. A trial that
+  added the ladder's equations to the quilt solve was measured and
+  rejected: one width and one length for a strip contradict the exact wall
+  lengths, and the wall quilt lost all its pins.
+- A quilt without a rigid frame lays only the right-corner component that
+  holds its longest line; the other components stay without axes. The top
+  quilt of the user's mesh has one line and no pins (a pin needs both
+  axes).
+- A ring of JOIN seams of equal 3D length still opens by id (g_short: ten
+  seams of equal length). On symmetric meshes (cube, ring) that is
+  harmless.
+- Found by the study, older than this slice: with the filter off the
+  island sets themselves depend on vertex numbering on some meshes
+  (b_rect_s2, b_ring_s1, f_rect_inarc, h_rect_s2_tri, m_rect_s2_trimain,
+  several walls objects), from the edge-count tie-break in the first two
+  groups and the order-dependent overlap gate. Using 3D length everywhere
+  would change the output without the filter and the Tier 3 baseline: a
+  separate slice.
+- Policies the user has not decided: a junction tie is HORIZONTAL; a patch
+  without a usable normal is VERTICAL; arch soffits are HORIZONTAL and
+  split from their walls; JOIN seams enter the tree after the other seams
+  (the order "between the rigid and the other seams" was measured: no
+  clear winner).
+- Charts are not placed or packed: quilts overlap each other in UV.
+- `world_up` is in the mesh's own space; a non-uniform object scale is not
+  handled by the tools.
+- write_quilt_uvs was not tested in the interactive UI, undo was not
+  verified, and the bmesh select history (the active element) was not
+  measured. It refuses a hidden target or hidden solved faces instead of
+  laying them.
+- Nothing decides the orientation of a quilt in UV: on the user's mesh
+  the wall quilt lies upside down against the reference (straight edge
+  up, noisy edge down). A natural home is the user-filter stage, which
+  owns the vertical.
+- Older than this slice: Layer 2's absolute `EPSILON = 1e-9`
+  (`layer_2_geometry/measures.py`) makes some lower-layer facts depend on
+  the mesh's scale (at 0.001 the sliver face of g_short gets zero area and
+  a zero normal), which changes the order of seams outside the JOIN group
+  and the pins at that scale.
+
+Study beside the slice: the user's "straighten shell" prototype (outside
+the repo), a UV relaxer in pure numpy: per polygon, rigid shape matching
+towards the flat 3D shape, plus straight-line constraints on tagged
+chains. Measured on the user's mesh with Scaffold's pins and lines as its
+inputs. As a fill it beats Blender's conformal unwrap on a chart without
+pins (edge length error 6.5% -> 2.9%, area error 11.3% -> 3.8%) and
+slightly on pinned charts. Its line constraints add nothing today: every
+vertex of every skeleton line is already pinned (0 unpinned on the
+user's mesh's pinned quilts and on the 297 quilts of `walls`).
+Straightening the remaining sides has no axis from structure (0 of 31
+pieces), and without an axis it breaks the layout (edge error 40%, 13
+flipped faces on the top quilt). A start without Blender's unwrap works on
+two of three quilts. Conclusion: a candidate to replace Blender's fill;
+automatic straightening needs a Layer 4 kind ("band") that declares the
+axis. `scaffold_core` has no numpy today; adopting it is a separate
+decision.
+
+Reviewer gate (independent agent) on 4e0c667: PASS WITH FIXES. Fixes
+applied: the writer no longer touches other objects; slit seams are
+cuts; a strip without rails is classed by its adjacent patches; the
+vertical is a direction in the mesh's own space; the degenerate normal
+test is relative; the guard test; six test gaps; the smoke checks. 15 mutants of the fixes,
+all caught.
+
+Second independent review, of 0b4006f and eb3d99c: PASS WITH FIXES. It
+confirmed by measurement the cut set against the user's rule on 38
+captures, the classes and directives against an independent
+implementation and under 8 id permutations, the rescale (186 pinned charts
+bit-identical; rescaled charts end at scale 1.0 and no pinned loop moves)
+and filter-off equality with main. Fixes applied: the exact selection
+restore, the refusals (hidden target, hidden solved face, another object
+in Edit Mode), the JOIN key to significant digits, a test for the bevel
+exclusion among rail neighbours (a strip whose rail neighbours are all
+bevels falls back to its adjacent patches), the Layer 2 fact
+area_vector_length in place of a Layer 0 read.
+
+Checks: 963 passed, 4 skipped, 1 xfailed (full suite from the repo root).
+Tier 3 default baseline identical (13 objects). `--unwrap-quilts` smoke run
+0 errors on Blender 4.5 and 4.3.2; it also fails when a vertex, edge or
+face selection flag of the target mesh changes.
+
+Next (proposed, not started): a ladder strip inside a quilt. The rail it
+shares with a neighbour takes the neighbour's stations; the free rail
+copies them through the ladder's profile lines; the width comes from the
+ladder; the strip has no length equations of its own. Also open: the
+orientation of a quilt in UV (which way is up), naturally in the
+user-filter stage.
+
 ## Decisions the user must approve before the relevant slice
 
 ```text
@@ -2784,4 +2988,12 @@ Layer 5 speed, an order of failure in the axis solve. Deferred: the
    amendment in AGENTS.md. The user's view of that filter: a post-filter of
    user options (what is up, which way a trim runs, which patches stitch
    into one quilt), never an input of Layers 1-3.
+15. Quilts (user direction, 2026-11-13): by default everything connected is
+   one quilt, decided from structure; only a user filter splits; the
+   user's seams stay as markup. DONE as Slice AH with the first filter
+   (vertical apart from horizontal, a bevel with its surfaces), G0 v1.16
+   DD-55, amendment authorised by the user. Open for the user: the four
+   policies listed in Slice AH (junction tie, no usable normal, arch
+   soffits, JOIN group order) and the next slice (a ladder strip inside a
+   quilt).
 ```

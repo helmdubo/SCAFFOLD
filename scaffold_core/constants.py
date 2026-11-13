@@ -7,5 +7,4 @@ Rules:
 - Does not import layer packages.
 """
 
-WORLD_UP = (0.0, 0.0, 1.0)
 DEFAULT_FLOAT_EPSILON = 1.0e-6

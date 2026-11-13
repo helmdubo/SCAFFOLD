@@ -27,6 +27,9 @@ G5a - Skeleton Runtime (docs/phases/G5a_skeleton_runtime.md)
 G4a - Layer 4 v0, the strip feature (docs/phases/G4a_strip_feature.md),
 opened by the user in autonomous mode (plan decision 14), plus the bevel
 kinds BEVEL_STRIP / BEVEL_JUNCTION approved by the user (G0 DD-54).
+The user-filter stage scaffold_core/user_filters/ (pass 3, G0 DD-55, plan
+Slice AH), opened by the user's direction that quilts are joined by
+structure and split only by user filters.
 G3 relation contracts remain frozen per G0; relation changes still
 follow G3 rules below.
 ```
@@ -41,6 +44,7 @@ scaffold_core/layer_2_geometry/
 scaffold_core/layer_3_relations/
 scaffold_core/layer_4_features/
 scaffold_core/layer_5_runtime/
+scaffold_core/user_filters/
 scaffold_core/pipeline/
 scaffold_core/tests/
 ```
@@ -56,7 +60,8 @@ Layer 4 holds the strip feature (G0 DD-50) and the bevel kinds BEVEL_STRIP /
 BEVEL_JUNCTION (G0 DD-54; a strip confirmed by the mark emits a
 STRAIGHT_LADDER constraint); a further feature kind needs
 the user's approval. Layer 5 may consume Layers 0-4 read-only and reads Layer 4
-only through FeatureConstraint. bpy is allowed ONLY in
+only through FeatureConstraint. The user-filter stage (G0 DD-55) runs between
+Layer 4 and Layer 5; Layer 5 reads it only through SeamDirective. bpy is allowed ONLY in
 scaffold_core/layer_5_runtime/uv_transfer.py (the G5 write boundary).
 
 Do not create future-phase directories.
@@ -97,6 +102,7 @@ Before coding, read only the routed docs needed for the task.
 | Chain shape / line or curve per patch side | `docs/architecture/chain_shape_contract_draft.md` + `G0.md` DD-48 |
 | G5a skeleton runtime / UV write | `docs/phases/G5a_skeleton_runtime.md` + `docs/agent_rules/blender_boundaries.md` |
 | Layer 4 strip feature / FeatureConstraint | `docs/phases/G4a_strip_feature.md` + `G0.md` DD-50 |
+| User filters / world vertical option / quilts / UV cut set | `docs/phases/G5a_skeleton_runtime.md` + `G0.md` DD-55 |
 | CFTUV reference scene / parity scoreboard | `dev/tools/cftuv_parity/README.md` |
 | Patch segmentation / shell detection | `docs/architecture/segmentation_shell_policy.md` |
 | Source mesh snapshot | `docs/layers/layer_0_source.md` |
@@ -144,6 +150,7 @@ vertex position
 degenerate geometry diagnostics
 chain plane, deviation from it and from the chord
 per-side side faces and tilt of a chain plane against its own patch
+patch area vector length (length of the sum of its triangle area vectors)
 ```
 
 Forbidden in Layer 2:
@@ -208,7 +215,8 @@ RunBridgedCornerRelation v0 (G0 DD-52; plan Slice AD) evidence: a right corner t
 PatchQuadLadderRelation v0 (G0 DD-53; plan Slice AE-1) evidence: the zero, one or two quad-ladder readings of an all-quad patch (columns, rails, ends, profile lines), pure topology; read by the Layer 4 bevel rule
 Direction conventions and the corner turn law (G0 DD-51; plan Slice AA): a use walks its loop as its faces wind, an evidence follows its use, a reflex face corner is measured as reflex
 Layer 4 v0 (G0 DD-50; plan Slice Y): strip feature candidates, instances and the STRAIGHT_STRIP constraint behind the user option straighten_strips (off by default)
-Layer 4 bevel kinds (G0 DD-54; plan Slices AE-2, AF): BEVEL_STRIP / BEVEL_JUNCTION records by the Layer 0 Blender Face Strength mark, or without it by a structural rule (candidates); a strip by mark emits a STRAIGHT_LADDER constraint behind straighten_bevel_strips (on by default) and Layer 5 lays it from the constraint (frame LADDER); the STRIP rule accepts only long sides that are not straight on the surface
+Layer 4 bevel kinds (G0 DD-54; plan Slices AE-2, AF): BEVEL_STRIP / BEVEL_JUNCTION records by the Layer 0 Blender Face Strength mark, or without it by a structural rule (candidates); a strip by mark emits a STRAIGHT_LADDER constraint behind straighten_bevel_strips (on by default) and Layer 5 lays it from the constraint (frame LADDER) when it is an island by itself; the STRIP rule accepts only long sides that are not straight on the surface
+User-filter stage (G0 DD-55; plan Slice AH): scaffold_core/user_filters/, pass 3 between Layer 4 and Layer 5; with the user option world_up (a direction in the mesh's own space; None by default, and then the stage emits nothing) each patch is HORIZONTAL or VERTICAL, and a seam gets a SeamDirective: SPLIT between the two classes, JOIN between a bevel by mark and a patch of its class. Layer 5 islands are quilts; island assembly reads only the SeamDirectives, and the solve states the UV cut set; uv_transfer.write_quilt_uvs lays each quilt as one chart by Blender's conformal unwrap and restores the user's seams. The vertical is not WorldOrientation and feeds nothing into Layers 1-4
 ```
 
 SHARED_CHAIN family transport crosses only straight single-run hinges
@@ -338,6 +346,10 @@ Layer 0 → Layer 1 → Layer 2 → Layer 3 → Layer 4 → Layer 5
 ```
 
 Lower layers must not import higher layers.
+
+The user-filter stage `scaffold_core/user_filters/` sits between Layer 4 and
+Layer 5. It imports `core`, `ids`, Layer 2 measures and the Layer 4 model,
+never Layer 5. Layer 5 and `pipeline/` may import it; Layers 0-4 must not.
 
 `pipeline/` may import layers.
 

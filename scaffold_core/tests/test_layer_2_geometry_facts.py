@@ -8,7 +8,7 @@ Rules:
 
 from __future__ import annotations
 
-from math import isclose, pi
+from math import cos, isclose, pi, sin
 
 from scaffold_core.core.diagnostics import DiagnosticSeverity
 from scaffold_core.ids import (
@@ -61,6 +61,7 @@ from scaffold_core.tests.fixtures.cylinder_tube import (
 from scaffold_core.tests.fixtures.degenerate_geometry import make_degenerate_triangle_source
 from scaffold_core.tests.fixtures.l_corridor_tunnel import make_l_corridor_tunnel_seamed_folds_source
 from scaffold_core.tests.fixtures.l_shape import make_two_quad_l_source
+from scaffold_core.tests.fixtures.quad_ladders import _mesh
 from scaffold_core.tests.fixtures.run_corner_sheets import make_bow_tie_quad_source, make_flat_l_hexagon_source
 from scaffold_core.tests.fixtures.single_patch import make_single_quad_source
 from scaffold_core.tests.test_layer_5_runtime import DATA, _load_capture
@@ -104,6 +105,28 @@ def test_two_quad_patch_geometry_aggregates_source_faces() -> None:
     assert patch.area == 2.0
     assert patch.normal == (0.0, 0.0, 1.0)
     assert patch.centroid == (1.0, 0.5, 0.0)
+    assert patch.area_vector_length == 2.0  # planar: the length of the summed area vectors is the area
+
+
+def test_patch_area_vector_length_is_the_length_of_the_summed_area_vectors() -> None:
+    tube = make_cylinder_tube_without_caps_with_one_seam_source()
+    (closed,) = build_geometry_facts(tube, build_topology_snapshot(tube)).patch_facts.values()
+    segments = 16
+    positions = {}
+    for i in range(segments + 1):
+        angle = pi * i / segments
+        for j, y in enumerate((0.0, 2.0)):
+            positions[f"v{i}_{j}"] = (cos(angle), y, sin(angle))
+    faces = [(f"v{i}_0", f"v{i}_1", f"v{i + 1}_1", f"v{i + 1}_0") for i in range(segments)]
+    half = _mesh("half_cylinder", positions, faces)
+    (half_facts,) = build_geometry_facts(half, build_topology_snapshot(half)).patch_facts.values()
+
+    assert closed.area > 1.0 and closed.area_vector_length < 1e-12  # a closed tube: the area vectors cancel
+    # A half cylinder (polygon of 16 sides): the chord 2 over the arc length, 2/pi in the limit.
+    assert isclose(
+        half_facts.area_vector_length / half_facts.area, 2.0 / (segments * 2.0 * sin(pi / (2 * segments))), rel_tol=1e-9
+    )
+    assert isclose(half_facts.area_vector_length / half_facts.area, 2.0 / pi, rel_tol=0.01)
 
 
 def test_local_face_fan_geometry_splits_materialized_seam_occurrences() -> None:

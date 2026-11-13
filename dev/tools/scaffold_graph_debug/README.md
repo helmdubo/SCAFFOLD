@@ -46,18 +46,54 @@ Straighten Strips   Pass 2 option; applies on the next Rebuild (and on Write UV)
 Straighten Bevel Strips
                     Pass 2 option, on by default: every bevel strip marked by Face
                     Strength is laid from its ladder as a straight island of its own
-                    (STRAIGHT_LADDER); applies on the next Rebuild (and on Write UV).
+                    (STRAIGHT_LADDER) unless the user filter below joins one of its
+                    seams; then it lies in its quilt and the ladder is not applied
+                    (a known defect: it can come out sheared). Applies on the next
+                    Rebuild (and on Write UV).
                     Limit: a triangulated bevel strip has no ladder reading, and
                     with straight long sides Straighten Strips does not take it
                     either, so it gets no layout and stays stitched into the main
                     island, which then has no rigid frame (h_rect_s2_tri with
                     Straighten Strips: 36 pins against 72 before Slice AF, the
                     same as with Straighten Strips off)
+Split vertical from horizontal
+                    Pass 3 user filter, ON by default in this panel (the pipeline
+                    default is off): with the Up axis (default +Z) and the Angle
+                    (default 45), a patch whose normal lies within the angle of
+                    up or down is horizontal, the rest vertical. A seam between
+                    a horizontal and a vertical patch is split; a bevel strip
+                    marked by Face Strength takes the class of its horizontal
+                    neighbour (else vertical), a bevel junction the majority of
+                    its strips (a tie is horizontal), and a bevel lies with its
+                    surfaces (its seams to patches of its class are joined
+                    without the angle gate). The Up axis is a world axis; the
+                    panel turns it into the object's own space by the object's
+                    rotation and scale (a non-uniform scale is not handled).
+                    Applies on the next Rebuild and on both Write UV buttons.
+                    Turn it off to see the structure alone
 Structure / Skeleton / Patches: sides and types / Layer 3 (detail) / Ladders / Bevels
                     collapsible groups, one eye toggle per layer, legend underneath
-Write UV (G5a)      unchanged
+Write UV (G5a)      writes the pins only (U > Unwrap fills the rest)
+Write UV and unwrap quilts
+                    writes the pins and lays every quilt as one chart by
+                    Blender's conformal unwrap (uv_transfer.write_quilt_uvs): for
+                    the unwrap only, the seams the quilt stitched are not cuts;
+                    a chart with fewer than two pins is rescaled to its 3D area;
+                    the mesh's seam flags and selection are restored afterwards.
+                    Only the target object is unwrapped: from Object Mode the
+                    other objects are deselected for the call and selected again
+                    afterwards; it refuses when the object is hidden, a solved
+                    face is hidden, or another object is in Edit Mode
 SCAFFOLD JSON       unchanged
 ```
+
+A quilt is an island of the solve: the patches that lie together in UV. The
+Quilts layers fill each quilt; the text report starts with the user filter
+(up axis, angle, horizontal and vertical patch counts, split and join
+directives by rule), then the quilt count, the largest quilt and the UV cut
+chains. The Seams layer draws a seam the filter split as cut and a seam it
+joined as stitched; the report lists the decisions by reason ("split by a
+user filter: ...", "joined by a user filter: ...").
 
 The eye toggles only show or hide Grease Pencil layers, so they act at once
 and never rebuild. If the analysed mesh is deleted or renamed, Analyze still
@@ -115,7 +151,7 @@ Group Skeleton:
 
 | Toggle | GP layer | Draws |
 | --- | --- | --- |
-| Islands: rigid frame / frame-free / strip / bevel strip | `Scaffold_Islands_UNFOLDED`, `_FRAME_FREE`, `_STRIP`, `_LADDER` | fill of every patch of an island, one colour per island, layer by the island's frame kind (bevel strip: a marked bevel strip laid from its ladder, frame LADDER) |
+| Quilts: rigid frame / frame-free / strip / bevel strip | `Scaffold_Islands_UNFOLDED`, `_FRAME_FREE`, `_STRIP`, `_LADDER` | fill of every patch of an island, one colour per island, layer by the island's frame kind (bevel strip: a marked bevel strip laid from its ladder, frame LADDER) |
 | Lines | `Scaffold_Skeleton_Lines` | each island line (`line_by_run`): all its runs in one colour |
 | Nodes | `Scaffold_Skeleton_Nodes` | white 3D cross at every skeleton node |
 | Pins | `Scaffold_Pins` | small orange 3D cross at every pinned vertex occurrence of the solve |
@@ -227,21 +263,26 @@ layer and the report, and saves a copy (the opened file is never written).
 `--render` writes Workbench PNGs of layer sets per object: by default
 patches_chains, islands_lines_seams and types; `--sets` picks others
 (bevels_ladders = Bevels fills with Ladder rails, ends and columns;
-face_mark = Source face mark).
+face_mark = Source face mark). Like the panel it runs the user filter with
++Z up by default; `--world-up X,Y,Z` picks another axis, `--no-filter` turns
+it off and `--angle` sets the angle.
 
 ## Write UV (G5a)
 
 `Write UV (G5a)` runs the Layer 5 v0 runtime:
 
 ```text
-Pass 0 / Pass 1 / Pass 2 (Straighten Strips toggle) -> build_islands -> build_island_skeletons -> run_skeleton_solve
--> uv_transfer.write_pinned_uvs
+Pass 0 / Pass 1 / Pass 2 (Straighten Strips toggle) / Pass 3 (filter options) -> build_islands
+-> build_island_skeletons -> run_skeleton_solve -> uv_transfer.write_pinned_uvs
 ```
 
 The button writes UV coordinates and pin flags for the skeleton only. It does
-not call `bpy.ops.uv.unwrap`. In Edit Mode, selected faces define the run. In
+not call `bpy.ops.uv.unwrap`. `Write UV and unwrap quilts` runs the same solve
+and then `uv_transfer.write_quilt_uvs`, which also runs the conformal unwrap
+with each quilt as one chart. In Edit Mode, selected faces define the run. In
 Object Mode, selecting one mesh object means all faces of that object are
-used. Then run Blender's manual command:
+used. After `Write UV (G5a)` only, run Blender's manual command (it uses the
+mesh's own seams, so a seam the quilt stitched stays a cut there):
 
 ```text
 UV Editor -> U -> Unwrap

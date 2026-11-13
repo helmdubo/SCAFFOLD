@@ -66,6 +66,10 @@ def main() -> int:
         command += ["--capture-dir", args.capture_dir]
     if args.straighten_strips:
         command.append("--straighten-strips")
+    if args.world_up:
+        command += ["--world-up", args.world_up]
+    if args.unwrap_quilts:
+        command.append("--unwrap-quilts")
 
     completed = subprocess.run(command, capture_output=True, text=True, timeout=args.timeout)
     records = [
@@ -101,6 +105,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--capture-dir", default="", help="dump SourceMeshSnapshot JSON per object")
     parser.add_argument(
         "--straighten-strips", action="store_true", help="run Pass 2 with straighten_strips (adds strip_islands)"
+    )
+    parser.add_argument(
+        "--world-up", default="", help="run the Pass 3 user filter with this up axis, e.g. 0,0,1 (default: no filter)"
+    )
+    parser.add_argument(
+        "--unwrap-quilts", action="store_true", help="with --write-uv: lay the quilts through write_quilt_uvs"
     )
     parser.add_argument("--baseline", default="", help="compare stable fields with this JSON baseline")
     parser.add_argument("--update-baseline", action="store_true", help="rewrite --baseline from this run")

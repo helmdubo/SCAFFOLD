@@ -11,6 +11,9 @@ Rules:
   patch side; a run-end pin is never overridden.
 - A ladder island (a STRAIGHT_LADDER constraint) pins every boundary vertex
   occurrence at the place its constraint gives it; it has no stations.
+- The result names the UV cut set (plan Slice AH): the stitched seams and
+  the Chains and source edges that stay cuts, so a writer can lay each
+  quilt as one chart without changing the user's seams.
 - Invariants are validation outputs, never silently relaxed (G5a).
 """
 
@@ -19,7 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-from scaffold_core.layer_5_runtime.islands import IslandAssembly, build_islands
+from scaffold_core.layer_5_runtime.islands import IslandAssembly, build_islands, uv_cut_chain_ids
 from scaffold_core.layer_5_runtime.skeleton import IslandSkeleton, build_island_skeletons
 
 ISLAND_MARGIN = 0.25  # LEVEL_B_PLACEHOLDER: naive island offsets; packing is Layer 4/5 policy.
@@ -49,6 +52,12 @@ class SolveResult:
     node_frame_mismatches: tuple[str, ...] = ()
     vertex_by_face_corner: Mapping[tuple[str, str], str] = field(default_factory=dict)
     rail_frame_conflicts: tuple[str, ...] = ()
+    # The UV cut set as data (plan Slice AH): the stitched (tree) seams lie
+    # inside one quilt and are not cuts; every other Chain shared by two
+    # patch uses is a cut, and so are the source edges listed here.
+    stitched_chain_ids: frozenset[str] = frozenset()
+    uv_cut_chain_ids: tuple[str, ...] = ()
+    uv_cut_source_edge_ids: frozenset[str] = frozenset()
 
 
 def run_skeleton_solve(context: Any) -> SolveResult:
@@ -80,6 +89,7 @@ def run_skeleton_solve(context: Any) -> SolveResult:
         violations.extend(island_violations)
         offset_u += width + ISLAND_MARGIN
     seam_mismatches = _seam_length_mismatches(context, assembly, evidence_by_id)
+    cut_chain_ids = uv_cut_chain_ids(context.topology_snapshot, assembly)
     patch_by_source_face = {
         str(face_id): str(patch_id)
         for patch_id, patch in context.topology_snapshot.patches.items()
@@ -104,6 +114,13 @@ def run_skeleton_solve(context: Any) -> SolveResult:
             f"{skeleton.island_id}:{conflict}"
             for skeleton in skeletons
             for conflict in skeleton.rail_frame_conflicts
+        ),
+        stitched_chain_ids=frozenset(decision.chain_id for decision in assembly.decisions if decision.accepted),
+        uv_cut_chain_ids=cut_chain_ids,
+        uv_cut_source_edge_ids=frozenset(
+            str(edge_id)
+            for chain_id in cut_chain_ids
+            for edge_id in context.topology_snapshot.chains[chain_id].source_edge_ids
         ),
     )
 

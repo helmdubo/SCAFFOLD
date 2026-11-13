@@ -30,7 +30,13 @@ import bpy  # noqa: E402 - executed by Blender only
 from scaffold_core.layer_0_source.blender_io import read_source_mesh_from_blender  # noqa: E402
 from scaffold_core.layer_4_features.model import FeatureOptions  # noqa: E402
 from scaffold_core.layer_5_runtime.pins import run_skeleton_solve  # noqa: E402
-from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations, run_pass_2_features  # noqa: E402
+from scaffold_core.pipeline.passes import (  # noqa: E402
+    run_pass_0,
+    run_pass_1_relations,
+    run_pass_2_features,
+    run_pass_3_filters,
+)
+from scaffold_core.user_filters.model import FilterOptions  # noqa: E402
 
 
 RESIDUAL_OK_LIMIT = 1.0e-4
@@ -66,6 +72,14 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--write-uv", action="store_true", help="exercise the UV write boundary")
     parser.add_argument("--capture-dir", default="", help="dump SourceMeshSnapshot JSON per object")
     parser.add_argument("--straighten-strips", action="store_true", help="run Pass 2 with straighten_strips")
+    parser.add_argument(
+        "--world-up", default="",
+        help="run Pass 2 and the Pass 3 user filter with this up axis in world space, turned into each "
+        "object's space by its matrix_world (a non-uniform object scale is not handled)",
+    )
+    parser.add_argument(
+        "--unwrap-quilts", action="store_true", help="with --write-uv: lay the quilts (write_quilt_uvs)"
+    )
     parser.add_argument("--out", required=True)
     return parser.parse_args(argv)
 
@@ -90,8 +104,23 @@ def _run_object(obj, args: argparse.Namespace) -> dict:
         context = run_pass_1_relations(run_pass_0(source))
         if args.straighten_strips:
             context = run_pass_2_features(context, FeatureOptions(straighten_strips=True))
+        world_up = tuple(float(value) for value in args.world_up.split(",")) if args.world_up else None
+        if world_up is not None:
+            # FilterOptions.world_up is a direction in the mesh's own space
+            from mathutils import Vector
+
+            world_up = tuple(float(value) for value in obj.matrix_world.to_3x3().inverted_safe() @ Vector(world_up))
+            if context.feature_snapshot is None:
+                context = run_pass_2_features(context)
+            context = run_pass_3_filters(context, FilterOptions(world_up=world_up))
         record.update(_pipeline_metrics(source, context))
         solve = run_skeleton_solve(context)
+        if world_up is not None:
+            # the user filter (absent without --world-up): its directives and the quilts they make
+            for kind in ("SPLIT", "JOIN"):
+                record[f"filter_{kind.lower()}"] = sum(
+                    1 for directive in context.filter_snapshot.directives if directive.kind.value == kind
+                )
         record.update(_solve_metrics(solve))
         record.update(_corner_turn_metrics(context, solve))
         if args.straighten_strips:
@@ -103,7 +132,7 @@ def _run_object(obj, args: argparse.Namespace) -> dict:
                 1 for constraint in context.feature_snapshot.constraints if constraint.kind.value == "STRAIGHT_LADDER"
             )
         if args.write_uv:
-            record.update(_write_uv_metrics(obj, solve, source, args.selection))
+            record.update(_write_uv_metrics(obj, solve, source, args.selection, args.unwrap_quilts))
     except Exception as error:  # report, never abort the batch
         if obj.mode != "OBJECT":
             bpy.ops.object.mode_set(mode="OBJECT")
@@ -207,10 +236,20 @@ def _corner_turn_metrics(context, solve) -> dict:
     return {"corners_against_law": checked - with_law, "mirrored_islands": mirrored}
 
 
-def _write_uv_metrics(obj, solve, source, selection: str) -> dict:
-    """Write pins through the G5 boundary and prove no loop outside the selection changed."""
+def _write_uv_metrics(obj, solve, source, selection: str, unwrap_quilts: bool = False) -> dict:
+    """Write pins through the G5 boundary and prove no loop outside the selection changed.
 
-    from scaffold_core.layer_5_runtime.uv_transfer import write_pinned_uvs
+    With unwrap_quilts the quilts are laid (write_quilt_uvs), and the record
+    also says how many seam flags differ after the write. A second visible
+    mesh object is selected too (in Object Mode beside the target) and its UV
+    loops are compared. The run fails (an error record) when a seam flag
+    differs, a loop of an unsolved face or of the other object changes, a
+    vertex, edge or face selection flag of the target's mesh changes (read
+    in the mode the writer was called in), or the object selection or the
+    active object is not restored.
+    """
+
+    from scaffold_core.layer_5_runtime.uv_transfer import write_pinned_uvs, write_quilt_uvs
 
     solved_faces = {int(str(face_id)[1:]) for face_id in source.selected_face_ids}
     foreign_before = _foreign_loop_state(obj, solved_faces)
@@ -218,21 +257,78 @@ def _write_uv_metrics(obj, solve, source, selection: str) -> dict:
     if edit:
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode="EDIT")
+    seams_before = [edge.use_seam for edge in obj.data.edges]
+    other = _other_mesh_object(obj) if unwrap_quilts else None
+    if other is not None:
+        other.select_set(True)
+    other_before = _foreign_loop_state(other, set()) if other is not None else []
+    selected_before = {item.name for item in bpy.context.view_layer.objects if item.select_get()}
+    active_before = bpy.context.view_layer.objects.active
+    flags_before = _selection_flags(obj) if unwrap_quilts else None
     try:
-        summary = write_pinned_uvs(SimpleNamespace(object=obj), solve)
+        writer = write_quilt_uvs if unwrap_quilts else write_pinned_uvs
+        summary = writer(SimpleNamespace(object=obj), solve)
+        flags_after = _selection_flags(obj) if unwrap_quilts else None
     finally:
         if edit:
             bpy.ops.object.mode_set(mode="OBJECT")
     foreign_after = _foreign_loop_state(obj, solved_faces)
     uv_layer = obj.data.uv_layers.active
     pinned_loops = sum(1 for loop_uv in uv_layer.data if loop_uv.pin_uv) if uv_layer else 0
+    extra = {}
+    if unwrap_quilts:
+        extra["seam_flags_changed"] = sum(
+            1 for edge, before in zip(obj.data.edges, seams_before) if edge.use_seam != before
+        )
+        other_after = _foreign_loop_state(other, set()) if other is not None else []
+        other_changed = sum(1 for before, after in zip(other_before, other_after) if before != after)
+        foreign_changed = sum(1 for before, after in zip(foreign_before, foreign_after) if before != after)
+        selection_kept = selected_before == {item.name for item in bpy.context.view_layer.objects if item.select_get()}
+        active_kept = bpy.context.view_layer.objects.active == active_before
+        flags_changed = sum(
+            1 for before, after in zip(flags_before, flags_after) for a, b in zip(before, after) if a != b
+        )
+        if other is not None:
+            other.select_set(False)
+        if (
+            extra["seam_flags_changed"] or other_changed or foreign_changed or flags_changed
+            or not selection_kept or not active_kept
+        ):
+            raise RuntimeError(
+                f"write_quilt_uvs changed state: seam flags {extra['seam_flags_changed']}, unsolved loops "
+                f"{foreign_changed}, other object loops {other_changed}, mesh selection flags {flags_changed}, "
+                f"selection kept {selection_kept}, active kept {active_kept}"
+            )
     return {
+        **extra,
         "written_loops": summary["written_loops"],
         "pinned_loops": pinned_loops,
         "foreign_loops_changed": sum(
             1 for before, after in zip(foreign_before, foreign_after) if before != after
         ),
     }
+
+
+def _selection_flags(obj) -> tuple:
+    """The vertex, edge and face select flags of obj's mesh, from the edit mesh in Edit Mode."""
+
+    if obj.mode == "EDIT":
+        import bmesh
+
+        bm = bmesh.from_edit_mesh(obj.data)
+        return tuple([item.select for item in items] for items in (bm.verts, bm.edges, bm.faces))
+    mesh = obj.data
+    return tuple([item.select for item in items] for items in (mesh.vertices, mesh.edges, mesh.polygons))
+
+
+def _other_mesh_object(obj):
+    """A visible mesh object other than obj, with its own mesh and an active UV layer, or None."""
+
+    for other in sorted(bpy.context.view_layer.objects, key=lambda item: item.name):
+        if other != obj and other.type == "MESH" and other.visible_get() and other.data != obj.data:
+            if other.data.uv_layers.active is not None and len(other.data.polygons):
+                return other
+    return None
 
 
 def _foreign_loop_state(obj, solved_faces: set[int]) -> list:
