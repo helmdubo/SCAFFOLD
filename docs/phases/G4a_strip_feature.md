@@ -48,8 +48,10 @@ Instance (plan Slice AF):
   already a rectangle, then long sides straight on the surface; a
   candidate that passes both and only waits for the option is suppressed
   as option off (plan Slice AC). An instance that would be accepted on a
-  patch laid from its bevel ladder is suppressed as laid from its bevel
-  ladder. Suppressed instances stay inspectable.
+  patch with a STRAIGHT_LADDER constraint is suppressed as laid from its
+  bevel ladder. A strip by mark without that constraint (both rails
+  straight on its surface, plan Slice AI) is graded like any other patch.
+  Suppressed instances stay inspectable.
 
 Constraint STRAIGHT_STRIP (self-contained, DD-26):
   patch id, the four PatchChain ids in loop order, and the target length of
@@ -123,14 +125,31 @@ the records. A strip confirmed by the mark, with an open chosen reading
 and no shared use, emits a STRAIGHT_LADDER constraint (plan Slice AF,
 option straighten_bevel_strips, on by default): u per profile line (the
 mean of the rails' arc lengths), the two rail vertices of each line, the
-width (mean profile length). Layer 5 pins every boundary vertex of the
+width (mean profile length). Exception (plan Slice AI): a strip whose two
+rails are each one use whose PatchChainShapeRelation on the strip's own
+side is exactly one SURFACE_LINE already unfolds with straight rails
+(a planar mitred strip, a piece of a cylinder). It emits no constraint;
+FEATURE_BEVEL_STRIP_NOT_LAID at INFO gives the reason "both rails are
+straight on its surface: it unfolds straight as it is" (the other reasons
+stay WARNING). The gate does not establish that the strip develops: a
+conical bevel also develops, as a curved band, and it is straightened.
+The test is the rail shape, not planarity. A strip with one
+straight rail and one that is not still emits. Without the constraint the
+strip is an ordinary patch for Layer 5.
+Layer 5 pins every boundary vertex of the
 patch where the constraint says (frame LADDER) when the patch is an island
 by itself, which it is when no seam of it is joined by the user filter.
 When the filter joins one of its seams (plan Slice AH, G0 DD-55) the patch
-lies in its quilt, the constraint is not applied there, and no diagnostic
-says so (the expected case). The quilt's own layout then lays its runs, and
-a strip whose two rails get their own lengths comes out sheared: a known
-defect, see the plan's Slice AH entry.
+lies in its quilt and the quilt lays its runs. A quilt without a rigid
+frame then keeps the strip's two rails together (plan Slice AI,
+layer_5_runtime/quilt_ladders.py, G0 DD-54): when exactly one rail is
+stitched and the quilt lays that rail on an axis, the free rail gives no
+length equations and each of its vertices takes the along-rail coordinate
+of its profile-line partner on the stitched rail. The ladder gives the
+quilt no axis. A quilt with a rigid frame reads nothing (its patches in
+the frame are planar and unfold exactly); a strip outside the frame is
+not laid and says so. A strip that meets the conditions in a quilt that
+pins none of its vertices is not counted as kept together and says so.
 
 Rule A, by the Layer 0 Face Strength mark (authoritative where any face of
 the patch is marked): all MEDIUM -> strip, all WEAK -> junction; MEDIUM and
@@ -171,6 +190,31 @@ with a shared use get no constraint. A fully triangulated bevel gets no
 layout at all: its strips are no longer STRIP either, stay stitched into
 the main island and leave it without a rigid frame (h_rect_s2_tri with
 strips on: 72 pins on Slice AE, 36 now, equal to strips off).
+
+Known limits of the quilt reading (plan Slice AI): a strip is read only
+when its quilt already lays its stitched rail on an axis; otherwise, and
+when both or no rails are stitched, the quilt's own layout lays its runs.
+A free-rail edge copies its partner edge on the stitched rail, so it is
+as short as that partner. A strip that unfolds straight and no longer
+gets a ladder can lie unpinned in a larger island (d_cyl_s2 strip f154:
+width ratio 3.33 after Blender's fill). With straighten_strips on, such a
+strip could get a STRAIGHT_STRIP if its longer pair were its curved ends;
+no capture has one.
+The gate reads Layer 3's SURFACE_LINE, decided per vertex (a turn under
+0.1 rad at each vertex), so a finely tessellated curved rail can read as
+one surface line and its strip is left unstraightened. On the present
+captures every strip let through turns at most 0.1 degree in total and
+every strip kept turns 18 to 167 degrees.
+After Blender's fill the user's bottom quilt (+Z) has 10 overlapping
+triangle pairs and 2 self-intersecting faces (f36 face 98, f111 face 123),
+none before the slice: the stitched rail of f36 turns a corner around
+f111 over a 1.4 mm OBLIQUE bridge run, and its unpinned vertex there
+lands on the wrong side of its neighbour. Laying that corner is left to
+the band slice.
+Without the filter a strip without a ladder joins by structure, as before
+Slice AF; such a quilt has no rigid frame and its frame-free layout is not
+checked for overlap, so overlaps after the fill rise on several bevel
+cases (the plan's Slice AI entry has the numbers).
 
 User filters: the first one is built (plan Slice AH, G0 DD-55, pass 3,
 `scaffold_core/user_filters/`). With the user's world vertical a bevel

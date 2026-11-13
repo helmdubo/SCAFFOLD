@@ -72,7 +72,8 @@ islands.py   - island assembly: spanning tree of stitch decisions.
   kept. Tree order: rigid seams, then the other seams (more edges first),
   then the JOIN seams (longer 3D length, PatchAdjacency.shared_length to
   9 significant digits, first), then by id. A STRAIGHT_LADDER patch with a JOIN seam lies in its
-  quilt and is not laid by its ladder.
+  quilt and is not laid by its ladder as an island of its own; a quilt
+  without a rigid frame may keep its two rails together (quilt_ladders.py).
   UV cut set (islands.uv_cut_chain_ids; SolveResult.uv_cut_chain_ids and
   uv_cut_source_edge_ids): every Chain with a source edge walked on two
   sides by the patch uses that no accepted decision stitched: seams
@@ -105,12 +106,41 @@ frame_free.py - the consumer of right corners in islands without a rigid
   axis bipartition, line orientation by the corner turn law, bridge
   vectors, the diagnostic for lines the corners never reach.
 
+quilt_ladders.py - a STRAIGHT_LADDER strip inside a quilt (plan Slice AI,
+  G0 DD-54), called by skeleton.py after line orientation and by pins.py
+  after the stations. Only a frame-free quilt reads it; the ladder gives
+  no axis and no sign. In a quilt with a rigid frame a strip in the frame
+  is unfolded with it, and a strip outside the frame is not laid (a
+  diagnostic). A strip is read when exactly one rail is stitched
+  in the quilt, the quilt lays that rail (its longest run, tie by id, has
+  an axis and a sign: the rail axis) and the free rail has no run on the
+  across axis. Then the free rail's runs on the rail axis lose their
+  signs (no length equation); each free-rail vertex takes the rail-axis
+  coordinate of its profile-line partner on the stitched rail, and across
+  lies on the line between the free rail's two corners at u over the
+  strip's length; a vertex whose partner has no pin is unpinned and
+  counted; a run-end pin is never moved. Width: one stitched end wholly on
+  the across axis leads the free end; with no end stitched both ends take
+  the constraint's width. After the solve a strip read whose quilt pins
+  none of its run ends (on both axes) loses its ties. Outcome per strip:
+  kept together, both rails stitched, its quilt has a rigid frame (these
+  three are quiet), no rail stitched, its stitched rail is not laid on an
+  axis, its free rail has a run on the across axis, a run end is not on
+  the ladder, it meets the conditions but its quilt pins none of its
+  vertices, its patch is outside the quilt's rigid frame, not laid
+  (diagnostics).
+  It reads the FeatureConstraint, the island's stitched Chains and the
+  Layer 1 use-to-Chain mapping only.
+
 axis_solve.py - the per-axis solve: components, equation groups, gauge,
   frame anchoring, residual tolerance and UNCONSTRAINED exclusion.
 
 pins.py      - output model: vertex -> (uv, pinned flag, island id);
   stations (plan Slice Z): an axis run pins its inner source vertices at
-  their arc-length points between its two end pins.
+  their arc-length points between its two end pins;
+  ladder ties (plan Slice AI): after the stations, each free-rail vertex
+  of a strip kept together in its quilt is pinned by its profile-line
+  partner (quilt_ladders.tie_free_rails).
 uv_transfer.py - the ONLY bpy write boundary (G5 rule).
   write_pinned_uvs writes UVs+pins in the mesh's current mode without bpy
   operators. It does not call mode_set or unwrap; the artist runs
@@ -159,7 +189,9 @@ uv_transfer.py - the ONLY bpy write boundary (G5 rule).
    diagnostic when the island has no frame.
 8. stations (plan Slice Z): a station pin lies on the UV segment between
    its run's two end pins at its arc-length fraction and never replaces
-   a run-end pin.
+   a run-end pin. Exception (plan Slice AI): a free-rail vertex of a
+   ladder strip kept together in its quilt is placed by its profile-line
+   partner on the stitched rail, not by its own arc length.
 9. corner turn (plan Slice AA, G0 DD-51): at every Layer 3 RIGHT corner
    and every bridged right corner (plan Slice AD, G0 DD-52) whose two
    runs (arriving and leaving) have solved ends, the layout turns left at a convex
@@ -386,7 +418,8 @@ frame); 6 is not checked, as for STRIP (the axes come from the
 constraint); 8 adds nothing (every vertex is already pinned). Every seam
 of such a patch is refused in island assembly unless a user filter joins
 one of its seams (plan Slice AH); then the patch lies in its quilt and the
-constraint is not applied. If a run end is not in the constraint the island keeps its
+ladder layout is not applied (since Slice AI the quilt may keep the
+strip's rails together, see below). If a run end is not in the constraint the island keeps its
 normal layout with a diagnostic. The buildings baseline is identical (no
 marks there); the smoke tool runs Layer 4 only with --straighten-strips.
 
@@ -400,6 +433,22 @@ part of this baseline; filter off, written from Object Mode): with the
 slit-seam rule
 the UV cut set went from 12 to 312 edges; after the quilt write flipped
 faces 152 -> 98 and the mean corner angle error 6.62 -> 2.86 degrees.
+
+After Slice AI (2026-11) a marked strip whose two rails are straight on its
+surface gets no STRAIGHT_LADDER constraint and is laid like any patch, and
+a frame-free quilt keeps the two rails of a ladder strip together
+(quilt_ladders.py). The Tier 3 default baseline is identical (13 objects;
+no marks there). The `--unwrap-quilts` run now also calls write_quilt_uvs
+with partial selections in vertex, edge and face select modes from Object
+Mode and Edit Mode, a hidden target, a hidden solved face and another
+object in Edit Mode, and compares the state before and after; five
+deliberately broken writers each fail it, and the real writer gives 0
+errors. On the user's mesh with +Z the bottom quilt keeps 61 pins and its
+pinned-edge length error against 3D goes from a mean of 0.048 to 0.0077
+(max 0.624 to 0.084); after Blender's fill that quilt has 10 overlapping
+triangle pairs and 2 self-intersecting faces at the corner where f36's
+stitched rail turns around f111 over an unpinned 1.4 mm bridge run (none
+before the slice; a stated limit, see the plan).
 
 After Slice Z (2026-11) pins are consistent and complete: on the 13
 buildings objects the framed pins that sat beyond drift from their frame
