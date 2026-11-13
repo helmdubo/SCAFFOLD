@@ -655,12 +655,27 @@ Parity scoreboard: `dev/tools/cftuv_parity/` (reference UVs, captures,
 Scaffold's result into a second UV layer of a copy of the reference scene
 (the user's copy: `E:\temp\buildings3_3_scaffold.blend`).
 
-Open, found by LOOKING at that copy, not by the scoreboard: (1) the axis
-solve pins nodes from equation groups that are not connected to the gauge
-group, with arbitrary coordinates (Main_wall is badly distorted); (2) a
-multi-segment run pins only its ends, so long sides bow (column body);
-(3) the scoreboard needs a measure of pin position agreement. Main_wall
-also needs work on slit seams inside a patch.
+Slice Z (Layer 5): pins are consistent and complete. Every equation group
+of the axis solve has its own gauge; in a framed island all groups are
+anchored to the frame, without a frame only the largest group is pinned;
+an axis run pins its inner vertices at arc-length stations. Before it, 29%
+of pinned nodes had arbitrary coordinates (hole loops), a defect older
+than this session that no metric showed. LOOK at results: render the two
+UV layers with `dev/tools/cftuv_parity/dump_layers.py` and
+`render_layers.py` after `write_scaffold_layer.py`.
+
+Open after Slice Z:
+
+- Main_wall is still distorted (frame-free, not developable, slit seams
+  inside a patch); cause not found.
+- Island composition: Scaffold stitches walls across horizontal ledge
+  patches, the CFTUV reference keeps them apart; a wall then comes out
+  upside down against the rest. This is the user's grouping filter
+  (decision 14), not built.
+- Island orientation (what is up) is not built either; Slice V is parked.
+- The column body is laid by arc length (2.88 m wide), the reference by
+  the chord (about 0.83 m): the user's call.
+- A strip stitched into a larger island is not straightened.
 
 Parked: Slice V (seam turns, island orientation) on the local branch
 `claude/slice-v-seam-turns`, commit 99db1a4, on the user's machine and not

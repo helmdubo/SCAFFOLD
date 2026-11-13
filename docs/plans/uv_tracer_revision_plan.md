@@ -2159,6 +2159,89 @@ mutations: 11 caught, 5 survived and are covered now.
 - Fixed, tests: the one-loop rule, "exactly one piece", a side without runs,
   frozen Layer 4 records.
 
+## Slice Z — consistent and complete pins (DONE, 2026-11)
+
+Autonomous mode (decision 14). Found by rendering the result copy of the
+reference scene, not by a metric: large islands of building_walls were torn
+around clumps of pins.
+
+Measurement (`floating_pins_probe.py`): the axis solve fixed the gauge of one
+node. Equation groups that no equation connects to it (the loop of a window
+hole: no chain joins it to the outer loop of its patch) kept arbitrary
+coordinates and were still pinned: 772 of 2625 pinned nodes on the reference
+meshes, 2161 of 7327 on the 13 buildings captures, up to 150 m from their
+place in the island frame. The defect is older than this session; every
+earlier pin count included these pins.
+
+Rules:
+
+1. Every connected group of equations has its own gauge.
+2. Island with a rigid frame: every group is anchored to the frame, so that
+   the mean solved coordinate of its nodes equals the mean of their frame
+   coordinate on that axis. A component with an equation on one axis only
+   takes its frame coordinate on the other axis. A node that the frame alone
+   would place on both axes stays unpinned.
+3. Island without a frame, and strip islands: only the largest group keeps
+   its coordinates; the others are unpinned, with one diagnostic per axis.
+4. Stations: an axis run pins its inner source vertices at their arc-length
+   points between its two end pins (CFTUV pins every vertex of a frame
+   chain). A vertex without a single occurrence on the run's side is skipped
+   and counted by a diagnostic.
+
+`layer_5_runtime/axis_solve.py` is new: the solver moved out of `skeleton.py`
+together with the change.
+
+Results (capture replays, before -> after):
+
+| | 8 in-repo | 13 buildings | 4 reference |
+|---|---|---|---|
+| framed pins beyond drift from their frame position | 43 -> 0 | 2161 -> 0 | 800 -> 28 |
+| largest distance from the frame | 36 m -> 3 mm | 152 m -> 5.8 cm | 135 m -> 5.7 cm |
+| pins | 753 -> 829 | 10138 -> 11112 | 3728 -> 4122 |
+| of them stations | 44 | 948 | 373 |
+
+Roles, islands, the four invariants, contradictions and diagnostics are
+unchanged, and every equation group moved by one translation per axis (the
+reviewer checked 1965 groups). The remaining 28 are in building_walls
+island:1 and inside its main group: runs up to 5 degrees off their axis put
+their full length on the axis, up to 1.85 times the drift. A snap question,
+not a gauge one.
+
+Parity, pin coverage: Arc 85 -> 97%, building_walls 90 -> 99%, collumn 54 ->
+73%, Main_wall 58 -> 88%. Tier 3: only pin and written-loop counts change;
+baseline updated. Tests 451 -> 470.
+
+Scoreboard additions (dev tool): `shape`/`torn` and `ishape`/`itorn`, the
+agreement of pairwise distances between common pins inside a patch and inside
+one Scaffold island x one reference island; `dump_layers.py` and
+`render_layers.py` draw the reference and the Scaffold UV layer side by side.
+
+Reviewer gate (independent agent): PASS WITH FIXES, nothing blocking. On 25
+captures everything except the new pins is identical to HEAD; 1365 stations
+checked against an independent edge walk; 16 own mutations, 12 caught, 2
+equivalent, 2 gaps now covered (the contradiction path in a framed island,
+a station with two candidate occurrences). Also fixed: no stations on a run
+whose two ends are one node; a dead branch removed.
+
+What the pictures show after this slice:
+
+```text
+building_walls  the six largest islands are clean, openings in place.
+Main_wall       still distorted. Frame-free, not developable, one equation
+                group; the cause is not found yet.
+collumn         the body is a 6.54 x 2.88 m rectangle (width by arc length);
+                the reference lays it about 0.83 m wide (it seems to take the
+                chord between the two sides). Same structure, another
+                proportion: the user's call.
+```
+
+`ishape` on building_walls stays at 78%. The reviewer traced the largest
+island: every patch fits the reference exactly, but Scaffold joins walls
+across horizontal ledge patches that the reference cut off into their own
+islands, so a part of the island is turned by 180 degrees against the rest.
+It is another stitch tree, valid as an unfolding. Whether walls and ledges
+may share an island is the grouping filter of decision 14, not a pin defect.
+
 ## Decisions the user must approve before the relevant slice
 
 ```text

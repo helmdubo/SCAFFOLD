@@ -24,11 +24,24 @@ information only, island counts with split/merged islands. The top gaps list
 the patches with the most reference AXIS_LINE length that Scaffold misses and
 the dominant reason read from Scaffold's data.
 
+Shape agreement checks WHERE the pins are. For the corners pinned in both
+descriptions, every pair's Scaffold distance (times the object scale) must
+match the reference distance within max(2% of it, 1% of the group's reference
+UV extent); pairwise distances ignore rotation (any angle) and translation.
+At most 300 pairs per group, taken as every k-th pair (no randomness). A group
+is the common pins of one patch (`shape`, `torn`) or of one Scaffold island
+(`ishape`, `itorn`) that lie in one reference UV island; a patch or island the
+reference cut into several islands is compared per piece. `shape` is the
+pair-weighted share of agreeing pairs; `torn` is "groups below 90% / groups
+scored". Fewer than 3 common pins: not scored. The island score is the one that
+catches patches placed wrongly against each other inside one island; the gaps
+section lists the worst torn patches and islands.
+
 ## What it does not measure
 
-UV coordinates, island orientation (quarter turns are invisible to the axis
-score), scale between islands, packing and overlap. Stretch is reported as
-information, not scored.
+Island orientation (quarter turns are invisible to the axis score), scale
+between islands, packing and overlap. Stretch is reported as information, not
+scored. A strip the reference straightened and Scaffold did not shows as torn.
 
 Arc and collumn references were made with CFTUV "Straighten Strips" on: curved
 strips are laid as straight rectangles with stretch, so their stretch differs
@@ -68,3 +81,31 @@ From the repository root:
     python dev/tools/cftuv_parity/parity.py --json out.json  # numbers for diffing
 
 Tests: `python -m pytest dev/tools/cftuv_parity`.
+
+## Look at a result
+
+`write_scaffold_layer.py` writes Scaffold's UVs as a second UV layer
+("Scaffold") into a copy of the scene. To see both layers side by side without
+opening Blender's UI, dump them (read-only, the .blend is never saved) and
+render PNGs with Pillow:
+
+    "C:/Program Files/Blender Foundation/Blender 4.5/blender.exe" -b result.blend \
+        --python dev/tools/cftuv_parity/dump_layers.py -- layers.json Arc building_walls collumn Main_wall
+    python dev/tools/cftuv_parity/render_layers.py layers.json --out-dir png [--panel 900]
+
+`<object>.png` shows the reference layer (`--left`, default "UVMap") and the
+Scaffold layer (`--right`, default "Scaffold"); pinned corners are red. For an
+object with more than 30 UV charts, `<object>.charts.png` also shows the 6
+largest Scaffold charts by UV area, each fitted to its own cell.
+
+What `ishape` and `itorn` do and do not say. They compare the pins of one
+Scaffold island with the reference island that holds them. A low value has two
+possible causes: pins at wrong places (the defect Slice Z fixed), or a
+different but valid unfolding: Scaffold stitched patches the reference kept in
+separate islands, so a part is turned against the rest. On building_walls after
+Slice Z the second cause dominates: Scaffold joins walls across horizontal
+ledge patches that the reference cut off, and the far wall comes out upside
+down. That is a question of which patches to stitch (a future grouping
+filter), not of pin positions. Pairwise distances also ignore mirroring. For
+pin positions inside Scaffold's own unfolding, check pins against the island
+frame instead (see `docs/phases/G5a_skeleton_runtime.md`, invariant 7).
