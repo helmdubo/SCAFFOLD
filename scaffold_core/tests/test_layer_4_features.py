@@ -168,7 +168,15 @@ def test_arch_with_the_option_off_solves_as_without_pass_2(arch) -> None:
     base, _on, solve_off, _solve = arch
     off = run_pass_2_features(base)
     assert not off.feature_snapshot.constraints
-    assert {i.suppression_reason for i in off.feature_snapshot.instances} == {FeatureSuppressionReason.OPTION_OFF}
+    # The shape is graded first: "option off" marks exactly what the option accepts.
+    accepted_on = {i.patch_id for i in _on.feature_snapshot.instances if i.status is FeatureInstanceStatus.ACCEPTED}
+    assert accepted_on
+    for instance, instance_on in zip(off.feature_snapshot.instances, _on.feature_snapshot.instances, strict=True):
+        assert instance.status is FeatureInstanceStatus.SUPPRESSED
+        if instance.patch_id in accepted_on:
+            assert instance.suppression_reason is FeatureSuppressionReason.OPTION_OFF
+        else:
+            assert instance.suppression_reason is instance_on.suppression_reason
     assert run_skeleton_solve(off) == solve_off
     assert off.relation_snapshot is base.relation_snapshot  # Pass 2 never writes Layer 3
 
@@ -327,6 +335,9 @@ def test_resolver_reasons() -> None:
     assert resolve_strip(rectangle, ON).suppression_reason is FeatureSuppressionReason.ALREADY_RECTANGLE
     trapezoid = _candidate(_side(0, 1.0), _side(1, 3.0), _side(2, 1.0), _side(3, 2.0))
     assert resolve_strip(trapezoid, ON).suppression_reason is FeatureSuppressionReason.NO_BENT_OPPOSITE_PAIR
+    # The option does not change the grade of a shape it would not accept.
+    assert resolve_strip(rectangle, FeatureOptions()).suppression_reason is FeatureSuppressionReason.ALREADY_RECTANGLE
+    assert resolve_strip(trapezoid, FeatureOptions()).suppression_reason is FeatureSuppressionReason.NO_BENT_OPPOSITE_PAIR
     one_bent = _candidate(_side(0, 1.0, True), _side(1, 3.0, True), _side(2, 1.0), _side(3, 2.0))
     assert resolve_strip(one_bent, ON).suppression_reason is FeatureSuppressionReason.NO_BENT_OPPOSITE_PAIR
 
@@ -350,6 +361,10 @@ def test_inspection_lists_feature_counts() -> None:
     assert report["constraint_count"] == 1
     assert report["constraints"][0]["patch_id"] == ARCH_FRONT
     assert "features" not in inspect_pipeline_context(base)
+    # With the option off the shapes keep their grade; only the strip waits for the option.
+    off = inspect_pipeline_context(run_pass_2_features(base))["features"]
+    assert off["accepted_count"] == 0 and off["constraint_count"] == 0
+    assert off["suppressed_by_reason"] == {"already a rectangle": 2, "no bent opposite pair": 2, "option off": 1}
 
 
 # ------------------------------------------------------------------ guard

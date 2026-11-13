@@ -120,8 +120,13 @@ Implemented:
     their own UV;
   - `uv_transfer.py` the only bpy write boundary; a loop takes only the pin
     of its own vertex occurrence in its own patch.
-- Debug add-on `Write UV (G5a)` button in
-  `dev/tools/scaffold_graph_debug/`.
+- Debug add-on `dev/tools/scaffold_graph_debug/` (plan Slice AC): Analyze
+  runs Passes 0-2 and the Layer 5 solve and draws fixed Grease Pencil
+  layers from pipeline records only (patches, loops, chains per use by
+  island axis, islands by frame kind, island lines, nodes, pins, stitch
+  decisions, side shapes, corners, Layer 4 patch types); `Write UV (G5a)`
+  button. It computes display offsets and nothing else: do not add
+  derived structure to it, add a record to the core instead.
 - ScaffoldTrace / ScaffoldRail v1 Layer 3 evidence views
   (`layer_3_relations/scaffold_rails.py`): ordered through hinge stations;
   closed loops stay non-consumable globally, and the pure cut view
@@ -699,6 +704,21 @@ Open after Slice AA:
 - A strip stitched along a bent side is not straightened (Slice AB frees
   only a strip whose stitch candidates are all straight hinges).
 
+Seen in the Slice AC debugger (state of the core, not fixed):
+
+- Main_wall: only the outer loop gets axes (36 runs). All 1047 runs of
+  the window holes are OBLIQUE (695 m of 971 m of boundary): an inner
+  loop of a frame-free island has no right corner shared with the outer
+  loop, so nothing ties its two directions to the island's axes.
+- A bent side of a strip is one island line per run (Arc's strip island
+  has 29 lines, the column's strips 49 and 38): the skeleton has no
+  entity for a curved side as a whole; the constraint's four sides are
+  the only large structure of a strip.
+- Patch types are what Layer 4 grades today: strip, rectangle,
+  four-sided without a bent pair, and everything else. Trapezoid,
+  L-shape and other kinds do not exist; a second feature kind needs the
+  user's approval.
+
 Parked: Slice V (seam turns, island orientation) on the local branch
 `claude/slice-v-seam-turns`, commit 99db1a4, on the user's machine and not
 pushed. It lacks docs and the reviewer gate. Measured: seams with the hinge
@@ -749,8 +769,8 @@ of duplicating core graph logic. Do not import Blender into Scaffold Core.
 Run from the repository root (fresh cloud containers need
 `python -m pip install pytest` first). This collects `scaffold_core/tests` and
 the pure overlay tests in `dev/tools/scaffold_graph_debug`, which consume
-Layer 3 rails and need no Blender; running only `scaffold_core/tests` misses
-them:
+the pipeline through the Layer 5 solve and need no Blender; running only
+`scaffold_core/tests` misses them:
 
 ```bash
 python -m pytest

@@ -1,4 +1,4 @@
-"""Blender operators and panel for the ScaffoldGraph dev overlay."""
+"""Blender operators and panel for the Scaffold structure debugger."""
 
 from __future__ import annotations
 
@@ -6,11 +6,32 @@ import sys
 from pathlib import Path
 
 import bpy
-from bpy.props import BoolProperty, PointerProperty, StringProperty
+from bpy.props import BoolProperty, FloatProperty, PointerProperty, StringProperty
 from bpy_extras.io_utils import ExportHelper
 
 from .build_stamp import get_build_stamp, resolve_build_stamp, set_build_stamp
-from .session import active_mesh_object, clear_all, close, refresh_visibility, show_or_refresh
+from .overlay_v2 import GROUPS, LAYER_SPECS, LEGENDS
+from .session import (
+    active_mesh_object,
+    clear_all,
+    close,
+    refresh_line_thickness,
+    refresh_visibility,
+    show_or_refresh,
+)
+
+GROUP_EXPAND_PROPS = {
+    "Structure": "expand_structure",
+    "Skeleton": "expand_skeleton",
+    "Patches: sides and types": "expand_patches",
+    "Layer 3 (detail)": "expand_layer3",
+}
+GROUP_EXPAND_DEFAULTS = {
+    "expand_structure": True,
+    "expand_skeleton": True,
+    "expand_patches": True,
+    "expand_layer3": False,
+}
 
 
 def _add_dev_tools_to_path() -> None:
@@ -24,98 +45,108 @@ def _safe_filename(name: str) -> str:
     return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in name)
 
 
+def _on_visibility_changed(_settings, context) -> None:
+    try:
+        refresh_visibility(context)
+    except Exception as exc:  # noqa: BLE001 - a toggle must never raise into the UI
+        print(f"[scaffold debug] visibility update failed: {exc}")
+
+
+def _on_line_thickness_changed(_settings, context) -> None:
+    try:
+        refresh_line_thickness(context)
+    except Exception as exc:  # noqa: BLE001 - a slider must never raise into the UI
+        print(f"[scaffold debug] line thickness update failed: {exc}")
+
+
 class SCAFFOLDGRAPH_Settings(bpy.types.PropertyGroup):
-    active: BoolProperty(name="Graph Debug Active", default=False)
+    active: BoolProperty(name="Analyze Active", default=False)
     source_object: StringProperty(name="Source Object", default="")
+    source_ref: PointerProperty(name="Source Object Ref", type=bpy.types.Object)  # survives a rename
     last_report: StringProperty(name="Last Report", default="")
     build_stamp: StringProperty(name="Build Stamp", default="")
-    show_family_colors: BoolProperty(name="Family Colors", default=True)
-    show_spines: BoolProperty(name="Spines", default=True)
-    show_ribs: BoolProperty(name="Ribs", default=True)
-    show_seam_verdicts: BoolProperty(name="Seam Verdicts", default=True)
-    show_junctions: BoolProperty(name="Junctions", default=True)
-    show_branch_points: BoolProperty(name="Branches", default=True)
-    show_chain_shape: BoolProperty(name="Chain Shape", default=True)
-    straighten_strips: BoolProperty(name="Straighten Strips", default=False)
+    straighten_strips: BoolProperty(
+        name="Straighten Strips",
+        description="Pass 2 option: lay accepted strip patches as rectangles (applies on Rebuild and Write UV)",
+        default=False,
+    )
+    show_labels: BoolProperty(name="Labels", default=False, update=_on_visibility_changed)
+    line_thickness: FloatProperty(
+        name="Line thickness",
+        description="Multiplier for every stroke of the overlay (1.0 = as built); fills are unaffected; acts at once",
+        default=1.0,
+        min=0.1,
+        max=20.0,
+        soft_max=8.0,
+        step=10,
+        update=_on_line_thickness_changed,
+    )
     source_hide_viewport: BoolProperty(name="Stored Viewport Hidden", default=False)
     source_hide_set: BoolProperty(name="Stored Object Hidden", default=False)
 
 
-class SCAFFOLDGRAPH_OT_Show(bpy.types.Operator):
-    bl_idname = "scaffold_graph_debug.show"
-    bl_label = "Rebuild Overlay"
-    bl_description = "Rebuild the ScaffoldGraph v2 Grease Pencil overlay"
-    bl_options = {"REGISTER", "UNDO"}
-
-    @classmethod
-    def poll(cls, context):
-        obj = context.active_object
-        return obj is not None and obj.type == "MESH" and obj.mode in {"OBJECT", "EDIT"}
-
-    def execute(self, context):
-        try:
-            _report, summary = show_or_refresh(context)
-        except Exception as exc:
-            self.report({"ERROR"}, f"ScaffoldGraph debug failed: {exc}")
-            return {"CANCELLED"}
-        self.report({"INFO"}, summary)
-        print(summary)
-        return {"FINISHED"}
+for _spec in LAYER_SPECS:
+    SCAFFOLDGRAPH_Settings.__annotations__[_spec.prop] = BoolProperty(
+        name=_spec.label,
+        default=_spec.default,
+        update=_on_visibility_changed,
+    )
+for _prop, _default in GROUP_EXPAND_DEFAULTS.items():
+    SCAFFOLDGRAPH_Settings.__annotations__[_prop] = BoolProperty(name="Expand", default=_default)
 
 
-class SCAFFOLDGRAPH_OT_Refresh(bpy.types.Operator):
-    bl_idname = "scaffold_graph_debug.refresh"
-    bl_label = "Rebuild Overlay"
-    bl_description = "Rebuild the ScaffoldGraph v2 Grease Pencil overlay"
+def _mesh_or_session_poll(context) -> bool:
+    """A live session's stored mesh, else the active mesh (a deleted or renamed source falls through)."""
+
+    settings = getattr(context.scene, "scaffold_graph_debug_settings", None)
+    if settings is not None and settings.active and settings.source_object in bpy.data.objects:
+        return True
+    obj = context.active_object
+    return obj is not None and obj.type == "MESH" and obj.mode in {"OBJECT", "EDIT"}
+
+
+class SCAFFOLDGRAPH_OT_Analyze(bpy.types.Operator):
+    bl_idname = "scaffold_graph_debug.analyze"
+    bl_label = "Analyze"
+    bl_description = "Build the debug overlay and hide the mesh, or remove it and restore the mesh"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
     def poll(cls, context):
         settings = getattr(context.scene, "scaffold_graph_debug_settings", None)
-        if settings is not None and settings.active and settings.source_object:
-            return settings.source_object in bpy.data.objects
-        obj = context.active_object
-        return obj is not None and obj.type == "MESH" and obj.mode in {"OBJECT", "EDIT"}
+        if settings is not None and settings.active:
+            return True  # always able to end a session, even one whose mesh is gone
+        return _mesh_or_session_poll(context)
 
     def execute(self, context):
+        settings = context.scene.scaffold_graph_debug_settings
         try:
-            _report, summary = show_or_refresh(context)
-        except Exception as exc:
-            self.report({"ERROR"}, f"ScaffoldGraph refresh failed: {exc}")
-            return {"CANCELLED"}
-        self.report({"INFO"}, summary)
-        print(summary)
-        return {"FINISHED"}
-
-
-class SCAFFOLDGRAPH_OT_Close(bpy.types.Operator):
-    bl_idname = "scaffold_graph_debug.close"
-    bl_label = "Close Graph"
-    bl_description = "Remove the ScaffoldGraph Grease Pencil overlay"
-    bl_options = {"REGISTER", "UNDO"}
-
-    def execute(self, context):
-        try:
-            summary = close(context)
-        except Exception as exc:
-            self.report({"ERROR"}, f"ScaffoldGraph close failed: {exc}")
+            if settings.active:
+                summary = close(context)
+            else:
+                _payload, summary = show_or_refresh(context)
+        except Exception as exc:  # noqa: BLE001 - surface errors to the artist
+            self.report({"ERROR"}, f"Scaffold debug failed: {exc}")
             return {"CANCELLED"}
         self.report({"INFO"}, summary)
         return {"FINISHED"}
 
 
-class SCAFFOLDGRAPH_OT_UpdateVisibility(bpy.types.Operator):
-    bl_idname = "scaffold_graph_debug.update_visibility"
-    bl_label = "Update Visibility"
-    bl_description = "Apply ScaffoldGraph overlay layer visibility"
+class SCAFFOLDGRAPH_OT_Refresh(bpy.types.Operator):
+    bl_idname = "scaffold_graph_debug.refresh"
+    bl_label = "Rebuild"
+    bl_description = "Rerun the pipeline and redraw every debug layer"
     bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        return _mesh_or_session_poll(context)
 
     def execute(self, context):
         try:
-            refresh_visibility(context)
-            summary = "visibility updated"
-        except Exception as exc:
-            self.report({"ERROR"}, f"ScaffoldGraph visibility update failed: {exc}")
+            _payload, summary = show_or_refresh(context)
+        except Exception as exc:  # noqa: BLE001 - surface errors to the artist
+            self.report({"ERROR"}, f"Scaffold debug rebuild failed: {exc}")
             return {"CANCELLED"}
         self.report({"INFO"}, summary)
         return {"FINISHED"}
@@ -130,11 +161,7 @@ class SCAFFOLDGRAPH_OT_ExportJson(bpy.types.Operator, ExportHelper):
 
     @classmethod
     def poll(cls, context):
-        settings = getattr(context.scene, "scaffold_graph_debug_settings", None)
-        if settings is not None and settings.active and settings.source_object:
-            return settings.source_object in bpy.data.objects
-        obj = context.active_object
-        return obj is not None and obj.type == "MESH" and obj.mode in {"OBJECT", "EDIT"}
+        return _mesh_or_session_poll(context)
 
     def invoke(self, context, event):
         settings = getattr(context.scene, "scaffold_graph_debug_settings", None)
@@ -236,42 +263,66 @@ class SCAFFOLDGRAPH_PT_Panel(bpy.types.Panel):
         settings = context.scene.scaffold_graph_debug_settings
 
         col = layout.column(align=True)
-        stamp = settings.build_stamp or get_build_stamp()
-        col.label(text=f"Build: {stamp}")
-        col.operator("scaffold_graph_debug.refresh", text="Rebuild Overlay", icon="FILE_REFRESH")
-        col.operator("scaffold_graph_debug.export_json", text="SCAFFOLD JSON", icon="EXPORT")
-        if settings.active:
-            col.operator("scaffold_graph_debug.close", text="Close Graph", icon="X")
-
-        col.separator()
+        col.label(text=f"Build: {settings.build_stamp or get_build_stamp()}")
         row = col.row(align=True)
-        row.prop(settings, "show_family_colors", toggle=True)
-        row.prop(settings, "show_spines", toggle=True)
-        row.prop(settings, "show_ribs", toggle=True)
-        row = col.row(align=True)
-        row.prop(settings, "show_seam_verdicts", toggle=True)
-        row.prop(settings, "show_junctions", toggle=True)
-        row.prop(settings, "show_branch_points", toggle=True)
-        row = col.row(align=True)
-        row.prop(settings, "show_chain_shape", toggle=True)
-        row = layout.row(align=True)
-        row.operator("scaffold_graph_debug.write_uv_g5a", icon="UV")
-        row.prop(settings, "straighten_strips", toggle=True)
-
+        row.scale_y = 1.4
+        row.operator(
+            "scaffold_graph_debug.analyze",
+            text="Analyze",
+            icon="VIEWZOOM",
+            depress=bool(settings.active),
+        )
+        col.operator("scaffold_graph_debug.refresh", text="Rebuild", icon="FILE_REFRESH")
+        col.prop(settings, "straighten_strips", toggle=True)
+        col.label(text="Straighten Strips applies on Rebuild")
+        col.prop(settings, "line_thickness", slider=True)
         if settings.source_object:
             col.label(text=f"Source: {settings.source_object}")
         if settings.last_report:
             col.label(text=settings.last_report)
+
+        for group in GROUPS:
+            self._draw_group(layout, settings, group)
+
+        row = layout.row(align=True)
+        row.operator("scaffold_graph_debug.write_uv_g5a", icon="UV")
+        layout.operator("scaffold_graph_debug.export_json", text="SCAFFOLD JSON", icon="EXPORT")
+
+    def _draw_group(self, layout, settings, group: str) -> None:
+        expand_prop = GROUP_EXPAND_PROPS[group]
+        expanded = bool(getattr(settings, expand_prop))
+        box = layout.box()
+        header = box.row()
+        header.prop(
+            settings,
+            expand_prop,
+            text=group,
+            icon="TRIA_DOWN" if expanded else "TRIA_RIGHT",
+            emboss=False,
+        )
+        if not expanded:
+            return
+        column = box.column(align=True)
+        for spec in LAYER_SPECS:
+            if spec.group != group:
+                continue
+            visible = bool(getattr(settings, spec.prop))
+            column.prop(settings, spec.prop, text=spec.label, icon="HIDE_OFF" if visible else "HIDE_ON")
+        if group == "Structure":
+            visible = bool(settings.show_labels)
+            column.prop(settings, "show_labels", text="Labels", icon="HIDE_OFF" if visible else "HIDE_ON")
+        legend = box.column(align=True)
+        legend.scale_y = 0.7
+        for line in LEGENDS.get(group, ()):
+            legend.label(text=line)
 
 
 classes = (
     SCAFFOLDGRAPH_OT_ExportJson,
     SCAFFOLDGRAPH_OT_WriteUV,
     SCAFFOLDGRAPH_Settings,
-    SCAFFOLDGRAPH_OT_Show,
+    SCAFFOLDGRAPH_OT_Analyze,
     SCAFFOLDGRAPH_OT_Refresh,
-    SCAFFOLDGRAPH_OT_Close,
-    SCAFFOLDGRAPH_OT_UpdateVisibility,
     SCAFFOLDGRAPH_PT_Panel,
 )
 

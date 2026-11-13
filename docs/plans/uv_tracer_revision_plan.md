@@ -1048,7 +1048,8 @@ kept that expectation (two PARALLEL rails) and failed on main from 196f9dd on,
 unnoticed because verification ran only `scaffold_core/tests`. The test now
 expects the horizontal SPINE, one PARALLEL (the opposite horizontal side) and
 four vertical RIBs, one per fold line and outer edge; verification runs the
-full suite from the repository root.
+full suite from the repository root. (Slice AC removed the debug add-on's
+own SPINE/PARALLEL/RIB rails and this test with them.)
 
 ### Task Card M1 — UV write stays inside the solved faces (DONE, bug fix)
 
@@ -2415,6 +2416,65 @@ identical to main on 25 captures. On: only collumn and walls.009 change;
 the corner law holds. 9 own mutations: 6 caught, 2 equivalent, 1 gap, now
 covered by an assert on the gate's own refusal reason. The walls.009
 split and the trapezoid question above come from the review.
+
+## Slice AC — structure debugger (DONE, 2026-11)
+
+Asked by the user: the CFTUV debugger (Grease Pencil patches and each
+patch's own copy of its chains) was enough to judge a structure by eye; the
+Scaffold add-on had more modes and the user could not tell which were
+right. Wanted: the CFTUV elements, plus the large skeleton structure, plus
+patch sides and patch types as far as the algorithm determines them.
+
+Inventory of the old add-on: it ran Passes 0 and 1 only and showed nothing
+of Layer 4 or Layer 5. Half of its modes were its own logic: SPINE /
+PARALLEL / RIB rail roles from raw 3D directions (no such thing in the
+core), and a copy of the stitch gate with another tolerance whose
+green/red was not the Layer 5 decision. Toggles did nothing until Rebuild.
+
+Now (`dev/tools/scaffold_graph_debug/`): Analyze runs Passes 0-2 and the
+Layer 5 solve once and draws fixed layers from records only; eye toggles
+and a line thickness slider act at once.
+
+```text
+Structure   Patches (fill per patch); Boundary / Holes (loops);
+            Chains: every PatchChain use, one stroke per run, on its own
+            patch's side of the edge, coloured by the island axis of the
+            run (two colours) or grey (OBLIQUE); Labels
+Skeleton    Islands by frame kind (rigid frame / frame-free / strip);
+            Lines (runs of one island line share a colour); Nodes; Pins;
+            Seams (Layer 5 StitchDecision: stitched or cut)
+Patches     Sides (PatchChainShapeRelation: line / curve / unresolved);
+            Corners (RunCornerRelation: right convex / right reflex /
+            other); Types (Layer 4: strip, strip waiting for the option,
+            rectangle, four-sided without a bent pair, other)
+Layer 3     Families, Junctions
+```
+
+The two chain colours are the two axes of an island. They carry no world
+meaning and are not related between islands: there is no orientation
+filter yet. A use is drawn on its side of an edge by the winding rule of
+G0 DD-51 (the face whose vertex cycle runs along the use owns it), with no
+heuristic.
+
+Removed: `rail_assembly.py`, `seam_verdicts.py`, `pair_checks.py`, the v1
+renderer, `dev/tools/scaffold_graph_grease_pencil.py` and their tests. The
+add-on computes display offsets and nothing else.
+
+Layer 4, one change: `resolve_strip` grades the shape before the option,
+so with the option off a candidate is still "already a rectangle" or "no
+bent opposite pair", and "option off" marks exactly the candidates the
+option accepts. Layer 5 reads only constraints: the solve is identical on
+12 captures with the option off and on (reviewer), Tier 3 baseline
+identical. Only the inspection report's `suppressed_by_reason` with the
+option off changes.
+
+`write_debug_scene.py` writes a .blend with the overlays headless (the
+visible checkpoint: `E:/temp/buildings3_3_scaffold_debug.blend`).
+
+What the debugger shows about the core (not fixed here): see "Seen in the
+Slice AC debugger" in `docs/agent_handoff.md`.
+
+Tests 515 -> 575.
 
 ## Decisions the user must approve before the relevant slice
 
