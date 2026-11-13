@@ -36,18 +36,20 @@ options, every output is identical to a run without Layer 4.
 ```text
 Candidate (evidence, always produced, DD-15, DD-20):
   a patch with exactly one boundary loop made of exactly four PatchChain
-  uses. Per use: its 3D length, whether its Chain is bent in 3D, whether the
-  use is one SURFACE_LINE piece (DD-48).
+  uses. Per use: its 3D length, whether the use is one SURFACE_LINE piece
+  (DD-48).
 
-Instance:
-  ACCEPTED when FeatureOptions.straighten_strips is on AND the strip needs
-  straightening (some use is not one surface line, or two opposite uses
-  differ in length by more than 1%) AND at least one opposite pair has both
-  uses bent in 3D. Otherwise SUPPRESSED with a reason. The shape is graded
-  first: already a rectangle, then no bent opposite pair; a candidate that
-  passes both and only waits for the option is suppressed as option off
-  (plan Slice AC). So the reason does not depend on the option except for
-  the candidates the option accepts. Suppressed instances stay inspectable.
+Instance (plan Slice AF):
+  ACCEPTED when FeatureOptions.straighten_strips is on AND both uses of the
+  longer opposite pair (the larger sum of the two 3D lengths; on an exact
+  tie either pair) are not one surface line: curved, cornered or
+  unresolved. Bending in 3D is not read, so a wall of a cylinder is not a
+  strip. Otherwise SUPPRESSED with a reason. The shape is graded first:
+  already a rectangle, then long sides straight on the surface; a
+  candidate that passes both and only waits for the option is suppressed
+  as option off (plan Slice AC). An instance that would be accepted on a
+  patch laid from its bevel ladder is suppressed as laid from its bevel
+  ladder. Suppressed instances stay inspectable.
 
 Constraint STRAIGHT_STRIP (self-contained, DD-26):
   patch id, the four PatchChain ids in loop order, and the target length of
@@ -113,8 +115,14 @@ patch; curved or noisy shapes included.
 
 ```text
 BEVEL_STRIP / BEVEL_JUNCTION, one BevelInstance per bevel patch
-(FeatureSnapshot.bevels), built by Pass 2 always. No option, no constraint:
-Layer 5 does not read them.
+(FeatureSnapshot.bevels), built by Pass 2 always. Layer 5 does not read
+the records. A strip confirmed by the mark, with an open chosen reading
+and no shared use, emits a STRAIGHT_LADDER constraint (plan Slice AF,
+option straighten_bevel_strips, on by default): u per profile line (the
+mean of the rails' arc lengths), the two rail vertices of each line, the
+width (mean profile length). Layer 5 pins every boundary vertex of the
+patch where the constraint says (frame LADDER). The patch is an island by
+itself for now (provisional, see the plan).
 
 Rule A, by the Layer 0 Face Strength mark (authoritative where any face of
 the patch is marked): all MEDIUM -> strip, all WEAK -> junction; MEDIUM and
@@ -146,6 +154,15 @@ Known false positive of rule B: a quad band capped by non-quad patches
 A: a strip that ends on an unbevelled face gets no direction. A plain quad
 ladder is not a kind. The debugger draws rule B records on their own
 layers ("by structure").
+
+Known limits of the ladder layout (plan Slice AF): one width and parallel
+rails, so a strip of varying width is not isometric; interior vertices of
+a multi-segment strip are left to Blender; a closed ring, a strip without
+a reading (triangulated, or ending on an unbevelled face) and a strip
+with a shared use get no constraint. A fully triangulated bevel gets no
+layout at all: its strips are no longer STRIP either, stay stitched into
+the main island and leave it without a rigid frame (h_rect_s2_tri with
+strips on: 72 pins on Slice AE, 36 now, equal to strips off).
 
 Later (not built): user filters that select strips as horizontal, vertical,
 under a ceiling, outer or inner corner. The world vertical enters there, as

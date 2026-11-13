@@ -53,7 +53,8 @@ scaffold_core/ui/
 ```
 
 Layer 4 holds the strip feature (G0 DD-50) and the bevel kinds BEVEL_STRIP /
-BEVEL_JUNCTION (G0 DD-54, records only); a further feature kind needs
+BEVEL_JUNCTION (G0 DD-54; a strip confirmed by the mark emits a
+STRAIGHT_LADDER constraint); a further feature kind needs
 the user's approval. Layer 5 may consume Layers 0-4 read-only and reads Layer 4
 only through FeatureConstraint. bpy is allowed ONLY in
 scaffold_core/layer_5_runtime/uv_transfer.py (the G5 write boundary).
@@ -207,7 +208,7 @@ RunBridgedCornerRelation v0 (G0 DD-52; plan Slice AD) evidence: a right corner t
 PatchQuadLadderRelation v0 (G0 DD-53; plan Slice AE-1) evidence: the zero, one or two quad-ladder readings of an all-quad patch (columns, rails, ends, profile lines), pure topology; read by the Layer 4 bevel rule
 Direction conventions and the corner turn law (G0 DD-51; plan Slice AA): a use walks its loop as its faces wind, an evidence follows its use, a reflex face corner is measured as reflex
 Layer 4 v0 (G0 DD-50; plan Slice Y): strip feature candidates, instances and the STRAIGHT_STRIP constraint behind the user option straighten_strips (off by default)
-Layer 4 bevel kinds (G0 DD-54; plan Slice AE-2): BEVEL_STRIP / BEVEL_JUNCTION records by the Layer 0 Blender Face Strength mark, or without it by a strict structural rule; no constraint, Layer 5 does not read them
+Layer 4 bevel kinds (G0 DD-54; plan Slices AE-2, AF): BEVEL_STRIP / BEVEL_JUNCTION records by the Layer 0 Blender Face Strength mark, or without it by a structural rule (candidates); a strip by mark emits a STRAIGHT_LADDER constraint behind straighten_bevel_strips (on by default) and Layer 5 lays it from the constraint (frame LADDER); the STRIP rule accepts only long sides that are not straight on the surface
 ```
 
 SHARED_CHAIN family transport crosses only straight single-run hinges

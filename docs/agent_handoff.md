@@ -14,7 +14,7 @@ Core package: scaffold_core/
 Current phase: G5a - Skeleton Runtime, plus G4a (Layer 4 v0, strip feature,
   and the bevel kinds BEVEL_STRIP / BEVEL_JUNCTION)
 Architecture: immutable B-rep-inspired interpretation pipeline
-G0 contract: v1.14 (G0.md remains read-only for agents)
+G0 contract: v1.15 (G0.md remains read-only for agents)
 ```
 
 Scaffold Core currently contains Layers 0-3, the G5a Layer 5 runtime,
@@ -739,6 +739,65 @@ Seen in the Slice AC debugger (state of the core, not fixed):
   four-sided without a bent pair, and everything else. Trapezoid,
   L-shape and other kinds do not exist; a second feature kind needs the
   user's approval.
+
+DIRECTION SET BY THE USER (2026-11-13), read before any work on islands:
+
+- The large structures built from Chains exist so that what is stitched
+  to what in UV is known at once, without growing a frontier step by
+  step. By default everything connected is one quilt. Rules that split
+  ("these are walls, that is a floor or a ceiling") belong to an over
+  filter of user options, which puts patches into separate quilts.
+- Today Layer 5 does the opposite: it stitches only seams that unfold
+  without distortion (angle defect within 1e-3), so a bevel never joins
+  its wall, and Slice AF even refuses every seam of a laid bevel strip.
+  The user objected to the result (20 small islands on
+  rounded_wall_noise_top). The "own island" rule of Slice AF is
+  provisional.
+- Measured for this (scratch study, CFTUV frontier): CFTUV's quilts rest
+  on the world vertical (same patch type only, H/V roles, FREE-FREE never
+  attaches), it has no overlap check, and it looks joined in Blender only
+  where both sides of a seam carry coincident pins, as in Scaffold. On
+  rounded_wall_noise_top CFTUV itself gives 15 quilts; the user's
+  reference UV (3 islands) is not CFTUV output. On that mesh the gate
+  refuses 10 seams, on each the defect is spread over every vertex of the
+  seam (bevel seams, 25 to 298 degrees in total).
+- A band by shape (not by four uses, not by quads) was stated and checked:
+  a one-loop patch whose loop, split at RIGHT corners and bridged right
+  corners, has four sides, the two longer opposite sides both turning on
+  the surface. It accepts the flat curved bottom f111, the bottom bevel
+  strips and the column body, rejects the developable walls and every
+  ordinary wall patch of four meshes. Laid by arc-length fraction at the
+  mean of its two long sides it matches the reference f111 within 0.5%.
+  Not built.
+
+After Slice AF (bevel strip layout):
+
+- A strip is laid with one width; where its width varies it is not
+  isometric. Interior vertices of multi-segment strips are not pinned.
+- A patch with fewer than two pins comes out of Blender's unwrap at an
+  arbitrary scale: a patch with no pin is packed into the unit square, a
+  patch with one pin keeps the area the layer had before. After Slice AF
+  only the noisy top of rounded_wall_noise_top is left without pins; on
+  collumn with strips off 74% of the area has none. Measured candidates:
+  a two-pin anchor on the longest run (exact on developable patches,
+  0.38 of the area on the noisy top), Blender's Average Islands Scale
+  (moves pinned islands, up to 1.9 m), rescaling each unpinned chart to
+  its 3D area after the unwrap (exact, but a step after Blender; the
+  scene-writing script already does it for charts with no pin). Not
+  decided.
+- The STRIP rule counts a cornered or unresolved long side as not
+  straight (the column body, three folded one-face strips on the
+  buildings). Unchanged from before; the user was told and may change it.
+- A STRIP patch whose only bent seam goes to a ladder patch does not leave
+  its island although that seam is never stitched (no capture shows it).
+
+After Slice AG-1 (speed): the Layer 5 solve is now the largest cost (about
+7 s on building_walls: overlap checks in island assembly, `_key` scans,
+the dense solver, `_node_map`) and grows faster than linear. The study in
+the scratch folder lists each spot with a one-line fix. The dead Layer 3
+records (five sets, proven by execution on 38 captures) are not removed
+yet; removing them needs G0 amendments (DD-07, 08, 09, 13, 23, 24, 31,
+33, 39-42, 46, 47).
 
 After Slices AE-1 and AE-2 (bevels):
 
