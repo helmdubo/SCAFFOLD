@@ -2356,6 +2356,66 @@ Main_wall: the stepped bottom of the +X wall stays OBLIQUE (3 cm chamfers
   632 run ends on seam-cut mid-chain vertices stay unpinned.
 ```
 
+## Slice AB — a straightened strip leaves its island (DONE, 2026-11)
+
+Autonomous mode (decision 14). The flat back face of the reference column
+is an accepted strip (two long sides that bend in the face plane, two short
+straight ends), but island assembly stitched it to the two caps across the
+short ends, so its constraint was not applied: 16 pins, a bowed side, caps
+without pins. CFTUV lays it as a rectangle with all 46 corners pinned and
+keeps the caps apart with 2 pins each.
+
+Rule (Layer 5 island assembly, G0 DD-50): a patch with a STRAIGHT_STRIP
+constraint is not stitched when every seam its stitch gate accepts is a
+straight hinge. Straightening only rescales a straight side; it would deform
+a neighbour stitched along a bent side, so such a strip stays stitched and
+not applied, as before. With the option off nothing changes.
+
+Before Slice AA this could not work: the run of the back face's one-edge end
+ran against the loop, so the strip's uses did not close.
+
+Results (25 captures; with the option off every output is identical):
+
+```text
+collumn    the back face leaves: islands 2 -> 4 (2 strip islands), pins
+           92 -> 126: 46 on the back face (the reference pins the same 46)
+           and 2 on each cap (the reference: 2 each). Parity: line recall
+           51% -> 100%, pin coverage 73% -> 100%.
+walls.009  one two-face patch (f539) leaves a wall island of 120 patches
+           (stitched across two straight sides, its bent sides on the mesh
+           border): pins 2004 -> 2006. It was the only link to a part of 10
+           patches, which becomes an island of its own (109 + 10 + the
+           strip) with the same pins and shape; no new diagnostics.
+others     unchanged. The L-shaped faces of the wall meshes have a bent
+           side among their stitch candidates and stay stitched.
+corner law 0 corners against, 0 mirrored islands.
+Tier 3     strips off: baseline identical; strips on: 13 objects, 0 errors.
+```
+
+The column's shape score stays low (53%): Scaffold lays the body 2.88 m
+wide (arc length) and the back face 1.21 m, the reference lays both 0.83 m
+wide and on top of each other. Same structure, another proportion: the
+user's call.
+
+A strip that leaves separates what was joined only through it: the caps
+of the column, and the part of walls.009 above. That follows from the
+rule; a check "leaving must not disconnect the island" would also keep the
+column's back face stitched.
+
+Open question for the user (Layer 4 acceptance, not this slice): f539 is a
+trapezoid, its straight opposite pair is 3.38 and 2.08 m long. DD-50 v0
+accepts it because its other pair is bent; straightening stretches each
+straight side by about 24%. A limit on how much a straight opposite pair
+may differ would suppress it (the column's back face differs by 10%).
+
+Tests 513 -> 515.
+
+Reviewer gate (independent agent): PASS WITH FIXES, nothing blocking. Off:
+identical to main on 25 captures. On: only collumn and walls.009 change;
+the corner law holds. 9 own mutations: 5 caught, 2 equivalent, 2 gaps (one
+now covered by an assert on the gate's own refusal reason). The walls.009
+split and the trapezoid question above come from the review.
+
 ## Decisions the user must approve before the relevant slice
 
 ```text

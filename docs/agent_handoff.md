@@ -696,7 +696,8 @@ Open after Slice AA:
 - Island orientation (what is up) is not built either; Slice V is parked.
 - The column body is laid by arc length (2.88 m wide), the reference by
   the chord (about 0.83 m): the user's call.
-- A strip stitched into a larger island is not straightened.
+- A strip stitched along a bent side is not straightened (Slice AB frees
+  only a strip whose stitch candidates are all straight hinges).
 
 Parked: Slice V (seam turns, island orientation) on the local branch
 `claude/slice-v-seam-turns`, commit 99db1a4, on the user's machine and not

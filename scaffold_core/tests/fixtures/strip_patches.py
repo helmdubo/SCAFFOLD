@@ -3,7 +3,8 @@ Layer: tests fixtures
 
 Rules:
 - Synthetic flat patches for the Layer 4 strip feature: a cut annulus (a ring
-  strip that is its own island), a ring sector stitched between two quads,
+  strip that is its own island), a ring sector stitched between two quads
+  (straight stitches only) and the same with a band on its bent outer arc,
   an annulus with a tab (five uses), a square with a hole (two loops) and a
   three-row cut annulus with and without a hole.
 - Fixtures build small explicit source data.
@@ -132,9 +133,33 @@ def make_ring_sector_between_quads_source() -> SourceMeshSnapshot:
     """Return a flat quarter ring sector with a quad across a seam at each radial end.
 
     The sector has four uses (outer arc, quad side, inner arc, quad side);
-    the coplanar quads stitch back, so the sector shares its island.
+    both stitch candidates are straight radial ends of one edge.
     """
 
+    points, faces, seams = _ring_sector_between_quads()
+    return _mesh("ring_sector_between_quads", points, faces, seam_edges=seams)
+
+
+def make_ring_sector_between_quads_with_band_source() -> SourceMeshSnapshot:
+    """Return the ring sector between quads plus a band across a seam on its outer arc.
+
+    The band (radius 2 to 3, same angle) is stitched along the bent outer
+    arc, so the sector keeps a bent stitch candidate beside the two straight
+    radial ends.
+    """
+
+    points, faces, seams = _ring_sector_between_quads()
+    band_radius = RING_OUTER_RADIUS + 1.0
+    for index in range(SECTOR_SEGMENTS + 1):
+        theta = (pi / 2.0) * index / SECTOR_SEGMENTS
+        points[f"b{index}"] = (band_radius * cos(theta), band_radius * sin(theta), 0.0)
+    for index in range(SECTOR_SEGMENTS):
+        faces[f"f_band{index}"] = (f"o{index}", f"b{index}", f"b{index + 1}", f"o{index + 1}")
+    seams += tuple((f"o{index}", f"o{index + 1}") for index in range(SECTOR_SEGMENTS))
+    return _mesh("ring_sector_between_quads_with_band", points, faces, seam_edges=seams)
+
+
+def _ring_sector_between_quads():
     points, faces = _ring(SECTOR_SEGMENTS, pi / 2.0, closed=False)
     last = SECTOR_SEGMENTS
     points["q0"] = (RING_INNER_RADIUS, -1.0, 0.0)
@@ -143,9 +168,7 @@ def make_ring_sector_between_quads_source() -> SourceMeshSnapshot:
     points["r1"] = (-1.0, RING_OUTER_RADIUS, 0.0)
     faces["f_quad_a"] = ("q0", "q1", "o0", "i0")
     faces["f_quad_b"] = (f"i{last}", f"o{last}", "r1", "r0")
-    return _mesh(
-        "ring_sector_between_quads", points, faces, seam_edges=(("i0", "o0"), (f"i{last}", f"o{last}"))
-    )
+    return points, faces, (("i0", "o0"), (f"i{last}", f"o{last}"))
 
 
 def make_square_with_hole_source() -> SourceMeshSnapshot:

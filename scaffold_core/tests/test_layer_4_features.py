@@ -34,6 +34,7 @@ from scaffold_core.layer_4_features.model import (
     FeatureSuppressionReason,
     StripSide,
 )
+from scaffold_core.layer_5_runtime.islands import STITCH_LEAVING_STRIP_REASON
 from scaffold_core.layer_5_runtime.pins import run_skeleton_solve
 from scaffold_core.layer_5_runtime.skeleton import STRIP_LAYOUT
 from scaffold_core.pipeline.inspection import inspect_pipeline_context
@@ -44,6 +45,7 @@ from scaffold_core.tests.fixtures.strip_patches import (
     make_cut_annulus_source,
     make_cut_three_row_annulus_source,
     make_ring_sector_between_quads_source,
+    make_ring_sector_between_quads_with_band_source,
     make_square_with_hole_source,
 )
 from scaffold_core.tests.test_layer_5_runtime import _load_capture
@@ -218,8 +220,42 @@ def test_five_uses_or_a_hole_is_no_candidate(make) -> None:
     assert len(annulus.feature_snapshot.candidates) == 1
 
 
-def test_strip_stitched_into_a_larger_island_is_not_applied_with_a_diagnostic() -> None:
+def test_strip_stitched_only_across_straight_sides_leaves_its_island() -> None:
     base = _pass_1(make_ring_sector_between_quads_source())
+    context = run_pass_2_features(base, ON)
+    (constraint,) = context.feature_snapshot.constraints
+    patch_id = str(constraint.patch_id)
+    solve = run_skeleton_solve(context)
+    # With the option off the sector stays stitched to both quads.
+    (island_off,) = run_skeleton_solve(base).assembly.islands
+    assert len(island_off.patch_ids) == 3
+    decisions = [d for d in solve.assembly.decisions if patch_id in (d.first_patch_id, d.second_patch_id)]
+    assert len(decisions) == 2
+    assert all(not d.accepted and d.reason == STITCH_LEAVING_STRIP_REASON for d in decisions)
+    assert len(solve.assembly.islands) == 3
+    assert _skeleton(solve, patch_id).frame == STRIP_LAYOUT
+    # A rectangle: opposite sides equal, every side straight, every corner turns left.
+    sides = _side_extents(context, solve, constraint)
+    assert [abs(along) for _role, along, _cross in sides[:2]] == pytest.approx(
+        [abs(along) for _role, along, _cross in sides[2:]]
+    )
+    assert all(cross < 1e-9 for _role, _along, cross in sides)
+    vectors = [(along, 0.0) if role == "AXIS_A" else (0.0, along) for role, along, _cross in sides]
+    for (ax, ay), (bx, by) in zip(vectors, vectors[1:] + vectors[:1]):
+        assert ax * by - ay * bx > 0.0
+    assert _loop_signed_area(context, solve, constraint) > 0.0
+    # The former neighbours are islands of one patch with their own layout.
+    for decision in decisions:
+        neighbour = decision.second_patch_id if decision.first_patch_id == patch_id else decision.first_patch_id
+        island_id = solve.assembly.island_by_patch_id[neighbour]
+        (island,) = [i for i in solve.assembly.islands if i.id == island_id]
+        assert island.patch_ids == (neighbour,)
+        assert _skeleton(solve, neighbour).frame != STRIP_LAYOUT
+        assert any(v.pinned and v.patch_id == neighbour for v in solve.vertices)
+
+
+def test_strip_stitched_across_a_bent_side_is_not_applied_with_a_diagnostic() -> None:
+    base = _pass_1(make_ring_sector_between_quads_with_band_source())
     context = run_pass_2_features(base, ON)
     (constraint,) = context.feature_snapshot.constraints
     patch_id = str(constraint.patch_id)
@@ -227,7 +263,9 @@ def test_strip_stitched_into_a_larger_island_is_not_applied_with_a_diagnostic() 
     solve_off = run_skeleton_solve(base)
     skeleton = _skeleton(solve, patch_id)
     (island,) = solve.assembly.islands
-    assert len(island.patch_ids) == 3
+    assert len(island.patch_ids) == 4
+    assert all(d.reason != STITCH_LEAVING_STRIP_REASON for d in solve.assembly.decisions)
+    assert solve.assembly == solve_off.assembly
     assert skeleton.frame != STRIP_LAYOUT
     assert f"strip constraint not applied, patch shares its island: {patch_id}" in skeleton.diagnostics
     assert solve.vertices == solve_off.vertices
