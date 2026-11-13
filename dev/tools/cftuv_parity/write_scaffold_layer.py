@@ -22,9 +22,11 @@ quilt as one chart; the mesh's seams are restored). --pins-only writes the
 pins and runs Blender's unwrap on the mesh's own seams, as before Slice AH;
 --no-unwrap writes the pins alone. The layer is scaled by --scale (default
 0.25, the reference's UV units per metre) so both layers have the same
-density. Charts are packed in rows so the layer can be read; a chart without
-pins comes out of the unwrap at an arbitrary scale and is rescaled to its 3D
-area first. This is a viewing aid, not Scaffold packing.
+density. Charts are packed in rows so the layer can be read. With the quilts
+laid, the core already gives a chart with fewer than two distinct pins the
+layout's scale; with --pins-only Blender's unwrap of the mesh's own seams does
+not, so a chart without pins is rescaled to its 3D area here first (by the
+core's pure helpers). This is a viewing aid, not Scaffold packing.
 """
 
 from __future__ import annotations
@@ -43,7 +45,12 @@ import bpy  # noqa: E402 - executed by Blender only
 from scaffold_core.layer_0_source.blender_io import read_source_mesh_from_blender  # noqa: E402
 from scaffold_core.layer_4_features.model import FeatureOptions  # noqa: E402
 from scaffold_core.layer_5_runtime.pins import run_skeleton_solve  # noqa: E402
-from scaffold_core.layer_5_runtime.uv_transfer import write_pinned_uvs, write_quilt_uvs  # noqa: E402
+from scaffold_core.layer_5_runtime.uv_transfer import (  # noqa: E402
+    chart_rescale_factor,
+    polygon_uv_area,
+    write_pinned_uvs,
+    write_quilt_uvs,
+)
 from scaffold_core.pipeline.passes import (  # noqa: E402
     run_pass_0,
     run_pass_1_relations,
@@ -150,13 +157,15 @@ def _write_object(obj, straighten_strips: bool, args) -> str:
 
 
 def _lay_out_charts(mesh, layer, solve, quilts_laid: bool) -> int:
-    """Make the layer readable: restore the density of charts without pins and pack all charts.
+    """Make the layer readable: pack all charts, and with --pins-only restore the density of charts without pins.
 
-    A chart is one Scaffold quilt (island). A quilt without any pinned corner
-    comes out of Blender's unwrap at an arbitrary scale and place and is
-    rescaled to its 3D area; with --pins-only (the mesh's own seams), every
-    patch without a pinned corner is such a chart of its own. Only whole
-    charts move or scale; no structure changes.
+    A chart is one Scaffold quilt (island). With the quilts laid, the core
+    write boundary already rescaled every chart with fewer than two distinct
+    pins to its 3D area, so the charts are only placed. With --pins-only (the
+    mesh's own seams), every patch without a pinned corner is a chart of its
+    own that comes out of Blender's unwrap at an arbitrary scale and is
+    rescaled to its 3D area here. Only whole charts move or scale; no
+    structure changes.
     """
 
     patch_of_face = solve.patch_by_source_face
@@ -187,10 +196,12 @@ def _lay_out_charts(mesh, layer, solve, quilts_laid: bool) -> int:
             charts.setdefault(key, []).extend(loop_indices)
             continue
         free_charts += 1
-        area_3d = sum(polygon.area for polygon in faces_of_chart[chart_id])
-        area_uv = sum(_uv_area(layer, polygon) for polygon in faces_of_chart[chart_id])
-        if area_3d > 0.0 and area_uv > 0.0:
-            factor = (area_3d / area_uv) ** 0.5
+        factor = None if quilts_laid else chart_rescale_factor(
+            sum(polygon_uv_area([tuple(layer.data[i].uv) for i in polygon.loop_indices])
+                for polygon in faces_of_chart[chart_id]),
+            sum(polygon.area for polygon in faces_of_chart[chart_id]),
+        )
+        if factor is not None:
             for i in loop_indices:
                 layer.data[i].uv = (layer.data[i].uv[0] * factor, layer.data[i].uv[1] * factor)
         charts[f"free:{chart_id}"] = list(loop_indices)
@@ -215,14 +226,6 @@ def _lay_out_charts(mesh, layer, solve, quilts_laid: bool) -> int:
         cursor_u += width + margin
         row_height = max(row_height, height)
     return free_charts
-
-
-def _uv_area(layer, polygon) -> float:
-    points = [layer.data[i].uv for i in polygon.loop_indices]
-    return abs(sum(
-        points[k][0] * points[(k + 1) % len(points)][1] - points[(k + 1) % len(points)][0] * points[k][1]
-        for k in range(len(points))
-    )) / 2.0
 
 
 if __name__ == "__main__":

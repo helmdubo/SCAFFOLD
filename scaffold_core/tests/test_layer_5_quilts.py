@@ -4,6 +4,7 @@ Layer: tests
 Rules:
 - Quilts as data (plan Slice AH): island assembly under the user filter's
   SeamDirectives, the UV cut set of the solve, and no change without a filter.
+- The pure scale helpers of the write boundary (headless; bpy is never loaded).
 - No production logic here.
 """
 
@@ -23,6 +24,11 @@ from scaffold_core.layer_5_runtime.islands import (
 )
 from scaffold_core.layer_5_runtime.pins import run_skeleton_solve
 from scaffold_core.layer_5_runtime.skeleton import LADDER_LAYOUT
+from scaffold_core.layer_5_runtime.uv_transfer import (
+    LAYOUT_UV_PER_MESH_UNIT,
+    chart_rescale_factor,
+    polygon_uv_area,
+)
 from scaffold_core.pipeline.passes import (
     run_pass_0,
     run_pass_1_relations,
@@ -166,3 +172,30 @@ def test_a_quilt_is_connected_by_its_stitched_seams() -> None:
                     reached |= patch_of_use[chain_id]
         assert reached == members
         assert len(island.stitched_chain_ids) == len(members) - 1  # a tree
+
+
+def test_the_layout_scale_is_one_uv_unit_per_mesh_unit() -> None:
+    assert LAYOUT_UV_PER_MESH_UNIT == 1.0
+
+
+def test_polygon_uv_area_is_unsigned_shoelace() -> None:
+    square = [(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)]
+    assert polygon_uv_area(square) == pytest.approx(4.0)
+    assert polygon_uv_area(list(reversed(square))) == pytest.approx(4.0)
+    assert polygon_uv_area([(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]) == pytest.approx(0.5)
+    assert polygon_uv_area([(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)]) == 0.0
+
+
+def test_chart_rescale_factor_gives_the_uv_area_its_3d_area() -> None:
+    # A chart packed into the unit square at linear scale 0.147 of true.
+    uv_area, area_3d = 0.147 ** 2 * 4.788, 4.788
+    factor = chart_rescale_factor(uv_area, area_3d)
+    assert factor == pytest.approx(1.0 / 0.147)
+    assert uv_area * factor ** 2 == pytest.approx(area_3d * LAYOUT_UV_PER_MESH_UNIT ** 2)
+    assert chart_rescale_factor(area_3d, area_3d) == pytest.approx(1.0)
+    assert chart_rescale_factor(1.0, 9.0, layout_scale=0.25) == pytest.approx(0.75)
+
+
+@pytest.mark.parametrize("uv_area, area_3d", [(0.0, 1.0), (1.0, 0.0), (0.0, 0.0), (-1.0, 1.0)])
+def test_a_degenerate_chart_is_left_alone(uv_area: float, area_3d: float) -> None:
+    assert chart_rescale_factor(uv_area, area_3d) is None

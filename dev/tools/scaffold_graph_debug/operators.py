@@ -298,7 +298,13 @@ class SCAFFOLDGRAPH_OT_WriteUV(bpy.types.Operator):
             print(f"[scaffold G5a] {report['next_step']}")
             for line in result.diagnostics:
                 print(f"[scaffold G5a] diag: {line}")
-            self.report({"INFO"}, summary + (" | quilts unwrapped" if self.unwrap_quilts else " | U > Unwrap to fill"))
+            if self.unwrap_quilts:
+                tail = f" | quilts unwrapped, charts rescaled:{report['charts_rescaled']}"
+                if report["charts_degenerate"]:
+                    tail += f" degenerate:{report['charts_degenerate']}"
+            else:
+                tail = " | U > Unwrap to fill"
+            self.report({"INFO"}, summary + tail)
         except Exception as exc:  # noqa: BLE001 - surface errors to the artist
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
