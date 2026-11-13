@@ -69,8 +69,11 @@ uv_transfer.py - the ONLY bpy write boundary (G5 rule): writes UVs+pins
 ```text
 1. axis-parallel: an axis-classified run's endpoints differ in UV only
    along its own axis (zero violations on flat-grid fixtures);
-2. lstsq residual ~0 on developable grids; nonzero residual must be
-   accompanied by UNCONSTRAINED diagnostics, never silent smearing;
+2. lstsq residual ~0 on developable grids; a residual above the
+   island's drift (plan Slice S: 1 mm per metre of span) must be
+   accompanied by UNCONSTRAINED diagnostics, never silent smearing. A
+   residual within the drift is spread by the solve (a closed outline
+   whose mesh lengths miss closure by millimetres);
 3. SEAM_SELF sides equal length in UV (band closure invariant);
 4. degradation always carries diagnostics naming entities;
 5. node/frame agreement (plan Slice N): in an island with a rigid unfolded
@@ -90,7 +93,8 @@ uv_transfer.py - the ONLY bpy write boundary (G5 rule): writes UVs+pins
    its run's two end pins at its arc-length fraction and never replaces
    a run-end pin.
 9. corner turn (plan Slice AA, G0 DD-51): at every Layer 3 RIGHT corner
-   whose two runs have solved ends, the layout turns left at a convex
+   and every bridged right corner (plan Slice AD, G0 DD-52) whose two
+   runs (arriving and leaving) have solved ends, the layout turns left at a convex
    corner and right at a reflex one, walking the loop. No island is
    mirrored and no line is flipped against its neighbours.
 ```
@@ -107,7 +111,7 @@ island rails. Layer 5 must not compensate for a missing or unordered
 ScaffoldTrace/ScaffoldRail by adding new rail-order, loop-orientation,
 BFS/greedy traversal or sign-propagation heuristics inside Layer 5 (the
 relative orientation of whole lines is Layer 5's own, G0 DD-47: it flips
-a line as a whole by Layer 3 RIGHT corners, never one run). If a
+a line as a whole by Layer 3 RIGHT corners, plain or bridged, never one run). If a
 fixture needs a direction-stable ordered rail or trace to solve, the correct
 G5a behavior is to diagnose/degrade and keep the behavior pinned until the
 Layer 3 rail/trace contract exists.
@@ -164,6 +168,12 @@ skeleton.py:
   so it still joins its end nodes for the other axis) and orients the
   lines against each other by the turn of Layer 3 RIGHT corners (plan
   Slice AA, G0 DD-51): convex left, reflex right; no 3D directions;
+  a right corner turned over one bridge run (Layer 3
+  RunBridgedCornerRelation, plan Slice AD, G0 DD-52) links and orients
+  the lines of its arriving and leaving runs the same way, and its
+  OBLIQUE bridge is laid by one vector equation per axis from the two
+  corner turns (IslandSkeleton.bridge_vector_by_run); a line the
+  corners never reach stays OBLIQUE with a diagnostic naming it;
   contradictions are excluded as UNCONSTRAINED with diagnostics.
 
 pins.py:

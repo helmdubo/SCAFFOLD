@@ -96,7 +96,8 @@ unordered_island_rails               of those, segments left unordered (branch o
 rail_frame_conflicts                 rails that split an island line or run against the frame (must be 0)
 ```
 
-Corner turn metrics read the Layer 3 RIGHT run corners in the solved layout
+Corner turn metrics read the Layer 3 RIGHT run corners and bridged right
+corners (G0 DD-52) in the solved layout
 (`corner_turns` in `dev/tools/cftuv_parity/parity.py`): the run that ends at
 the corner arrives, the one that starts there leaves, so a convex corner turns
 left and a reflex corner right in an unmirrored island:

@@ -7,6 +7,8 @@ Rules:
   one length equation between two components.
 - Every connected group of equations is solved with its own gauge; no
   singular block is left to the dense solver.
+- An OBLIQUE bridge run of a bridged right corner may add one equation
+  per axis with its given offset (frame-free islands; skeleton.py).
 - An island with a rigid unfolded frame anchors every group to the frame:
   the mean of its nodes' solved coordinate equals the mean of their frame
   coordinate. Without a frame only the largest group keeps coordinates;
@@ -64,7 +66,7 @@ def axis_components(runs, roles, role_name, node_by_run_end):
 
 def solve_axis(
     axis_name, runs, roles, signs, node_by_run_end, diagnostics, direction_of=None, drift=None, length_of=None,
-    frame_coordinate_by_node=None,
+    frame_coordinate_by_node=None, bridge_offset_by_run=None,
 ):
     """P7 semantics: the A coordinate lives on COLUMN components (nodes
     connected by AXIS_B runs share one A value) and is constrained by
@@ -74,6 +76,11 @@ def solve_axis(
     length_of overrides run lengths (a strip island's scaled lengths).
     frame_coordinate_by_node gives, in an island with a rigid unfolded frame,
     each node's frame coordinate along this axis; None without a frame.
+    bridge_offset_by_run gives, for an OBLIQUE bridge run of a bridged right
+    corner, its END minus START coordinate along this axis: one equation
+    between the components of its two ends. It unions no nodes and is not
+    sign-normalized. Ends in one component add it only when the offset is
+    not zero within RESIDUAL_TOLERANCE; then the residual check judges it.
     """
 
     own_role = "AXIS_A" if axis_name == "AXIS_A" else "AXIS_B"
@@ -108,6 +115,15 @@ def solve_axis(
         if dot(normalize(oriented), normalize(ref_dir)) < 0.0:
             equation[2] = -value
     equations = [(eq[0], eq[1], eq[2], eq[3]) for eq in equations]
+    for e in runs:
+        offset = (bridge_offset_by_run or {}).get(e.id)
+        if offset is None or roles.get(e.id) in (own_role, cross_role):
+            continue
+        start = component_of.get(node_by_run_end[(e.id, "START")])
+        end = component_of.get(node_by_run_end[(e.id, "END")])
+        if start is None or end is None or (start == end and abs(offset) <= RESIDUAL_TOLERANCE):
+            continue
+        equations.append((start, end, offset, e.id))
     coords, residuals = _lstsq(equations)
     if drift is None:
         spans = [

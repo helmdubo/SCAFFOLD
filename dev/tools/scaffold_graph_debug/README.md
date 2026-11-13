@@ -107,7 +107,7 @@ Group Patches: sides and types:
 | Toggle | GP layer | Draws |
 | --- | --- | --- |
 | Sides | `Scaffold_Patch_Sides` | one stroke per `PatchChainShapeRelation` piece: mint = surface line, blue = surface curve, orange = unresolved |
-| Corners | `Scaffold_Patch_Corners` | `RunCornerRelation` RIGHT and OTHER: green = right convex, magenta = right reflex, orange = other; STRAIGHT is not drawn |
+| Corners | `Scaffold_Patch_Corners` | `RunCornerRelation` RIGHT and OTHER: green = right convex, magenta = right reflex, orange = other; STRAIGHT is not drawn. `RunBridgedCornerRelation` (a right corner turned over one bridge run): blue cross at the bridge run's midpoint |
 | Types: strip / strip (option off) / rectangle / four-sided / other | `Scaffold_Types_*` | patch fill by the Layer 4 verdict: accepted strip (straightened); suppressed "option off" (a strip the option would straighten); suppressed "already a rectangle"; suppressed "no bent opposite pair"; no candidate |
 
 Layer 4 grades the shape before it reads the option, so Rectangle, Four-sided

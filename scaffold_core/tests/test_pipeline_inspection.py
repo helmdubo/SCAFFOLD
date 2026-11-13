@@ -240,6 +240,7 @@ def test_inspection_default_output_is_compact() -> None:
         # Top square: four right corners; box rim: four straight run joins.
         "run_corner_relation_count": 8,
         "run_corner_kind_counts": {"STRAIGHT": 4, "RIGHT": 4, "OTHER": 0},
+        "run_bridged_corner_relation_count": 0,
     }
 
 

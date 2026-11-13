@@ -17,7 +17,12 @@ Rules:
   from the handedness of those right corners (convex turns left, reflex
   right); an unordered rail or a line the corners contradict stays
   unsigned with a diagnostic, and a signed axis line the corners do not
-  tie to the island's longest line is reported. No world axes; roles and
+  tie to the island's longest line is reported. A right corner turned over
+  one bridge run (Layer 3 RunBridgedCornerRelation) links and orients the
+  lines of its arriving and leaving runs as a RIGHT corner does; a bridge
+  whose own line got no axis (OBLIQUE) is laid by one vector equation per
+  axis from the two corner turns. A line the corners never reach stays OBLIQUE with a
+  diagnostic. No world axes; roles and
   signs read no 3D directions (the axis solve still normalizes equations
   between the same two cross components by a 3D dot).
 - A Layer 4 STRAIGHT_STRIP FeatureConstraint (the only feature channel,
@@ -37,14 +42,19 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field, replace
-from math import pi
+from math import cos, pi, sin
 from typing import Any, Mapping
 
 from scaffold_core.layer_2_geometry.measures import EPSILON, cross, dot, normalize
 from scaffold_core.layer_3_relations.model import PatchChainEndpointRole, RunCornerKind, ScaffoldRailSegment
 from scaffold_core.layer_3_relations.scaffold_rails import cut_scaffold_rail, rail_member_endpoints
 from scaffold_core.layer_4_features.model import FeatureConstraintKind
-from scaffold_core.layer_5_runtime.axis_solve import RESIDUAL_TOLERANCE_PER_SPAN, AxisSolve, solve_axis
+from scaffold_core.layer_5_runtime.axis_solve import (
+    RESIDUAL_TOLERANCE,
+    RESIDUAL_TOLERANCE_PER_SPAN,
+    AxisSolve,
+    solve_axis,
+)
 from scaffold_core.layer_5_runtime.islands import (
     PLANAR_PATCH_MIN_NORMAL_DOT,
     IslandAssembly,
@@ -67,6 +77,7 @@ UNFOLDED_FRAME = "UNFOLDED"
 FRAME_FREE = "FRAME_FREE"
 STRIP_LAYOUT = "STRIP"  # an applied STRAIGHT_STRIP FeatureConstraint
 _STRIP_AXIS_UNIT = {"AXIS_A": (1.0, 0.0, 0.0), "AXIS_B": (0.0, 1.0, 0.0)}
+_LAYOUT_AXIS_UNIT = {"AXIS_A": (1.0, 0.0), "AXIS_B": (0.0, 1.0)}
 
 
 @dataclass(frozen=True)
@@ -84,6 +95,9 @@ class IslandSkeleton:
     vertex_by_run_end: Mapping[tuple[str, str], str] = field(default_factory=dict)
     rail_segments: tuple[ScaffoldRailSegment, ...] = ()
     rail_frame_conflicts: tuple[str, ...] = ()
+    # Frame-free island: the (AXIS_A, AXIS_B) vector of each OBLIQUE bridge
+    # run laid by a bridged right corner.
+    bridge_vector_by_run: Mapping[str, tuple[float, float]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -212,18 +226,24 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
     frame = None if strip_layout is not None else _unfolded_frame(island, assembly, geometry, lookups)
     length_of = None
     frame_coordinates = {"AXIS_A": None, "AXIS_B": None}
+    bridge_vectors: dict[str, tuple[float, float]] = {}
     if strip_layout is not None:
         roles, signs, direction_of, length_of = strip_layout
         mismatches = ()
         drift = None  # no frame: the solve measures drift along each axis
     elif frame is None:
-        axis_by_line = _bipartition_families(runs, line_of, relations.run_corner_relations, diagnostics)
+        bridged = relations.run_bridged_corner_relations
+        axis_by_line = _bipartition_families(runs, line_of, relations.run_corner_relations, diagnostics, bridged)
         roles = {
             e.id: axis_by_line.get(line_of.get(e.id), "OBLIQUE")
             for e in runs
         }
         signs = _rail_signs(rail_segments, line_of, diagnostics)
-        _orient_lines_by_corners(runs, line_of, axis_by_line, signs, relations.run_corner_relations, diagnostics)
+        _orient_lines_by_corners(
+            runs, line_of, axis_by_line, signs, relations.run_corner_relations, diagnostics, bridged
+        )
+        bridge_vectors = _bridge_vectors(runs, roles, signs, bridged, diagnostics)
+        _report_unreached_lines(runs, line_of, axis_by_line, bridge_vectors, diagnostics)
         direction_of = {e.id: e.direction for e in runs}
         mismatches: tuple[str, ...] = ()
         drift = None  # no frame: the solve measures drift along each axis
@@ -254,10 +274,12 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
     axis_a = solve_axis(
         "AXIS_A", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift, length_of,
         frame_coordinates["AXIS_A"],
+        {run_id: vector[0] for run_id, vector in bridge_vectors.items()},
     )
     axis_b = solve_axis(
         "AXIS_B", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift, length_of,
         frame_coordinates["AXIS_B"],
+        {run_id: vector[1] for run_id, vector in bridge_vectors.items()},
     )
     # A node with no equation on either axis is not on the skeleton: the
     # frame alone would pin it, so it keeps no coordinate (stays fabric).
@@ -282,6 +304,7 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
         vertex_by_run_end=vertex_by_run_end,
         rail_segments=rail_segments,
         rail_frame_conflicts=rail_conflicts,
+        bridge_vector_by_run=bridge_vectors,
     )
 
 
@@ -774,13 +797,15 @@ def _faces_at_run_end(e, source_vertex: str, lookups) -> frozenset:
     return frozenset(faces)
 
 
-def _bipartition_families(runs, family_of, run_corner_relations, diagnostics):
+def _bipartition_families(runs, family_of, run_corner_relations, diagnostics, bridged_corners=()):
     """Axis classes via right corners on the patch surface (frame-free).
 
     Derivation for curved islands, which have no rigid unfolded frame. Two
     island lines are orthogonal iff two of their runs, both in this island,
     meet at a Layer 3 RunCornerRelation of kind RIGHT: a right corner of one
-    patch's own surface (convex or reflex). The seed (longest) line is AXIS_A;
+    patch's own surface (convex or reflex), or are the arriving and leaving
+    runs of a RunBridgedCornerRelation (a right corner turned over one bridge
+    run; the bridge takes no part). The seed (longest) line is AXIS_A;
     lines meeting it at a right corner are AXIS_B, and so on by BFS.
     Contradictions degrade the line to OBLIQUE with a diagnostic - never
     silently forced - and an OBLIQUE line passes no axis to its neighbours.
@@ -796,10 +821,16 @@ def _bipartition_families(runs, family_of, run_corner_relations, diagnostics):
         return {}
     island_run_ids = {e.id for e in runs}
     edges: dict[str, set[str]] = {}
-    for corner in run_corner_relations:
-        if corner.kind is not RunCornerKind.RIGHT:
-            continue
-        first_id, second_id = corner.first_directional_evidence_id, corner.second_directional_evidence_id
+    pairs = [
+        (corner.first_directional_evidence_id, corner.second_directional_evidence_id)
+        for corner in run_corner_relations
+        if corner.kind is RunCornerKind.RIGHT
+    ]
+    pairs.extend(
+        (corner.arriving_directional_evidence_id, corner.leaving_directional_evidence_id)
+        for corner in bridged_corners
+    )
+    for first_id, second_id in pairs:
         if first_id not in island_run_ids or second_id not in island_run_ids:
             continue
         fam_a, fam_b = family_of.get(first_id), family_of.get(second_id)
@@ -825,7 +856,9 @@ def _bipartition_families(runs, family_of, run_corner_relations, diagnostics):
     return axis_by_family
 
 
-def _orient_lines_by_corners(runs, line_of, axis_by_line, signs, run_corner_relations, diagnostics):
+def _orient_lines_by_corners(
+    runs, line_of, axis_by_line, signs, run_corner_relations, diagnostics, bridged_corners=()
+):
     """One sign factor per island line from the handedness of right corners.
 
     Frame-free islands only. The rails fix each line's in-line run signs; the
@@ -836,7 +869,9 @@ def _orient_lines_by_corners(runs, line_of, axis_by_line, signs, run_corner_rela
     left and a reflex corner turns right, so with a sign s per run
     (coordinate(END) - coordinate(START) = s * length):
     s(arriving) * s(leaving) = +1 when (arriving is AXIS_A) == convex, else -1.
-    That fixes the product of the two lines' factors. Factors propagate by
+    That fixes the product of the two lines' factors. A RunBridgedCornerRelation
+    is read the same way: its arriving run arrives, its leaving run leaves,
+    and its combined angle says convex or reflex. Factors propagate by
     BFS from the longest line (tie: id), each corner read once. A line
     given two different factors is a conflict: its runs lose their signs (no
     length equations) and the island gets one diagnostic per such line. A
@@ -851,7 +886,7 @@ def _orient_lines_by_corners(runs, line_of, axis_by_line, signs, run_corner_rela
         line_id = line_of.get(e.id)
         if line_id is not None:
             length_by_line[line_id] = length_by_line.get(line_id, 0.0) + e.length
-    links: dict[str, list[tuple[str, float, int]]] = {}
+    turns: list[tuple[int, str | None, str | None, float]] = []  # (index, arriving, leaving, angle)
     for index, corner in enumerate(run_corner_relations):
         if corner.kind is not RunCornerKind.RIGHT:
             continue
@@ -859,8 +894,17 @@ def _orient_lines_by_corners(runs, line_of, axis_by_line, signs, run_corner_rela
             corner.first_endpoint_role: corner.first_directional_evidence_id,
             corner.second_endpoint_role: corner.second_directional_evidence_id,
         }
-        arriving = run_by_role.get(PatchChainEndpointRole.END)
-        leaving = run_by_role.get(PatchChainEndpointRole.START)
+        turns.append((
+            index, run_by_role.get(PatchChainEndpointRole.END), run_by_role.get(PatchChainEndpointRole.START),
+            corner.interior_angle_sum,
+        ))
+    turns.extend(
+        (len(run_corner_relations) + index, corner.arriving_directional_evidence_id,
+         corner.leaving_directional_evidence_id, corner.interior_angle_sum)
+        for index, corner in enumerate(bridged_corners)
+    )
+    links: dict[str, list[tuple[str, float, int]]] = {}
+    for index, arriving, leaving, angle in turns:
         if arriving is None or leaving is None:
             continue
         if not {arriving, leaving} <= island_run_ids or arriving not in signs or leaving not in signs:
@@ -869,7 +913,7 @@ def _orient_lines_by_corners(runs, line_of, axis_by_line, signs, run_corner_rela
         arriving_axis = axis_by_line.get(arriving_line)
         if {arriving_axis, axis_by_line.get(leaving_line)} != {"AXIS_A", "AXIS_B"}:
             continue
-        convex = corner.interior_angle_sum < pi
+        convex = angle < pi
         wanted = 1.0 if (arriving_axis == "AXIS_A") == convex else -1.0
         relative = wanted * signs[arriving] * signs[leaving]
         links.setdefault(arriving_line, []).append((leaving_line, relative, index))
@@ -917,6 +961,77 @@ def _orient_lines_by_corners(runs, line_of, axis_by_line, signs, run_corner_rela
             del signs[e.id]
         elif factor_by_line.get(line_id, 1.0) < 0.0:
             signs[e.id] = -signs[e.id]
+
+
+def _bridge_vectors(runs, roles, signs, bridged_corners, diagnostics) -> dict[str, tuple[float, float]]:
+    """The (AXIS_A, AXIS_B) layout vector of each bridge run (frame-free).
+
+    Read once roles and signs are final. A bridged corner whose arriving run A
+    and leaving run B lie on different axes with signs, and whose bridge C is
+    OBLIQUE, lays C: walking the loop, A points along sign(A) times its axis
+    (AXIS_A, AXIS_B right-handed, a left turn positive), the boundary turns by
+    pi - angle at each of the two corners, and the two turns are corrected
+    evenly so that they add up to exactly the right angle the record names
+    (+pi/2 convex, -pi/2 reflex). C's vector is its length along A's direction
+    turned by the first corrected turn. A corner whose B does not point where
+    the right angle says is reported and lays nothing; a bridge that two
+    corners lay differently is reported and gets no vector.
+    """
+
+    run_by_id = {e.id: e for e in runs}
+    vectors_by_bridge: dict[str, list[tuple[float, float]]] = {}
+    for corner in bridged_corners:
+        arriving = corner.arriving_directional_evidence_id
+        bridge = corner.bridge_directional_evidence_id
+        leaving = corner.leaving_directional_evidence_id
+        if not {arriving, bridge, leaving} <= set(run_by_id) or roles.get(bridge) != "OBLIQUE":
+            continue
+        arriving_role, leaving_role = roles.get(arriving), roles.get(leaving)
+        if {arriving_role, leaving_role} != {"AXIS_A", "AXIS_B"} or arriving not in signs or leaving not in signs:
+            continue
+        total = 0.5 * pi if corner.interior_angle_sum < pi else -0.5 * pi
+        first_turn = pi - corner.arriving_interior_angle_sum
+        second_turn = pi - corner.leaving_interior_angle_sum
+        first_turn -= 0.5 * (first_turn + second_turn - total)
+        along = tuple(signs[arriving] * c for c in _LAYOUT_AXIS_UNIT[arriving_role])
+        leaving_direction = tuple(signs[leaving] * c for c in _LAYOUT_AXIS_UNIT[leaving_role])
+        if max(abs(a - b) for a, b in zip(_turn_2d(along, total), leaving_direction)) > 0.5:
+            diagnostics.append(f"bridged corner against its line orientation: {corner.id}")
+            continue
+        length = run_by_id[bridge].length
+        direction = _turn_2d(along, first_turn)
+        vectors_by_bridge.setdefault(bridge, []).append((length * direction[0], length * direction[1]))
+    vectors: dict[str, tuple[float, float]] = {}
+    for bridge in sorted(vectors_by_bridge):
+        laid = vectors_by_bridge[bridge]
+        if any(max(abs(a - b) for a, b in zip(vector, laid[0])) > RESIDUAL_TOLERANCE for vector in laid):
+            diagnostics.append(f"bridge run laid two ways by bridged corners: {bridge}")
+            continue
+        vectors[bridge] = laid[0]
+    return vectors
+
+
+def _turn_2d(vector, angle):
+    c, s = cos(angle), sin(angle)
+    return (c * vector[0] - s * vector[1], s * vector[0] + c * vector[1])
+
+
+def _report_unreached_lines(runs, line_of, axis_by_line, bridge_vectors, diagnostics) -> None:
+    """One diagnostic per island line the right corners never reach (frame-free).
+
+    Such a line is OBLIQUE. A line made only of bridge runs that have a
+    layout vector is laid by its bridged corners and is not reported.
+    """
+
+    runs_by_line: dict[str, list[str]] = {}
+    for e in runs:
+        line_id = line_of.get(e.id)
+        if line_id is not None:
+            runs_by_line.setdefault(line_id, []).append(e.id)
+    for line_id in sorted(runs_by_line):
+        if line_id in axis_by_line or all(run_id in bridge_vectors for run_id in runs_by_line[line_id]):
+            continue
+        diagnostics.append(f"island line not reached by right corners: {line_id} -> OBLIQUE")
 
 
 _chain_axis = chain_axis

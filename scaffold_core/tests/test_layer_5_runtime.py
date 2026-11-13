@@ -13,7 +13,7 @@ import json
 import sys
 from collections import Counter
 from dataclasses import replace
-from math import pi
+from math import atan2, cos, dist, pi, sin
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -52,8 +52,12 @@ from scaffold_core.tests.fixtures.l_corridor_tunnel import (
 )
 from scaffold_core.tests.fixtures.reflex_corner import make_reflex_corner_walls_source
 from scaffold_core.tests.fixtures.run_corner_sheets import (
+    NOTCHED_SHEET_UNFOLDED,
+    make_cut_corner_rectangle_source,
+    make_folded_cut_corner_source,
     make_folded_l_sheet_source,
     make_folded_sheet_source,
+    make_notched_sheet_source,
 )
 from scaffold_core.tests.fixtures.strip_patches import make_cut_annulus_source
 from scaffold_core.tests.fixtures.t_vertex_wall import make_t_vertex_wall_source
@@ -1037,12 +1041,15 @@ def _corner_law_by_island(context, result) -> dict[str, Counter]:
 
     The run whose endpoint role is END arrives at the corner, the START run
     leaves it; in an unmirrored layout a convex corner turns left and a reflex
-    corner right. Only corners with all four run-end coordinates solved and a
-    clear turn (sine of at least 0.5) are counted.
+    corner right. A bridged right corner is checked the same way between its
+    arriving and leaving runs ("bridged" counts those checked). Only corners
+    with all four run-end coordinates solved and a clear turn (sine of at
+    least 0.5) are counted.
     """
 
     skeleton_of_run = {run_id: s for s in result.skeletons for run_id in s.axis_role_by_run}
     counts: dict[str, Counter] = {}
+    turns = []  # (arriving, leaving, angle, bridged)
     for corner in context.relation_snapshot.run_corner_relations:
         if corner.kind is not RunCornerKind.RIGHT:
             continue
@@ -1050,8 +1057,15 @@ def _corner_law_by_island(context, result) -> dict[str, Counter]:
             corner.first_endpoint_role: corner.first_directional_evidence_id,
             corner.second_endpoint_role: corner.second_directional_evidence_id,
         }
-        arriving = run_by_role.get(PatchChainEndpointRole.END)
-        leaving = run_by_role.get(PatchChainEndpointRole.START)
+        turns.append((
+            run_by_role.get(PatchChainEndpointRole.END), run_by_role.get(PatchChainEndpointRole.START),
+            corner.interior_angle_sum, False,
+        ))
+    turns.extend(
+        (c.arriving_directional_evidence_id, c.leaving_directional_evidence_id, c.interior_angle_sum, True)
+        for c in context.relation_snapshot.run_bridged_corner_relations
+    )
+    for arriving, leaving, angle, bridged in turns:
         skeleton = skeleton_of_run.get(arriving)
         if leaving is None or skeleton is None or skeleton_of_run.get(leaving) is not skeleton:
             continue
@@ -1066,8 +1080,9 @@ def _corner_law_by_island(context, result) -> dict[str, Counter]:
         turn = da[0] * dl[1] - da[1] * dl[0]
         if turn == 0.0 or abs(turn) < 0.5 * (da[0] ** 2 + da[1] ** 2) ** 0.5 * (dl[0] ** 2 + dl[1] ** 2) ** 0.5:
             continue
-        law = (turn > 0.0) == (corner.interior_angle_sum < pi)
+        law = (turn > 0.0) == (angle < pi)
         counts.setdefault(skeleton.island_id, Counter())["with" if law else "against"] += 1
+        counts[skeleton.island_id]["bridged"] += bridged
     return counts
 
 
@@ -1085,6 +1100,9 @@ CORNER_LAW_SOURCES = {
     "reflex_corner": make_reflex_corner_walls_source,
     "folded_l_sheet": make_folded_l_sheet_source,
     "folded_sheet": make_folded_sheet_source,
+    "notched_sheet": lambda: make_notched_sheet_source(folded=False),
+    "notched_sheet_folded": lambda: make_notched_sheet_source(folded=True),
+    "cut_corner_folded": lambda: make_cut_corner_rectangle_source(30.0, folded=True),
     "cut_annulus": make_cut_annulus_source,
     "t_vertex_wall": make_t_vertex_wall_source,
     "tube_with_cap": make_tube_with_cap_source,
@@ -1181,6 +1199,161 @@ def test_corner_handedness_orients_lines_and_unsigns_a_contradicted_line() -> No
 
 def _skeleton_by_island(result):
     return {skeleton.island_id: skeleton for skeleton in result.skeletons}
+
+
+def _run_name(context):
+    evidence = {e.id: e for e in context.relation_snapshot.patch_chain_directional_evidence}
+    return lambda run_id: f"{evidence[run_id].start_source_vertex_id}-{evidence[run_id].end_source_vertex_id}"
+
+
+def _without_bridged_corners(context):
+    return replace(context, relation_snapshot=replace(context.relation_snapshot, run_bridged_corner_relations=()))
+
+
+def test_frame_free_bridged_corners_lay_a_chamfered_outline_exactly() -> None:
+    # Folded notched sheet: one non-planar patch, no rigid frame. Its notch
+    # corners and its top-left corner are right corners turned over chamfers.
+    context = run_pass_1_relations(run_pass_0(make_notched_sheet_source(folded=True)))
+    result = run_skeleton_solve(context)
+    (skeleton,) = result.skeletons
+    name = _run_name(context)
+    roles = {name(run_id): role for run_id, role in skeleton.axis_role_by_run.items()}
+    bridges = {"j1-j2", "j3-j4", "t1-t2"}
+
+    assert skeleton.frame == "FRAME_FREE"
+    assert skeleton.diagnostics == ()
+    assert {run for run, role in roles.items() if role == "OBLIQUE"} == bridges
+    assert {name(run_id) for run_id in skeleton.bridge_vector_by_run} == bridges
+    assert roles["j2-j3"] == roles["a0-a1"] == "AXIS_A"  # the notch top, across two chamfers
+    # The notch top is the bridge of the chamfer -> top -> chamfer record, but
+    # it has an axis role: it is laid by its length equation, not by a vector.
+    (top_bridged,) = [
+        c for c in context.relation_snapshot.run_bridged_corner_relations
+        if name(c.bridge_directional_evidence_id) == "j2-j3"
+    ]
+    assert top_bridged.bridge_directional_evidence_id not in skeleton.bridge_vector_by_run
+    assert max(skeleton.axis_a.residual_max, skeleton.axis_b.residual_max) < 1e-9
+    pins = {vertex.source_vertex_id: vertex.uv for vertex in result.vertices if vertex.pinned}
+    run_ends = {
+        str(vertex)
+        for e in context.relation_snapshot.patch_chain_directional_evidence
+        for vertex in (e.start_source_vertex_id, e.end_source_vertex_id)
+    }
+    assert run_ends <= set(pins)
+    # The exact unfolded outline, moved rigidly: a rotation, never a mirror.
+    unfolded = {
+        str(vertex_id): vertex.position[:2]
+        for vertex_id, vertex in context.source_snapshot.vertices.items()
+        if vertex.position[2] == 0.0
+    }
+    unfolded.update(NOTCHED_SHEET_UNFOLDED)
+    origin, axis = "a0", "a3"
+    angle = atan2(pins[axis][1] - pins[origin][1], pins[axis][0] - pins[origin][0]) - atan2(
+        unfolded[axis][1] - unfolded[origin][1], unfolded[axis][0] - unfolded[origin][0]
+    )
+    for vertex, uv in pins.items():
+        x, y = (unfolded[vertex][k] - unfolded[origin][k] for k in range(2))
+        moved = (pins[origin][0] + cos(angle) * x - sin(angle) * y, pins[origin][1] + sin(angle) * x + cos(angle) * y)
+        assert dist(moved, uv) < 1e-9, vertex
+    law = _corner_law_by_island(context, result)[skeleton.island_id]
+    assert law["against"] == 0
+    assert law["bridged"] == 4  # the three chamfers and the notch top between its chamfers
+
+
+def test_without_bridged_corners_the_notch_and_its_side_are_unreached_lines() -> None:
+    context = _without_bridged_corners(run_pass_1_relations(run_pass_0(make_notched_sheet_source(folded=True))))
+    (skeleton,) = run_skeleton_solve(context).skeletons
+    name = _run_name(context)
+    unreached = {
+        name(run_id)
+        for run_id, line in skeleton.line_by_run.items()
+        if f"island line not reached by right corners: {line} -> OBLIQUE" in skeleton.diagnostics
+    }
+
+    assert unreached == {"j1-j2", "j2-j3", "j3-j4", "t1-t2", "t2-a0", "a0-a1", "a1-j1"}
+    assert skeleton.bridge_vector_by_run == {}
+
+
+def test_frame_free_unreached_line_is_reported_once() -> None:
+    # Folded sheet: p-w meets its neighbours at 135 and 45 degrees: no right corner.
+    context = run_pass_1_relations(run_pass_0(make_folded_sheet_source()))
+    (skeleton,) = run_skeleton_solve(context).skeletons
+    name = _run_name(context)
+    (run_id,) = [run_id for run_id in skeleton.axis_role_by_run if name(run_id) == "p-w"]
+
+    assert skeleton.axis_role_by_run[run_id] == "OBLIQUE"
+    assert skeleton.diagnostics == (
+        f"island line not reached by right corners: {skeleton.line_by_run[run_id]} -> OBLIQUE",
+    )
+
+
+def _bridged_corner(arriving, bridge, leaving, first_degrees, second_degrees):
+    first, second = first_degrees * pi / 180.0, second_degrees * pi / 180.0
+    return SimpleNamespace(
+        id=f"bridged:{arriving}:{bridge}:{leaving}",
+        arriving_directional_evidence_id=arriving,
+        bridge_directional_evidence_id=bridge,
+        leaving_directional_evidence_id=leaving,
+        arriving_interior_angle_sum=first,
+        leaving_interior_angle_sum=second,
+        interior_angle_sum=first + second - pi,
+    )
+
+
+def test_bridge_vectors_follow_the_corner_turns_and_report_disagreements() -> None:
+    from scaffold_core.layer_5_runtime.skeleton import _bridge_vectors
+
+    runs = tuple(SimpleNamespace(id=run_id, length=2.0) for run_id in ("a", "b", "c", "d", "e", "f", "g"))
+    roles = {"a": "AXIS_A", "b": "AXIS_B", "c": "OBLIQUE", "d": "AXIS_A", "e": "AXIS_B", "f": "OBLIQUE", "g": "AXIS_B"}
+    signs = {"a": 1.0, "b": 1.0, "d": 1.0, "e": 1.0, "g": -1.0}
+    diagnostics: list[str] = []
+
+    vectors = _bridge_vectors(runs, roles, signs, (
+        # c bridges a convex right corner split 45 + 45 (a +A, b +B): it points up-right.
+        _bridged_corner("a", "c", "b", 135.0, 135.0),
+        # f is laid by two corners that disagree: 45 + 45 and 30 + 60.
+        _bridged_corner("a", "f", "b", 135.0, 135.0),
+        _bridged_corner("d", "f", "e", 150.0, 120.0),
+        # A convex corner from +A must leave along +B; g runs along -B.
+        _bridged_corner("d", "c", "g", 135.0, 135.0),
+    ), diagnostics)
+
+    assert set(vectors) == {"c"}
+    assert vectors["c"] == pytest.approx((2.0 ** 0.5, 2.0 ** 0.5))
+    assert diagnostics == [
+        "bridged corner against its line orientation: bridged:d:c:g",
+        "bridge run laid two ways by bridged corners: f",
+    ]
+
+
+def test_bridge_vector_splits_the_tolerance_error_evenly_between_the_two_turns() -> None:
+    from scaffold_core.layer_5_runtime.skeleton import _bridge_vectors
+
+    runs = tuple(SimpleNamespace(id=run_id, length=1.0) for run_id in ("a", "c", "b"))
+    # 136 + 137 degrees: turns 44 and 43, three degrees short of the right angle.
+    corner = _bridged_corner("a", "c", "b", 136.0, 137.0)
+    vectors = _bridge_vectors(
+        runs, {"a": "AXIS_A", "c": "OBLIQUE", "b": "AXIS_B"}, {"a": 1.0, "b": 1.0}, (corner,), []
+    )
+
+    turn = (44.0 + 1.5) * pi / 180.0
+    assert vectors["c"] == pytest.approx((cos(turn), sin(turn)))
+
+
+@pytest.mark.parametrize("make_source", [
+    lambda: make_notched_sheet_source(folded=False),
+    lambda: make_cut_corner_rectangle_source(30.0),
+])
+def test_rigid_frame_island_solves_the_same_with_or_without_bridged_corners(make_source) -> None:
+    context = run_pass_1_relations(run_pass_0(make_source()))
+    assert context.relation_snapshot.run_bridged_corner_relations
+
+    with_bridged = run_skeleton_solve(context)
+    without = run_skeleton_solve(_without_bridged_corners(context))
+
+    assert [s.frame for s in with_bridged.skeletons] == ["UNFOLDED"]
+    assert with_bridged.skeletons == without.skeletons
+    assert with_bridged.vertices == without.vertices
 
 
 def test_arch_rim_arcs_share_one_axis_and_end_chains_the_other() -> None:
@@ -1880,3 +2053,69 @@ def _write_with_fake_bmesh(monkeypatch, source, result, mode: str) -> dict:
     write_pinned_uvs(SimpleNamespace(object=mesh_object), result)
     # uv_transfer names Blender elements like blender_io: f<index>, v<index>.
     return {(f"f{face.index}", f"v{loop.vert.index}"): loop.uv_data for face in faces for loop in face.loops}
+
+
+def _bridge_on_one_component(offset):
+    """Axis A solve: c bridges two nodes that the AXIS_B run b joins into one component."""
+
+    from scaffold_core.layer_5_runtime.axis_solve import solve_axis
+
+    runs = (
+        SimpleNamespace(id="a", length=1.0, direction=(1.0, 0.0, 0.0)),
+        SimpleNamespace(id="b", length=1.0, direction=(0.0, 1.0, 0.0)),
+        SimpleNamespace(id="c", length=1.0, direction=(0.7, 0.7, 0.0)),
+    )
+    node_by_run_end = {
+        ("a", "START"): "n0", ("a", "END"): "n2",
+        ("b", "START"): "n0", ("b", "END"): "n1",
+        ("c", "START"): "n0", ("c", "END"): "n1",
+    }
+    roles = {"a": "AXIS_A", "b": "AXIS_B", "c": "OBLIQUE"}
+    diagnostics: list[str] = []
+    solve = solve_axis(
+        "AXIS_A", runs, roles, {"a": 1.0, "b": 1.0}, node_by_run_end, diagnostics,
+        bridge_offset_by_run={"c": offset},
+    )
+    return solve, diagnostics
+
+
+def test_bridge_whose_ends_share_a_cross_component_is_judged_by_the_residual() -> None:
+    # A non-zero offset between two nodes of one component cannot hold: its
+    # residual is the offset, so the component goes UNCONSTRAINED, reported.
+    solve, diagnostics = _bridge_on_one_component(0.5)
+
+    assert solve.equation_count == 2
+    assert diagnostics == ["AXIS_A: 1 contradictory equations -> UNCONSTRAINED components"]
+    assert "n0" not in solve.coordinate_by_node and "n1" not in solve.coordinate_by_node
+
+
+def test_bridge_with_zero_offset_inside_one_component_adds_no_equation() -> None:
+    solve, diagnostics = _bridge_on_one_component(1e-7)
+
+    assert solve.equation_count == 1  # the AXIS_A run alone
+    assert diagnostics == []
+    assert solve.coordinate_by_node["n2"] - solve.coordinate_by_node["n0"] == pytest.approx(1.0)
+
+
+def test_bridged_corner_off_a_right_angle_within_tolerance_is_reported_not_silent() -> None:
+    # Pinned behaviour (Slice AD review): turns of 44 and 43 degrees make a
+    # 93-degree corner, inside the DD-45 tolerance, so the record exists and
+    # the bridge is laid for an exact right angle. The true top side is 3
+    # degrees off the bottom, so the island cannot close: the solve reports
+    # contradictory equations and pins nothing; it never places wrong pins.
+    context = run_pass_1_relations(run_pass_0(make_folded_cut_corner_source(44.0, 43.0)))
+    (record,) = context.relation_snapshot.run_bridged_corner_relations
+    result = run_skeleton_solve(context)
+    (skeleton,) = result.skeletons
+
+    assert round(record.interior_angle_sum * 180.0 / pi, 6) == 93.0
+    assert skeleton.frame == "FRAME_FREE"
+    assert record.bridge_directional_evidence_id in skeleton.bridge_vector_by_run
+    assert "AXIS_A: 5 contradictory equations -> UNCONSTRAINED components" in skeleton.diagnostics
+    assert "AXIS_B: 3 contradictory equations -> UNCONSTRAINED components" in skeleton.diagnostics
+    assert skeleton.axis_a.unconstrained_components and skeleton.axis_b.unconstrained_components
+    assert not [vertex for vertex in result.vertices if vertex.pinned]
+    # The same sheet with turns that add up to 90 degrees solves exactly.
+    exact = run_skeleton_solve(run_pass_1_relations(run_pass_0(make_folded_cut_corner_source(45.0, 45.0))))
+    assert exact.skeletons[0].diagnostics == ()
+    assert len([vertex for vertex in exact.vertices if vertex.pinned]) == 7

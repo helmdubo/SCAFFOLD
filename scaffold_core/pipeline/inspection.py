@@ -229,6 +229,7 @@ def relation_summary_to_dict(relations: RelationSnapshot, detail: str = "compact
         "patch_chain_shape_kind_counts": _patch_chain_shape_kind_counts(relations),
         "run_corner_relation_count": len(relations.run_corner_relations),
         "run_corner_kind_counts": _run_corner_kind_counts(relations),
+        "run_bridged_corner_relation_count": len(relations.run_bridged_corner_relations),
     }
     if detail != "full":
         return summary
