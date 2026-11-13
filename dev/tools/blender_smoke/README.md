@@ -96,6 +96,16 @@ unordered_island_rails               of those, segments left unordered (branch o
 rail_frame_conflicts                 rails that split an island line or run against the frame (must be 0)
 ```
 
+Corner turn metrics read the Layer 3 RIGHT run corners in the solved layout
+(`corner_turns` in `dev/tools/cftuv_parity/parity.py`): the run that ends at
+the corner arrives, the one that starts there leaves, so a convex corner turns
+left and a reflex corner right in an unmirrored island:
+
+```text
+corners_against_law                  checked RIGHT corners that turn the wrong way (expected 0)
+mirrored_islands                     islands with more corners against the law than with it (expected 0)
+```
+
 Chain shape metrics (Stage A) count the evidence-only PatchChainShapeRelation
 pieces, each PatchChain cut at its surface corners and judged on its own side:
 

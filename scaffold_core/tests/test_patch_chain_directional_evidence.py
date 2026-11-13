@@ -24,6 +24,7 @@ from scaffold_core.layer_3_relations.patch_chain_shape import build_patch_chain_
 from scaffold_core.pipeline.inspection import inspect_pipeline_context
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations
 from scaffold_core.tests.fixtures.closed_shared_loop import make_closed_shared_boundary_loop_source
+from scaffold_core.tests.test_layer_5_runtime import DATA, _load_capture
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -168,3 +169,30 @@ def test_chain_refinement_code_does_not_introduce_deferred_semantic_terms_for_di
                 identifiers.add(node.asname)
 
     assert not identifiers & FORBIDDEN_TOKENS
+
+
+def test_runs_of_every_open_use_chain_from_its_start_vertex_to_its_end_vertex() -> None:
+    checked = 0
+    for path in sorted(DATA.glob("*.json")):
+        context = run_pass_1_relations(run_pass_0(_load_capture(path.name)))
+        model = context.topology_snapshot
+        runs_by_use: dict = {}
+        for item in context.relation_snapshot.patch_chain_directional_evidence:
+            runs_by_use.setdefault(item.patch_chain_id, []).append(item)
+        for use in model.patch_chains.values():
+            start_sources = set(model.vertices[use.start_vertex_id].source_vertex_ids)
+            end_sources = set(model.vertices[use.end_vertex_id].source_vertex_ids)
+            runs = runs_by_use.get(use.id, [])
+            if not runs or start_sources & end_sources:
+                continue  # a closed use has no end points to follow
+            by_start = {item.start_source_vertex_id: item for item in runs}
+            assert len(by_start) == len(runs), (path.name, use.id)
+            first = [item for item in runs if item.start_source_vertex_id in start_sources]
+            assert len(first) == 1, (path.name, use.id)
+            walked = [first[0]]
+            while walked[-1].end_source_vertex_id in by_start and len(walked) < len(runs):
+                walked.append(by_start[walked[-1].end_source_vertex_id])
+            assert len(walked) == len(runs), (path.name, use.id)
+            assert walked[-1].end_source_vertex_id in end_sources, (path.name, use.id)
+            checked += 1
+    assert checked > 200

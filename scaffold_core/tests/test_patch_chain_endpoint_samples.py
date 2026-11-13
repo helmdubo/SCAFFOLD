@@ -25,6 +25,7 @@ from scaffold_core.tests.fixtures.cylinder_tube import (
     make_segmented_cylinder_tube_without_caps_with_one_seam_source,
 )
 from scaffold_core.tests.fixtures.l_corridor_tunnel import make_l_corridor_tunnel_seamed_folds_source
+from scaffold_core.tests.test_layer_5_runtime import _load_capture
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -123,7 +124,9 @@ def test_cylinder_patch_chain_endpoint_samples_use_nonzero_local_face_fan_normal
     assert all(sample.confidence > 0.0 for sample in snapshot.patch_chain_endpoint_samples)
 
 
-def test_patch_chain_endpoint_samples_fill_topology_ends_from_local_segments() -> None:
+def test_patch_chain_endpoint_samples_at_open_use_ends_come_from_its_runs() -> None:
+    # The runs follow the use from its start vertex, so its topology ends are
+    # run ends and need no LOCAL_SEGMENT fallback.
     context = run_pass_1_relations(run_pass_0(make_l_corridor_tunnel_seamed_folds_source()))
     samples = context.relation_snapshot.patch_chain_endpoint_samples
     patch_chain_id = "patch_chain:patch:seed:f_wall:0:2"
@@ -141,10 +144,26 @@ def test_patch_chain_endpoint_samples_fill_topology_ends_from_local_segments() -
         VertexId("vertex:g2"),
     )
 
-    assert start_sample.evidence[0].data["sample_source"] == "LOCAL_SEGMENT"
+    assert start_sample.evidence[0].data["sample_source"] == "RUN_DERIVED"
     assert start_sample.tangent_away_from_vertex == (0.0, 0.0, -1.0)
-    assert end_sample.evidence[0].data["sample_source"] == "LOCAL_SEGMENT"
+    assert end_sample.evidence[0].data["sample_source"] == "RUN_DERIVED"
     assert end_sample.tangent_away_from_vertex == (0.0, 0.0, 1.0)
+
+
+def test_local_segment_samples_serve_a_closed_chain_used_from_a_seam() -> None:
+    # The ring's use starts at the seam vertex v7, not at the Chain's start:
+    # no run ends there, so both use ends take the local segment.
+    context = run_pass_1_relations(run_pass_0(_load_capture("artist_cross_band.json")))
+    samples = context.relation_snapshot.patch_chain_endpoint_samples
+    local = [sample for sample in samples if sample.evidence[0].data["sample_source"] == "LOCAL_SEGMENT"]
+
+    assert {(str(sample.patch_chain_id), sample.endpoint_role, sample.vertex_id) for sample in local} == {
+        ("patch_chain:patch:seed:f4:0:0", PatchChainEndpointRole.START, VertexId("vertex:v7")),
+        ("patch_chain:patch:seed:f4:0:0", PatchChainEndpointRole.END, VertexId("vertex:v7")),
+    }
+    start, end = sorted(local, key=lambda sample: sample.endpoint_role.value != "START")
+    # The two ends leave v7 in opposite directions along the ring.
+    assert sum(a * b for a, b in zip(start.tangent_away_from_vertex, end.tangent_away_from_vertex)) < -0.99
 
 
 def test_patch_chain_endpoint_samples_do_not_change_layer_1_identity() -> None:

@@ -89,6 +89,15 @@ Shape agreement (WHERE the pins are, not only which corners are pinned):
   are compared as they are, since Scaffold replays the same option: a strip
   the reference straightened and Scaffold did not shows as torn, which is
   correct.
+Corner turn (information; the corner law of a solved, unmirrored layout):
+  at a Layer 3 RunCornerRelation of kind RIGHT the run with endpoint role END
+  arrives and the run with role START leaves, both along the patch's boundary
+  loop. A convex corner (interior_angle_sum < pi) must turn left in the solved
+  coordinates of the two runs' ends, a reflex corner right. Checked: both runs
+  in one island, all four run-end coordinates solved, a clear turn
+  (|cross| >= TURN_MIN_SINE times the two lengths). turn = corners with the
+  law / corners checked; mirrored = islands with more corners against the law
+  than with it.
 Not measured: island orientation, scale between islands, packing.
 """
 
@@ -119,6 +128,7 @@ SHAPE_EXTENT_TOL = 0.01  # tolerance floor, share of the group's reference UV ex
 SHAPE_MAX_PAIRS = 300
 SHAPE_MIN_POINTS = 3
 TORN_BELOW = 0.9
+TURN_MIN_SINE = 0.5  # corner turn: a clear turn in the solved layout
 
 AXIS_LINE = "AXIS_LINE"
 FREE_LINE = "FREE_LINE"
@@ -395,6 +405,50 @@ def shape_scores(uses, context, solve, reference, scale):
     }
 
 
+def corner_turns(relations, solve):
+    """(corners with the corner law, corners checked, mirrored islands); see the docstring."""
+
+    skeleton_of_run = {
+        run_id: skeleton for skeleton in solve.skeletons for run_id in skeleton.axis_role_by_run
+    }
+    with_by_island: Counter = Counter()
+    against_by_island: Counter = Counter()
+    for corner in relations.run_corner_relations:
+        if corner.kind.value != "RIGHT":
+            continue
+        run_by_role = {
+            corner.first_endpoint_role.value: corner.first_directional_evidence_id,
+            corner.second_endpoint_role.value: corner.second_directional_evidence_id,
+        }
+        arriving, leaving = run_by_role.get("END"), run_by_role.get("START")
+        skeleton = skeleton_of_run.get(arriving)
+        if leaving is None or skeleton is None or skeleton_of_run.get(leaving) is not skeleton:
+            continue
+        points = []
+        for run_id, role in ((arriving, "START"), (arriving, "END"), (leaving, "START"), (leaving, "END")):
+            node = skeleton.node_by_run_end.get((run_id, role))
+            a = skeleton.axis_a.coordinate_by_node.get(node)
+            b = skeleton.axis_b.coordinate_by_node.get(node)
+            if a is None or b is None:
+                break
+            points.append((a, b))
+        if len(points) != 4:
+            continue
+        first = (points[1][0] - points[0][0], points[1][1] - points[0][1])
+        second = (points[3][0] - points[2][0], points[3][1] - points[2][1])
+        cross = first[0] * second[1] - first[1] * second[0]
+        if abs(cross) < TURN_MIN_SINE * math.hypot(*first) * math.hypot(*second) or cross == 0.0:
+            continue
+        if (cross > 0.0) == (corner.interior_angle_sum < math.pi):
+            with_by_island[skeleton.island_id] += 1
+        else:
+            against_by_island[skeleton.island_id] += 1
+    with_law = sum(with_by_island.values())
+    checked = with_law + sum(against_by_island.values())
+    mirrored = sum(1 for island, count in against_by_island.items() if count > with_by_island[island])
+    return with_law, checked, mirrored
+
+
 # ---------------------------------------------------------- pipeline reading
 
 
@@ -640,6 +694,7 @@ def evaluate(name):
         "islands": island_info(solve, reference),
         "gaps": top_gaps(uses, context, solve),
         "shape": shape_scores(uses, context, solve, reference, scale),
+        "turn": dict(zip(("with_law", "checked", "mirrored"), corner_turns(context.relation_snapshot, solve))),
         "_uses": uses,
     }
 
@@ -709,6 +764,7 @@ def main(argv=None) -> None:
             f"{r['object']}: patches={r['patches_total']} uses={r['uses']} unread={r['unread_uses']}"
             f" ref_axis_len={s['ref_axis_length']:.2f} axis_pairs={s['axis_pairs']}"
             f" stretched(>{STRETCH_TOL:.0%})={_pct(s['stretched_share']).strip()}"
+            f" turn={r['turn']['with_law']}/{r['turn']['checked']} mirrored={r['turn']['mirrored']}"
         )
         for gap in r["gaps"]:
             print(

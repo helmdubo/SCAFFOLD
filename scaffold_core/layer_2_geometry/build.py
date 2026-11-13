@@ -34,6 +34,7 @@ from scaffold_core.layer_2_geometry.measures import (
     add,
     angle_between,
     average,
+    cross,
     dot,
     length,
     max_line_distance,
@@ -272,6 +273,7 @@ def _build_chain_geometry_facts(
 ) -> ChainGeometryFacts:
     source_vertex_run, source_segment_vertex_ids = _source_vertex_run_for_chain(
         source,
+        topology,
         chain,
         diagnostics,
     )
@@ -351,6 +353,7 @@ def _distinct_closed_points(points: tuple[Vector3, ...]) -> tuple[Vector3, ...]:
 
 def _source_vertex_run_for_chain(
     source: SourceMeshSnapshot,
+    topology: SurfaceModel,
     chain: Chain,
     diagnostics: list[Diagnostic],
 ) -> tuple[tuple[SourceVertexId, ...], tuple[tuple[SourceEdgeId, SourceVertexId, SourceVertexId], ...]]:
@@ -362,6 +365,11 @@ def _source_vertex_run_for_chain(
         (first_edge.vertex_ids[0], first_edge.vertex_ids[1]),
         (first_edge.vertex_ids[1], first_edge.vertex_ids[0]),
     )
+    # The run follows the Chain from its start vertex. A one-edge Chain fits
+    # both attempts, so the edge's own vertex order must not decide.
+    start_vertex = topology.vertices.get(chain.start_vertex_id)
+    if start_vertex is not None and attempts[0][0] not in start_vertex.source_vertex_ids:
+        attempts = (attempts[1], attempts[0])
     for first_start_vertex_id, first_end_vertex_id in attempts:
         run = [first_start_vertex_id, first_end_vertex_id]
         segment_vertex_ids = [
@@ -513,14 +521,45 @@ def _source_vertex_angle_sums(
         if len(vertex_ids) < 3:
             continue
         for index, source_vertex_id in enumerate(vertex_ids):
-            point = _source_vertex_point(source, source_vertex_id)
-            previous_point = _source_vertex_point(source, vertex_ids[index - 1])
-            next_point = _source_vertex_point(source, vertex_ids[(index + 1) % len(vertex_ids)])
-            angle_sums[source_vertex_id] += angle_between(
-                subtract(previous_point, point),
-                subtract(next_point, point),
-            )
+            angle_sums[source_vertex_id] += _face_corner_angle(source, source_face_id, index)
     return dict(angle_sums)
+
+
+def _face_corner_angle(source: SourceMeshSnapshot, source_face_id: SourceFaceId, index: int) -> float:
+    """Interior angle of a face at its corner `index`, in 0..2*pi."""
+
+    return _face_corner_angles(source, source_face_id)[index]
+
+
+def _face_corner_angles(source: SourceMeshSnapshot, source_face_id: SourceFaceId) -> tuple[float, ...]:
+    """Interior angles of a face at its corners, in corner order.
+
+    The angle between the two edges alone reads a reflex corner of an n-gon
+    as its complement to a full turn. A corner is read as reflex when the
+    boundary turns there against the face's own winding. The corners of a
+    simple polygon sum to (n - 2) * pi: when the plain reading is closer to
+    that sum (a self-crossing or strongly folded face, where the winding
+    says nothing), the face keeps the plain reading.
+    """
+
+    vertex_ids = source.faces[source_face_id].vertex_ids
+    count = len(vertex_ids)
+    points = tuple(_source_vertex_point(source, vertex_id) for vertex_id in vertex_ids)
+    plain = tuple(
+        angle_between(subtract(points[index - 1], points[index]), subtract(points[(index + 1) % count], points[index]))
+        for index in range(count)
+    )
+    if count <= 3:
+        return plain
+    _area, face_normal = _face_fan_area_normal(source, (source_face_id,))
+    wound = tuple(
+        2.0 * pi - angle
+        if dot(cross(subtract(points[index], points[index - 1]), subtract(points[(index + 1) % count], points[index])), face_normal) < 0.0
+        else angle
+        for index, angle in enumerate(plain)
+    )
+    simple_sum = (count - 2) * pi
+    return wound if abs(sum(wound) - simple_sum) <= abs(sum(plain) - simple_sum) else plain
 
 
 def _source_vertex_boundary_flags(
@@ -709,13 +748,7 @@ def _source_vertex_angle_sum(
         for index, face_source_vertex_id in enumerate(vertex_ids):
             if face_source_vertex_id != source_vertex_id:
                 continue
-            point = _source_vertex_point(source, face_source_vertex_id)
-            previous_point = _source_vertex_point(source, vertex_ids[index - 1])
-            next_point = _source_vertex_point(source, vertex_ids[(index + 1) % len(vertex_ids)])
-            total += angle_between(
-                subtract(previous_point, point),
-                subtract(next_point, point),
-            )
+            total += _face_corner_angle(source, source_face_id, index)
     return total
 
 

@@ -664,10 +664,31 @@ than this session that no metric showed. LOOK at results: render the two
 UV layers with `dev/tools/cftuv_parity/dump_layers.py` and
 `render_layers.py` after `write_scaffold_layer.py`.
 
-Open after Slice Z:
+Slice AA (Layers 1, 2 and 5; G0 DD-51): direction conventions and the corner
+turn law. Three lower-layer defects are fixed: the Layer 2 vertex run of a
+one-edge Chain ran against the Chain for half of them, so evidence START/END
+were not the loop direction; a reflex corner of an n-gon was measured as 90
+degrees; a use of a closed Chain met by a seam got orientation +1 by default.
+With them fixed, a law holds exactly on every solved island with a rigid
+frame: walking the loop, a convex RIGHT corner turns left and a reflex one
+right. Layer 5 now orients the lines of a frame-free island by that law
+(`_orient_lines_by_corners`); the old rule compared raw 3D directions and
+left unlinked lines with an arbitrary sign, which twisted Main_wall (14 of 40
+pins) and mirrored three islands. The law is G5a invariant 9 and two Tier 3
+metrics (`corners_against_law`, `mirrored_islands`). When a layout looks
+twisted or mirrored, check this law first.
 
-- Main_wall is still distorted (frame-free, not developable, slit seams
-  inside a patch); cause not found.
+Open after Slice AA:
+
+- Main_wall: the stepped bottom of the +X wall stays OBLIQUE (3 cm chamfers
+  make 225 degree corners, kind OTHER, which break the right-corner walk
+  that assigns axes); 632 run ends on seam-cut mid-chain vertices stay
+  unpinned.
+- `solve_axis` still normalizes equations between the same two cross
+  components by a raw 3D dot; it flips nothing on the 25 captures now.
+  `_segments_follow_chain` (Layer 2) and `_patch_chain_reverses_source_path`
+  (Layer 3) compensated for the reversed runs and are trivial for open
+  chains now.
 - Island composition: Scaffold stitches walls across horizontal ledge
   patches, the CFTUV reference keeps them apart; a wall then comes out
   upside down against the rest. This is the user's grouping filter

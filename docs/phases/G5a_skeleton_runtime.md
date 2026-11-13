@@ -89,6 +89,10 @@ uv_transfer.py - the ONLY bpy write boundary (G5 rule): writes UVs+pins
 8. stations (plan Slice Z): a station pin lies on the UV segment between
    its run's two end pins at its arc-length fraction and never replaces
    a run-end pin.
+9. corner turn (plan Slice AA, G0 DD-51): at every Layer 3 RIGHT corner
+   whose two runs have solved ends, the layout turns left at a convex
+   corner and right at a reflex one, walking the loop. No island is
+   mirrored and no line is flipped against its neighbours.
 ```
 
 ## Non-goals in G5a
@@ -101,7 +105,9 @@ Since plan Slice Q, G5a has no rail order or in-line sign derivation of its
 own: lines and the signs of islands without a rigid frame come from the
 island rails. Layer 5 must not compensate for a missing or unordered
 ScaffoldTrace/ScaffoldRail by adding new rail-order, loop-orientation,
-BFS/greedy traversal or sign-propagation heuristics inside Layer 5. If a
+BFS/greedy traversal or sign-propagation heuristics inside Layer 5 (the
+relative orientation of whole lines is Layer 5's own, G0 DD-47: it flips
+a line as a whole by Layer 3 RIGHT corners, never one run). If a
 fixture needs a direction-stable ordered rail or trace to solve, the correct
 G5a behavior is to diagnose/degrade and keep the behavior pinned until the
 Layer 3 rail/trace contract exists.
@@ -155,9 +161,9 @@ skeleton.py:
   Slice X), takes in-line run signs from its ordered
   island rails (plan Slice Q; a run on an unordered rail stays unsigned
   with a diagnostic and adds no length equation, but keeps its axis role,
-  so it still joins its end nodes for the other axis) and co-orients
-  parallel lines
-  through their cross runs;
+  so it still joins its end nodes for the other axis) and orients the
+  lines against each other by the turn of Layer 3 RIGHT corners (plan
+  Slice AA, G0 DD-51): convex left, reflex right; no 3D directions;
   contradictions are excluded as UNCONSTRAINED with diagnostics.
 
 pins.py:

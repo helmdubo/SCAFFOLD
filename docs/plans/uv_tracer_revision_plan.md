@@ -2242,6 +2242,120 @@ islands, so a part of the island is turned by 180 degrees against the rest.
 It is another stitch tree, valid as an unfolding. Whether walls and ledges
 may share an island is the grouping filter of decision 14, not a pin defect.
 
+## Slice AA — loop direction and the corner turn law (DONE, 2026-11)
+
+Autonomous mode (decision 14). Started from two visible defects of the
+reference scene: Main_wall is twisted, and the column's flat back face is
+not straightened.
+
+Root causes, all below Layer 5:
+
+```text
+Layer 2  a one-edge Chain took its vertex run from the source edge's own
+         vertex order. For half of all one-edge chains (930 of 1883 on the
+         reference meshes, 2595 of 5072 on the 13 buildings) the run, and
+         every Layer 3 run and evidence built from it, ran against the
+         Layer 1 Chain. START and END of an evidence were not the loop
+         direction. Fixed: the run starts at the Chain's start vertex.
+Layer 2  the corner angle of a face was acos of its two edge directions:
+         a reflex corner of an n-gon was read as 90 degrees instead of 270.
+         Fixed: a corner that turns against the face winding is reflex.
+Layer 1  a use of a closed Chain that starts elsewhere than the Chain (a
+         ring met by a seam), or whose ends are two occurrences of one
+         vertex, got orientation +1 by default. Fixed: the cyclic edge
+         order decides.
+```
+
+Effect of the three fixes alone on 25 captures (strips off and on):
+families, rails, shape relations, islands, frames, roles, lines, the pinned
+set and all diagnostics are unchanged. Run directions change, and pin
+coordinates by a flip of both axes of an island. Layer 3 corners are
+corrected: at HEAD 7004 corners had no arriving and leaving run, now none;
+Main_wall drops 230 spurious corners (1009 -> 779) that wrong START/END
+roles had paired; on the wall meshes 49 corners change kind OTHER -> RIGHT
+and 4 RIGHT -> OTHER (reflex angles); the stitch gate's reason changes on
+3 chains without changing any stitch. Every PatchChain use now follows the winding of its side face (3
+did not), and the LOCAL_SEGMENT fallback of endpoint samples, which had
+covered the reversed runs, now fires only for a closed chain used from a
+seam.
+
+The law the fixes expose (G0 DD-51): at a RIGHT corner the END run arrives
+and the START run leaves along the loop, so in a layout that is not mirrored
+a convex corner turns left and a reflex corner turns right. Measured on
+solved islands:
+
+| | corners checked | against the law | mirrored islands |
+|---|---|---|---|
+| rigid frame, before the fixes | 5218 of 9990 readable | 1559 | 74 |
+| rigid frame, after the fixes | 13969 | 0 | 0 |
+| no frame, after the fixes, old sign rule | 81 | 3 | 3 |
+| no frame, new sign rule | 81 | 0 | 0 |
+
+(The first row is the 13 buildings only; with the old directions 4772
+corners there did not even have an arriving and a leaving run.)
+
+Layer 5 change: in an island without a rigid frame the lines of one axis
+were co-oriented through single cross runs by comparing raw 3D directions;
+lines without such a link kept an arbitrary sign. On Main_wall 14 of 40
+pins had the wrong vertical sign (each off by twice the length of one
+vertical run), and three islands came out mirrored. Now every RIGHT corner
+between two signed runs of different axes fixes the product of their two
+lines' signs, and the signs spread from the longest line. A line that two
+corners orient differently loses its signs with a diagnostic. No 3D
+direction is compared.
+
+Results:
+
+```text
+structure   digest of 25 captures, strips off and on: the pinned set, roles,
+            islands, frames, lines and diagnostics are identical; only pin
+            coordinates of artist_arch_bevel, Arc and Main_wall change.
+corner law  0 corners against and 0 mirrored islands on all 25 captures.
+Main_wall   parity shape and ishape 84% -> 100% (torn 1/2 -> 0/2); turn
+            11/20 with one mirrored island -> 20/20.
+Arc         turn 8/13 with one mirrored island -> 13/13 (the shape score
+            does not see mirroring).
+solve_axis  its 3D-dot normalization flipped 28 equations before and flips
+            none now (12788 comparisons).
+Tier 3      13 buildings objects, 0 errors; the only differences are the two
+            new metrics (corners_against_law, mirrored_islands), both 0;
+            baseline updated.
+```
+
+Seven synthetic fixtures also broke the law under the old rule (extruded
+cross, folded sheets, tubes); no test had checked handedness.
+
+Tests 470 -> 513.
+
+A face that crosses itself or is strongly folded has no usable winding:
+read by it, its corners would sum far from (n - 2) * pi (a bow-tie quad on
+building_walls: 720 degrees). Such a face keeps the plain angle reading,
+chosen by which reading is closer to that sum.
+
+Reviewer gate (independent agent): PASS WITH FIXES, nothing blocking. Own
+scripts confirm the law (13969 corners, 0 against, also by an independent
+3D check against the fan normal) and, against the CFTUV UVs by a
+similarity fit, that Arc island 0 and Main_wall island 0 were exact mirrors
+and Main_wall island 1 was twisted, and that all three now fit with zero
+error. 17 own mutations: 15 caught, 2 equivalent or trivial. Fixes applied:
+the fallback for self-crossing faces above; a diagnostic for a signed axis
+line that right corners do not tie to the island's longest line (none on
+the 25 captures); the statement about corners in this section, which had
+said they do not change.
+
+Left alone, noted for later:
+
+```text
+solve_axis still normalizes equations between the same two cross components
+  by a raw 3D dot.
+_segments_follow_chain (Layer 2) and _patch_chain_reverses_source_path
+  (Layer 3) compensated for the reversed runs and are now always trivially
+  true / false for open chains.
+Main_wall: the stepped bottom of the +X wall stays OBLIQUE (3 cm chamfers
+  make 225 degree corners, kind OTHER, which break the right-corner walk);
+  632 run ends on seam-cut mid-chain vertices stay unpinned.
+```
+
 ## Decisions the user must approve before the relevant slice
 
 ```text
