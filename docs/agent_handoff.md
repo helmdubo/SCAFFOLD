@@ -11,9 +11,10 @@ Read this after `AGENTS.md` and before changing code.
 ```text
 Project: Scaffold
 Core package: scaffold_core/
-Current phase: G5a - Skeleton Runtime, plus G4a (Layer 4 v0, strip feature)
+Current phase: G5a - Skeleton Runtime, plus G4a (Layer 4 v0, strip feature,
+  and the bevel kinds BEVEL_STRIP / BEVEL_JUNCTION)
 Architecture: immutable B-rep-inspired interpretation pipeline
-G0 contract: v1.10 (G0.md remains read-only for agents)
+G0 contract: v1.14 (G0.md remains read-only for agents)
 ```
 
 Scaffold Core currently contains Layers 0-3, the G5a Layer 5 runtime,
@@ -145,6 +146,15 @@ Implemented:
   consecutive OTHER corners whose turns add up to a right angle, e.g. a
   chamfered corner). A frame-free island reads it like a RIGHT corner
   and lays the bridge by one vector equation per axis.
+- PatchQuadLadderRelation v0 (`layer_3_relations/quad_ladders.py`, G0
+  DD-53, plan Slice AE-1): the ladder readings of an all-quad patch
+  (columns, rails, ends, profile lines), pure topology. Layer 0 reads the
+  raw Blender Face Strength mark per face.
+- Layer 4 bevel kinds (`layer_4_features/build.py`, G0 DD-54, plan Slice
+  AE-2): BEVEL_STRIP / BEVEL_JUNCTION records by the mark, or by a strict
+  structural rule; records only. Test data with ground truth:
+  `scaffold_core/tests/data/bevel_cases` (generator
+  `dev/tools/blender_smoke/build_bevel_cases.py`).
 - Pipeline tooling: Chain -> PatchChain incidence index
   (`layer_3_relations/patch_chain_incidence.py`), per-pass stage timings in
   `PipelineContext.pass_timings` (reported by inspection), and a networkx
@@ -729,6 +739,38 @@ Seen in the Slice AC debugger (state of the core, not fixed):
   four-sided without a bent pair, and everything else. Trapezoid,
   L-shape and other kinds do not exist; a second feature kind needs the
   user's approval.
+
+After Slices AE-1 and AE-2 (bevels):
+
+- Wanted next by the user: filters that select bevel strips as
+  horizontal, vertical, under a ceiling, outer or inner corner (decals).
+  The world vertical is a user option of the filter, never an input of
+  Layers 1-3. Not built; there is no filter stage yet.
+- The corner kind of a strip compares whole-patch normals (PatchAdjacency)
+  and is MIXED or UNDEFINED beside a curved neighbour; a filter needs a
+  local dihedral along the rail.
+- "Band" as a patch kind for arcs, cables, caves and curved roads is a
+  separate future kind, related to STRIP; the ladder relation serves it.
+- The debugger draws the reading Layer 4 chose for a bevel strip and the
+  first reading for any other ladder patch.
+
+External audit (2026-11-13), the user's instruction: take what has real
+architectural value, defer the rest. Decided:
+
+- Do: remove Layer 3 records that nothing reads and the superlinear spot
+  in pass 1 (measured on building_walls, 1429 faces: pass 1 takes 2.7 s;
+  15433 ScaffoldNodeIncidentEdgeRelations take about a third of it and no
+  code in Layers 4-5 reads them). The user agreed to remove unread G3
+  records.
+- Do: an order of failure in the axis solve: on contradictory equations
+  drop the bridge equations first, not the whole island (a bridged corner
+  93 degrees off a right angle takes an island from 7 pins to 0 today).
+- Deferred: the `confidence` fields (1.0 everywhere, unused); a direction
+  field inside one patch as Layer 3 evidence for frame-free islands; an
+  own relaxation with slide-along-line constraints in place of point pins
+  plus Blender's unwrap.
+- Not taken: a cross-field / MIQ pipeline (it yields UV, not the structure
+  records the user needs; the meshes average two faces per patch).
 
 Parked: Slice V (seam turns, island orientation) on the local branch
 `claude/slice-v-seam-turns`, commit 99db1a4, on the user's machine and not

@@ -24,8 +24,9 @@ docs/context_map.yaml
 
 ```text
 G5a - Skeleton Runtime (docs/phases/G5a_skeleton_runtime.md)
-G4a - Layer 4 v0, the strip feature only (docs/phases/G4a_strip_feature.md),
-opened by the user in autonomous mode (plan decision 14).
+G4a - Layer 4 v0, the strip feature (docs/phases/G4a_strip_feature.md),
+opened by the user in autonomous mode (plan decision 14), plus the bevel
+kinds BEVEL_STRIP / BEVEL_JUNCTION approved by the user (G0 DD-54).
 G3 relation contracts remain frozen per G0; relation changes still
 follow G3 rules below.
 ```
@@ -51,7 +52,8 @@ scaffold_core/api/
 scaffold_core/ui/
 ```
 
-Layer 4 holds the strip feature only (G0 DD-50); a second feature kind needs
+Layer 4 holds the strip feature (G0 DD-50) and the bevel kinds BEVEL_STRIP /
+BEVEL_JUNCTION (G0 DD-54, records only); a further feature kind needs
 the user's approval. Layer 5 may consume Layers 0-4 read-only and reads Layer 4
 only through FeatureConstraint. bpy is allowed ONLY in
 scaffold_core/layer_5_runtime/uv_transfer.py (the G5 write boundary).
@@ -167,6 +169,7 @@ Sawtooth/straightness work exists only as raw G2 geometry facts.
 ## G3 relations rule
 
 Layer 3 stores derived relations over topology and geometry.
+PatchQuadLadderRelation also reads the Layer 0 source face cycles (G0 DD-53).
 
 ## G3 relations status
 
@@ -201,8 +204,10 @@ ScaffoldTrace / ScaffoldRail v1 evidence views: station order and island cut vie
 PatchChainShapeRelation v0 (G0 DD-48; plan Slice W Stages A, B) per-side chain shape: surface line, surface curve or unresolved; one reader, the per-use chord shortcut of directional runs (G0 DD-30)
 RunCornerRelation v0 (G0 DD-49; plan Slice X) evidence: STRAIGHT / RIGHT / OTHER corner between two run ends on one patch surface; read by the Layer 5 frame-free axis bipartition and line orientation
 RunBridgedCornerRelation v0 (G0 DD-52; plan Slice AD) evidence: a right corner turned over exactly one bridge run between two OTHER corners; read by the Layer 5 frame-free bipartition, line orientation and bridge equations
+PatchQuadLadderRelation v0 (G0 DD-53; plan Slice AE-1) evidence: the zero, one or two quad-ladder readings of an all-quad patch (columns, rails, ends, profile lines), pure topology; read by the Layer 4 bevel rule
 Direction conventions and the corner turn law (G0 DD-51; plan Slice AA): a use walks its loop as its faces wind, an evidence follows its use, a reflex face corner is measured as reflex
 Layer 4 v0 (G0 DD-50; plan Slice Y): strip feature candidates, instances and the STRAIGHT_STRIP constraint behind the user option straighten_strips (off by default)
+Layer 4 bevel kinds (G0 DD-54; plan Slice AE-2): BEVEL_STRIP / BEVEL_JUNCTION records by the Layer 0 Blender Face Strength mark, or without it by a strict structural rule; no constraint, Layer 5 does not read them
 ```
 
 SHARED_CHAIN family transport crosses only straight single-run hinges

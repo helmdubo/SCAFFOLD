@@ -1,8 +1,10 @@
 # G4a — Layer 4 v0: the strip feature (phase contract)
 
 Opened by the user in autonomous mode (plan decision 14, 2026-11-13) while
-G5a is still the main phase. Layer 4 holds one feature kind, STRIP, and one
-constraint kind, STRAIGHT_STRIP. G0 DD-50.
+G5a is still the main phase. Layer 4 v0 holds the feature kind STRIP and one
+constraint kind, STRAIGHT_STRIP. G0 DD-50. The bevel kinds BEVEL_STRIP and
+BEVEL_JUNCTION (G0 DD-54, plan Slice AE-2) are described at the end of this
+file; they are records only and change no layout.
 
 ## Why
 
@@ -102,3 +104,41 @@ all 25 replayed captures are identical to the run without Layer 4.
   its inner vertices unpinned, and Blender's unwrap bows that side.
 - No FeatureRule protocol or registry yet: one rule, plain functions.
 ```
+
+## Bevel kinds (plan Slice AE-2, G0 DD-54)
+
+Approved by the user (2026-11-13). Input: a Bevel was applied, its faces are
+bounded by seams and cut by seams into strips and corner junctions, each a
+patch; curved or noisy shapes included.
+
+```text
+BEVEL_STRIP / BEVEL_JUNCTION, one BevelInstance per bevel patch
+(FeatureSnapshot.bevels), built by Pass 2 always. No option, no constraint:
+Layer 5 does not read them.
+
+Rule A, by the Layer 0 Face Strength mark (authoritative where any face of
+the patch is marked): all MEDIUM -> strip, all WEAK -> junction; MEDIUM and
+WEAK in one patch, or bevel faces with STRONG / unmarked faces -> SUPPRESSED
+with a reason (the seams do not isolate the bevel). The strip's direction is
+the ladder reading (G0 DD-53) whose rails have no bevel face across and
+whose ends have a bevel face, the border or the patch itself across.
+
+Rule B, by structure (only patches with no marked face): end-strict
+readings, pure junctions, a strip between two patches that are not strips,
+a junction that joins at least one strip (G0 DD-54 has the definitions).
+
+A strip keeps its reading, rail and end uses, the neighbour patches on each
+rail, faces per column, column count, ring flag and a corner kind (CONVEX /
+CONCAVE / MIXED / UNDEFINED, from PatchAdjacency). A junction keeps the
+strips it joins in loop order, its other neighbours and a border flag.
+```
+
+Known limits of rule B: a miter without junction faces (every window corner
+of Blender's default Bevel), a strip that runs to the mesh border, a
+junction that also touches a main surface, a closed ring, a triangulated
+bevel. The mark finds all of these. A plain quad ladder is not a kind.
+
+Later (not built): user filters that select strips as horizontal, vertical,
+under a ceiling, outer or inner corner. The world vertical enters there, as
+a user option, never in Layers 1-3. The corner kind beside a curved
+neighbour needs a more local source than whole-patch normals.
