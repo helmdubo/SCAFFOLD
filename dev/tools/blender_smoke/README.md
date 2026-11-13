@@ -37,7 +37,10 @@ Options:
 --write-uv          write pins through uv_transfer and verify that no loop
                     outside the solved faces changed (foreign_loops_changed)
 --straighten-strips run Pass 2 with FeatureOptions(straighten_strips=True) and
-                    add metric strip_islands; default off keeps baselines
+                    add metric strip_islands; default off keeps baselines.
+                    Smoke runs Layer 4 only with this flag: without it, it
+                    does not exercise bevel strips at all, although
+                    Straighten Bevel Strips is on by default everywhere else
 --baseline PATH     compare stable fields; exit 1 and print only the diffs
 --update-baseline   rewrite PATH from this run
 ```

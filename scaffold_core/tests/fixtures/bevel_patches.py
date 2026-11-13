@@ -5,8 +5,8 @@ Rules:
 - Small synthetic meshes for the Layer 4 bevel rule: an extruded corner
   profile with one bevel strip (convex or concave, marked or not, with or
   without seams), flat patch layouts and a capped prism for the structural
-  rule edges; a marked ladder strip of any rail shape for the ladder
-  constraint.
+  rule edges; a marked ladder strip of any rail shape, and a marked ring
+  cut by one seam, for the ladder constraint.
 - Seams are given as vertex pairs; Face Strength marks per face index.
 - No production logic here.
 """
@@ -346,3 +346,32 @@ def make_marked_ladder_strip_source(
         faces.append((f"p{columns}_{r}", f"eb{r}", f"eb{r + 1}", f"p{columns}_{r + 1}"))
         seams += [(f"p0_{r}", f"p0_{r + 1}"), (f"p{columns}_{r}", f"p{columns}_{r + 1}")]
     return _mesh("marked_ladder_strip", positions, faces, tuple(seams), strengths)
+
+
+def make_marked_cut_ring_source(sides: int = 12) -> SourceMeshSnapshot:
+    """A flat MEDIUM ring between two STRONG rings, cut across by one seam.
+
+    Rings of radius 0.5, 1.0, 1.1 and 1.6 with sides vertices each; the
+    middle ring (1.0 to 1.1) is marked MEDIUM, the others STRONG. Both its
+    circles are seams, and so is the edge r1_0 - r2_0: the strip's two ends
+    are one SEAM_SELF Chain, so each end vertex has two occurrences.
+    """
+
+    radii = (0.5, 1.0, 1.1, 1.6)
+    positions = {
+        f"r{k}_{i}": (r * math.cos(2.0 * math.pi * i / sides), r * math.sin(2.0 * math.pi * i / sides), 0.0)
+        for k, r in enumerate(radii) for i in range(sides)
+    }
+    faces = []
+    strengths: dict[int, SourceFaceStrength] = {}
+    seams = []
+    for k in range(3):
+        for i in range(sides):
+            j = (i + 1) % sides
+            strengths[len(faces)] = MEDIUM if k == 1 else STRONG
+            faces.append((f"r{k}_{i}", f"r{k}_{j}", f"r{k + 1}_{j}", f"r{k + 1}_{i}"))
+    for i in range(sides):
+        j = (i + 1) % sides
+        seams += [(f"r1_{i}", f"r1_{j}"), (f"r2_{i}", f"r2_{j}")]
+    seams.append(("r1_0", "r2_0"))
+    return _mesh("marked_cut_ring", positions, faces, tuple(seams), strengths)

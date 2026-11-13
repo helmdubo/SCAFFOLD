@@ -239,6 +239,9 @@ def _leaving_strip_patch_ids(context, adjacencies, gate_by_adjacency, rigidity: 
 
     A stitch candidate is a non-SEAM_SELF adjacency of the patch that the
     angle gate accepts; a patch without candidates is an island anyway.
+    Known and left: a seam to a STRAIGHT_LADDER patch still counts as a
+    candidate here although it is never stitched, so a strip whose only bent
+    seam goes to a ladder patch does not leave its island (no capture shows it).
     """
 
     strip_patch_ids = _constrained_patch_ids(context, FeatureConstraintKind.STRAIGHT_STRIP)

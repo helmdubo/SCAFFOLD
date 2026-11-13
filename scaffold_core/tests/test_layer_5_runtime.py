@@ -1002,7 +1002,7 @@ def _corner(first: str, second: str, kind=RunCornerKind.RIGHT):
 
 
 def test_oblique_line_from_a_bipartition_conflict_passes_no_axis_on() -> None:
-    from scaffold_core.layer_5_runtime.skeleton import _bipartition_families
+    from scaffold_core.layer_5_runtime.frame_free import bipartition_families
 
     lengths = {"x": 5.0, "y": 2.0, "z": 2.0, "w": 1.0, "v": 1.0}
     runs = tuple(SimpleNamespace(id=f"run_{line}", length=length) for line, length in lengths.items())
@@ -1018,20 +1018,20 @@ def test_oblique_line_from_a_bipartition_conflict_passes_no_axis_on() -> None:
     )
     diagnostics: list[str] = []
 
-    axis = _bipartition_families(runs, line_of, corners, diagnostics)
+    axis = bipartition_families(runs, line_of, corners, diagnostics)
 
     assert axis == {"x": "AXIS_A", "y": "OBLIQUE", "z": "AXIS_B", "w": "AXIS_A"}
     assert diagnostics == ["axis bipartition conflict: y -> OBLIQUE"]
 
 
 def test_bipartition_links_only_runs_of_this_island() -> None:
-    from scaffold_core.layer_5_runtime.skeleton import _bipartition_families
+    from scaffold_core.layer_5_runtime.frame_free import bipartition_families
 
     runs = (SimpleNamespace(id="run_x", length=2.0), SimpleNamespace(id="run_y", length=1.0))
     # line_of may name an outside run's line, but its corner is not this island's.
     line_of = {"run_x": "x", "run_y": "y", "outside": "y"}
 
-    axis = _bipartition_families(runs, line_of, (_corner("run_x", "outside"),), [])
+    axis = bipartition_families(runs, line_of, (_corner("run_x", "outside"),), [])
 
     assert axis == {"x": "AXIS_A"}
 
@@ -1156,7 +1156,7 @@ def _turn_corner(arriving: str, leaving: str, convex: bool):
 
 
 def test_corner_handedness_orients_lines_and_unsigns_a_contradicted_line() -> None:
-    from scaffold_core.layer_5_runtime.skeleton import _orient_lines_by_corners
+    from scaffold_core.layer_5_runtime.frame_free import orient_lines_by_corners
 
     lengths = {"x1": 3.0, "x2": 2.0, "y1": 1.0, "y2": 1.0, "z1": 1.0, "w1": 1.0}
     runs = tuple(SimpleNamespace(id=run_id, length=length) for run_id, length in lengths.items())
@@ -1185,7 +1185,7 @@ def test_corner_handedness_orients_lines_and_unsigns_a_contradicted_line() -> No
     )
     diagnostics: list[str] = []
 
-    _orient_lines_by_corners(runs, line_of, axis_by_line, signs, corners, diagnostics)
+    orient_lines_by_corners(runs, line_of, axis_by_line, signs, corners, diagnostics)
 
     assert diagnostics == [
         "corner handedness conflict on island line: y -> unsigned",
@@ -1301,14 +1301,14 @@ def _bridged_corner(arriving, bridge, leaving, first_degrees, second_degrees):
 
 
 def test_bridge_vectors_follow_the_corner_turns_and_report_disagreements() -> None:
-    from scaffold_core.layer_5_runtime.skeleton import _bridge_vectors
+    from scaffold_core.layer_5_runtime.frame_free import bridge_vectors
 
     runs = tuple(SimpleNamespace(id=run_id, length=2.0) for run_id in ("a", "b", "c", "d", "e", "f", "g"))
     roles = {"a": "AXIS_A", "b": "AXIS_B", "c": "OBLIQUE", "d": "AXIS_A", "e": "AXIS_B", "f": "OBLIQUE", "g": "AXIS_B"}
     signs = {"a": 1.0, "b": 1.0, "d": 1.0, "e": 1.0, "g": -1.0}
     diagnostics: list[str] = []
 
-    vectors = _bridge_vectors(runs, roles, signs, (
+    vectors = bridge_vectors(runs, roles, signs, (
         # c bridges a convex right corner split 45 + 45 (a +A, b +B): it points up-right.
         _bridged_corner("a", "c", "b", 135.0, 135.0),
         # f is laid by two corners that disagree: 45 + 45 and 30 + 60.
@@ -1327,12 +1327,12 @@ def test_bridge_vectors_follow_the_corner_turns_and_report_disagreements() -> No
 
 
 def test_bridge_vector_splits_the_tolerance_error_evenly_between_the_two_turns() -> None:
-    from scaffold_core.layer_5_runtime.skeleton import _bridge_vectors
+    from scaffold_core.layer_5_runtime.frame_free import bridge_vectors
 
     runs = tuple(SimpleNamespace(id=run_id, length=1.0) for run_id in ("a", "c", "b"))
     # 136 + 137 degrees: turns 44 and 43, three degrees short of the right angle.
     corner = _bridged_corner("a", "c", "b", 136.0, 137.0)
-    vectors = _bridge_vectors(
+    vectors = bridge_vectors(
         runs, {"a": "AXIS_A", "c": "OBLIQUE", "b": "AXIS_B"}, {"a": 1.0, "b": 1.0}, (corner,), []
     )
 

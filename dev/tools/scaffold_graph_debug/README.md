@@ -46,7 +46,13 @@ Straighten Strips   Pass 2 option; applies on the next Rebuild (and on Write UV)
 Straighten Bevel Strips
                     Pass 2 option, on by default: every bevel strip marked by Face
                     Strength is laid from its ladder as a straight island of its own
-                    (STRAIGHT_LADDER); applies on the next Rebuild (and on Write UV)
+                    (STRAIGHT_LADDER); applies on the next Rebuild (and on Write UV).
+                    Limit: a triangulated bevel strip has no ladder reading, and
+                    with straight long sides Straighten Strips does not take it
+                    either, so it gets no layout and stays stitched into the main
+                    island, which then has no rigid frame (h_rect_s2_tri with
+                    Straighten Strips: 36 pins against 72 before Slice AF, the
+                    same as with Straighten Strips off)
 Structure / Skeleton / Patches: sides and types / Layer 3 (detail) / Ladders / Bevels
                     collapsible groups, one eye toggle per layer, legend underneath
 Write UV (G5a)      unchanged
