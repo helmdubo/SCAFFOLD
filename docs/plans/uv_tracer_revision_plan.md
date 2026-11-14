@@ -3145,6 +3145,238 @@ Next (approved by the user): the band. A design study with a prototype
   disputed ones: the noisy top f0, the column's seam profile, strip f73).
 - The band slice also takes the corner of f36 around f111 (see the
   stated limits above).
+- What happened (note of 2026-11-15): the band was not built as
+  described. A study before the next slice ("band as a sweep", see the
+  Slice AJ entry) found that the quad-ladder reading gives no rails for
+  f0, f111 or Arc f16, and the user's decisions of 2026-11-15 turned the
+  slice into Slice AJ: the STRIP rule reads a rail pair (two curved
+  sides that bend the same way), the column's back face f355 is no strip,
+  a curved end is left to the fill, and a surface line is also straight in
+  total (an accumulated turn of at most 15 degrees, the measure proposed
+  above). Saw teeth were deferred by the user. The four-side reading by
+  corners, f111 as a band (it already lies straight in the bottom quilt
+  with the filter on), f0 and the corner of f36 were not taken; the
+  corner of f36 is the first open item of Slice AJ.
+
+## Slice AJ — a strip's rails are two curved sides that bend the same way; mirrored sides are no strip; a curved end is left to the fill; a surface line is straight in total (DONE, 2026-11)
+
+Target: the STRIP rule (G0 DD-50) and the surface line (G0 DD-48) after
+Slice AI. Commit 77fd542; G0 v1.18 DD-48, DD-50, DD-54.
+
+Measured first:
+
+- With `straighten_strips` on, the STRIP rule took the LONGER opposite
+  pair as the long sides and accepted when both were not one surface
+  line. The flat back wall of the half column (`collumn|f355`: one n-gon
+  face between two mirrored profile curves) was accepted and laid as a
+  rectangle: 46 pins, 37.71 degrees of mean corner angle error after
+  Blender's fill. The column body (`collumn|f1`) was accepted with its
+  profile seams (6.541 / 6.541) as long sides and its real rails, the two
+  arcs (2.820 / 2.931), as ends; it came out as a full rectangle (76 pins,
+  3.98 degrees, edge error 0.096).
+- f1's bottom arc turns 36.5 degrees in total on f1's surface, at most
+  3.86 per vertex (15 inner vertices), and Layer 3 called it one
+  SURFACE_LINE, because a line was decided per vertex only (the limit
+  Slice AI stated).
+
+The user's decisions (2026-11-15):
+
+- f355 must not be recognised as a strip and must not be straightened;
+  in it only the top and bottom chains are straight.
+- For f1 the user laid the arcs and the rings straight by hand; the side
+  profile seams are curved and in principle need not be straightened
+  (the user straightened them by hand only because it looks nice).
+- The user's definition of a strip (2026-11-14): two curved chains of
+  close curvature that go the same way, plus two caps of equal length.
+  Arcs are never straightened by themselves, only as sides of a patch
+  recognised as a strip.
+- "Saw teeth" (straightness that tolerates small ripple by relative
+  amplitude) is deferred to a late stage.
+- The user reminded the rule: find the root cause, do not treat
+  symptoms; the rest was left to the agent's judgement.
+
+```text
+Layer 2  ChainGeometryFacts.chord_area_vector (measures.py,
+         polyline_chord_area_vector): the area vector of the chain closed
+         by its chord, a Newell sum about the mean of its points along
+         source_vertex_run (a closed ring gives its own area). None when
+         its length is at most COLLINEAR_SINE (1e-6) times the squared
+         chain length: a numeric zero test, no shape threshold. It needs
+         no plane estimate and flips when the chain is walked the other
+         way.
+Layer 3  PatchChainShapeRelation (DD-48, patch_chain_shape.py): a piece is
+         SURFACE_LINE only when every interior surface turn is within
+         GEODESIC_STRAIGHT_TOLERANCE AND its accumulated turn (the largest
+         absolute partial sum of its signed vertex surface turns along the
+         piece; a zigzag stays small, a slow arc grows) is at most
+         SURFACE_LINE_MAX_ACCUMULATED_TURN = 15 degrees; otherwise
+         SURFACE_CURVE. The evidence data records accumulated_turn and the
+         bound.
+Layer 4  STRIP rule (DD-50, build.py): the grades already a rectangle and
+         long sides straight on the surface (on the longer pair) stay. One
+         grade is added after them and before "option off": a RAIL PAIR is
+         an opposite pair whose two uses are both not one surface line and
+         whose chord area vectors, each oriented by its use as it walks
+         the loop, point opposite ways. Opposite sides of a loop are walked
+         in opposite directions, so two sides that bend the same way in
+         space have opposite vectors; mirrored sides have the same one. A
+         side without a vector (collinear, or no net bow) is no rail. No
+         rail pair: SUPPRESSED, new reason NO_RAIL_PAIR = "no curved
+         opposite sides bend the same way (mirrored or unlike)". Exactly
+         one rail pair holds the rails whatever its length; when both pairs
+         are rail pairs the longer holds them (pair 0 on an exact tie). No
+         floor on the bend and no bound on how alike the two sides are: no
+         case on the captures and buildings needs one (the least alike
+         accepted pair is u_rounded f96).
+         FeatureConstraint (STRAIGHT_STRIP) gains rail_pair (0: loop
+         positions 0 and 2, 1: positions 1 and 3) and
+         free_end_patch_chain_ids (the end uses that are not one surface
+         line); patch_chain_ids and target_lengths keep their meaning.
+Layer 5  skeleton.py, pins.py: the rail pair is AXIS_A (without one, the
+         pair with the longer target as before). A free end keeps only its
+         two end points (the rail ends, tied across); its inner vertices
+         get no coordinate, no pin and no stations
+         (IslandSkeleton.fill_run_ids). An end that is one surface line is
+         laid straight as before.
+tools    the debug overlay draws a strip's free-end runs as unlaid; the
+         reason NO_RAIL_PAIR maps to the "four-sided" type; the CFTUV
+         parity tool counts a use with a free-end run as NOT_LINE with
+         reason FREE_END.
+```
+
+The measurement behind the Layer 3 bound: over the 801 SURFACE_LINE pieces
+with inner vertices on all captures and the buildings, the accumulated
+turn is at most 1.91 degrees on the buildings and 5.48 on Main_wall (hole
+rims, two inner vertices each); the next values are collumn f1's bottom
+ring at 36.5 and u_rounded_wall_noise_top f111's rail at 90.0; 15 sits in
+that gap. Exactly those two pieces change kind; no directional run, pin,
+frame, bevel-ladder gate verdict or diagnostic moves; the Tier 3 baseline
+is identical.
+
+Results:
+
+- Verdicts against HEAD over every capture and the buildings, in three
+  option sets (default; strips on; strips on with bevels off): only
+  `collumn|f355` changes (strips on: ACCEPTED to NO_RAIL_PAIR; default:
+  OPTION_OFF to NO_RAIL_PAIR). `collumn|f1` stays accepted; its rails are
+  now the two arcs and the profile seams are free ends.
+- Column after Blender 4.5's conformal fill, strips on: f1 34 pins, 3.59
+  degrees, edge error 0.087, 0 flips, 0 overlaps (before: 76 pins, 3.98,
+  0.096). f355 is an ordinary patch in an UNFOLDED-frame island with both
+  caps: 16 pins, 3.90 degrees, edge error 0.020; it keeps its profile
+  shape and its top and bottom are straight; identical to HEAD with the
+  option off (before, with the option on: 46 pins, 37.71 degrees).
+- Default options: every output identical to HEAD on all captures, the
+  buildings and the user's mesh, except the two Layer 3 pieces that change
+  kind and f355's suppression reason. Arc and its layout are unchanged
+  with the option on.
+- With strips on and the bevel option off, the marked strips c_arch_s2
+  f26, e_arch_s2_n20 f26, d_cyl_s2 f112 and f114 lose 2 pins each: the
+  inner vertex of each 2-segment profile end, now a free end. With the
+  bevel option on (the default) they are laid by their ladders,
+  unchanged.
+- CFTUV parity for `collumn` (the reference lays f355 and f1 as full
+  rectangles, which the user's decision now contradicts): recall 100% to
+  16%, pin coverage 100% to 40%, shape 53% to 49%. Arc unchanged (96%,
+  97%, 100%).
+
+Stated limits:
+
+- A wrong reading of the bend is possible only where the bow of a side is
+  below its noise.
+- An inflected (S-shaped) side is read by its net bow; an exactly
+  symmetric S has none and is no rail.
+- A cornered side counts as curved (as before): a planar band with a
+  right-angle corner inside each long side is still accepted and
+  straightened with the option on (measured on a synthetic L band: 23.6
+  degrees after the fill against 0.0 unstraightened). The four one-face
+  building patches the option accepts are unchanged. Cutting such sides
+  at their corners is not done.
+- The rule covers only patches with one loop of exactly four PatchChain
+  uses. The noisy top `u_rounded_wall_noise_top|f0` (five uses because of
+  a 6 cm chamfer; 30 triangles inside) and `f111` are not candidates.
+- The rails of a strip with free ends lie at equal UV length (the mean of
+  the two 3D lengths) and at a distance equal to the mean end length, as
+  before; with free ends the interior rings of the column come out nearly
+  straight, not exactly (only the two arcs are pinned).
+- `straighten_strips` is still off by default.
+- The fold at the corner of strip f36 (Slice AI stated limit) is
+  unchanged.
+
+Also studied before the slice (session scratchpad, not in the repo):
+
+- "Band as a sweep" (`ai\band3\`, report in README_band3.txt and
+  partA.txt): the hypothesis that the quad-ladder reading (DD-53) gives a
+  band its rails was FALSE for the cases that matter. Of the named bands
+  only collumn f1 has a reading; `f0` has 49 quads, 30 triangles and one
+  5-gon; `f111` is 29 triangles and one quad; Arc f16 has 7 triangles
+  forming an interior pole. 3D sweep measures alone cannot tell a band
+  from a wall that develops (u_rounded f211 reads as a sweep in 3D); the
+  developed-surface test is still needed. Two separate questions remain:
+  station correspondence (topology: a ladder reading, a face strip, or
+  the mark) and whether to straighten (geometry, or the user's intent).
+  For f0 and Arc f16 no structural fact was found for either.
+- `f111` already lies straight in the bottom quilt with the filter on
+  (through its neighbours); `f0`'s quilt has no pins.
+- The user's hand tool (a numpy prototype outside the repo; operator
+  "Straight, Snap to U/V") straightens edges the user selects, including
+  interior edges that are not seams. Where structure is silent (f0, Arc
+  f16, exactly straight interior rings), a user-selected set of edges is
+  a possible future input of the same kind as the Face Strength mark and
+  the vertical filter. Open proposal for the user: NOT decided, NOT
+  approved.
+- Saw teeth, deferred by the user: the measured facts of the case sheet
+  (`ai\band\cases2\`) stay valid for when it is taken up: relative
+  amplitude has a natural gap between 0.93% and 2.03%.
+
+Reviewer gate (independent agent), round one: PASS WITH FIXES. It
+reproduced the numbers, proved the default output identical to HEAD,
+checked the verdicts under mirroring, rotation with scale, flipped winding
+and id permutations (no difference), and ran 13 mutants plus two (one that
+mattered survived: removing the station skip; now caught by a new test).
+Its main finding: the first version read the bend sign from Layer 2's
+plane estimate (a signed turn in the chain's plane), which fails under
+out-of-plane noise: a mirrored wall with noise of 5% of a segment was
+ACCEPTED in 2 of 4 seeds, and u_rounded f35 was wrongly rejected. The
+chord area vector replaced it; a test now holds a noisy mirrored wall at
+NO_RAIL_PAIR and a noisy real strip accepted at 5% and 10% noise over
+four seeds. Second round, on the fixes: PASS. It confirmed
+the claims with its own whole-state dump (default output identical to HEAD
+except the two Layer 3 pieces and f355's reason; f35 identical in every
+option set), repeated the invariance checks on the new fact, measured that
+the smallest curved strip side lies about 400 times above the numeric zero
+test, and caught all six mutants of the fixes. A wrong ACCEPT of a mirrored
+wall is still constructible only when the noise reaches about the bow of
+the side (bow 0.1 of the side's length: from one segment of in-plane
+noise; at a bow of 0.4 never, up to two segments). Not tested, no case in
+the data: a curved SEAM_SELF Chain on two opposite sides would be a rail
+pair by construction, and Layer 4 does not guard Layer 2's degraded
+edge-order fallback.
+
+Seen on the checkpoint scene and not changed by this slice: the back wall
+f355 lies in its true shape but turned by about 1 degree. Its rigid frame
+takes its axis from the longest line, one of the two tapering shaft runs
+(5.517 long, 1.03 degrees off the wall's own vertical), so the top and
+bottom chains are OBLIQUE and the mirror shaft run is OBLIQUE and has no
+pins. This is the open question of the orientation of a quilt, on one
+patch.
+
+Checks: `python -m pytest` 1020 passed, 4 skipped, 1 xfailed (986
+before; full suite from the repo root). Tier 3 on buildings: baseline
+identical, 13 objects.
+
+Next, open items in this order:
+
+1. The fold at the corner of strip f36 around f111 (Slice AI stated
+   limit; unchanged).
+2. Quilt orientation.
+3. The user-selected-edges proposal (above): awaiting the user.
+4. Saw teeth: deferred by the user.
+5. The older open items already listed in this plan stay (among them,
+   from Slice AI: d_cyl_s2 f154, strips not read in their quilts, the
+   filter-off overlaps and the tie-by-id rules of island assembly; from
+   Slice AH: the four open policies; from Slice AF: the scale of charts
+   with fewer than two pins).
 
 ## Decisions the user must approve before the relevant slice
 
@@ -3235,5 +3467,17 @@ Next (approved by the user): the band. A design study with a prototype
    APPROVED by the user: the band (the STRIP feature with sides split at
    corners nearer to RIGHT than to STRAIGHT; see the Slice AI entry). Open
    for the user: straighten a band inside a quilt or only alone, its
-   option and default, and the noisy top patch f0.
+   option and default, and the noisy top patch f0. (2026-11-15: the band
+   was not built as described; the next slice became Slice AJ, decision
+   17.)
+17. Strips (user decisions, 2026-11-15): the column's flat back face
+   f355 (two mirrored profile curves) is no strip and is not
+   straightened; the column body's profile seams need not be
+   straightened; a strip is two curved chains of close curvature that go
+   the same way plus two caps (the user's definition of 2026-11-14), and
+   an arc is straightened only as a side of a strip; saw teeth are
+   deferred to a late stage. DONE as Slice AJ, G0 v1.18 DD-48, DD-50
+   (amendment authorised by the user). Open for the user: the
+   user-selected-edges proposal (an input of the same kind as the Face
+   Strength mark; not decided, not approved).
 ```

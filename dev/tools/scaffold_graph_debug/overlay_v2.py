@@ -213,6 +213,7 @@ PATCH_TYPE_BY_REASON = {
     "option off": "STRIP_OFF",
     "already a rectangle": "RECTANGLE",
     "long sides are straight on the surface": "FOUR_SIDED",
+    "no curved opposite sides bend the same way (mirrored or unlike)": "FOUR_SIDED",
     "laid from its bevel ladder": "STRIP",
 }
 PATCH_TYPE_NAMES = {
@@ -591,7 +592,8 @@ def _roles(solve) -> tuple[dict[str, str], dict[str, str]]:
     island_by_run: dict[str, str] = {}
     for skeleton in solve.skeletons:
         for run_id, role in skeleton.axis_role_by_run.items():
-            role_by_run[run_id] = role
+            # A strip's free end is left to the fill: not drawn as a laid line.
+            role_by_run[run_id] = None if run_id in skeleton.fill_run_ids else role
             island_by_run[run_id] = skeleton.island_id
     return role_by_run, island_by_run
 

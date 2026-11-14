@@ -37,6 +37,7 @@ class FeatureSuppressionReason(str, Enum):
     OPTION_OFF = "option off"
     ALREADY_RECTANGLE = "already a rectangle"
     LONG_SIDES_STRAIGHT = "long sides are straight on the surface"
+    NO_RAIL_PAIR = "no curved opposite sides bend the same way (mirrored or unlike)"
     LAID_AS_BEVEL_STRIP = "laid from its bevel ladder"
     BEVEL_STRIP_AND_JUNCTION_FACES = "strip and junction faces in one patch"
     BEVEL_NOT_ISOLATED = "bevel faces not isolated by seams"
@@ -102,6 +103,9 @@ class StripSide:
     position_in_loop: int
     length: float  # 3D length of the Chain
     is_surface_line: bool  # the use is one SURFACE_LINE piece (Layer 3)
+    # Layer 2 area vector of the Chain closed by its chord, as the use walks
+    # the loop; None when that area is zero within rounding.
+    chord_area_vector: tuple[float, float, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -175,6 +179,10 @@ class FeatureConstraint:
     STRAIGHT_STRIP: the patch is laid as a rectangle. patch_chain_ids are the
     four uses in loop order; target_lengths[0] is the length of the opposite
     pair at loop positions 0 and 2, target_lengths[1] that of positions 1 and 3.
+    rail_pair names the pair that holds the rails (0: positions 0 and 2, 1:
+    positions 1 and 3); the other pair are the ends. free_end_patch_chain_ids
+    are the end uses that are not one surface line: only their two end points
+    are laid (as rail ends), their inner vertices are left to the fill.
 
     STRAIGHT_LADDER: a marked bevel strip is laid as a straight strip from
     its ladder (ladder holds every boundary vertex's place): by itself, or
@@ -190,6 +198,8 @@ class FeatureConstraint:
     patch_chain_ids: tuple[PatchChainId, ...]
     target_lengths: tuple[float, float]
     ladder: StraightLadder | None = None
+    rail_pair: int | None = None
+    free_end_patch_chain_ids: tuple[PatchChainId, ...] = ()
 
 
 @dataclass(frozen=True)

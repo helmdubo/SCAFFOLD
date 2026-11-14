@@ -37,17 +37,32 @@ options, every output is identical to a run without Layer 4.
 Candidate (evidence, always produced, DD-15, DD-20):
   a patch with exactly one boundary loop made of exactly four PatchChain
   uses. Per use: its 3D length, whether the use is one SURFACE_LINE piece
-  (DD-48).
+  (DD-48), and the Layer 2 chord area vector of its Chain as the use
+  walks the loop (plan Slice AJ; flipped for a reversed use, none when the
+  Chain has none).
 
-Instance (plan Slice AF):
+Rail pair (plan Slice AJ):
+  an opposite pair whose two uses are both not one surface line and whose
+  chord area vectors, each oriented by its use, point opposite ways.
+  Opposite sides of a loop are walked in opposite directions, so two sides
+  that bend the same way in space have opposite vectors; mirrored sides
+  (the two profiles of a flat wall) have the same one. A side without a
+  vector (collinear, or bows that cancel exactly) is no rail. No floor on
+  the bend, no bound on how alike the sides are. A single rail pair holds
+  the rails whatever its length; when both pairs are rail pairs the longer
+  one does (pair 0 on an exact tie). The other pair are the ends.
+
+Instance (plans Slices AF, AJ):
   ACCEPTED when FeatureOptions.straighten_strips is on AND both uses of the
   longer opposite pair (the larger sum of the two 3D lengths; on an exact
   tie either pair) are not one surface line: curved, cornered or
-  unresolved. Bending in 3D is not read, so a wall of a cylinder is not a
-  strip. Otherwise SUPPRESSED with a reason. The shape is graded first:
-  already a rectangle, then long sides straight on the surface; a
-  candidate that passes both and only waits for the option is suppressed
-  as option off (plan Slice AC). An instance that would be accepted on a
+  unresolved, AND the candidate has a rail pair. Bending in 3D is not
+  read, so a wall of a cylinder is not a strip. Otherwise SUPPRESSED with
+  a reason. The shape is graded first: already a rectangle, then long
+  sides straight on the surface, then no rail pair (NO_RAIL_PAIR, "no
+  curved opposite sides bend the same way (mirrored or unlike)"); a
+  candidate that passes all three and only waits for the option is
+  suppressed as option off (plan Slice AC). An instance that would be accepted on a
   patch with a STRAIGHT_LADDER constraint is suppressed as laid from its
   bevel ladder. A strip by mark without that constraint (both rails
   straight on its surface, plan Slice AI) is graded like any other patch.
@@ -55,7 +70,9 @@ Instance (plan Slice AF):
 
 Constraint STRAIGHT_STRIP (self-contained, DD-26):
   patch id, the four PatchChain ids in loop order, and the target length of
-  each opposite pair: the mean of the two 3D lengths.
+  each opposite pair: the mean of the two 3D lengths. Since plan Slice AJ
+  also rail_pair (0: loop positions 0 and 2, 1: positions 1 and 3) and
+  free_end_patch_chain_ids, the end uses that are not one surface line.
 ```
 
 The rule reads structure only: no world axis, no H/V, no patch types.
@@ -69,12 +86,18 @@ Layer 5 reads constraints only; it does not recognise strips.
 A STRAIGHT_STRIP constraint is applied when its patch is an island by itself.
 The island then takes the strip layout (IslandSkeleton.frame == "STRIP"):
   - the uses at loop positions 0 and 2 lie on one axis, 1 and 3 on the other;
-    the pair with the longer target length is AXIS_A;
+    the rail pair is AXIS_A (a constraint without one: the pair with the
+    longer target length);
   - the runs of a use follow the loop, so going round the loop the sides run
     +A, +B, -A, -B and the rectangle closes without a mirror;
   - each run's length in the equations is its 3D length scaled by target
     length / use length, so opposite sides come out equal;
-  - the existing axis solve places the nodes; every run end is pinned.
+  - the existing axis solve places the nodes; every run end is pinned,
+    except the inner run ends of a free end (plan Slice AJ): a free end
+    keeps only its two end points (the rail ends, tied across); its inner
+    vertices get no coordinate, no pin and no stations
+    (IslandSkeleton.fill_run_ids) and are left to the fill. An end that
+    is one surface line is laid straight.
 A constraint whose patch shares its island is not applied, and the island
 gets a diagnostic naming the patch.
 Island assembly (plan Slice AB) does not stitch a constrained patch when
@@ -101,14 +124,47 @@ The arch front face becomes a 2.90 x 0.44 rectangle (the arcs at the mean of
 3.56 and 2.25), the column body a 6.54 x 2.88 rectangle. With the option off
 all 25 replayed captures are identical to the run without Layer 4.
 
+After plan Slice AJ (2026-11-15), strips on, after Blender 4.5's
+conformal fill: the column body f1 takes its two arcs as rails and leaves
+its profile seams to the fill (34 pins, 3.59 degrees of mean corner angle
+error, edge error 0.087, 0 flips, 0 overlaps; before: 76 pins, 3.98,
+0.096). The column's flat back face f355 is no strip (NO_RAIL_PAIR) and
+is laid as an ordinary patch: 16 pins, 3.90 degrees, edge error 0.020,
+identical to a run with the option off (before: 46 pins, 37.71 degrees).
+The reference lays both as full rectangles, which the user's decision now
+contradicts: collumn parity recall 100% to 16%, pin coverage 100% to 40%,
+shape 53% to 49%. Arc is unchanged (96%, 97%, 100%). With strips on and
+straighten_bevel_strips off, the marked strips c_arch_s2 f26,
+e_arch_s2_n20 f26, d_cyl_s2 f112 and f114 lose 2 pins each, the inner
+vertex of each 2-segment profile end, now a free end; with the bevel
+option on (the default) their ladders lay them, unchanged.
+
 ## Known limits
 
 ```text
 - A strip stitched along a bent side is not straightened (L-shaped faces
   in the walls of the buildings). A strip stitched across straight sides
-  only leaves its island (plan Slice AB: the column's flat back face).
+  only leaves its island (plan Slice AB: the column's flat back face; since
+  plan Slice AJ that face is no strip, its profiles are mirrored).
 - Pins sit at run ends only: a long side made of one multi-segment run keeps
   its inner vertices unpinned, and Blender's unwrap bows that side.
+  (Since plan Slice Z stations pin the inner vertices of an axis run;
+  since plan Slice AJ a free end's inner vertices are left to the fill.)
+- Limits of the rail pair (plan Slice AJ): a wrong reading of the bend is
+  possible only where the bow of a side is below its noise. An inflected
+  (S-shaped) side is read by its net bow; an exactly symmetric S has none
+  and is no rail. A cornered side counts as curved, as before: a planar
+  band with a right-angle corner inside each long side is still accepted
+  and straightened with the option on (a synthetic L band: 23.6 degrees
+  after the fill against 0.0 unstraightened); the four one-face building
+  patches the option accepts are unchanged; cutting such sides at their
+  corners is not done. Only patches with one loop of exactly four uses
+  are candidates: the noisy top u_rounded_wall_noise_top f0 (five uses,
+  because of a 6 cm chamfer; 30 triangles inside) and f111 are not. The
+  rails of a strip with free ends lie at equal UV length (the mean of the
+  two 3D lengths) and at a distance equal to the mean end length; with
+  free ends only the rails are pinned, so the column's interior rings come
+  out nearly straight, not exactly.
 - No FeatureRule protocol or registry yet: one rule, plain functions.
 ```
 
@@ -200,17 +256,22 @@ gets a ladder can lie unpinned in a larger island (d_cyl_s2 strip f154:
 width ratio 3.33 after Blender's fill). With straighten_strips on, such a
 strip could get a STRAIGHT_STRIP if its longer pair were its curved ends;
 no capture has one.
-The gate reads Layer 3's SURFACE_LINE, decided per vertex (a turn under
-0.1 rad at each vertex), so a finely tessellated curved rail can read as
-one surface line and its strip is left unstraightened. On the present
-captures every strip let through turns at most 0.1 degree in total and
-every strip kept turns 18 to 167 degrees.
+The gate reads Layer 3's SURFACE_LINE. In Slice AI that was decided per
+vertex only (a turn under 0.1 rad at each vertex), so a finely tessellated
+curved rail could read as one surface line. Since plan Slice AJ a surface
+line is also straight in total (at most 15 degrees of accumulated turn,
+G0 DD-48): a rail that turns more is a curve however fine its
+tessellation, one that turns less in total still reads as a line. No gate
+verdict changed: on the present captures every strip let through turns at
+most 0.1 degree in total and every strip kept turns 18 to 167 degrees.
 After Blender's fill the user's bottom quilt (+Z) has 10 overlapping
 triangle pairs and 2 self-intersecting faces (f36 face 98, f111 face 123),
 none before the slice: the stitched rail of f36 turns a corner around
 f111 over a 1.4 mm OBLIQUE bridge run, and its unpinned vertex there
 lands on the wrong side of its neighbour. Laying that corner is left to
-the band slice.
+the band slice. (2026-11-15: the slice after Slice AI became Slice AJ,
+which changed the strip rule and the surface line; it did not take this
+corner, which stays open and unchanged.)
 Without the filter a strip without a ladder joins by structure, as before
 Slice AF; such a quilt has no rigid frame and its frame-free layout is not
 checked for overlap, so overlaps after the fill rise on several bevel

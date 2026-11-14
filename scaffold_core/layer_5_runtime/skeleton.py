@@ -27,8 +27,9 @@ Rules:
   between the same two cross components by a 3D dot).
 - A Layer 4 STRAIGHT_STRIP FeatureConstraint (the only feature channel,
   G0 DD-26) lays an island of exactly its one patch as a rectangle: the
-  constraint's loop order gives axes and signs, its target lengths scale the
-  runs. A constraint on a patch that shares its island is not applied and
+  constraint's loop order and rail pair give axes and signs, its target
+  lengths scale the runs; a free end keeps only its two end points (its
+  inner vertices are left to the fill). A constraint on a patch that shares its island is not applied and
   the island gets a diagnostic. Layer 5 recognises no strips itself.
 - A Layer 4 STRAIGHT_LADDER FeatureConstraint (a marked bevel strip, an
   island by itself) places every boundary vertex of its patch where the
@@ -115,6 +116,10 @@ class IslandSkeleton:
     # of the strips read, placed by their profile lines after the solve.
     quilt_ladder_by_patch: Mapping[str, str] = field(default_factory=dict)
     ladder_ties: tuple[quilt_ladders.LadderTie, ...] = ()
+    # Strip island: the runs of its free ends (STRAIGHT_STRIP
+    # free_end_patch_chain_ids), left to the fill: no stations, and their
+    # inner nodes keep no coordinate.
+    fill_run_ids: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -329,6 +334,22 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
             })
             for solve in (axis_a, axis_b)
         )
+    fill_runs: frozenset[str] = frozenset()
+    if strip_layout is not None and strip.free_end_patch_chain_ids:
+        # A free strip end is left to the fill: its runs still tie the rail
+        # ends across, but its inner nodes keep no coordinate (no pin) and its
+        # runs get no stations (no straight line).
+        free_uses = {str(use) for use in strip.free_end_patch_chain_ids}
+        fill_runs = frozenset(e.id for e in runs if str(e.patch_chain_id) in free_uses)
+        kept = {node_by_run_end[(e.id, role)] for e in runs if e.id not in fill_runs for role in ("START", "END")}
+        inner = {node_by_run_end[(run_id, role)] for run_id in fill_runs for role in ("START", "END")} - kept
+        if inner:
+            axis_a, axis_b = (
+                replace(solve, coordinate_by_node={
+                    node: value for node, value in solve.coordinate_by_node.items() if node not in inner
+                })
+                for solve in (axis_a, axis_b)
+            )
     if ladder_ties:
         ladder_outcomes, ladder_ties = quilt_ladders.drop_strips_without_pins(
             ladder_outcomes, ladder_ties, runs, node_by_run_end,
@@ -350,6 +371,7 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
         bridge_vector_by_run=bridge_vectors,
         quilt_ladder_by_patch=ladder_outcomes,
         ladder_ties=ladder_ties,
+        fill_run_ids=fill_runs,
     )
 
 
@@ -357,8 +379,8 @@ def _strip_layout(strip, runs, node_by_run_end, diagnostics):
     """Axis roles, signs, directions and run lengths of a STRAIGHT_STRIP island.
 
     The constraint lists the four uses in loop order. Uses at positions 0 and
-    2 share one axis, 1 and 3 the other; the pair with the longer target is
-    AXIS_A. Runs follow the loop direction, so walking the loop from the first
+    2 share one axis, 1 and 3 the other; the constraint's rail pair is AXIS_A
+    (without one, the pair with the longer target). Runs follow the loop direction, so walking the loop from the first
     AXIS_A use gives +A, +B, -A, -B and the rectangle closes unmirrored. Each
     run's length is scaled by target / use length, so opposite sides come out
     equal. Returns None, with a diagnostic, when a use has no runs or the
@@ -376,7 +398,10 @@ def _strip_layout(strip, runs, node_by_run_end, diagnostics):
     if not _strip_uses_close(uses, runs_by_use, node_by_run_end):
         diagnostics.append(f"strip constraint not applied, its uses do not close the loop: {strip.patch_id}")
         return None
-    first_a = 0 if strip.target_lengths[0] >= strip.target_lengths[1] else 1
+    if strip.rail_pair is not None:
+        first_a = strip.rail_pair
+    else:
+        first_a = 0 if strip.target_lengths[0] >= strip.target_lengths[1] else 1
     roles = {e.id: "OBLIQUE" for e in runs}
     signs: dict[str, float] = {}
     direction_of = {e.id: e.direction for e in runs}

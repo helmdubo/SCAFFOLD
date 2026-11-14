@@ -8,7 +8,8 @@ Rules:
 - Stations: every inner source vertex of an axis run whose two ends have a
   UV is pinned on the straight UV segment between them, at its arc-length
   fraction along the run. Its identity is its occurrence on the run's own
-  patch side; a run-end pin is never overridden.
+  patch side; a run-end pin is never overridden. The runs of a strip's
+  free ends (skeleton.fill_run_ids) get no stations.
 - A ladder island (a STRAIGHT_LADDER constraint) pins every boundary vertex
   occurrence at the place its constraint gives it; it has no stations.
 - A ladder strip kept together in its quilt (quilt_ladders.py) pins each
@@ -220,6 +221,8 @@ def _station_pins(skeleton, evidence_by_id, uv_by_node, geometry, vertex_by_face
     for evidence_id in sorted(skeleton.axis_role_by_run):
         if skeleton.axis_role_by_run[evidence_id] not in ("AXIS_A", "AXIS_B"):
             continue
+        if evidence_id in skeleton.fill_run_ids:
+            continue  # a free strip end is left to the fill
         start_node = skeleton.node_by_run_end[(evidence_id, "START")]
         end_node = skeleton.node_by_run_end[(evidence_id, "END")]
         if start_node == end_node:

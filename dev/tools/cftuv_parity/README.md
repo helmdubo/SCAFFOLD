@@ -46,6 +46,15 @@ scored. A strip the reference straightened and Scaffold did not shows as torn.
 Arc and collumn references were made with CFTUV "Straighten Strips" on: curved
 strips are laid as straight rectangles with stretch, so their stretch differs
 from 1 by design. building_walls and Main_wall were made without it.
+
+A use with a run on a strip's free end (plan Slice AJ: an end of a
+straightened strip that is not one surface line, left to Blender's fill,
+`IslandSkeleton.fill_run_ids`) is counted `NOT_LINE` with the reason
+`FREE_END`. On collumn the reference lays the body f1 and the flat back
+face f355 as full rectangles; by the user's decision of 2026-11-15 f355 is
+no strip and f1's profile seams are free ends, so collumn's scores drop
+by design (Slice AJ, strips on: line recall 100% to 16%, pin coverage
+100% to 40%, shape 53% to 49%). Arc is unchanged (96%, 97%, 100%).
 Scaffold replays each object with the same option (Pass 2
 `FeatureOptions.straighten_strips`); the mapping is `STRAIGHTEN_STRIPS` in
 `parity.py`, and the table prints it per object (`strips on/off`).

@@ -494,6 +494,39 @@ def test_surface_turning_total_is_signed() -> None:
     assert isclose(record.surface_turn_max, 0.05)
 
 
+@pytest.mark.parametrize(
+    ("vertex_turns_deg", "kind"),
+    [
+        ([3.0] * 11, CURVE),  # a slow arc: 3 degrees a vertex, 33 in total
+        ([3.0, -3.0] * 5 + [3.0], LINE),  # a zigzag of the same steps: at most 3 in total
+        ([3.0] * 4, LINE),  # a short slow arc: 12 in total, inside the bound
+        ([3.0] * 6, CURVE),  # 18 in total
+    ],
+    ids=["slow_arc", "zigzag", "short_arc", "longer_arc"],
+)
+def test_a_surface_line_is_also_straight_in_total(vertex_turns_deg, kind) -> None:
+    # Every vertex passes the per-vertex line tolerance (0.1 rad, 5.7 degrees);
+    # the piece is a line only while the running sum of its signed turns stays
+    # within 15 degrees.
+    count = len(vertex_turns_deg) + 2
+    line = tuple((float(index), 0.0, 0.0) for index in range(count))
+    fans = [
+        _fan(f"z{index}", f"v{index}", ("f",), pi + radians(turn), UP)
+        for index, turn in enumerate(vertex_turns_deg, start=1)
+    ]
+    records, _diagnostics = _hand_built(line, fans, ("f",) * (count - 1))
+
+    (record,) = records
+    assert record.kind is kind
+    assert record.surface_turn_max < 0.1
+    accumulated = record.evidence[0].data["accumulated_turn"]
+    partial, largest = 0.0, 0.0
+    for turn in vertex_turns_deg:
+        partial += turn
+        largest = max(largest, abs(partial))
+    assert isclose(degrees(accumulated), largest, rel_tol=1.0e-9)
+
+
 # --- evidence only: nothing else changes -----------------------------------------------------
 
 def _canonical_sources():

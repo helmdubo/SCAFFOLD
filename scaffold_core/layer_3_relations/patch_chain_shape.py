@@ -48,6 +48,14 @@ SOURCE = "layer_3_relations.patch_chain_shape"
 # sits between a regular 9-gon (40) and an 8-gon (45): an 8-gon is cornered,
 # a 9-gon and finer is a curve.
 SURFACE_CORNER_MIN_TURN = radians(42.0)
+# A surface line is also straight in total: the largest |partial sum| of its
+# signed vertex surface turns (a zigzag stays small, a slow arc grows). Over
+# every line piece of the captures and buildings that sum is at most 1.9
+# degrees on the buildings and 5.5 on Main_wall (its hole rims, two inner
+# vertices each), and next comes the bottom ring of collumn|f1 at 36.5
+# (16 segments, at most 3.9 per vertex) and the rail of u_rounded|f111 at 90.
+# 15 sits in that gap.
+SURFACE_LINE_MAX_ACCUMULATED_TURN = radians(15.0)
 LAW_ERROR_MAX = radians(5.0)
 PLANAR_RELATIVE_DEVIATION = 0.01
 LAW_MISMATCH_CODE = "PATCH_CHAIN_SHAPE_LAW_MISMATCH"
@@ -250,9 +258,13 @@ def _piece_record(
     law_error_max = max(law_errors, default=0.0)
     occurrence_unresolved = len(resolved_turns) != len(interior)
     law_mismatch = law_error_max > LAW_ERROR_MAX
+    accumulated_turn = _accumulated_turn(resolved_turns)
     if occurrence_unresolved or law_mismatch:
         kind = PatchChainShapeKind.UNRESOLVED
-    elif all(abs(turn) <= GEODESIC_STRAIGHT_TOLERANCE for turn in resolved_turns):
+    elif (
+        all(abs(turn) <= GEODESIC_STRAIGHT_TOLERANCE for turn in resolved_turns)
+        and accumulated_turn <= SURFACE_LINE_MAX_ACCUMULATED_TURN
+    ):
         kind = PatchChainShapeKind.SURFACE_LINE
     else:
         kind = PatchChainShapeKind.SURFACE_CURVE
@@ -281,6 +293,8 @@ def _piece_record(
                     "policy": POLICY_NAME,
                     "surface_corner_min_turn": SURFACE_CORNER_MIN_TURN,
                     "surface_line_tolerance": GEODESIC_STRAIGHT_TOLERANCE,
+                    "surface_line_max_accumulated_turn": SURFACE_LINE_MAX_ACCUMULATED_TURN,
+                    "accumulated_turn": accumulated_turn,
                     "law_error_max_allowed": LAW_ERROR_MAX,
                     "interior_source_vertex_ids": tuple(str(turn.source_vertex_id) for turn in interior),
                     "surface_turns": tuple(turn.surface_turn for turn in interior),
@@ -291,6 +305,17 @@ def _piece_record(
             ),
         ),
     )
+
+
+def _accumulated_turn(turns: tuple[float, ...]) -> float:
+    """Largest |partial sum| of the signed vertex turns, walked along the piece."""
+
+    total = 0.0
+    largest = 0.0
+    for turn in turns:
+        total += turn
+        largest = max(largest, abs(total))
+    return largest
 
 
 def _distinct_closed_points(points: tuple[Vector3, ...]) -> tuple[Vector3, ...]:

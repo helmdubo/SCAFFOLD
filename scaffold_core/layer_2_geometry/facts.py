@@ -70,6 +70,9 @@ class ChainGeometryFacts:
     plane_deviation: float = 0.0
     # Largest vertex distance from the chord line.
     chord_deviation: float = 0.0
+    # Area vector of the chain closed by its chord (Newell sum), walked
+    # along source_vertex_run; None when that area is zero within rounding.
+    chord_area_vector: Vector3 | None = None
 
 
 @dataclass(frozen=True)
