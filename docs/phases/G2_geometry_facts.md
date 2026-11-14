@@ -116,6 +116,12 @@ Chain:
   plane normal (none for a collinear chain)
   largest vertex distance from that plane
   largest vertex distance from the chord
+  chord_area_vector (plan Slice AJ): the area vector of the chain closed
+    by its chord, a Newell sum about the mean of its points along
+    source_vertex_run (a closed ring gives its own area); it needs no
+    plane estimate and flips when the chain is walked the other way; None
+    when its length is at most COLLINEAR_SINE (1e-6) times the squared
+    chain length (a numeric zero test, no shape threshold)
 
 PatchChain (one side of a Chain):
   side face of every chain segment in the use's own patch, and its normal

@@ -80,6 +80,9 @@ tilt of a use      angle between that plane and the surface normal of one
 surface turn       3D turn x sin(tilt): how much the piece turns when the
                    surface is laid flat
 surface line       a piece whose surface turn stays inside the DD-45 tolerance
+                   at every vertex and whose accumulated turn (largest
+                   |partial sum| of its signed vertex turns) is at most 15
+                   degrees (plan Slice AJ, G0 DD-48)
 surface curve      a planar piece whose surface turn does not
 ```
 
@@ -117,6 +120,16 @@ A shape relation record per use and piece:
 kind: SURFACE_LINE | SURFACE_CURVE | UNRESOLVED
 surface_turn_max, surface_turning_total, tilt range, piece vertices
 ```
+
+Since plan Slice AJ (G0 DD-48) the evidence data of a piece also records
+`accumulated_turn` and the bound SURFACE_LINE_MAX_ACCUMULATED_TURN (15
+degrees). A piece whose every vertex turn is within the tolerance but whose
+accumulated turn exceeds the bound is a SURFACE_CURVE: a slow arc. Over the
+801 SURFACE_LINE pieces with inner vertices on all captures and the
+buildings the accumulated turn is at most 1.91 degrees on the buildings and
+5.48 on Main_wall; the next values are 36.5 (collumn f1's bottom ring) and
+90.0 (u_rounded_wall_noise_top f111's rail). Exactly those two pieces
+changed kind; no run, pin or frame moved.
 
 `UNRESOLVED` covers a spatial piece, a tilt that changes along the piece, and
 a warped single-face patch. It carries a diagnostic and decides nothing.

@@ -153,7 +153,7 @@ Group Structure:
 | Patches | `Scaffold_Patches` | fill of each patch (its source faces), one colour per patch |
 | Boundary | `Scaffold_Loops_Boundary` | OUTER loops, near-white |
 | Holes | `Scaffold_Loops_Holes` | INNER (and DEGRADED) loops, blue |
-| Chains | `Scaffold_Chains` | every PatchChain use, one stroke per directional run, coloured by the axis role Layer 5 gave that run |
+| Chains | `Scaffold_Chains` | every PatchChain use, one stroke per directional run, coloured by the axis role Layer 5 gave that run; a run of a strip's free end (plan Slice AJ, `IslandSkeleton.fill_run_ids`, left to Blender's fill) is drawn unlaid, grey without a role |
 | Labels | collection `Scaffold_Debug_Labels__<object>` | `P<patch>C<position in loop>` (`L<loop>` when the patch has several loops), created only while the toggle is on |
 
 Group Skeleton:
@@ -172,7 +172,7 @@ Group Patches: sides and types:
 | --- | --- | --- |
 | Sides | `Scaffold_Patch_Sides` | one stroke per `PatchChainShapeRelation` piece: mint = surface line, blue = surface curve, orange = unresolved |
 | Corners | `Scaffold_Patch_Corners` | `RunCornerRelation` RIGHT and OTHER: green = right convex, magenta = right reflex, orange = other; STRAIGHT is not drawn. `RunBridgedCornerRelation` (a right corner turned over one bridge run): blue cross at the bridge run's midpoint |
-| Types: strip / strip (option off) / rectangle / four-sided / other | `Scaffold_Types_*` | patch fill by the Layer 4 verdict: strip = accepted strip (straightened) or suppressed "laid from its bevel ladder" (a strip the bevel ladder lays instead); suppressed "option off" (a strip the option would straighten); suppressed "already a rectangle"; four-sided = suppressed "long sides are straight on the surface"; no candidate |
+| Types: strip / strip (option off) / rectangle / four-sided / other | `Scaffold_Types_*` | patch fill by the Layer 4 verdict: strip = accepted strip (straightened) or suppressed "laid from its bevel ladder" (a strip the bevel ladder lays instead); suppressed "option off" (a strip the option would straighten); suppressed "already a rectangle"; four-sided = suppressed "long sides are straight on the surface" or "no curved opposite sides bend the same way (mirrored or unlike)" (plan Slice AJ: no rail pair, such as the column's flat back face f355 between mirrored profiles); no candidate |
 
 Layer 4 grades the shape before it reads the option, so Rectangle, Four-sided
 and Other are the same with Straighten Strips on or off; only the strips the
@@ -220,7 +220,8 @@ Yellow and cyan are the two axes of one island (Layer 5 `AXIS_A` and `AXIS_B`):
 runs of the same colour in one island are laid along the same UV axis. The
 colours have no world meaning, and there is no relation between islands:
 yellow in one island and yellow in another island are unrelated. Grey runs
-are `OBLIQUE` or have no role.
+are `OBLIQUE` or have no role, among them the free ends of a straightened
+strip (plan Slice AJ).
 
 ### Positions
 

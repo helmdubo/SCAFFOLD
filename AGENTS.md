@@ -56,7 +56,8 @@ scaffold_core/api/
 scaffold_core/ui/
 ```
 
-Layer 4 holds the strip feature (G0 DD-50) and the bevel kinds BEVEL_STRIP /
+Layer 4 holds the strip feature (G0 DD-50; its rails are two curved
+opposite sides that bend the same way, plan Slice AJ) and the bevel kinds BEVEL_STRIP /
 BEVEL_JUNCTION (G0 DD-54; a strip confirmed by the mark emits a
 STRAIGHT_LADDER constraint unless both its rails are straight on its
 surface); a further feature kind needs
@@ -152,6 +153,7 @@ degenerate geometry diagnostics
 chain plane, deviation from it and from the chord
 per-side side faces and tilt of a chain plane against its own patch
 patch area vector length (length of the sum of its triangle area vectors)
+chain chord area vector (area vector of the chain closed by its chord)
 ```
 
 Forbidden in Layer 2:
@@ -210,12 +212,12 @@ SurfaceFlowCompatibilityEvidence v0 evidence-only cross-patch flow-family compat
 ConnectedDirectionFamily v1 (G0 DD-43/DD-45) occurrence-aware geodesic families
 RunEndpointJunction v0 (G0 DD-44)
 ScaffoldTrace / ScaffoldRail v1 evidence views: station order and island cut view (G0 DD-46/DD-47; plan Slices J, O)
-PatchChainShapeRelation v0 (G0 DD-48; plan Slice W Stages A, B) per-side chain shape: surface line, surface curve or unresolved; one reader, the per-use chord shortcut of directional runs (G0 DD-30)
+PatchChainShapeRelation v0 (G0 DD-48; plan Slice W Stages A, B) per-side chain shape: surface line, surface curve or unresolved; a line stays within the tolerance at every vertex and turns at most 15 degrees in total (plan Slice AJ); one reader in Layers 3 and 5, the per-use chord shortcut of directional runs (G0 DD-30)
 RunCornerRelation v0 (G0 DD-49; plan Slice X) evidence: STRAIGHT / RIGHT / OTHER corner between two run ends on one patch surface; read by the Layer 5 frame-free axis bipartition and line orientation
 RunBridgedCornerRelation v0 (G0 DD-52; plan Slice AD) evidence: a right corner turned over exactly one bridge run between two OTHER corners; read by the Layer 5 frame-free bipartition, line orientation and bridge equations
 PatchQuadLadderRelation v0 (G0 DD-53; plan Slice AE-1) evidence: the zero, one or two quad-ladder readings of an all-quad patch (columns, rails, ends, profile lines), pure topology; read by the Layer 4 bevel rule
 Direction conventions and the corner turn law (G0 DD-51; plan Slice AA): a use walks its loop as its faces wind, an evidence follows its use, a reflex face corner is measured as reflex
-Layer 4 v0 (G0 DD-50; plan Slice Y): strip feature candidates, instances and the STRAIGHT_STRIP constraint behind the user option straighten_strips (off by default)
+Layer 4 v0 (G0 DD-50; plan Slice Y): strip feature candidates, instances and the STRAIGHT_STRIP constraint behind the user option straighten_strips (off by default); plan Slice AJ: the rails are a rail pair, two opposite sides not straight on the surface whose Layer 2 chord area vectors, oriented by their uses, point opposite ways (they bend the same way); mirrored sides are no strip (NO_RAIL_PAIR); an end that is not one surface line is a free end, left to the fill
 Layer 4 bevel kinds (G0 DD-54; plan Slices AE-2, AF): BEVEL_STRIP / BEVEL_JUNCTION records by the Layer 0 Blender Face Strength mark, or without it by a structural rule (candidates); a strip by mark emits a STRAIGHT_LADDER constraint behind straighten_bevel_strips (on by default), unless both its rails are straight on its surface (plan Slice AI: it unfolds straight as it is, an INFO diagnostic says so), and Layer 5 lays it from the constraint (frame LADDER) when it is an island by itself; the STRIP rule accepts only long sides that are not straight on the surface
 User-filter stage (G0 DD-55; plan Slice AH): scaffold_core/user_filters/, pass 3 between Layer 4 and Layer 5; with the user option world_up (a direction in the mesh's own space; None by default, and then the stage emits nothing) each patch is HORIZONTAL or VERTICAL, and a seam gets a SeamDirective: SPLIT between the two classes, JOIN between a bevel by mark and a patch of its class. Layer 5 islands are quilts; island assembly reads only the SeamDirectives, and the solve states the UV cut set; uv_transfer.write_quilt_uvs lays each quilt as one chart by Blender's conformal unwrap and restores the user's seams. The vertical is not WorldOrientation and feeds nothing into Layers 1-4
 Ladder strips in quilts (G0 DD-54; plan Slice AI): scaffold_core/layer_5_runtime/quilt_ladders.py; a STRAIGHT_LADDER strip in a quilt without a rigid frame is read when exactly one of its rails is stitched and the quilt already lays that rail on an axis: the free rail gives no length equations and each of its vertices takes the along-rail coordinate of its profile-line partner on the stitched rail. The ladder gives the quilt no axis. Every strip in a quilt gets an outcome; the unexpected ones are diagnostics (among them a strip whose quilt pins none of its vertices, and a strip outside its quilt's rigid frame). Layer 5 reads only the FeatureConstraint, the island's stitched Chains and the Layer 1 use-to-Chain mapping

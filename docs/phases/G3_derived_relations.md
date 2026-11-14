@@ -851,8 +851,13 @@ G3a is acceptable when:
 Implemented (G0 DD-48, plan Slice W Stage A). Per PatchChain use, each piece
 between surface corners is a SURFACE_LINE, a SURFACE_CURVE or UNRESOLVED,
 judged on that use's own patch surface from Layer 2 face-fan angle sums, and
-cross-checked against the chain plane tilt. Its one reader is the per-use
-chord shortcut of directional runs (Stage B, G0 DD-30): a zigzag Chain is
+cross-checked against the chain plane tilt. A piece is SURFACE_LINE only
+when every interior surface turn is within GEODESIC_STRAIGHT_TOLERANCE and
+its accumulated turn (the largest absolute partial sum of its signed
+vertex surface turns) is at most SURFACE_LINE_MAX_ACCUMULATED_TURN, 15
+degrees (plan Slice AJ): a zigzag stays a line, a slow arc is a curve.
+The evidence data records `accumulated_turn` and the bound. Its one
+reader in Layers 3 and 5 is the per-use chord shortcut of directional runs (Stage B, G0 DD-30): a zigzag Chain is
 one run only for a use where it is one surface line. Contract and later
 stages:
 `docs/architecture/chain_shape_contract_draft.md`.

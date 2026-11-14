@@ -140,7 +140,10 @@ pins.py      - output model: vertex -> (uv, pinned flag, island id);
   their arc-length points between its two end pins;
   ladder ties (plan Slice AI): after the stations, each free-rail vertex
   of a strip kept together in its quilt is pinned by its profile-line
-  partner (quilt_ladders.tie_free_rails).
+  partner (quilt_ladders.tie_free_rails);
+  free strip ends (plan Slice AJ): the runs of a STRAIGHT_STRIP's free
+  ends (IslandSkeleton.fill_run_ids) get no stations, and their inner
+  nodes keep no coordinate: they are left to the fill.
 uv_transfer.py - the ONLY bpy write boundary (G5 rule).
   write_pinned_uvs writes UVs+pins in the mesh's current mode without bpy
   operators. It does not call mode_set or unwrap; the artist runs
@@ -449,6 +452,19 @@ pinned-edge length error against 3D goes from a mean of 0.048 to 0.0077
 triangle pairs and 2 self-intersecting faces at the corner where f36's
 stitched rail turns around f111 over an unpinned 1.4 mm bridge run (none
 before the slice; a stated limit, see the plan).
+
+After Slice AJ (2026-11-15) a STRAIGHT_STRIP constraint names its rail
+pair, which is AXIS_A (without one, the pair with the longer target as
+before), and its free ends: the end uses that are not one surface line.
+A free end keeps only its two end points (the rail ends, tied across by
+its runs); its inner vertices get no coordinate, no pin and no stations
+(IslandSkeleton.fill_run_ids) and are left to Blender's fill. An end that
+is one surface line is laid straight as before. With default options
+every Layer 5 output is identical to the run before the slice; the Tier 3
+baseline is identical (13 objects). With strips on, the column body f1
+after Blender 4.5's fill: 34 pins, 3.59 degrees of mean corner angle
+error, edge error 0.087, 0 flips, 0 overlaps (before: 76 pins, 3.98,
+0.096).
 
 After Slice Z (2026-11) pins are consistent and complete: on the 13
 buildings objects the framed pins that sat beyond drift from their frame
