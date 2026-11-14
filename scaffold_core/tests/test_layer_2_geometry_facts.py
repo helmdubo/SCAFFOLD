@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from math import cos, isclose, pi, sin
 
+import pytest
+
 from scaffold_core.core.diagnostics import DiagnosticSeverity
 from scaffold_core.ids import (
     BoundaryLoopId,
@@ -43,6 +45,7 @@ from scaffold_core.layer_1_topology.model import (
 )
 from scaffold_core.layer_2_geometry.build import build_geometry_facts
 from scaffold_core.layer_2_geometry.facts import ChainShapeHint
+from scaffold_core.layer_2_geometry.measures import polyline_chord_area_vector
 from scaffold_core.pipeline.inspection import geometry_summary_to_dict
 from scaffold_core.tests.fixtures.capped_prism import make_capped_decagon_prism_odd_strips_source
 from scaffold_core.tests.fixtures.chain_shape_geometry import (
@@ -353,6 +356,63 @@ def test_spatial_chain_reports_plane_deviation() -> None:
     flat_source = make_single_pentagon_source(lift=0.0)
     (flat_border,) = build_geometry_facts(flat_source, build_topology_snapshot(flat_source)).chain_facts.values()
     assert isclose(flat_border.plane_deviation, 0.0, abs_tol=1.0e-12)
+
+
+def _quarter_arc(count=8, noise=0.0):
+    points = []
+    for index in range(count + 1):
+        angle = 0.5 * pi * index / count
+        wobble = noise * (1.0 if index % 2 else -1.0) if 0 < index < count else 0.0
+        points.append((cos(angle), sin(angle), wobble))
+    return tuple(points)
+
+
+def test_chord_area_vector_is_the_area_closed_by_the_chord_and_flips_with_the_walk() -> None:
+    arc = _quarter_arc()
+    area = polyline_chord_area_vector(arc)
+    # Eight triangles from the centre less the chord triangle, counter-clockwise about +z.
+    expected = 4.0 * sin(pi / 16.0) - 0.5
+    assert isclose(area[2], expected, rel_tol=1.0e-12)
+    assert isclose(area[0], 0.0, abs_tol=1.0e-12) and isclose(area[1], 0.0, abs_tol=1.0e-12)
+    backwards = polyline_chord_area_vector(arc[::-1])
+    assert all(isclose(a, -b, abs_tol=1.0e-12) for a, b in zip(area, backwards))
+    moved = polyline_chord_area_vector(tuple((x + 100.0, y - 50.0, z + 7.0) for x, y, z in arc))
+    assert all(isclose(a, b, abs_tol=1.0e-9) for a, b in zip(area, moved))
+
+
+@pytest.mark.parametrize("count", (16, 23, 24, 31))
+def test_chord_area_vector_is_none_when_the_area_is_zero_within_rounding(count) -> None:
+    # A straight polyline, and an S whose two bows cancel exactly, close no area.
+    straight = tuple((0.3 * index, 0.1 * index, -0.2 * index) for index in range(count + 1))
+    assert polyline_chord_area_vector(straight) is None
+    s_curve = tuple((4.0 * index / count, 0.8 * sin(2.0 * pi * index / count), 0.0) for index in range(count + 1))
+    assert polyline_chord_area_vector(s_curve) is None
+    # Paired positive: the same S with one bow a little deeper has a real net area.
+    lopsided = tuple((x, y * (1.1 if y > 0.0 else 1.0), z) for x, y, z in s_curve)
+    assert abs(polyline_chord_area_vector(lopsided)[2]) > 0.01
+
+
+def test_chord_area_vector_of_a_noisy_arc_keeps_its_bow() -> None:
+    clean = polyline_chord_area_vector(_quarter_arc(16))
+    # Out-of-plane noise of 10% of a segment length moves only the off-plane components.
+    noisy = polyline_chord_area_vector(_quarter_arc(16, noise=0.1 * 0.5 * pi / 16))
+    assert isclose(noisy[2], clean[2], rel_tol=1.0e-12)
+    assert sum(a * b for a, b in zip(clean, noisy)) > 0.9 * sum(a * a for a in clean)
+
+
+def test_chain_chord_area_vector_is_none_for_a_straight_chain_and_the_ring_area_for_a_ring() -> None:
+    source, topology = make_chain_shape_source_and_topology()
+    facts = build_geometry_facts(source, topology).chain_facts
+    assert facts[ChainId("chain:straight")].chord_area_vector is None
+
+    ring_source = make_cone_frustum_band_source()
+    ring = next(
+        chain_fact
+        for chain_fact in build_geometry_facts(ring_source, build_topology_snapshot(ring_source)).chain_facts.values()
+        if len(chain_fact.segments) == 16 and "e_t" in str(chain_fact.chain_id)
+    )
+    # A closed ring has no chord: the area of the 16-gon itself, of radius 1.
+    assert isclose(abs(ring.chord_area_vector[2]), 8.0 * sin(pi / 8.0), rel_tol=1.0e-9)
 
 
 def test_tilt_is_measured_per_side_of_one_chain() -> None:

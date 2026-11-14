@@ -5,8 +5,9 @@ Rules:
 - Synthetic flat patches for the Layer 4 strip feature: a cut annulus (a ring
   strip that is its own island), a ring sector stitched between two quads
   (straight stitches only) and the same with a band on its bent outer arc,
-  an annulus with a tab (five uses), a square with a hole (two loops) and a
-  three-row cut annulus with and without a hole.
+  an annulus with a tab (five uses), a square with a hole (two loops), a
+  three-row cut annulus with and without a hole, and a flat patch of any
+  outline s, t -> (x, y) with a folded flap behind a seam on every side.
 - Fixtures build small explicit source data.
 - No production logic here.
 """
@@ -14,6 +15,7 @@ Rules:
 from __future__ import annotations
 
 from math import cos, pi, sin
+from random import Random
 
 from scaffold_core.ids import SourceEdgeId, SourceFaceId, SourceMeshId, SourceVertexId
 from scaffold_core.layer_0_source.marks import SourceMark, SourceMarkKind
@@ -182,3 +184,51 @@ def make_square_with_hole_source() -> SourceMeshSnapshot:
         if (x, y) != (1, 1)
     }
     return _mesh("square_with_hole", points, faces)
+
+
+FLAP_DEPTH = 0.2
+
+
+def make_flat_strip_with_flaps_source(outline, columns: int, rows: int, noise: float = 0.0, seed: int = 0) -> SourceMeshSnapshot:
+    """Return a flat patch of columns x rows quads with a flap behind a seam on each side.
+
+    outline(s, t) gives the (x, y) of the patch at s, t in [0, 1] (z = 0).
+    The patch is one loop of four uses: t = 0 and t = 1 (the columns
+    sides) and s = 0 and s = 1 (the rows sides). Every boundary edge has a
+    flap quad hanging straight down (z = -FLAP_DEPTH) behind a UV seam, so
+    no seam stitches and the patch is an island by itself. noise moves the
+    inner vertices of the sides t = 0 and t = 1 along z by noise times a
+    seeded uniform number in [-1, 1].
+    """
+
+    rng = Random(seed)
+    points = {}
+    for i in range(columns + 1):
+        for j in range(rows + 1):
+            x, y = outline(i / columns, j / rows)
+            z = noise * rng.uniform(-1.0, 1.0) if j in (0, rows) and 0 < i < columns else 0.0
+            points[f"c{i}_{j}"] = (x, y, z)
+    faces = {
+        f"f{i}_{j}": (f"c{i}_{j}", f"c{i + 1}_{j}", f"c{i + 1}_{j + 1}", f"c{i}_{j + 1}")
+        for i in range(columns)
+        for j in range(rows)
+    }
+    seams = []
+    sides = (
+        ("a", [(i, 0) for i in range(columns + 1)]),
+        ("b", [(columns, j) for j in range(rows + 1)]),
+        ("c", [(i, rows) for i in range(columns, -1, -1)]),
+        ("d", [(0, j) for j in range(rows, -1, -1)]),
+    )
+    for name, corners in sides:
+        for index, (i, j) in enumerate(corners):
+            x, y, z = points[f"c{i}_{j}"]
+            points[f"{name}{index}"] = (x, y, z - FLAP_DEPTH)
+        for index in range(len(corners) - 1):
+            first = "c{}_{}".format(*corners[index])
+            second = "c{}_{}".format(*corners[index + 1])
+            # The patch walks first -> second along its loop; the flap across walks it back.
+            faces[f"flap_{name}{index}"] = (second, first, f"{name}{index}", f"{name}{index + 1}")
+            seams.append((first, second))
+    return _mesh("flat_strip_with_flaps", points, faces, seam_edges=tuple(seams))
+

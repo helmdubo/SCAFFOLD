@@ -42,6 +42,7 @@ from scaffold_core.layer_2_geometry.measures import (
     normalize,
     plane_tilt,
     polyline_plane_normal,
+    polyline_chord_area_vector,
     scale,
     subtract,
     triangle_area_normal_centroid,
@@ -374,6 +375,7 @@ def _build_chain_geometry_facts(
         plane_normal=plane_normal,
         plane_deviation=max_plane_distance(_distinct_closed_points(points), plane_normal),
         chord_deviation=max_line_distance(points, start_point, end_point),
+        chord_area_vector=polyline_chord_area_vector(points),
     )
 
 

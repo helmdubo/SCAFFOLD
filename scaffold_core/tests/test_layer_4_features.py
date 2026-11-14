@@ -11,6 +11,7 @@ Rules:
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError, replace
+from math import cos, hypot, pi, sin
 from pathlib import Path
 
 import pytest
@@ -18,9 +19,12 @@ import pytest
 from scaffold_core.ids import ChainId, PatchChainId, PatchId
 from scaffold_core.layer_4_features.build import (
     resolve_strip,
+    strip_constraint,
     strip_long_pairs,
     strip_candidates,
+    strip_is_rail_pair,
     strip_needs_straightening,
+    strip_rail_pair,
 )
 from scaffold_core.layer_4_features.model import (
     FeatureCandidate,
@@ -44,6 +48,7 @@ from scaffold_core.tests.fixtures.strip_patches import (
     make_annulus_with_tab_source,
     make_cut_annulus_source,
     make_cut_three_row_annulus_source,
+    make_flat_strip_with_flaps_source,
     make_ring_sector_between_quads_source,
     make_ring_sector_between_quads_with_band_source,
     make_square_with_hole_source,
@@ -283,13 +288,23 @@ def test_strip_stitched_across_a_bent_side_is_not_applied_with_a_diagnostic() ->
 # ------------------------------------------------------------ Layer 4 units
 
 
-def _side(position, length, line=True):
+def _side(position, length, line=True, area=None):
+    """A strip side; a curved side by default bows the same way as its opposite one.
+
+    Opposite sides walk the loop in opposite directions, so sides bowing the
+    same way in space have opposite chord area vectors: +z at positions 0
+    and 1, -z at 2 and 3. A straight side closes no area.
+    """
+
+    if area is None and not line:
+        area = (0.0, 0.0, 1.0 if position < 2 else -1.0)
     return StripSide(
         patch_chain_id=PatchChainId(f"pc{position}"),
         chain_id=ChainId(f"c{position}"),
         position_in_loop=position,
         length=length,
         is_surface_line=line,
+        chord_area_vector=area,
     )
 
 
@@ -369,6 +384,52 @@ def test_long_sides_curved_on_the_surface_decide_acceptance() -> None:
     assert not hasattr(long_curved.sides[0], "is_bent")
 
 
+def test_mirrored_long_sides_are_no_rail_pair() -> None:
+    # Two profiles bowing away from each other (a flat wall between mirrored
+    # curves) have the same chord area vector walked along the loop.
+    mirrored = _candidate(_side(0, 1.0), _side(1, 5.0, False, (0.0, 0.0, 1.0)),
+                          _side(2, 1.0), _side(3, 5.0, False, (0.0, 0.0, 1.0)))
+    assert strip_rail_pair(mirrored) is None
+    assert resolve_strip(mirrored, ON).suppression_reason is FeatureSuppressionReason.NO_RAIL_PAIR
+    # The option does not change the grade.
+    assert resolve_strip(mirrored, FeatureOptions()).suppression_reason is FeatureSuppressionReason.NO_RAIL_PAIR
+    # Paired positive: the same sides bending the same way are the rails.
+    alike = _candidate(_side(0, 1.0), _side(1, 5.0, False), _side(2, 1.0), _side(3, 5.0, False))
+    assert strip_rail_pair(alike) == 1
+    assert resolve_strip(alike, ON).status is FeatureInstanceStatus.ACCEPTED
+    # A curved side that closes no area with its chord (its bows cancel) cannot be a rail.
+    no_area = _candidate(_side(0, 1.0), _side(1, 5.0, False), _side(2, 1.0), replace(_side(3, 5.0, False), chord_area_vector=None))
+    assert resolve_strip(no_area, ON).suppression_reason is FeatureSuppressionReason.NO_RAIL_PAIR
+    # A side that is one surface line is no rail even when it closes an area.
+    line_side = _candidate(_side(0, 1.0), _side(1, 5.0, False), _side(2, 1.0, True, (0.0, 0.0, -1.0)), _side(3, 5.0, False))
+    assert strip_is_rail_pair(line_side, (1, 3)) and not strip_is_rail_pair(line_side, (0, 2))
+
+
+def test_the_single_rail_pair_holds_the_rails_whatever_its_length() -> None:
+    # Long pair curved but mirrored, short pair curved and bending alike: the short pair holds the rails.
+    short_rails = _candidate(
+        _side(0, 6.0, False, (1.0, 0.0, 0.0)), _side(1, 2.8, False),
+        _side(2, 6.0, False, (1.0, 0.0, 0.0)), _side(3, 2.9, False),
+    )
+    assert strip_rail_pair(short_rails) == 1
+    instance = resolve_strip(short_rails, ON)
+    assert instance.status is FeatureInstanceStatus.ACCEPTED
+    constraint = strip_constraint(instance, short_rails)
+    assert constraint.rail_pair == 1
+    assert constraint.free_end_patch_chain_ids == (PatchChainId("pc0"), PatchChainId("pc2"))
+    assert constraint.patch_chain_ids == tuple(side.patch_chain_id for side in short_rails.sides)
+    assert constraint.target_lengths == pytest.approx((6.0, 2.85))
+    # Both pairs rail pairs: the longer one; an exact tie takes pair 0.
+    both = _candidate(_side(0, 6.0, False), _side(1, 2.8, False), _side(2, 6.0, False), _side(3, 2.9, False))
+    assert strip_rail_pair(both) == 0
+    assert strip_constraint(resolve_strip(both, ON), both).free_end_patch_chain_ids == (PatchChainId("pc1"), PatchChainId("pc3"))
+    tie = _candidate(_side(0, 2.0, False), _side(1, 3.0, False), _side(2, 2.0, False), _side(3, 1.0, False))
+    assert strip_rail_pair(tie) == 0
+    # Ends that are surface lines are not free.
+    straight_ends = _candidate(_side(0, 1.0), _side(1, 5.0, False), _side(2, 1.2), _side(3, 4.0, False))
+    assert strip_constraint(resolve_strip(straight_ends, ON), straight_ends).free_end_patch_chain_ids == ()
+
+
 def test_needs_straightening_threshold_is_one_percent() -> None:
     near = _candidate(_side(0, 1.0), _side(1, 3.0), _side(2, 1.0), _side(3, 3.0 * 0.995))
     far = _candidate(_side(0, 1.0), _side(1, 3.0), _side(2, 1.0), _side(3, 3.0 * 0.98))
@@ -425,12 +486,13 @@ def test_a_mesh_without_marks_solves_the_same_with_the_bevel_option_at_its_defau
 # --------------------------------------------- STRIP acceptance on the captures
 
 BEVEL_CASES = DATA / "bevel_cases"
-# Verdicts of the strip rule (option on): A accepted, S suppressed (plan Slice AF).
+# Verdicts of the strip rule (option on): A accepted, S suppressed as long sides straight
+# on the surface (plan Slice AF), N suppressed as no rail pair (plan Slice AJ).
 STRIP_VERDICTS = [
     (DATA / "artist_arch_bevel.json", "f16", "A"),
     (REFERENCES / "Arc.capture.json", "f16", "A"),
     (REFERENCES / "collumn.capture.json", "f1", "A"),
-    (REFERENCES / "collumn.capture.json", "f355", "A"),
+    (REFERENCES / "collumn.capture.json", "f355", "N"),  # the flat back wall: mirrored profiles
     (REFERENCES / "building_walls.capture.json", "f1415", "A"),  # a folded one-face strip
     (BEVEL_CASES / "u_rounded_wall_noise_top.capture.json", "f110", "S"),  # a wall that develops
     (BEVEL_CASES / "u_rounded_wall_noise_top.capture.json", "f211", "S"),
@@ -455,6 +517,151 @@ def test_strip_acceptance_reads_long_sides_curved_on_the_surface(path, face, ver
     assert (instance.status is FeatureInstanceStatus.ACCEPTED) == (verdict == "A")
     if verdict == "S":
         assert instance.suppression_reason is FeatureSuppressionReason.LONG_SIDES_STRAIGHT
+    if verdict == "N":
+        assert instance.suppression_reason is FeatureSuppressionReason.NO_RAIL_PAIR
+
+
+# --------------------------------------------- the column (plan Slice AJ)
+
+
+@pytest.fixture(scope="module")
+def column():
+    from dev.tools.scaffold_graph_debug.snapshot_io import load_source_snapshot
+
+    base = _pass_1(load_source_snapshot(REFERENCES / "collumn.capture.json"))
+    on = run_pass_2_features(base, ON)
+    return base, on, run_skeleton_solve(on)
+
+
+def test_column_back_wall_with_mirrored_profiles_is_not_a_strip(column) -> None:
+    base, on, solve = column
+    assert _instance(on, "patch:seed:f355").suppression_reason is FeatureSuppressionReason.NO_RAIL_PAIR
+    assert not [c for c in on.feature_snapshot.constraints if str(c.patch_id) == "patch:seed:f355"]
+    assert _skeleton(solve, "patch:seed:f355") == _skeleton(run_skeleton_solve(base), "patch:seed:f355")
+    # Paired positive: the column body next to it is a strip.
+    assert _instance(on, "patch:seed:f1").status is FeatureInstanceStatus.ACCEPTED
+
+
+def test_column_body_rails_are_its_arcs_and_its_profile_seams_are_free(column) -> None:
+    _base, on, solve = column
+    (constraint,) = [c for c in on.feature_snapshot.constraints if str(c.patch_id) == "patch:seed:f1"]
+    candidate = next(c for c in on.feature_snapshot.candidates if str(c.patch_id) == "patch:seed:f1")
+    arcs, seams = (1, 3), (0, 2)
+    assert constraint.rail_pair == 1
+    assert constraint.free_end_patch_chain_ids == tuple(candidate.sides[i].patch_chain_id for i in seams)
+    assert constraint.target_lengths == pytest.approx((6.5406, (2.8200 + 2.9312) / 2.0), abs=1e-3)
+    skeleton = _skeleton(solve, "patch:seed:f1")
+    assert skeleton.frame == STRIP_LAYOUT
+    runs = [e for e in on.relation_snapshot.patch_chain_directional_evidence if str(e.patch_id) == "patch:seed:f1"]
+    free_uses = set(constraint.free_end_patch_chain_ids)
+    assert skeleton.fill_run_ids == frozenset(e.id for e in runs if e.patch_chain_id in free_uses)
+    assert all(skeleton.axis_role_by_run[e.id] == "AXIS_A" for e in runs if e.patch_chain_id not in free_uses)
+    pins = {v.source_vertex_id: v.uv for v in solve.vertices if v.pinned and v.patch_id == "patch:seed:f1"}
+    # The seams' inner vertices are left to the fill; their end points are the rail ends.
+    for index in seams:
+        run = on.geometry_facts.chain_facts[candidate.sides[index].chain_id].source_vertex_run
+        assert not set(map(str, run[1:-1])) & set(pins)
+        assert {str(run[0]), str(run[-1])} <= set(pins)
+    # Each arc lies straight on one line of the strip, both with one length.
+    spans = []
+    for index in arcs:
+        run = on.geometry_facts.chain_facts[candidate.sides[index].chain_id].source_vertex_run
+        uvs = [pins[str(vertex)] for vertex in run]
+        assert max(v for _u, v in uvs) - min(v for _u, v in uvs) < 1e-9
+        spans.append(max(u for u, _v in uvs) - min(u for u, _v in uvs))
+    assert spans == pytest.approx([constraint.target_lengths[1]] * 2, abs=1e-6)
+    assert solve.axis_parallel_violations == ()
+
+
+# ------------------------------------- flat strips with flaps (plan Slice AJ)
+
+
+def _quarter_annulus(s, t):
+    return ((1.0 + 0.3 * t) * cos(0.5 * pi * s), (1.0 + 0.3 * t) * sin(0.5 * pi * s))
+
+
+def _mirrored_lens(s, t):
+    return (3.0 * s, (t - 0.5) * (0.6 + 0.8 * sin(pi * s)))
+
+
+def _shifted_s(s, t):
+    """A sine S of one full wave and the same S shifted by 0.5 across: both point-symmetric."""
+
+    return (4.0 * s, 0.8 * sin(2.0 * pi * s) + 0.5 * t)
+
+
+def _offset_s(s, t):
+    """A sine S of one full wave and its offset curve at the distance 0.3 t (not point-symmetric)."""
+
+    x, y = 4.0 * s, 0.8 * sin(2.0 * pi * s)
+    dx, dy = 4.0, 1.6 * pi * cos(2.0 * pi * s)
+    norm = hypot(dx, dy)
+    return (x - 0.3 * t * dy / norm, y + 0.3 * t * dx / norm)
+
+
+def _mirrored_long_sides_alike_short_arcs(s, t):
+    """Long sides (t = 0, 1) bowing apart, short sides (s = 0, 1) bowing the same way."""
+
+    return ((t - 0.5) * (1.0 + 0.4 * sin(pi * s)), 3.0 * s + 0.15 * (1.0 - (2.0 * t - 1.0) ** 2))
+
+
+def _flat_strip(outline, columns, rows, **noise):
+    context = run_pass_2_features(_pass_1(make_flat_strip_with_flaps_source(outline, columns, rows, **noise)), ON)
+    (patch_id,) = [
+        patch_id for patch_id, patch in context.topology_snapshot.patches.items()
+        if "f0_0" in {str(face_id) for face_id in patch.source_face_ids}
+    ]
+    return context, str(patch_id)
+
+
+@pytest.mark.parametrize("seed", range(4))
+@pytest.mark.parametrize("noise", (0.05, 0.1))
+def test_noise_does_not_turn_a_mirrored_wall_into_a_strip_or_a_strip_into_a_wall(noise, seed) -> None:
+    # Out-of-plane noise on the inner vertices of the long sides, as a share of
+    # a segment: at 5% the plane-turn reading accepted the lens in 2 of 4 seeds.
+    lens, lens_id = _flat_strip(_mirrored_lens, 12, 3, noise=noise * 3.0 / 12, seed=seed)
+    assert _instance(lens, lens_id).suppression_reason is FeatureSuppressionReason.NO_RAIL_PAIR
+    ring, ring_id = _flat_strip(_quarter_annulus, 12, 3, noise=noise * 0.5 * pi / 12, seed=seed)
+    assert _instance(ring, ring_id).status is FeatureInstanceStatus.ACCEPTED
+    (constraint,) = ring.feature_snapshot.constraints
+    assert constraint.rail_pair == 0  # the two arcs
+
+
+@pytest.mark.parametrize("columns", (16, 23, 24, 31))
+def test_an_exactly_symmetric_s_pair_is_no_rail_pair(columns) -> None:
+    # Both long sides are curved on the surface, but each S closes no net area
+    # with its chord: no bow to compare, whatever the segment count (before,
+    # rounding noise of order 1e-17 decided it and flipped with the count).
+    context, patch_id = _flat_strip(_shifted_s, columns, 3)
+    candidate = next(c for c in context.feature_snapshot.candidates if str(c.patch_id) == patch_id)
+    assert not candidate.sides[0].is_surface_line and not candidate.sides[2].is_surface_line
+    assert candidate.sides[0].chord_area_vector is None and candidate.sides[2].chord_area_vector is None
+    assert _instance(context, patch_id).suppression_reason is FeatureSuppressionReason.NO_RAIL_PAIR
+    # An inflected side is read by its net bow: the offset of the S is not
+    # point-symmetric and keeps a real net area; its exact twin keeps none.
+    offset, offset_id = _flat_strip(_offset_s, columns, 3)
+    sides = next(c for c in offset.feature_snapshot.candidates if str(c.patch_id) == offset_id).sides
+    assert sides[0].chord_area_vector is None and sides[2].chord_area_vector is not None
+
+
+def test_a_free_end_of_one_run_gets_no_inner_pin() -> None:
+    context, patch_id = _flat_strip(_mirrored_long_sides_alike_short_arcs, 12, 6)
+    (constraint,) = context.feature_snapshot.constraints
+    assert constraint.rail_pair == 1  # the short arcs; the mirrored long sides are free
+    solve = run_skeleton_solve(context)
+    skeleton = _skeleton(solve, patch_id)
+    assert skeleton.frame == STRIP_LAYOUT
+    runs = context.relation_snapshot.patch_chain_directional_evidence
+    for use in constraint.free_end_patch_chain_ids:
+        (run,) = [e for e in runs if e.patch_chain_id == use]  # one run: its two ends are the rail ends
+        assert run.id in skeleton.fill_run_ids
+    pinned = {v.source_vertex_id for v in solve.vertices if v.pinned and v.patch_id == patch_id}
+    inner = {f"c{i}_{j}" for i in range(1, 12) for j in (0, 6)}
+    corners = {"c0_0", "c12_0", "c0_6", "c12_6"}
+    assert not pinned & inner
+    assert corners <= pinned
+    # Paired positive: the rails carry their stations.
+    assert {f"c{i}_{j}" for i in (0, 12) for j in range(7)} <= pinned
 
 
 # ------------------------------------------------- reviewer gate additions

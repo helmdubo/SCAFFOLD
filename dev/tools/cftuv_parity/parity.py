@@ -641,7 +641,9 @@ def _scaffold_use(runs, skeleton, patch_id, pinned_uv, extent, causes=None):
         return NOT_LINE, None, "NO_RUNS"
     if skeleton is None:
         return NOT_LINE, None, "NO_ISLAND"
-    roles = {skeleton.axis_role_by_run.get(run.id, "NONE") for run in runs}
+    if any(run.id in getattr(skeleton, "fill_run_ids", ()) for run in runs):
+        return NOT_LINE, None, "FREE_END"  # a strip's free end is left to the fill
+    roles ={skeleton.axis_role_by_run.get(run.id, "NONE") for run in runs}
     if len(roles) > 1 and roles <= {"AXIS_A", "AXIS_B"}:
         return NOT_LINE, None, "MIXED_ROLES"
     role = next(iter(roles))

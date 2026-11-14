@@ -108,8 +108,8 @@ def strip_candidates(
 ) -> tuple[FeatureCandidate, ...]:
     """Patches with exactly one boundary loop of exactly four PatchChain uses.
 
-    Per use: 3D Chain length and whether the use is exactly one SURFACE_LINE
-    piece.
+    Per use: 3D Chain length, whether the use is exactly one SURFACE_LINE
+    piece, and the Chain's chord area vector as the use walks the loop.
     """
 
     pieces_by_use: dict[str, list] = {}
@@ -138,6 +138,7 @@ def strip_candidates(
                     position_in_loop=pc.position_in_loop,
                     length=facts.length,
                     is_surface_line=len(pieces) == 1 and pieces[0].kind is PatchChainShapeKind.SURFACE_LINE,
+                    chord_area_vector=_use_chord_area_vector(facts, pc),
                 )
             )
         candidates.append(
@@ -150,6 +151,20 @@ def strip_candidates(
             )
         )
     return tuple(candidates)
+
+
+def _use_chord_area_vector(facts, pc) -> tuple[float, float, float] | None:
+    """The Layer 2 chord area vector of the use's Chain, as the use walks its loop; None when it has none.
+
+    Layer 2 measures it along the Chain's stored vertex run, which it walks
+    from the Chain's start vertex; a reversed use walks it backwards, which
+    flips the vector.
+    """
+
+    if facts.chord_area_vector is None:
+        return None
+    walk = float(pc.orientation_sign)
+    return tuple(walk * component for component in facts.chord_area_vector)
 
 
 def strip_needs_straightening(candidate: FeatureCandidate) -> bool:
@@ -189,18 +204,62 @@ def strip_long_sides_curved(candidate: FeatureCandidate) -> bool:
     )
 
 
+def strip_is_rail_pair(candidate: FeatureCandidate, pair: tuple[int, int]) -> bool:
+    """Both uses curved on the surface and, walked along the loop, bowing opposite ways.
+
+    Each side carries the Layer 2 area vector of its Chain closed by its
+    chord, oriented as the use walks the loop. Opposite sides of a loop are
+    walked in opposite directions, so two sides that bow the same way in
+    space have opposite vectors; mirrored sides, such as the two profiles of
+    a flat wall, have the same one. A side whose area is zero within
+    rounding (straight, or bows that cancel exactly) has no vector and is no
+    rail. There is no floor on the bow and no bound on how alike the two
+    sides are: no case on the captures and buildings needs one.
+    Limits: a wrong reading is possible only where the bow of a side is
+    below its noise. An inflected (S-shaped) side is read by its net bow.
+    A cornered side counts as curved (it is not one surface line), so a
+    planar band with a right-angle corner inside each long side is still a
+    strip and is straightened, as before this grade.
+    """
+
+    first, second = (candidate.sides[index] for index in pair)
+    if first.is_surface_line or second.is_surface_line:
+        return False
+    if first.chord_area_vector is None or second.chord_area_vector is None:
+        return False
+    return sum(a * b for a, b in zip(first.chord_area_vector, second.chord_area_vector)) < 0.0
+
+
+def strip_rail_pair(candidate: FeatureCandidate) -> int | None:
+    """Index into STRIP_OPPOSITE_PAIRS of the pair that holds the rails, or None.
+
+    A single rail pair holds the rails whatever its length; when both are
+    rail pairs the longer one does (pair 0 on an exact tie of the summed
+    lengths, as Layer 5 has always taken it).
+    """
+
+    rail_pairs = [index for index, pair in enumerate(STRIP_OPPOSITE_PAIRS) if strip_is_rail_pair(candidate, pair)]
+    if len(rail_pairs) != 2:
+        return rail_pairs[0] if rail_pairs else None
+    sides = candidate.sides
+    sums = [sides[first].length + sides[second].length for first, second in STRIP_OPPOSITE_PAIRS]
+    return 1 if sums[1] > sums[0] else 0
+
+
 def resolve_strip(candidate: FeatureCandidate, options: FeatureOptions) -> FeatureInstance:
-    """ACCEPTED only with the option on and long sides that are curved on the surface.
+    """ACCEPTED only with the option on, long sides curved on the surface and a rail pair.
 
     The shape is graded first (already a rectangle, then long sides straight
-    on the surface), so "option off" marks exactly the candidates the option
-    would accept.
+    on the surface, then no rail pair), so "option off" marks exactly the
+    candidates the option would accept.
     """
 
     if not strip_needs_straightening(candidate):
         reason = FeatureSuppressionReason.ALREADY_RECTANGLE
     elif not strip_long_sides_curved(candidate):
         reason = FeatureSuppressionReason.LONG_SIDES_STRAIGHT
+    elif strip_rail_pair(candidate) is None:
+        reason = FeatureSuppressionReason.NO_RAIL_PAIR
     elif not options.straighten_strips:
         reason = FeatureSuppressionReason.OPTION_OFF
     else:
@@ -216,9 +275,14 @@ def resolve_strip(candidate: FeatureCandidate, options: FeatureOptions) -> Featu
 
 
 def strip_constraint(instance: FeatureInstance, candidate: FeatureCandidate) -> FeatureConstraint:
-    """The rectangle: four uses in loop order and the mean length of each opposite pair."""
+    """The rectangle: four uses in loop order, the mean length of each opposite pair, the rails and the free ends.
+
+    An end that is one surface line is laid straight; one that is not is
+    free: only its end points are laid, as the rails' ends.
+    """
 
     sides = candidate.sides
+    rail_pair = strip_rail_pair(candidate)
     return FeatureConstraint(
         id=f"feature_constraint:straight_strip:{candidate.patch_id}",
         kind=FeatureConstraintKind.STRAIGHT_STRIP,
@@ -227,5 +291,11 @@ def strip_constraint(instance: FeatureInstance, candidate: FeatureCandidate) -> 
         patch_chain_ids=tuple(side.patch_chain_id for side in sides),
         target_lengths=tuple(
             (sides[first].length + sides[second].length) / 2.0 for first, second in STRIP_OPPOSITE_PAIRS
+        ),
+        rail_pair=rail_pair,
+        free_end_patch_chain_ids=tuple(
+            sides[index].patch_chain_id
+            for index in STRIP_OPPOSITE_PAIRS[1 - rail_pair]
+            if not sides[index].is_surface_line
         ),
     )

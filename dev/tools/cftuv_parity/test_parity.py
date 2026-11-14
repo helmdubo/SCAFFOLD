@@ -175,6 +175,12 @@ def test_scaffold_use_line_and_failures():
     causes = oblique_causes(bridge_and_unreached)
     assert _scaffold_use(runs, bridge_and_unreached, "P", on_line, 3.0, causes)[2] == "OBLIQUE_UNLINKED"
     assert _scaffold_use([], skeleton, "P", on_line, 3.0)[2] == "NO_RUNS"
+    # A strip's free end keeps its AXIS_B role in the solve but is not laid.
+    free = _skeleton({"r1": "AXIS_B", "r2": "AXIS_B"})
+    free.fill_run_ids = frozenset({"r1", "r2"})
+    assert _scaffold_use(runs, free, "P", {key: (2.0, uv[0]) for key, uv in on_line.items()}, 3.0)[2] == "FREE_END"
+    laid = _skeleton({"r1": "AXIS_B", "r2": "AXIS_B"})
+    assert _scaffold_use(runs, laid, "P", {key: (2.0, uv[0]) for key, uv in on_line.items()}, 3.0)[:2] == (AXIS_LINE, "AXIS_B")
 
 
 @pytest.mark.parametrize("name", ["Main_wall", "Arc"])
@@ -188,22 +194,20 @@ def test_reference_right_corners_turn_by_the_corner_law(name):
     assert mirrored == 0
 
 
-def test_reference_column_back_face_leaves_its_island_as_a_strip():
-    # The flat back face is stitched to both caps only across its two short
-    # straight ends, so with strips on it leaves its island and is laid as a
-    # rectangle with every boundary vertex pinned (CFTUV pins all 46); the
-    # caps become islands of their own with pins.
+def test_reference_column_back_face_is_no_strip_and_keeps_its_island():
+    # The flat back face lies between two mirrored profiles, so it is no strip
+    # (plan Slice AJ; CFTUV still pins its full rectangle): with strips on it
+    # stays stitched to both caps across its straight ends. The column body
+    # is the strip, an island by itself.
     context, solve = _replay(REFERENCE_DIR / "collumn.capture.json", STRAIGHTEN_STRIPS["collumn"])
     assembly = solve.assembly
     patches_by_island = {island.id: island.patch_ids for island in assembly.islands}
     frame_by_island = {skeleton.island_id: skeleton.frame for skeleton in solve.skeletons}
-    back = "patch:seed:f355"
-    assert patches_by_island[assembly.island_by_patch_id[back]] == (back,)
-    assert frame_by_island[assembly.island_by_patch_id[back]] == "STRIP"
-    assert len({v.vertex_id for v in solve.vertices if v.pinned and v.patch_id == back}) == 46
-    for cap in ("patch:seed:f0", "patch:seed:f353"):
-        assert patches_by_island[assembly.island_by_patch_id[cap]] == (cap,)
-        assert any(v.pinned and v.patch_id == cap for v in solve.vertices)
+    back, body = "patch:seed:f355", "patch:seed:f1"
+    assert set(patches_by_island[assembly.island_by_patch_id[back]]) == {back, "patch:seed:f0", "patch:seed:f353"}
+    assert frame_by_island[assembly.island_by_patch_id[back]] != "STRIP"
+    assert patches_by_island[assembly.island_by_patch_id[body]] == (body,)
+    assert frame_by_island[assembly.island_by_patch_id[body]] == "STRIP"
     # Only seams the angle gate accepts get the leaving reason: the two bent
     # sides, shared with the body, keep the gate's own refusal.
     reasons = {

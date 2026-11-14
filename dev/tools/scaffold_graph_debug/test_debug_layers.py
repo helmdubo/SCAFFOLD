@@ -43,6 +43,7 @@ CASES = {
     "artist_arch_bevel_strips_on": (_capture("artist_arch_bevel"), True),
     "artist_arch_bevel_strips_off": (_capture("artist_arch_bevel"), False),
     "rounded_wall_bevel_marks": (_capture("bevel_cases/u_rounded_wall_noise_top.capture"), False),
+    "column_strips_on": (lambda: load_source_snapshot("dev/tools/cftuv_parity/reference/collumn.capture.json"), True),
 }
 # Written out here, not read from the module: AXIS_A yellow, AXIS_B cyan.
 ROLE_RGBA = {"AXIS_A": [1.0, 0.85, 0.0, 1.0], "AXIS_B": [0.0, 0.85, 0.85, 1.0]}
@@ -69,8 +70,10 @@ def test_every_use_gets_exactly_one_chain_stroke_set_with_its_run_roles(case) ->
     runs_by_use: dict[str, set[str]] = {}
     for record in evidence:
         runs_by_use.setdefault(str(record.patch_chain_id), set()).add(record.id)
+    # A strip's free end (fill_run_ids) is drawn unlaid.
     role_by_run = {
-        run_id: role for skeleton in solve.skeletons for run_id, role in skeleton.axis_role_by_run.items()
+        run_id: None if run_id in skeleton.fill_run_ids else role
+        for skeleton in solve.skeletons for run_id, role in skeleton.axis_role_by_run.items()
     }
 
     items = payload["layers"]["Scaffold_Chains"]
@@ -84,8 +87,13 @@ def test_every_use_gets_exactly_one_chain_stroke_set_with_its_run_roles(case) ->
             assert sorted(item["run_id"] for item in use_items) == sorted(runs)
         else:
             assert [item["run_id"] for item in use_items] == [None]
+    free_runs = {run_id for skeleton in solve.skeletons for run_id in skeleton.fill_run_ids}
+    if case == "column_strips_on":
+        assert free_runs  # the column body's profile seams are free ends
     for item in items:
         assert item["role"] == role_by_run.get(item["run_id"])
+        if item["run_id"] in free_runs:
+            assert item["role"] is None and item["strokes"][0]["color"] == OBLIQUE_RGBA
         assert len(item["strokes"]) == 1
         stroke = item["strokes"][0]
         if item["role"] in ROLE_RGBA:
@@ -146,6 +154,7 @@ def test_patch_types_equal_the_layer_4_instances(case) -> None:
                 "option off": "STRIP_OFF",
                 "already a rectangle": "RECTANGLE",
                 "long sides are straight on the surface": "FOUR_SIDED",
+                "no curved opposite sides bend the same way (mirrored or unlike)": "FOUR_SIDED",
                 "laid from its bevel ladder": "STRIP",
             }[instance.suppression_reason.value]
     assert {patch_id: row["type"] for patch_id, row in payload["patch_types"].items()} == expected

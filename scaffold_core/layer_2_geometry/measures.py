@@ -111,6 +111,34 @@ def polyline_plane_normal(points: tuple[Vector3, ...]) -> Vector3 | None:
     return normalize(total)
 
 
+def polyline_chord_area_vector(points: tuple[Vector3, ...]) -> Vector3 | None:
+    """Area vector of the polygon a polyline makes with its chord (Newell sum), or None.
+
+    Half the sum of the cross products of consecutive points (measured from
+    their mean), the chord from the last point back to the first closing
+    it. Walking the points the other way flips it. A closed polyline (last
+    point on the first) has no chord: it is the area of the ring itself.
+    None when the area is numerically zero: at most COLLINEAR_SINE times the
+    squared polyline length (a collinear polyline, or bows on both sides
+    that cancel exactly). The test is relative to the polyline's own length;
+    it is a numeric zero test and no shape threshold (the smallest curved
+    strip side on the captures and buildings is about 400 times above it).
+    """
+
+    if len(points) < 3:
+        return None
+    center = average(points)
+    relative = [subtract(point, center) for point in points]
+    total = (0.0, 0.0, 0.0)
+    for first, second in zip(relative, relative[1:] + relative[:1]):
+        total = add(total, cross(first, second))
+    area = scale(total, 0.5)
+    polyline_length = sum(length(subtract(end, start)) for start, end in zip(points, points[1:]))
+    if length(area) <= COLLINEAR_SINE * polyline_length * polyline_length:
+        return None
+    return area
+
+
 def max_plane_distance(points: tuple[Vector3, ...], normal: Vector3 | None) -> float:
     """Largest distance of a point from the plane through their mean with this normal."""
 
