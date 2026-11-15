@@ -248,8 +248,10 @@ the main island and leave it without a rigid frame (h_rect_s2_tri with
 strips on: 72 pins on Slice AE, 36 now, equal to strips off).
 
 Known limits of the quilt reading (plan Slice AI): a strip is read only
-when its quilt already lays its stitched rail on an axis; otherwise, and
-when both or no rails are stitched, the quilt's own layout lays its runs.
+when its quilt already lays its stitched rail on an axis (since plan Slice
+AK in at least one piece: the stitched rail is cut where its axis changes,
+and a line on no piece is not tied); otherwise, and when both or no rails
+are stitched, the quilt's own layout lays its runs.
 A free-rail edge copies its partner edge on the stitched rail, so it is
 as short as that partner. A strip that unfolds straight and no longer
 gets a ladder can lie unpinned in a larger island (d_cyl_s2 strip f154:
@@ -271,7 +273,18 @@ f111 over a 1.4 mm OBLIQUE bridge run, and its unpinned vertex there
 lands on the wrong side of its neighbour. Laying that corner is left to
 the band slice. (2026-11-15: the slice after Slice AI became Slice AJ,
 which changed the strip rule and the surface line; it did not take this
-corner, which stays open and unchanged.)
+corner.) Resolved by plan Slice AK (2026-11-15): the cause was not the
+vertex. The two sides of the stitched Chain f36/f111 were two island
+lines, so no run of f111 took an axis and the bridged right corner on
+f111's side was never laid, and the ladder was read along one axis only.
+With the sides joined, the ladder read in pieces and the frame-free drift
+per metre of the island, that quilt has 0 overlapping triangle pairs and
+0 self-intersecting faces after the fill, f36's shear is 0.01 / 0.13
+degrees (mean / max) and f73 is kept together too. The cost: the band f111
+is laid straight and the curved middle of its inner side (OBLIQUE) bulges;
+4 of f73's 10 profile lines are on no piece and its largest corner angle
+error is about 24 degrees there; f36's 40.8 mm mitre edge is laid at 106.6
+mm.
 Without the filter a strip without a ladder joins by structure, as before
 Slice AF; such a quilt has no rigid frame and its frame-free layout is not
 checked for overlap, so overlaps after the fill rise on several bevel
