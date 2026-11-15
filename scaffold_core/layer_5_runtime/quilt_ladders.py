@@ -10,8 +10,20 @@ Rules:
   holds only planar patches, and each patch in the frame is unfolded
   exactly: the strip there needs nothing. A strip outside that frame (behind
   a warped patch or a bent hinge) is not laid and says so.
-- The ladder gives no axis and no sign: the frame-free bipartition and line
-  orientation run as without it. After orientation a strip is read only
+- The ladder chooses no axis and no sign, but its mark says its stitched
+  rail is straight (plan Slice AL): before the bipartition, the stitched
+  uses of the stitched rail of a strip that could be read (every run end
+  on the ladder, exactly one rail stitched; stitched_rail_uses) are made
+  one island line between right corners, plain or bridged, that Layer 3
+  records between runs of the rail's Chain, on any use of it, and never
+  across a use's own ends (frame_free.join_marked_rails). The runs of the
+  rail's Chain on a line that join made from several lines give no length
+  equation (the mark says straight, not how long); its nodes are stations
+  between its laid nodes. The free rail is never joined. The joins of a
+  quilt are made together or not at all: if they bring the bipartition a
+  conflict, the lines stay as they were and one diagnostic says so. The
+  bipartition and line orientation then run on those lines as on any,
+  seeded by the lengths before the joins. After orientation a strip is read only
   when exactly one of its rails is stitched in the quilt and the quilt lays
   that rail in at least one piece (plan Slice AK): the stitched rail is cut
   into pieces where the axis its signed runs lie on changes (a profile
@@ -104,6 +116,33 @@ def quilt_ladders_by_island(context: Any, assembly: Any) -> dict[str, list]:
     return result
 
 
+def stitched_rail_uses(constraints, island, runs, vertex_by_run_end, patch_chain_by_id) -> dict[str, tuple[str, ...]]:
+    """The uses of each strip's stitched rail whose Chain the quilt stitches (plan Slice AL).
+
+    Only a strip that read_quilt_ladders could read gets an entry: every run
+    end of its patch is on the ladder and exactly one of its rails is
+    stitched. The mark says that rail is straight; the frame-free consumer
+    makes it one island line (frame_free.join_marked_rails). Returns patch ->
+    the stitched uses of that rail, in id order; the free rail is never named.
+    """
+
+    stitched = set(island.stitched_chain_ids)
+    uses_by_patch: dict[str, tuple[str, ...]] = {}
+    for constraint in sorted(constraints, key=lambda item: str(item.patch_id)):
+        patch_id = str(constraint.patch_id)
+        ladder = constraint.ladder
+        if not _on_ladder(ladder, [e for e in runs if str(e.patch_id) == patch_id], vertex_by_run_end):
+            continue
+        rails = (ladder.rail_a_patch_chain_ids, ladder.rail_b_patch_chain_ids)
+        stitched_rails = [uses for uses in rails if _is_stitched(uses, stitched, patch_chain_by_id)]
+        if len(stitched_rails) != 1:
+            continue
+        uses_by_patch[patch_id] = tuple(sorted(
+            str(use) for use in stitched_rails[0] if str(patch_chain_by_id[str(use)].chain_id) in stitched
+        ))
+    return uses_by_patch
+
+
 def read_quilt_ladders(constraints, island, runs, roles, signs, vertex_by_run_end, patch_chain_by_id, diagnostics):
     """Read each ladder strip of a frame-free quilt once its lines are oriented (see the module rules).
 
@@ -123,7 +162,7 @@ def read_quilt_ladders(constraints, island, runs, roles, signs, vertex_by_run_en
         ladder = constraint.ladder
         patch_runs = sorted((e for e in runs if str(e.patch_id) == patch_id), key=lambda e: e.id)
         fraction = _fractions(ladder)
-        if any(vertex_by_run_end.get((e.id, role)) not in fraction for e in patch_runs for role in ("START", "END")):
+        if not _on_ladder(ladder, patch_runs, vertex_by_run_end):
             outcome = QUILT_LADDER_OFF_LADDER
         else:
             outcome, read = _read_strip(ladder, patch_runs, roles, signs, stitched, patch_chain_by_id, vertex_by_run_end)
@@ -400,6 +439,13 @@ def _fractions(ladder) -> dict[str, float]:
         for vertex, share in line.across:
             fraction[str(vertex.vertex_id)] = share
     return fraction
+
+
+def _on_ladder(ladder, patch_runs, vertex_by_run_end) -> bool:
+    """Every run end of the strip's patch is a vertex of the ladder."""
+
+    fraction = _fractions(ladder)
+    return all(vertex_by_run_end.get((e.id, role)) in fraction for e in patch_runs for role in ("START", "END"))
 
 
 def _is_stitched(uses, stitched: set, patch_chain_by_id) -> bool:

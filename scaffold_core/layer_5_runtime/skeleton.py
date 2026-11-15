@@ -43,6 +43,14 @@ Rules:
   quilt is read after line orientation by quilt_ladders.py (plan Slice AI):
   it gives no axis, only keeps its two rails together, piece by piece where
   its stitched rail turns from one axis to the other (plan Slice AK).
+  Before the bipartition its stitched rail is made one line between the
+  right corners Layer 3 records on the rail's Chain (frame_free.
+  join_marked_rails, plan Slice AL); the runs of that Chain on a line the
+  join made from several lines give no length equation, and after the
+  solve its run-end nodes are stations between its laid nodes
+  (frame_free.station_marked_rails). The joins of an island are made
+  together or not at all (none when the joined lines' bipartition meets a
+  conflict), and the seed is chosen by the lengths before the joins.
 - Island rails: Layer 3 cuts each family's ScaffoldRail by the island (its
   runs and stitched hinges) and orders the pieces; Layer 5 checks them
   against the unfolded frame and never orders a line itself.
@@ -129,6 +137,9 @@ class IslandSkeleton:
     # free_end_patch_chain_ids), left to the fill: no stations, and their
     # inner nodes keep no coordinate.
     fill_run_ids: frozenset[str] = frozenset()
+    # Frame-free quilt: the runs of a line the mark of a ladder strip made from
+    # several lines (plan Slice AL); they give no length equation.
+    unmeasured_run_ids: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -272,6 +283,8 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
     bridge_vectors: dict[str, tuple[float, float]] = {}
     ladder_ties: tuple[quilt_ladders.LadderTie, ...] = ()
     ladder_outcomes: dict[str, str] = {}
+    marked_rails: tuple[frame_free.MarkedRail, ...] = ()
+    unmeasured: frozenset[str] = frozenset()
     if strip_layout is not None:
         roles, signs, direction_of, length_of = strip_layout
         mismatches = ()
@@ -282,9 +295,20 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
         line_of, signs, length_by_line = frame_free.join_stitched_lines(
             runs, line_of, signs, island.stitched_chain_ids, diagnostics
         )
-        axis_by_line = frame_free.bipartition_families(
-            runs, line_of, relations.run_corner_relations, diagnostics, bridged, length_by_line
-        )
+        if length_by_line is None:
+            length_by_line = frame_free.line_lengths(runs, line_of)
+        axis_by_line = None
+        if ladders:
+            line_of, signs, length_by_line, axis_by_line, marked_rails = _join_marked_rails(
+                island, runs, line_of, signs, length_by_line, ladders, vertex_by_run_end, relations, lookups,
+                diagnostics,
+            )
+            # The rail's Chain on a line the mark made is straight, its length unknown: no length equation.
+            unmeasured = frame_free.unmeasured_runs(marked_rails, runs, line_of)
+        if axis_by_line is None:
+            axis_by_line = frame_free.bipartition_families(
+                runs, line_of, relations.run_corner_relations, diagnostics, bridged, length_by_line
+            )
         roles = {
             e.id: axis_by_line.get(line_of.get(e.id), "OBLIQUE")
             for e in runs
@@ -300,7 +324,7 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
         frame_free.report_unreached_lines(runs, line_of, axis_by_line, bridge_vectors, diagnostics)
         direction_of = {e.id: e.direction for e in runs}
         mismatches: tuple[str, ...] = ()
-        drift = _island_drift(runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_vectors)
+        drift = _island_drift(runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_vectors, unmeasured)
     else:
         framed = tuple(e for e in runs if str(e.patch_id) in frame.rotation_by_patch)
         ladder_outcomes = quilt_ladders.rigid_frame_outcomes(ladders, frame.rotation_by_patch, diagnostics)
@@ -331,12 +355,22 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
         "AXIS_A", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift, length_of,
         frame_coordinates["AXIS_A"],
         {run_id: vector[0] for run_id, vector in bridge_vectors.items()},
+        unmeasured,
     )
     axis_b = solve_axis(
         "AXIS_B", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift, length_of,
         frame_coordinates["AXIS_B"],
         {run_id: vector[1] for run_id, vector in bridge_vectors.items()},
+        unmeasured,
     )
+    if unmeasured:
+        # The nodes of a line the mark made: stations between its laid nodes, by 3D length.
+        stationed = frame_free.station_marked_rails(
+            marked_rails, runs, roles, node_by_run_end,
+            {"AXIS_A": axis_a.coordinate_by_node, "AXIS_B": axis_b.coordinate_by_node}, diagnostics,
+        )
+        axis_a = replace(axis_a, coordinate_by_node=stationed["AXIS_A"])
+        axis_b = replace(axis_b, coordinate_by_node=stationed["AXIS_B"])
     # A node with no equation on either axis is not on the skeleton: the
     # frame alone would pin it, so it keeps no coordinate (stays fabric).
     frame_only = axis_a.frame_only_nodes & axis_b.frame_only_nodes
@@ -385,10 +419,59 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
         quilt_ladder_by_patch=ladder_outcomes,
         ladder_ties=ladder_ties,
         fill_run_ids=fill_runs,
+        unmeasured_run_ids=unmeasured,
     )
 
 
-def _island_drift(runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_vectors) -> float:
+def _join_marked_rails(island, runs, line_of, signs, length_by_line, ladders, vertex_by_run_end, relations, lookups,
+                       diagnostics):
+    """The mark joins of a frame-free quilt, made together or not at all (plan Slice AL).
+
+    The stitched rail of each ladder strip the quilt could read is made one
+    line (frame_free.join_marked_rails). A line the mark made has no
+    measured length, so the bipartition (and later the orientation) is
+    seeded by the lengths before the joins: a joined line keeps the id of
+    its longest part and counts as that part alone. If the bipartition of
+    the joined lines meets a conflict (a line held on both axes), no join is
+    made: the lines, signs and lengths stay as they were, the bipartition is
+    that of those lines (with its own diagnostics), and one diagnostic names
+    the strips whose rails were not joined. It states only what was seen
+    with the rails joined: the lines without the joins may conflict too, and
+    then the result is the same as without the mark. Returns the lines, signs, seed lengths, axis per line
+    (None: not yet bipartitioned) and the MarkedRail stretches.
+    """
+
+    bridged = relations.run_bridged_corner_relations
+    patch_chain_by_id, source_of = lookups.patch_chain_by_id, lookups.source_of_vertex
+    rail_uses = quilt_ladders.stitched_rail_uses(ladders, island, runs, vertex_by_run_end, patch_chain_by_id)
+    use_ends = {
+        use: frozenset(
+            source_of.get(str(vertex), str(vertex))
+            for vertex in (patch_chain_by_id[use].start_vertex_id, patch_chain_by_id[use].end_vertex_id)
+        )
+        for uses in rail_uses.values() for use in uses
+    }
+    scratch: list[str] = []
+    joined_line_of, joined_signs, rails = frame_free.join_marked_rails(
+        runs, line_of, signs, length_by_line, rail_uses, use_ends, relations.run_corner_relations, bridged, scratch,
+    )
+    if not any(rail.line_count > 1 for rail in rails):
+        diagnostics.extend(scratch)
+        return line_of, signs, length_by_line, None, rails
+    seed_lengths = {line_id: length_by_line[line_id] for line_id in set(joined_line_of.values()) if line_id in length_by_line}
+    axis_by_line = frame_free.bipartition_families(
+        runs, joined_line_of, relations.run_corner_relations, scratch, bridged, seed_lengths
+    )
+    if "OBLIQUE" in axis_by_line.values():  # a conflict: the joins are not made
+        patches = sorted({rail.patch_id for rail in rails if rail.line_count > 1})
+        diagnostics.append(f"{frame_free.MARKED_RAILS_KEPT_PREFIX}: {', '.join(patches)}")
+        return line_of, signs, length_by_line, None, ()
+    diagnostics.extend(scratch)
+    return joined_line_of, joined_signs, seed_lengths, axis_by_line, rails
+
+
+def _island_drift(runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_vectors,
+                  unmeasured=frozenset()) -> float:
     """The drift a frame-free island absorbs on both axes: per metre of its larger axis span.
 
     Only frame-free islands: a strip island (STRAIGHT_STRIP) keeps the drift
@@ -405,7 +488,7 @@ def _island_drift(runs, roles, signs, node_by_run_end, direction_of, length_of, 
 
     return RESIDUAL_TOLERANCE_PER_SPAN * max(
         axis_span(axis_name, runs, roles, signs, node_by_run_end, direction_of, length_of,
-                  {run_id: vector[index] for run_id, vector in bridge_vectors.items()})
+                  {run_id: vector[index] for run_id, vector in bridge_vectors.items()}, unmeasured)
         for index, axis_name in enumerate(("AXIS_A", "AXIS_B"))
     )
 

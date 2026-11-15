@@ -11,21 +11,40 @@ Rules:
   turns, and a line the corners never reach is reported. The longest line
   seeds both; a joined line counts its stitched Chain once and keeps the id
   and orientation of its longest part.
+- The stitched rail of a marked ladder strip in the quilt (the uses
+  quilt_ladders.stitched_rail_uses names) is one island line between the
+  right corners, plain or bridged, that Layer 3 records between runs of the
+  rail's Chain on any use of it, and never across a use's own ends (plan
+  Slice AL). The runs of the rail's Chain on a line that join made from
+  several lines give no length equation; its run-end nodes are stations,
+  by 3D length, between its nodes the solve lays. The joins are made
+  together or not at all: skeleton.py keeps the lines as they were when
+  the bipartition of the joined lines meets a conflict (whether or not
+  the lines without the joins have one too), and the seed of
+  the bipartition and orientation is chosen by the lengths before the
+  joins.
 - Reads Layer 3 RunCornerRelation / RunBridgedCornerRelation records, run
-  fields, the island's lines, rail signs and stitched Chains only; no 3D
-  direction, world axis or H/V.
-  Never orders a line or flips one run (G0 DD-47).
+  fields, the island's lines, rail signs and stitched Chains, and the rail
+  uses named by quilt_ladders.py only; no 3D direction, world axis or H/V.
+  Never orders a line or flips one run (G0 DD-47): run order along a use is
+  its Layer 3 segment order.
 """
 
 from __future__ import annotations
 
 from collections import deque
+from dataclasses import dataclass
 from math import cos, pi, sin
 
 from scaffold_core.layer_3_relations.model import PatchChainEndpointRole, RunCornerKind
 from scaffold_core.layer_5_runtime.axis_solve import RESIDUAL_TOLERANCE
 
 _LAYOUT_AXIS_UNIT = {"AXIS_A": (1.0, 0.0), "AXIS_B": (0.0, 1.0)}
+MARKED_RAIL_PREFIX = "ladder strip in a quilt, stitched rail made one line"
+MARKED_RAILS_KEPT_PREFIX = (
+    "ladder strips in a quilt, stitched rails not made one line: with the rails joined the quilt's right corners"
+    " hold a line on both axes, the lines are kept as they were"
+)
 
 
 def join_stitched_lines(runs, line_of, signs, stitched_chain_ids, diagnostics):
@@ -60,18 +79,9 @@ def join_stitched_lines(runs, line_of, signs, stitched_chain_ids, diagnostics):
     for e in runs:
         if str(e.parent_chain_id) in stitched and e.id in signs and e.id in line_of:
             runs_by_chain.setdefault(str(e.parent_chain_id), []).append(e)
-    parent: dict[str, tuple[str, float]] = {}
     part_length = line_lengths(runs, line_of)
+    pairs: list = []
     second_sides: list = []  # per pair joined across two lines: its second side, laid on the first
-
-    def find(line_id):
-        root, parity = parent.get(line_id, (line_id, 1.0))
-        if root == line_id:
-            return line_id, 1.0
-        top, above = find(root)
-        parent[line_id] = (top, parity * above)
-        return top, parity * above
-
     for chain_id in sorted(runs_by_chain):
         members = sorted(runs_by_chain[chain_id], key=lambda e: e.id)
         for index, first in enumerate(members):
@@ -82,21 +92,52 @@ def join_stitched_lines(runs, line_of, signs, stitched_chain_ids, diagnostics):
                     continue
                 if line_of[first.id] != line_of[second.id]:
                     second_sides.append(second)  # two lines made one: the Chain is laid once
-                relative = first.orientation_sign * second.orientation_sign * signs[first.id] * signs[second.id]
-                (first_root, first_parity), (second_root, second_parity) = (
-                    find(line_of[first.id]), find(line_of[second.id])
-                )
-                if first_root == second_root:
-                    if first_parity * second_parity != relative:
-                        diagnostics.append(
-                            f"stitched Chain sides disagree on their line orientation: {first.id} / {second.id}"
-                            " -> one line, it keeps the orientation it had"
-                        )
-                    continue
-                kept, joined = sorted((first_root, second_root), key=lambda line_id: (-part_length.get(line_id, 0.0), line_id))
-                parent[joined] = (kept, first_parity * second_parity * relative)
-    if not parent:
+                pairs.append((first, second))
+    joined = _join_lines(pairs, line_of, signs, part_length, "stitched Chain sides", diagnostics)
+    if joined is None:
         return line_of, signs, part_length
+    joined_line_of, joined_signs, length_by_line = joined
+    for e in second_sides:
+        length_by_line[joined_line_of[e.id]] -= e.length
+    return joined_line_of, joined_signs, length_by_line
+
+
+def _join_lines(pairs, line_of, signs, part_length, what, diagnostics):
+    """Join the island lines of each pair of signed runs into one line: a union-find with parity.
+
+    The relative factor of the two runs' lines is o_a * o_b * s_a * s_b
+    (orientation signs of their uses and run signs, G0 DD-51). A pair whose
+    lines are already one and whose parity contradicts it is reported (what
+    names the pair's kind); the line keeps the orientation it had. A joined
+    line keeps the id and orientation of its longest part (part_length; tie:
+    the smallest id). Returns None when nothing is joined, else the joined
+    line map, the signs relative to it and the summed part lengths per line.
+    """
+
+    parent: dict[str, tuple[str, float]] = {}
+
+    def find(line_id):
+        root, parity = parent.get(line_id, (line_id, 1.0))
+        if root == line_id:
+            return line_id, 1.0
+        top, above = find(root)
+        parent[line_id] = (top, parity * above)
+        return top, parity * above
+
+    for first, second in pairs:
+        relative = first.orientation_sign * second.orientation_sign * signs[first.id] * signs[second.id]
+        (first_root, first_parity), (second_root, second_parity) = find(line_of[first.id]), find(line_of[second.id])
+        if first_root == second_root:
+            if first_parity * second_parity != relative:
+                diagnostics.append(
+                    f"{what} disagree on their line orientation: {first.id} / {second.id}"
+                    " -> one line, it keeps the orientation it had"
+                )
+            continue
+        kept, joined = sorted((first_root, second_root), key=lambda line_id: (-part_length.get(line_id, 0.0), line_id))
+        parent[joined] = (kept, first_parity * second_parity * relative)
+    if not parent:
+        return None
     joined_line_of, joined_signs = dict(line_of), dict(signs)
     for run_id, line_id in line_of.items():
         root, parity = find(line_id)
@@ -107,9 +148,197 @@ def join_stitched_lines(runs, line_of, signs, stitched_chain_ids, diagnostics):
     for line_id, length in part_length.items():
         root = find(line_id)[0]
         length_by_line[root] = length_by_line.get(root, 0.0) + length
-    for e in second_sides:
-        length_by_line[joined_line_of[e.id]] -= e.length
     return joined_line_of, joined_signs, length_by_line
+
+
+@dataclass(frozen=True)
+class MarkedRail:
+    """A stretch of a marked ladder strip's stitched rail laid as one island line (plan Slice AL).
+
+    run_ids: the signed runs of one stitched use of the rail, in the use's
+    order from its start, between two right corners on the rail's Chain or
+    the use's own ends (a closed use is never joined across its own ends).
+    name: the patch and the stretch's first and last source vertex.
+    line_count: how many island lines the join made one; 1 when the
+    stretch already was one line.
+    """
+
+    patch_id: str
+    chain_id: str
+    line_id: str
+    run_ids: tuple[str, ...]
+    line_count: int
+    name: str
+
+
+def join_marked_rails(runs, line_of, signs, length_by_line, rail_uses_by_patch, use_end_sources,
+                      run_corner_relations, bridged_corners, diagnostics):
+    """The stitched rail of a marked ladder strip is one island line between right corners on its Chain.
+
+    rail_uses_by_patch names, per strip, the stitched uses of its stitched
+    rail (quilt_ladders.stitched_rail_uses): the mark (Layer 4
+    STRAIGHT_LADDER) says that rail is straight, where Layer 3 may have cut
+    it into several lines because its arc is coarse. use_end_sources gives
+    each use's two end source vertices (Layer 1 PatchChain start and end
+    vertex). The signed runs of each such use are ordered by their first
+    Chain segment (Layer 3 segment indices), rotated so that the run that
+    starts at one of the use's ends comes first (a closed use cut by a
+    SEAM_SELF opens where its cut is, G0 DD-47). A run is joined to the next
+    when the next starts where it ends walking the Chain forward
+    (orientation signs), that vertex is not one of the use's ends, and no
+    right corner Layer 3 records between runs of the rail's Chain, on any
+    use of it in the island, lies there: a RIGHT RunCornerRelation, or a
+    RunBridgedCornerRelation (its bridge's two ends). Parity and the kept id
+    are those of join_stitched_lines (_join_lines, with length_by_line, the
+    lengths join_stitched_lines returns; None: the sums of the runs); runs
+    without a sign take no part. A joined line keeps the id of its longest
+    part. Returns the joined line map, the signs relative to it and one
+    MarkedRail per stretch; the inputs are not changed.
+    """
+
+    if length_by_line is None:
+        length_by_line = line_lengths(runs, line_of)
+    run_by_id = {e.id: e for e in runs}
+    runs_by_use: dict[str, list] = {}
+    for e in runs:
+        if e.id in signs and e.id in line_of:
+            runs_by_use.setdefault(str(e.patch_chain_id), []).append(e)
+    pairs: list = []
+    stretches: list[tuple[str, list]] = []
+    for patch_id in sorted(rail_uses_by_patch):
+        for use in rail_uses_by_patch[patch_id]:
+            members = sorted(runs_by_use.get(use, ()), key=lambda e: (e.segment_indices[0], e.id))
+            if not members:
+                continue
+            ends = use_end_sources[use]
+            first_index = next((i for i, e in enumerate(members) if _forward_start(e) in ends), 0)
+            members = members[first_index:] + members[:first_index]
+            cut = _corner_vertices(str(members[0].parent_chain_id), run_by_id, run_corner_relations, bridged_corners)
+            stretch = [members[0]]
+            for first, second in zip(members, members[1:]):
+                vertex = _forward_end(first)
+                # The end check guards a use none of whose runs starts at a use end (its first run unsigned and
+                # so left out, or its Chain passing its own end vertex mid-way): the rotation then cannot help.
+                if vertex == _forward_start(second) and vertex not in cut and vertex not in ends:
+                    pairs.append((first, second))
+                    stretch.append(second)
+                else:
+                    stretches.append((patch_id, stretch))
+                    stretch = [second]
+            stretches.append((patch_id, stretch))
+    joined = _join_lines(pairs, line_of, signs, length_by_line, "ladder rail runs", diagnostics)
+    joined_line_of, joined_signs = (line_of, signs) if joined is None else joined[:2]
+    parts: dict[str, set[str]] = {}
+    for run_id, line_id in line_of.items():
+        parts.setdefault(joined_line_of[run_id], set()).add(line_id)
+    rails = tuple(
+        MarkedRail(
+            patch_id, str(stretch[0].parent_chain_id), joined_line_of[stretch[0].id], tuple(e.id for e in stretch),
+            len(parts[joined_line_of[stretch[0].id]]),
+            f"{patch_id} ({_forward_start(stretch[0])}..{_forward_end(stretch[-1])})",
+        )
+        for patch_id, stretch in stretches
+    )
+    return joined_line_of, joined_signs, rails
+
+
+def _forward_start(e) -> str:
+    """The run's end vertex first along its Chain's segment order (a run follows its use, G0 DD-51)."""
+
+    return str(e.start_source_vertex_id if e.orientation_sign != -1 else e.end_source_vertex_id)
+
+
+def _forward_end(e) -> str:
+    return str(e.end_source_vertex_id if e.orientation_sign != -1 else e.start_source_vertex_id)
+
+
+def _corner_vertices(chain_id, run_by_id, run_corner_relations, bridged_corners) -> set[str]:
+    """Source vertices of a Chain where a right corner turns it: a RIGHT or a bridged corner of its runs."""
+
+    def on_chain(run_id):
+        return run_id in run_by_id and str(run_by_id[run_id].parent_chain_id) == chain_id
+
+    def ends(run_id):
+        e = run_by_id[run_id]
+        return {str(e.start_source_vertex_id), str(e.end_source_vertex_id)}
+
+    cut: set[str] = set()
+    for corner in run_corner_relations:
+        first, second = corner.first_directional_evidence_id, corner.second_directional_evidence_id
+        if corner.kind is RunCornerKind.RIGHT and on_chain(first) and on_chain(second):
+            cut |= ends(first) & ends(second)
+    for corner in bridged_corners:
+        bridge = corner.bridge_directional_evidence_id
+        if all(on_chain(run_id) for run_id in (corner.arriving_directional_evidence_id, bridge,
+                                                corner.leaving_directional_evidence_id)):
+            cut |= ends(bridge)
+    return cut
+
+
+def unmeasured_runs(rails, runs, line_of) -> frozenset[str]:
+    """Runs that give no length equation: on a rail's Chain, on a line the mark made from several lines.
+
+    Every use of the rail's Chain in the island counts (the two sides of the
+    stitched rail); other runs that share the joined line keep their length
+    equations: the mark says nothing about them.
+    """
+
+    marked = {(rail.chain_id, rail.line_id) for rail in rails if rail.line_count > 1}
+    return frozenset(e.id for e in runs if (str(e.parent_chain_id), line_of.get(e.id)) in marked)
+
+
+def station_marked_rails(rails, runs, roles, node_by_run_end, coordinates, diagnostics):
+    """Along coordinates of the run-end nodes of each rail the mark made one line (plan Slice AL).
+
+    coordinates maps AXIS_A / AXIS_B to the solved coordinate per node. Only
+    rails with line_count > 1 are read: their runs gave no length equation.
+    The rail's along axis is its line's role. Walking its runs in the order
+    of the stretch, a node without an along coordinate between two nodes
+    that have one takes the value between them in proportion to the 3D
+    length along the rail (the runs' lengths). A node with such a node on
+    one side only keeps no coordinate (no extrapolation). Its across
+    coordinate is its line's, as on any line. One diagnostic per stretch,
+    named by its patch and its first and last source vertex: its line
+    count, its 3D length and the length it is laid at, or that it gets no
+    stations because fewer than two of its nodes are laid. Returns new
+    coordinate maps; the inputs are not changed.
+    """
+
+    run_by_id = {e.id: e for e in runs}
+    result = {axis: dict(values) for axis, values in coordinates.items()}
+    for rail in rails:
+        if rail.line_count < 2:
+            continue
+        stretch = [run_by_id[run_id] for run_id in rail.run_ids]
+        length = sum(e.length for e in stretch)
+        axis = roles.get(stretch[0].id)
+        along = result.get(axis)
+        nodes = [_node_at(stretch[0], _forward_start(stretch[0]), node_by_run_end)]
+        nodes.extend(_node_at(e, _forward_end(e), node_by_run_end) for e in stretch)
+        walked = [0.0]
+        for e in stretch:
+            walked.append(walked[-1] + e.length)
+        fixed = [] if along is None else [index for index, node in enumerate(nodes) if node in along]
+        head = f"{MARKED_RAIL_PREFIX} from {rail.line_count} lines, no length equation, {length:.4f} m in 3D"
+        if len(fixed) < 2:
+            diagnostics.append(f"{head}, no stations: fewer than two of its nodes are laid: {rail.name}")
+            continue
+        for low, high in zip(fixed, fixed[1:]):
+            span = walked[high] - walked[low]
+            for index in range(low + 1, high):
+                t = (walked[index] - walked[low]) / span if span > 0.0 else 0.0
+                along[nodes[index]] = along[nodes[low]] + t * (along[nodes[high]] - along[nodes[low]])
+        if fixed[0] == 0 and fixed[-1] == len(nodes) - 1:
+            laid = abs(along[nodes[-1]] - along[nodes[0]])
+            diagnostics.append(f"{head} laid at {laid:.4f} m: {rail.name}")
+        else:
+            diagnostics.append(f"{head}, its ends not both laid: {rail.name}")
+    return result
+
+
+def _node_at(e, source_vertex, node_by_run_end) -> str:
+    role = "START" if str(e.start_source_vertex_id) == source_vertex else "END"
+    return node_by_run_end[(e.id, role)]
 
 
 def line_lengths(runs, line_of) -> dict[str, float]:

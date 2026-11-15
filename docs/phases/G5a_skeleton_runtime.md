@@ -105,7 +105,13 @@ skeleton.py  - selection-wide solve:
   the island lines (plan Slice Q), Layer 5 checks them against the frame
   and never orders a line. In an island without a rigid frame the lines of
   the two sides of a stitched Chain are then joined (plan Slice AK,
-  frame_free.join_stitched_lines).
+  frame_free.join_stitched_lines), and the stitched rail of a marked
+  ladder strip the quilt could read is made one line (plan Slice AL,
+  skeleton._join_marked_rails: all the joins of an island or none); the
+  runs of the rail's Chain on a line the mark made from several lines give
+  no length equation (IslandSkeleton.unmeasured_run_ids, also left out of
+  the drift span), and after the solve their nodes are stations
+  (frame_free.station_marked_rails).
 
 frame_free.py - the consumer of right corners in islands without a rigid
   frame (plan Slices X, AA, AD; split out of skeleton.py in Slice AF):
@@ -124,11 +130,41 @@ frame_free.py - the consumer of right corners in islands without a rigid
   stitched Chain once; a line the cut view built across a seam is counted
   as before. It reads Layer 3 run fields, rail signs and the island's
   stitched Chains only; it walks nothing.
+  join_marked_rails (plan Slice AL, G0 DD-47), run after
+  join_stitched_lines and before the bipartition: for each stitched use
+  of the stitched rail that quilt_ladders.stitched_rail_uses names, the
+  signed runs are ordered by their first Chain segment and rotated to the
+  run that starts at one of the use's ends (Layer 1 PatchChain start and
+  end vertex); a run joins the next when the next starts where it ends,
+  that vertex is not a use end, and no RIGHT RunCornerRelation or end of
+  a RunBridgedCornerRelation bridge whose runs all lie on the rail's
+  Chain (any use of it in the island) sits there. Same union-find with
+  parity as join_stitched_lines (_join_lines). One MarkedRail per
+  stretch: patch, Chain, line, runs, line count (how many lines the join
+  made one), name "<patch> (<first source>..<last source>)". The free
+  rail is never named. skeleton._join_marked_rails makes the joins of an
+  island together: the bipartition of the joined lines is seeded with the
+  lengths before the joins (a joined line counts as its longest part);
+  if any line comes out OBLIQUE no join is made and one diagnostic
+  "ladder strips in a quilt, stitched rails not made one line: with the
+  rails joined the quilt's right corners hold a line on both axes, the
+  lines are kept as they were: <patches>" names the strips. unmeasured_runs: the runs on a rail's
+  Chain whose line the mark made from several lines; they give no length
+  equation. station_marked_rails, after the solve: walking a stretch, a
+  node without an along coordinate between two laid nodes takes the value
+  between them by 3D length; no extrapolation. One diagnostic per stretch:
+  "ladder strip in a quilt, stitched rail made one line from N lines, no
+  length equation, L m in 3D laid at X m: <name>", "..., its ends not
+  both laid: <name>" or "..., no stations: fewer than two of its nodes
+  are laid: <name>".
 
 quilt_ladders.py - a STRAIGHT_LADDER strip inside a quilt (plan Slice AI,
   G0 DD-54), called by skeleton.py after line orientation and by pins.py
-  after the stations. Only a frame-free quilt reads it; the ladder gives
-  no axis and no sign. In a quilt with a rigid frame a strip in the frame
+  after the stations. Only a frame-free quilt reads it; the ladder chooses
+  no axis and no sign, but stitched_rail_uses names the stitched uses of
+  the stitched rail of each strip it could read (every run end on the
+  ladder, exactly one rail stitched), which frame_free.join_marked_rails
+  makes one line before the bipartition (plan Slice AL). In a quilt with a rigid frame a strip in the frame
   is unfolded with it, and a strip outside the frame is not laid (a
   diagnostic). A strip is read when exactly one rail is stitched
   in the quilt and the quilt lays that rail in at least one piece (plan
@@ -164,7 +200,9 @@ quilt_ladders.py - a STRAIGHT_LADDER strip inside a quilt (plan Slice AI,
   Layer 1 use-to-Chain mapping only.
 
 axis_solve.py - the per-axis solve: components, equation groups, gauge,
-  frame anchoring, residual tolerance and UNCONSTRAINED exclusion.
+  frame anchoring, residual tolerance and UNCONSTRAINED exclusion. A run
+  in unmeasured_run_ids (plan Slice AL) adds no equation and keeps its
+  role, so its line still joins its nodes on the cross axis.
 
 pins.py      - output model: vertex -> (uv, pinned flag, island id);
   stations (plan Slice Z): an axis run pins its inner source vertices at
@@ -524,7 +562,28 @@ self-intersecting faces 2 -> 0, flips 0 -> 0, pinned source vertices 40 ->
 (mean / max); the mean corner angle error rises 4.00 -> 5.28 degrees and
 the pinned-edge error 0.0071 -> 0.0335, because the band f111 is now laid
 straight and the curved middle of its inner side (OBLIQUE) bulges in the
-fill.
+fill. (Corrected 2026-11-15, measured in the study of Slice AL: the pins
+forced that middle to 3.522 m for 2.889 m in 3D and the fill laid it as a
+zigzag of up to 0.036 m across, not a bulge. Laid straight since Slice AL.)
+
+After Slice AL (2026-11-15) the stitched rail of a marked ladder strip in
+an island without a rigid frame is one island line between the right
+corners, plain or bridged, that Layer 3 records between runs of its Chain
+(frame_free.join_marked_rails; G0 DD-47, DD-54). On a rail the mark made
+from several lines the runs of its Chain give no length equation, and its
+run-end nodes are stations by 3D length between its laid nodes; the joins
+of an island are made together or not at all. With the filter off every
+capture, the 13 buildings and the user's mesh are identical in every pin,
+role, sign, outcome, tie and diagnostic; the Tier 3 baseline is identical
+(13 objects) and the quilt smoke differs only in timing. On the user's
+mesh with +Z the bottom quilt after Blender 4.5's fill: pinned source
+vertices 61 -> 69; overlapping triangle pairs, self-intersecting faces and
+flips 0 -> 0; mean / max corner angle error 5.28 / 31.6 -> 4.49 / 33.9
+degrees (f111 5.20 / 23.3 -> 3.20 / 8.4); f73 shear between its rails
+0.55 / 2.02 -> 0.00 / 0.00 degrees; pinned-edge error 0.0335 -> 0.0468.
+f111's inner side is laid straight at 1.101 of its 3D length on every edge
+(the user's own layout: 1.095), its outer side at 1.000. The top quilt
+(noisy f0) keeps its Layer 3 lines and has no pins, as before.
 
 After Slice Z (2026-11) pins are consistent and complete: on the 13
 buildings objects the framed pins that sat beyond drift from their frame
