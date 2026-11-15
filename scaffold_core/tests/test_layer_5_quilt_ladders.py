@@ -38,9 +38,9 @@ _CACHE: dict = {}
 STRAIGHT_A = [(float(i), 0.0, 0.0) for i in range(4)]
 LIFTED_B = [(0.0, 0.2, 0.0), (1.0, 0.5, 0.5), (2.0, 0.5, 0.5), (3.0, 0.3, 0.0)]  # end A 0.2 long, end B 0.3
 FLAT_B = [(0.0, 0.2, 0.0), (1.0, 0.7, 0.0), (2.0, 0.7, 0.0), (3.0, 0.2, 0.0)]  # in the plane: a rigid quilt
-# An L-shaped strip folded at its corner: each rail has a run on each axis.
-FOLDED_A = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0), (2.0, 1.0, 0.5), (2.0, 2.0, 1.0)]
-FOLDED_B = [(0.0, 0.2, 0.0), (1.0, 0.2, 0.0), (1.8, 0.2, 0.0), (1.8, 1.0, 0.5), (1.8, 2.0, 1.0)]
+# An L-shaped strip folded at its corner: flat, then climbing a slope; each rail has a run on each axis.
+FOLDED_A = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0), (2.0, 1.0, 0.3), (2.0, 2.0, 0.6), (2.0, 3.0, 0.9)]
+FOLDED_B = [(0.0, 0.1, 0.0), (1.0, 0.1, 0.0), (1.9, 0.1, 0.0), (1.9, 1.0, 0.3), (1.9, 2.0, 0.6), (1.9, 3.0, 0.9)]
 
 
 def _rounded():
@@ -94,8 +94,13 @@ def _end_length(context, uses) -> float:
     return sum(e.length for e in context.relation_snapshot.patch_chain_directional_evidence if e.patch_chain_id in uses)
 
 
-def _check_kept_together(context, solve, patch_id, *, width, lines_pinned):
-    """Each profile line with both rail vertices pinned: same place along the stitched rail's axis, width across."""
+def _check_kept_together(context, solve, patch_id, *, width, lines_pinned, one_piece=True):
+    """Each profile line with both rail vertices pinned: same place along one axis, width across.
+
+    one_piece: that axis is the axis of the stitched rail's longest run for every line. Otherwise
+    each line may lie in another piece (plan Slice AK); returns the along axis of every such line
+    (0 for AXIS_A, 1 for AXIS_B) in profile-line order.
+    """
 
     island, skeleton = _skeleton(solve, patch_id)
     assert skeleton.frame == FRAME_FREE
@@ -112,10 +117,13 @@ def _check_kept_together(context, solve, patch_id, *, width, lines_pinned):
         if str(line.rail_a.vertex_id) in pins and str(line.rail_b.vertex_id) in pins
     ]
     assert len(both) == lines_pinned
+    alongs = []
     for a, b in both:
-        assert a[along] == pytest.approx(b[along], abs=EXACT)  # no shear
-        assert abs(a[1 - along] - b[1 - along]) == pytest.approx(width, rel=EXACT)
-    return island, skeleton
+        line_along = along if one_piece else (0 if abs(a[0] - b[0]) <= EXACT else 1)
+        assert a[line_along] == pytest.approx(b[line_along], abs=EXACT)  # no shear
+        assert abs(a[1 - line_along] - b[1 - line_along]) == pytest.approx(width, rel=EXACT)
+        alongs.append(line_along)
+    return island, skeleton, alongs
 
 
 def _pinned_edge_errors(context, solve, island_id):
@@ -142,24 +150,45 @@ def _pinned_edge_errors(context, solve, island_id):
 # --------------------------------------------------------------------------- the user's rounded wall, +Z
 
 
-def test_the_bottom_strip_f36_keeps_its_rails_together_in_its_quilt() -> None:
+def test_the_bottom_strip_f36_keeps_its_rails_together_in_its_quilt(monkeypatch) -> None:
     plain, up = _rounded()
     solve = run_skeleton_solve(up)
     island, skeleton = _skeleton(solve, F36)
+    # plan Slice AK: the two sides of each stitched Chain of the quilt are one line where they cover the
+    # same segments; Layer 3 keeps the seams' sides in different families (a family does not cross a
+    # seam with several runs), so here the join, not Layer 3, makes them one.
+    family_of = {m: f.id for f in up.relation_snapshot.connected_direction_families for m in f.member_directional_evidence_ids}
+    by_side: dict[tuple, list] = {}
+    for e in up.relation_snapshot.patch_chain_directional_evidence:
+        if str(e.parent_chain_id) in island.stitched_chain_ids and e.id in skeleton.orientation_by_run:
+            by_side.setdefault((str(e.parent_chain_id), tuple(sorted(e.segment_indices))), []).append(e.id)
+    pairs = [ids for ids in by_side.values() if len(ids) == 2]
+    assert pairs and any(family_of.get(a) != family_of.get(b) for a, b in pairs)
+    assert all(skeleton.line_by_run[a] == skeleton.line_by_run[b] for a, b in pairs)
     ladder = _ladder(up, F36).ladder
     ends = [(_stitched(up, island, uses), uses) for uses in (ladder.end_a_patch_chain_ids, ladder.end_b_patch_chain_ids)]
     stitched_ends = [uses for is_stitched, uses in ends if is_stitched]
     width = _end_length(up, stitched_ends[0]) if len(stitched_ends) == 1 else ladder.width
     assert len(stitched_ends) == 1  # one end leads, the other follows it
-    _check_kept_together(up, solve, F36, width=width, lines_pinned=20)
-    # Two free-rail vertices have a partner without a pin: unpinned and counted.
-    assert f"{island.id}: 2 ladder rail vertices without a pinned profile partner -> unpinned" in solve.diagnostics
+    # plan Slice AK: the stitched rail turns around f111's corner (a bridged right corner of f111 over the
+    # 1.4 mm edge v208-v210), so the strip is read in two pieces: lines 0-19 along one axis, 20-21 along
+    # the other, its rails together in each. Every line is pinned (before: 20, v210/v157 had no place).
+    _island, _skeleton_, alongs = _check_kept_together(up, solve, F36, width=width, lines_pinned=22, one_piece=False)
+    assert alongs == [alongs[0]] * 20 + [1 - alongs[0]] * 2
+    pinned_sources = {v.source_vertex_id for v in solve.vertices if v.patch_id == F36 and v.pinned}
+    assert {"v208", "v209", "v210", "v211", "v157", "v158"} <= pinned_sources
+    assert not [d for d in solve.diagnostics if "without a pinned profile partner" in d and d.startswith(island.id)]
     assert not [d for d in skeleton.diagnostics if "contradictory" in d]
-    # The bottom quilt's pinned edges keep their 3D length (measured mean 0.0077, max 0.084;
-    # before Slice AI 0.048 and 0.624, the rails sheared by 0.10).
+    # The one-face strip f95 at f111's other end measures the band's width 0.4218 against 0.4207: within
+    # the drift of the 7 m quilt, not of the 0.42 m across it (plan Slice AK); 61 source vertices pinned.
+    assert len({v.source_vertex_id for v in solve.vertices if v.island_id == island.id and v.pinned}) == 61
+    # Pinned edges: f111 and f73 are now laid straight along f36 and keep their lengths only roughly
+    # (measured 137 edges, mean 0.031; f111 max 0.24). The worst is f36's mitre edge on its free rail,
+    # v209-v211, 40.8 mm in 3D and laid w * sqrt(2) = 0.107 around the square turn. Before the slice:
+    # 74 edges, mean 0.0077, max 0.084, and the corner folded over after the fill.
     errors = _pinned_edge_errors(up, solve, island.id)
-    assert len(errors) == 74
-    assert sum(errors) / len(errors) < 0.01 and max(errors) < 0.1
+    assert len(errors) == 137
+    assert sum(errors) / len(errors) < 0.035 and sorted(errors)[-2] < 0.25 and max(errors) == pytest.approx(1.61, abs=0.01)
     # The wall quilt: its strip f94 develops (no constraint); its 76 pins do not change.
     walls, wall_skeleton = _skeleton(solve, "patch:seed:f94")
     assert sum(1 for v in solve.vertices if v.island_id == walls.id) == 76
@@ -168,6 +197,15 @@ def test_the_bottom_strip_f36_keeps_its_rails_together_in_its_quilt() -> None:
     # Paired negative: without the filter f36 is an island by itself.
     alone, _alone_skeleton = _skeleton(run_skeleton_solve(plain), F36)
     assert alone.patch_ids == (F36,)
+    # Paired negative: without the join f73 is not read and the quilt pins fewer source vertices.
+    from scaffold_core.layer_5_runtime import frame_free
+
+    monkeypatch.setattr(frame_free, "join_stitched_lines", lambda runs, line_of, signs, stitched, diagnostics: (line_of, signs, None))
+    apart = run_skeleton_solve(up)
+    _island_apart, skeleton_apart = _skeleton(apart, F36)
+    assert any(skeleton_apart.line_by_run[a] != skeleton_apart.line_by_run[b] for a, b in pairs)
+    assert skeleton_apart.quilt_ladder_by_patch["patch:seed:f73"] == quilt_ladders.QUILT_LADDER_RAIL_NOT_LAID
+    assert len({v.source_vertex_id for v in apart.vertices if v.island_id == island.id and v.pinned}) < 61
 
 
 def test_a_strip_whose_quilt_pins_none_of_its_vertices_is_not_kept_together_and_says_so() -> None:
@@ -193,11 +231,13 @@ def test_drop_strips_without_pins_keeps_a_strip_with_one_pinned_run_end() -> Non
     runs = (Run("rp", "p"), Run("rq", "q"))
     node = {("rp", "START"): "n1", ("rp", "END"): "n2", ("rq", "START"): "n3", ("rq", "END"): "n4"}
     read = quilt_ladders.QUILT_LADDER_READ
-    diagnostics: list[str] = []
+    pieces = [f"{quilt_ladders.PIECES_PREFIX}, 1 profile lines on no piece -> not tied: {patch}" for patch in ("p", "q")]
+    diagnostics: list[str] = list(pieces)
     outcomes, kept = quilt_ladders.drop_strips_without_pins({"p": read, "q": read}, ties, runs, node, {"n2"}, diagnostics)
     assert outcomes == {"p": read, "q": quilt_ladders.QUILT_LADDER_NOTHING_PINNED}
     assert kept == ties[:1]
-    assert diagnostics == [f"{quilt_ladders.NOT_READ_PREFIX}, {quilt_ladders.QUILT_LADDER_NOTHING_PINNED}: q"]
+    # q is not read after all: it loses its "read in pieces" diagnostic, p keeps its own.
+    assert diagnostics == [pieces[0], f"{quilt_ladders.NOT_READ_PREFIX}, {quilt_ladders.QUILT_LADDER_NOTHING_PINNED}: q"]
 
 
 def test_a_strip_outside_the_rigid_frame_of_its_quilt_says_so() -> None:
@@ -247,15 +287,22 @@ def test_a_strip_with_no_rail_stitched_is_not_read_and_says_so() -> None:
 def test_a_strip_whose_stitched_rail_the_quilt_does_not_lay_is_not_read_and_says_so() -> None:
     _plain, up = _rounded()
     solve = run_skeleton_solve(up)
-    for patch_id in ("patch:seed:f71", "patch:seed:f73", "patch:seed:f96"):
+    for patch_id in ("patch:seed:f71", "patch:seed:f96"):
         _island, skeleton = _skeleton(solve, patch_id)
         assert skeleton.quilt_ladder_by_patch[patch_id] == quilt_ladders.QUILT_LADDER_RAIL_NOT_LAID
         assert _not_read(solve, patch_id) == [
             f"{quilt_ladders.NOT_READ_PREFIX}, {quilt_ladders.QUILT_LADDER_RAIL_NOT_LAID}: {patch_id}"
         ]
         assert not [tie for tie in skeleton.ladder_ties if tie.key[1] == patch_id]
-    # Paired positive: f36 in the same solve is read.
+    # Paired positive: f36 in the same solve is read; so is f73 since plan Slice AK, its stitched rail lying
+    # on f111, whose side on f36 is now one line with f36's rail. Its rail on f111 is laid in two pieces on one
+    # axis around f111's curved middle (OBLIQUE): the lines between them are not tied, and say so.
     assert _skeleton(solve, F36)[1].quilt_ladder_by_patch[F36] == quilt_ladders.QUILT_LADDER_READ
+    f73 = "patch:seed:f73"
+    assert _skeleton(solve, f73)[1].quilt_ladder_by_patch[f73] == quilt_ladders.QUILT_LADDER_READ
+    assert [d for d in solve.diagnostics if d.endswith(f73)] == [
+        f"{quilt_ladders.PIECES_PREFIX}, 4 profile lines on no piece -> not tied: {f73}"
+    ]
 
 
 def test_a_ladder_whose_run_end_is_not_on_it_is_not_read_and_says_so() -> None:
@@ -342,18 +389,145 @@ def test_with_both_ends_stitched_each_keeps_its_length_and_the_free_rail_runs_st
     assert one_pins[str(last.rail_b.vertex_id)][1] - one_pins[str(last.rail_a.vertex_id)][1] == pytest.approx(0.2)
 
 
-def test_a_free_rail_with_a_run_on_the_across_axis_is_not_read_and_says_so() -> None:
-    context, solve, patch_id = _synthetic(FOLDED_A, FOLDED_B, joins=("A",), splits=("B",))
-    _island, skeleton = _skeleton(solve, patch_id)
+def test_a_strip_whose_stitched_rail_turns_a_corner_is_read_in_two_pieces_with_its_rails_together_in_each() -> None:
+    # plan Slice AK: before, a single rail axis was read, so the folded strip was "free rail across" and not read.
+    context, solve, patch_id = _synthetic(FOLDED_A, FOLDED_B, joins=("A",), splits=("B", "EB"))
+    ladder = _ladder(context, patch_id).ladder
+    island, skeleton = _skeleton(solve, patch_id)
     assert skeleton.frame == FRAME_FREE
-    assert skeleton.quilt_ladder_by_patch[patch_id] == quilt_ladders.QUILT_LADDER_FREE_RAIL_ACROSS
-    assert _not_read(solve, patch_id) == [
-        f"{quilt_ladders.NOT_READ_PREFIX}, {quilt_ladders.QUILT_LADDER_FREE_RAIL_ACROSS}: {patch_id}"
+    assert skeleton.quilt_ladder_by_patch[patch_id] == quilt_ladders.QUILT_LADDER_READ
+    # Two runs of the stitched rail meet at the corner line on two axes: that line is in no piece.
+    ties = [tie for tie in skeleton.ladder_ties if tie.key[1] == patch_id]
+    tied = {tie.key[0]: tie.along_index for tie in ties}
+    lines = ladder.profile_lines
+    free = [str(line.rail_b.vertex_id if _stitched(context, island, ladder.rail_a_patch_chain_ids) else line.rail_a.vertex_id)
+            for line in lines]
+    assert free[2] not in tied and len(tied) == len(lines) - 1
+    assert len({tied[vertex] for vertex in free[:2]}) == 1 and len({tied[vertex] for vertex in free[3:]}) == 1
+    assert tied[free[0]] != tied[free[-1]]
+    assert f"{quilt_ladders.PIECES_PREFIX}, 1 profile lines on no piece -> not tied: {patch_id}" in solve.diagnostics
+    assert not [d for d in solve.diagnostics if "contradictory" in d or "partner" in d]
+    # Rails together in each piece: one coordinate shared, the same distance across throughout the piece.
+    pins = _pins(solve, patch_id)
+    for piece in (lines[:2], lines[3:]):
+        pairs = [(pins[str(line.rail_a.vertex_id)], pins[str(line.rail_b.vertex_id)]) for line in piece]
+        along = 0 if abs(pairs[0][0][0] - pairs[0][1][0]) <= EXACT else 1
+        for a, b in pairs:
+            assert a[along] == pytest.approx(b[along], abs=EXACT)
+            assert abs(a[1 - along] - b[1 - along]) == pytest.approx(abs(pairs[0][0][1 - along] - pairs[0][1][1 - along]), abs=EXACT)
+    # Paired negative: a straight strip is read in one piece, every line tied on one axis.
+    _c, straight, straight_id = _synthetic(STRAIGHT_A, LIFTED_B, joins=("A",), splits=("B", "EB"))
+    assert len({tie.along_index for tie in _skeleton(straight, straight_id)[1].ladder_ties}) == 1
+
+
+class _Line:
+    def __init__(self, index):
+        self.rail_a = _Vertex(f"a{index}")
+        self.rail_b = _Vertex(f"b{index}")
+        self.u = float(index)
+        self.across = ()
+
+
+class _Vertex:
+    def __init__(self, name):
+        self.vertex_id = name
+        self.source_vertex_id = name
+
+
+class _Run:
+    def __init__(self, run_id, use, length=1.0):
+        self.id, self.patch_id, self.patch_chain_id, self.length = run_id, "strip", use, length
+
+
+def _fake_strip(free_roles, stitched_roles, line_count=4):
+    """A strip of line_count profile lines: rail A stitched, rail B free, one run per step on each rail.
+
+    stitched_roles / free_roles: the role of the run over each step (None: OBLIQUE). Ends: one run each.
+    """
+
+    ladder = type("Ladder", (), {})()
+    ladder.profile_lines = tuple(_Line(i) for i in range(line_count))
+    ladder.rail_a_patch_chain_ids, ladder.rail_b_patch_chain_ids = ("ra",), ("rb",)
+    ladder.end_a_patch_chain_ids, ladder.end_b_patch_chain_ids = ("ea",), ("eb",)
+    ladder.width, ladder.length = 1.0, float(line_count - 1)
+    constraint = type("Constraint", (), {"patch_id": "strip", "ladder": ladder})()
+    chains = {"ra": "stitched", "rb": "free", "ea": "end a", "eb": "end b"}
+    patch_chain_by_id = {use: type("Use", (), {"chain_id": chain})() for use, chain in chains.items()}
+    runs, roles, signs, vertex_by_run_end = [], {}, {}, {}
+    for rail, rail_roles in (("a", stitched_roles), ("b", free_roles)):
+        for step, role in enumerate(rail_roles):
+            e = _Run(f"r{rail}{step}", f"r{rail}")
+            runs.append(e)
+            roles[e.id] = role or "OBLIQUE"
+            signs[e.id] = 1.0
+            vertex_by_run_end[(e.id, "START")], vertex_by_run_end[(e.id, "END")] = f"{rail}{step}", f"{rail}{step + 1}"
+    for end, line in (("ea", 0), ("eb", line_count - 1)):
+        e = _Run(end, end)
+        runs.append(e)
+        roles[e.id] = "OBLIQUE"
+        vertex_by_run_end[(e.id, "START")], vertex_by_run_end[(e.id, "END")] = f"a{line}", f"b{line}"
+    island = type("Island", (), {"stitched_chain_ids": ("stitched",)})()
+    return constraint, island, runs, roles, signs, vertex_by_run_end, patch_chain_by_id
+
+
+def test_the_stitched_rail_is_cut_into_pieces_where_its_axis_changes() -> None:
+    # A bridged turn: A, an OBLIQUE bridge, B. Each piece ties its own lines along its own axis.
+    constraint, island, runs, roles, signs, vertex_by_run_end, uses = _fake_strip(
+        ["AXIS_A", None, "AXIS_B"], ["AXIS_A", None, "AXIS_B"]
+    )
+    diagnostics: list[str] = []
+    _lengths, ties, outcomes = quilt_ladders.read_quilt_ladders(
+        [constraint], island, runs, roles, signs, vertex_by_run_end, uses, diagnostics
+    )
+    assert outcomes == {"strip": quilt_ladders.QUILT_LADDER_READ} and diagnostics == []
+    assert [(tie.key[0], tie.partner[0], tie.along_index, tie.t, tuple(c[0] for c in tie.corners)) for tie in ties] == [
+        ("b0", "a0", 0, 0.0, ("b0", "b1")), ("b1", "a1", 0, 1.0, ("b0", "b1")),
+        ("b2", "a2", 1, 0.0, ("b2", "b3")), ("b3", "a3", 1, 1.0, ("b2", "b3")),
     ]
-    assert skeleton.ladder_ties == ()
-    # Paired positive: a strip whose free rail stays on the rail axis is read.
-    _c, read, read_id = _synthetic(STRAIGHT_A, LIFTED_B, joins=("A",), splits=("B", "EB"))
-    assert _skeleton(read, read_id)[1].quilt_ladder_by_patch[read_id] == quilt_ladders.QUILT_LADDER_READ
+    # The free runs within a piece and on its axis lose their signs; the free bridge keeps its own.
+    assert "rb0" not in signs and "rb2" not in signs and signs["rb1"] == 1.0
+    # A plain right turn: the corner line is held on both axes and lies in no piece.
+    constraint, island, runs, roles, signs, vertex_by_run_end, uses = _fake_strip(["AXIS_A", "AXIS_B"], ["AXIS_A", "AXIS_B"], 3)
+    diagnostics = []
+    _lengths, ties, outcomes = quilt_ladders.read_quilt_ladders(
+        [constraint], island, runs, roles, signs, vertex_by_run_end, uses, diagnostics
+    )
+    assert outcomes == {"strip": quilt_ladders.QUILT_LADDER_READ}
+    assert [(tie.key[0], tie.along_index) for tie in ties] == [("b0", 0), ("b2", 1)]
+    assert diagnostics == [f"{quilt_ladders.PIECES_PREFIX}, 1 profile lines on no piece -> not tied: strip"]
+    # Two runs of one axis on either side of an OBLIQUE step are two pieces: no run holds that step.
+    constraint, island, runs, roles, signs, vertex_by_run_end, uses = _fake_strip(
+        ["AXIS_A", None, "AXIS_A"], ["AXIS_A", None, "AXIS_A"]
+    )
+    _lengths, ties, _outcomes = quilt_ladders.read_quilt_ladders(
+        [constraint], island, runs, roles, signs, vertex_by_run_end, uses, []
+    )
+    assert [tuple(c[0] for c in tie.corners) for tie in ties] == [("b0", "b1")] * 2 + [("b2", "b3")] * 2
+
+
+def test_a_free_rail_with_a_run_on_the_across_axis_of_its_piece_is_not_read_and_says_so() -> None:
+    constraint, island, runs, roles, signs, vertex_by_run_end, uses = _fake_strip(
+        ["AXIS_A", "AXIS_B", "AXIS_A"], ["AXIS_A", "AXIS_A", "AXIS_A"]
+    )
+    diagnostics: list[str] = []
+    _lengths, ties, outcomes = quilt_ladders.read_quilt_ladders(
+        [constraint], island, runs, roles, signs, vertex_by_run_end, uses, diagnostics
+    )
+    assert outcomes == {"strip": quilt_ladders.QUILT_LADDER_FREE_RAIL_ACROSS} and ties == ()
+    assert diagnostics == [f"{quilt_ladders.NOT_READ_PREFIX}, {quilt_ladders.QUILT_LADDER_FREE_RAIL_ACROSS}: strip"]
+    assert all(run_id in signs for run_id in ("rb0", "rb1", "rb2"))
+    # Paired positive: the same run on the across axis of the piece it lies in is read (the turn above).
+    constraint, island, runs, roles, signs, vertex_by_run_end, uses = _fake_strip(
+        ["AXIS_A", "AXIS_B", "AXIS_B"], ["AXIS_A", "AXIS_B", "AXIS_B"]
+    )
+    assert quilt_ladders.read_quilt_ladders(
+        [constraint], island, runs, roles, signs, vertex_by_run_end, uses, []
+    )[2] == {"strip": quilt_ladders.QUILT_LADDER_READ}
+    # Paired negative: a stitched rail with no signed run on an axis has no piece and is not laid.
+    constraint, island, runs, roles, signs, vertex_by_run_end, uses = _fake_strip(["AXIS_A"] * 3, [None] * 3)
+    assert quilt_ladders.read_quilt_ladders(
+        [constraint], island, runs, roles, signs, vertex_by_run_end, uses, []
+    )[2] == {"strip": quilt_ladders.QUILT_LADDER_RAIL_NOT_LAID}
 
 
 def test_a_strip_in_a_quilt_with_a_rigid_frame_is_unfolded_exactly_and_says_nothing() -> None:

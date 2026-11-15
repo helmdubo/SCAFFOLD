@@ -53,6 +53,8 @@ from scaffold_core.tests.fixtures.l_corridor_tunnel import (
 from scaffold_core.tests.fixtures.reflex_corner import make_reflex_corner_walls_source
 from scaffold_core.tests.fixtures.run_corner_sheets import (
     NOTCHED_SHEET_UNFOLDED,
+    make_band_on_sloped_strip_arc_source,
+    make_chamfered_top_on_folded_wall_source,
     make_cut_corner_rectangle_source,
     make_folded_cut_corner_source,
     make_folded_l_sheet_source,
@@ -332,12 +334,16 @@ def test_artist_walls_captures_keep_g5a_invariants() -> None:
         ), name
 
 
-def test_fully_seamed_box_unfolds_as_one_consistent_island() -> None:
+def test_fully_seamed_box_unfolds_as_one_consistent_island(monkeypatch) -> None:
     # Every edge is a seam, so the whole box is one island: a spanning tree of
     # stitched hinges. Layer 3 families cross the seams the tree leaves cut,
     # and at a box corner three families are mutually perpendicular in 3D, so
     # the frame-free bipartition left the box with no pins at all. Island
     # lines in the rigid unfolded frame give every run an axis (plan Slice N).
+    from scaffold_core.layer_5_runtime import frame_free
+
+    # The stitched sides are joined only without a rigid frame (plan Slice AK).
+    monkeypatch.setattr(frame_free, "join_stitched_lines", lambda *args: pytest.fail("joined in a rigid frame"))
     context = run_pass_1_relations(run_pass_0(make_capped_square_prism_all_seams_source()))
     result = run_skeleton_solve(context)
 
@@ -447,6 +453,42 @@ def test_solve_absorbs_modelling_drift_relative_to_the_island_span() -> None:
         # 5 mm over 10 m is drift (1 mm per metre); 5 cm is a contradiction
         assert bool(diagnostics) is contradictory, (rung_length, diagnostics)
         assert bool(solve.coordinate_by_node) is not contradictory
+
+
+def _band(length, first_width, second_width):
+    """A frame-free band: two rails of the given length on AXIS_A, its two width measurements on AXIS_B."""
+
+    runs = (
+        SimpleNamespace(id="a0", length=length, direction=(1.0, 0.0, 0.0)),
+        SimpleNamespace(id="a1", length=length, direction=(1.0, 0.0, 0.0)),
+        SimpleNamespace(id="b0", length=first_width, direction=(0.0, 1.0, 0.0)),
+        SimpleNamespace(id="b1", length=second_width, direction=(0.0, 1.0, 0.0)),
+    )
+    ends = {"a0": ("n0", "n1"), "a1": ("n2", "n3"), "b0": ("n0", "n2"), "b1": ("n1", "n3")}
+    node_by_run_end = {(run_id, role): node for run_id, pair in ends.items() for role, node in zip(("START", "END"), pair)}
+    roles = {"a0": "AXIS_A", "a1": "AXIS_A", "b0": "AXIS_B", "b1": "AXIS_B"}
+    return runs, roles, {run_id: 1.0 for run_id in roles}, node_by_run_end
+
+
+def test_frame_free_drift_is_per_metre_of_the_island_not_of_the_solved_axis() -> None:
+    # plan Slice AK: the user's rounded wall, +Z: a band 7 m long and 0.42 m wide whose width is measured
+    # 0.4218 and 0.4207; the drift of the band's own width (0.42 mm) called that noise a contradiction.
+    from scaffold_core.layer_5_runtime.axis_solve import solve_axis as _solve_axis
+    from scaffold_core.layer_5_runtime.skeleton import _island_drift
+
+    for second_width, contradictory in ((0.301, False), (0.35, True)):  # 1 mm of noise; a 5 cm taper
+        runs, roles, signs, node_by_run_end = _band(10.0, 0.3, second_width)
+        direction_of = {e.id: e.direction for e in runs}
+        drift = _island_drift(runs, roles, signs, node_by_run_end, direction_of, None, {})
+        assert drift == pytest.approx(0.01)  # 1 mm per metre of the band's 10 m, on both axes
+        diagnostics: list[str] = []
+        solve = _solve_axis("AXIS_B", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift)
+        assert bool(diagnostics) is contradictory, (second_width, diagnostics)
+        assert bool(solve.coordinate_by_node) is not contradictory
+    # Paired negative: per metre of the solved axis alone (0.3 m across) the 1 mm of noise is a contradiction.
+    own_span: list[str] = []
+    _solve_axis("AXIS_B", *_band(10.0, 0.3, 0.301), own_span)
+    assert own_span == ["AXIS_B: 2 contradictory equations -> UNCONSTRAINED components"]
 
 
 def test_framed_solve_uses_the_frame_drift_shared_with_the_jog_check() -> None:
@@ -900,9 +942,9 @@ def test_frame_free_island_takes_lines_and_in_line_signs_from_its_rails(monkeypa
     assert multi_run and all(segment.is_ordered for segment in multi_run)
     for segment in skeleton.rail_segments:
         members = segment.ordered_member_directional_evidence_ids
-        assert {skeleton.line_by_run[member] for member in members} == {
-            f"{segment.direction_family_id}@{min(members)}"
-        }
+        # One line per rail piece; the two sides of a stitched seam may join
+        # two pieces into one line (plan Slice AK), so the id may be the other piece's.
+        assert len({skeleton.line_by_run[member] for member in members}) == 1
         # Co-orientation between rails may flip a whole line, never one run.
         assert len({
             skeleton.orientation_by_run[member] * segment.orientation_sign_by_member[member]
@@ -1356,6 +1398,219 @@ def test_rigid_frame_island_solves_the_same_with_or_without_bridged_corners(make
     assert with_bridged.vertices == without.vertices
 
 
+def _cut_rail_pieces_per_patch(monkeypatch, context):
+    """Cut every rail piece of the island into one piece per patch.
+
+    Layer 3 puts the two sides of this fixture's straight single-run seam in
+    one family (a family crosses such a hinge), so the fixture alone would
+    never exercise the join: its two sides are already one line. On the
+    user's rounded wall the seam is curved and has several runs, which no
+    family crosses, so its two sides are two families: this cut stands in
+    for that. A seam with several runs that still shows the layout effect
+    could not be built in a small fixture (an arc seam between a flat band
+    and a sloped strip is joined without a stand-in, see the test after the
+    next one, but its joined lines stay OBLIQUE and its pins do not move).
+    """
+
+    from scaffold_core.layer_5_runtime import skeleton as skeleton_module
+
+    patch_of = {e.id: str(e.patch_id) for e in context.relation_snapshot.patch_chain_directional_evidence}
+    real_cut = skeleton_module.cut_scaffold_rail
+
+    def cut(*args):
+        pieces = []
+        for segment in real_cut(*args):
+            members = segment.ordered_member_directional_evidence_ids
+            for patch in dict.fromkeys(patch_of[member] for member in members):
+                part = tuple(member for member in members if patch_of[member] == patch)
+                pieces.append(replace(
+                    segment,
+                    ordered_member_directional_evidence_ids=part,
+                    ordered_station_member_ids=tuple((member,) for member in part),
+                    orientation_sign_by_member={member: segment.orientation_sign_by_member[member] for member in part},
+                ))
+        return tuple(pieces)
+
+    monkeypatch.setattr(skeleton_module, "cut_scaffold_rail", cut)
+
+
+def test_the_two_sides_of_a_stitched_seam_are_one_line_and_lay_the_far_sides_bridged_corner(monkeypatch) -> None:
+    # plan Slice AK: the top's runs meet the wall's only on the seam; in a quilt the seam has one UV per
+    # vertex, so its two sides are one line, and the top's chamfered corner is laid through it.
+    context = run_pass_1_relations(run_pass_0(make_chamfered_top_on_folded_wall_source()))
+    _cut_rail_pieces_per_patch(monkeypatch, context)
+    evidence = {e.id: e for e in context.relation_snapshot.patch_chain_directional_evidence}
+    result = run_skeleton_solve(context)
+    (skeleton,) = result.skeletons
+    assert skeleton.frame == "FRAME_FREE"
+    (seam,) = result.assembly.islands[0].stitched_chain_ids
+    on_seam = [run_id for run_id, e in evidence.items() if str(e.parent_chain_id) == seam]
+    assert len({str(evidence[run_id].patch_id) for run_id in on_seam}) == 2
+    assert len({skeleton.line_by_run[run_id] for run_id in on_seam}) == 1
+    top = {run_id: role for run_id, role in skeleton.axis_role_by_run.items() if str(evidence[run_id].patch_id).endswith("f_top")}
+    assert sorted(top.values()) == ["AXIS_A", "AXIS_A", "AXIS_B", "AXIS_B", "OBLIQUE"]
+    (bridged,) = context.relation_snapshot.run_bridged_corner_relations
+    assert bridged.bridge_directional_evidence_id in skeleton.bridge_vector_by_run
+    assert not [d for d in skeleton.diagnostics if "not reached" in d or "contradictory" in d or "disagree" in d]
+    position = {str(k): v.position for k, v in context.source_snapshot.vertices.items()}
+    pins = [v for v in result.vertices if v.patch_id.endswith("f_top") and v.pinned]
+    assert sorted(v.source_vertex_id for v in pins) == ["p0", "p1", "p2", "p3", "p4"]
+    for i, a in enumerate(pins):  # the flat top is laid exactly, chamfer included
+        for b in pins[i + 1:]:
+            assert dist(a.uv, b.uv) == pytest.approx(dist(position[a.source_vertex_id], position[b.source_vertex_id]), abs=1e-9)
+    assert result.axis_parallel_violations == ()
+
+    # Paired negative: without the join the top's lines are never reached and its corner is not laid.
+    _without_join(monkeypatch)
+    (apart,) = run_skeleton_solve(context).skeletons
+    assert {apart.axis_role_by_run[run_id] for run_id in top} == {"OBLIQUE"}
+    assert apart.bridge_vector_by_run == {}
+    assert sum("not reached by right corners" in d for d in apart.diagnostics) == 5
+
+
+def test_join_stitched_lines_joins_runs_over_the_same_segments_with_the_parity_of_their_uses() -> None:
+    from scaffold_core.layer_5_runtime.frame_free import join_stitched_lines
+
+    def run(run_id, use, segments, orientation, chain="c", length=1.0):
+        return SimpleNamespace(id=run_id, parent_chain_id=chain, patch_chain_id=use, segment_indices=segments,
+                               orientation_sign=orientation, length=length)
+
+    runs = (
+        run("p", "use_p", (0, 1), 1, length=2.0),  # one side of the seam's first two segments
+        run("q", "use_q", (1, 0), -1, length=2.0),  # the other side over the same segments, walked the other way
+        run("a", "use_p", (2, 3, 4), 1), run("b1", "use_q", (2,), -1), run("b2", "use_q", (3, 4), -1),  # overlap in part
+        run("r", "use_p", (5,), 1), run("s", "use_q", (6,), 1),  # touch only at a vertex
+        run("u", "use_q", (5,), 1),  # unsigned
+        run("x", "use_x", (0,), 1, chain="cut"),  # not a stitched Chain
+    )
+    line_of = {"p": "L1", "q": "L2", "a": "L3", "b1": "L4", "b2": "L5", "r": "L6", "s": "L7", "u": "L8", "x": "L9"}
+    signs = {"p": 1.0, "q": 1.0, "a": 1.0, "b1": 1.0, "b2": 1.0, "r": 1.0, "s": 1.0, "x": 1.0}
+    diagnostics: list[str] = []
+    joined, joined_signs, lengths = join_stitched_lines(runs, line_of, signs, ("c",), diagnostics)
+    # p and q cover the same segments: one line, q flips (o_p * o_q * s_p * s_q = -1). Runs that
+    # overlap only in part, touch at a vertex, are unsigned or lie on a cut Chain keep their lines.
+    assert joined == dict(line_of, q="L1")
+    assert joined_signs == dict(signs, q=-1.0)
+    assert diagnostics == [] and line_of["q"] == "L2" and signs["q"] == 1.0  # inputs untouched
+    # The joined line lays the stitched Chain once, not both sides together.
+    assert lengths["L1"] == 2.0 and "L2" not in lengths and lengths["L3"] == 1.0
+    # A joined line keeps the id and orientation of its longest part: with a run more on q's
+    # line, L2 stays and p flips.
+    longer = (*runs, run("t", "use_t", (0,), 1, chain="other"))
+    joined, joined_signs, lengths = join_stitched_lines(longer, dict(line_of, t="L2"), dict(signs, t=1.0), ("c",), [])
+    assert joined["p"] == joined["q"] == joined["t"] == "L2"
+    assert (joined_signs["p"], joined_signs["q"]) == (-1.0, 1.0) and lengths["L2"] == 3.0
+    # Two sides already on one line whose signs contradict it are reported; the line, both
+    # signs and its length (both sides, as Layer 3 built it) stay as they were.
+    diagnostics = []
+    joined, joined_signs, lengths = join_stitched_lines(runs, dict(line_of, q="L1"), signs, ("c",), diagnostics)
+    assert joined == dict(line_of, q="L1") and joined_signs == signs and lengths["L1"] == 4.0
+    assert diagnostics == [
+        "stitched Chain sides disagree on their line orientation: p / q -> one line, it keeps the orientation it had"
+    ]
+
+
+def _without_join(monkeypatch):
+    from scaffold_core.layer_5_runtime import frame_free
+
+    monkeypatch.setattr(frame_free, "join_stitched_lines", lambda runs, line_of, signs, stitched, diagnostics: (line_of, signs, None))
+
+
+def test_the_two_families_of_an_arc_seam_are_joined_run_by_run_without_a_stand_in(monkeypatch) -> None:
+    # plan Slice AK: a curved seam with several runs, which no Layer 3 family crosses.
+    context = run_pass_1_relations(run_pass_0(make_band_on_sloped_strip_arc_source()))
+    evidence = {e.id: e for e in context.relation_snapshot.patch_chain_directional_evidence}
+    family_of = {
+        member: family.id
+        for family in context.relation_snapshot.connected_direction_families
+        for member in family.member_directional_evidence_ids
+    }
+    result = run_skeleton_solve(context)
+    (skeleton,) = result.skeletons
+    (island,) = result.assembly.islands
+    assert skeleton.frame == "FRAME_FREE"
+    (seam,) = island.stitched_chain_ids
+    by_segments: dict[tuple[int, ...], list[str]] = {}
+    for run_id, e in evidence.items():
+        if str(e.parent_chain_id) == seam:
+            by_segments.setdefault(tuple(sorted(e.segment_indices)), []).append(run_id)
+    assert len(by_segments) == 12 and all(len(pair) == 2 for pair in by_segments.values())
+    for first, second in by_segments.values():
+        assert evidence[first].patch_id != evidence[second].patch_id
+        assert family_of[first] != family_of[second]  # Layer 3 keeps the two sides apart
+        assert skeleton.line_by_run[first] == skeleton.line_by_run[second]  # one UV line
+    assert not [d for d in skeleton.diagnostics if "disagree" in d or "contradictory" in d]
+
+    # Paired negative: without the join each side is its own line; 11 of the 12 pairs are
+    # two lines the corners never reach (the 12th pair is reached on both sides).
+    _without_join(monkeypatch)
+    (apart,) = run_skeleton_solve(context).skeletons
+    for first, second in by_segments.values():
+        assert apart.line_by_run[first] != apart.line_by_run[second]
+    unreached = lambda s: sum("not reached by right corners" in d for d in s.diagnostics)  # noqa: E731
+    assert unreached(apart) - unreached(skeleton) == 11
+
+
+def test_joining_stitched_sides_does_not_turn_the_frame_free_islands_of_the_cube(monkeypatch) -> None:
+    # Review of plan Slice AK: on a_cube_s3 (filter off) four island lines are equally long. A joined
+    # line that took the smallest part id, or counted both sides of its stitched Chain, seeded another
+    # line and turned five frame-free islands by 90 or 180 degrees. It keeps the id, orientation and
+    # length of its longest part, so every pin lies where it lies without the join.
+    from dev.tools.scaffold_graph_debug.snapshot_io import load_source_snapshot
+    from scaffold_core.pipeline.passes import run_pass_3_filters
+    from scaffold_core.user_filters.model import FilterOptions
+
+    source = load_source_snapshot(DATA / "bevel_cases" / "a_cube_s3.capture.json")
+    context = run_pass_3_filters(run_pass_2_features(run_pass_1_relations(run_pass_0(source))), FilterOptions(world_up=None))
+
+    def frame_free_pins(result):
+        free = {s.island_id for s in result.skeletons if s.frame == "FRAME_FREE"}
+        return {(v.island_id, v.patch_id, v.source_vertex_id): v.uv for v in result.vertices if v.pinned and v.island_id in free}
+
+    joined = run_skeleton_solve(context)
+    _without_join(monkeypatch)
+    apart = run_skeleton_solve(context)
+    joined_lines = sum(len(set(s.line_by_run.values())) for s in joined.skeletons if s.frame == "FRAME_FREE")
+    apart_lines = sum(len(set(s.line_by_run.values())) for s in apart.skeletons if s.frame == "FRAME_FREE")
+    assert joined_lines < apart_lines  # the join acts here
+    pins, pins_apart = frame_free_pins(joined), frame_free_pins(apart)
+    assert len({key[0] for key in pins}) == 5 and set(pins) == set(pins_apart)
+    for key, uv in pins.items():
+        assert uv == pytest.approx(pins_apart[key], abs=1e-9), key
+
+
+def test_a_stitched_chain_whose_sides_overlap_only_in_part_is_not_joined(monkeypatch) -> None:
+    # Review of plan Slice AK: the strip takes the chord of the folded Chain as one run over its three
+    # segments, the cap steps over the same Chain in three runs at right angles. Forced into one quilt,
+    # joining the overlapping runs made the corners contradict (0 pins); the sides stay apart.
+    from scaffold_core.layer_5_runtime import pins as pins_module
+    from scaffold_core.layer_5_runtime.islands import Island
+    from scaffold_core.tests.fixtures.chain_shape_surfaces import make_folded_strip_with_cap_source
+
+    folded = "chain:e_p0_0_p1_0:e_p1_0_p2_0:e_p2_0_p3_0"
+    real_build = pins_module.build_islands
+
+    def stitched_by_force(context):
+        assembly = real_build(context)
+        patches = tuple(sorted(p for island in assembly.islands for p in island.patch_ids))
+        return IslandAssembly((Island("island:0", patches, (folded,)),), assembly.decisions,
+                              {p: "island:0" for p in patches})
+
+    monkeypatch.setattr(pins_module, "build_islands", stitched_by_force)
+    context = run_pass_1_relations(run_pass_0(make_folded_strip_with_cap_source()))
+    on_folded = [e for e in context.relation_snapshot.patch_chain_directional_evidence if str(e.parent_chain_id) == folded]
+    assert sorted(len(e.segment_indices) for e in on_folded) == [1, 1, 1, 3]
+    result = run_skeleton_solve(context)
+    (skeleton,) = result.skeletons
+    assert skeleton.frame == "FRAME_FREE"
+    assert len({skeleton.line_by_run[e.id] for e in on_folded}) == 4
+    assert sum(vertex.pinned for vertex in result.vertices) == 10
+    assert not [d for d in skeleton.diagnostics if "contradictory" in d]
+    _without_join(monkeypatch)
+    apart = run_skeleton_solve(context)
+    assert apart.vertices == result.vertices and apart.skeletons == result.skeletons
+
+
 def test_arch_rim_arcs_share_one_axis_and_end_chains_the_other() -> None:
     # Before right corners, raw 3D perpendicularity across the rim/cap fold
     # made odd cycles and a whole rim arc went OBLIQUE.
@@ -1368,7 +1623,10 @@ def test_arch_rim_arcs_share_one_axis_and_end_chains_the_other() -> None:
         skeleton = skeletons[island_id]
         assert skeleton.frame == "FRAME_FREE"
         assert not [d for d in skeleton.diagnostics if "bipartition" in d]
-        members_by_line: dict[str, int] = Counter(skeleton.line_by_run.values())
+        # Counted on the rim patch alone: an end chain's line also holds its stitched partner (plan Slice AK).
+        members_by_line: dict[str, int] = Counter(
+            line for run_id, line in skeleton.line_by_run.items() if str(evidence[run_id].patch_id) == rim_patch
+        )
         arc_roles, end_roles = set(), set()
         arc_lines = set()
         for run_id, role in skeleton.axis_role_by_run.items():

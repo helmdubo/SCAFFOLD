@@ -8,7 +8,10 @@ Rules:
 - One length equation per RUN connecting its OWN endpoints.
 - Island lines are the pieces of the Layer 3 rail cut by the island (its runs
   and stitched hinges): a family that crosses a cut seam splits into several
-  island lines (plan Slice Q).
+  island lines (plan Slice Q). In an island without a rigid frame the runs
+  of the two uses of a stitched Chain that cover the same Chain segments are
+  one line (one UV per vertex in a quilt; frame_free.join_stitched_lines,
+  plan Slice AK); a rigid frame already places both sides alike.
 - Axis roles and run orientation come from the island's unfolded frame
   (stitch-tree parallel transport) when every island patch is planar;
   an island without one bipartitions its lines into axes by the right
@@ -38,7 +41,8 @@ Rules:
   from end B to end A, so the layout is not mirrored; it reads no ladder,
   face or 3D direction. A STRAIGHT_LADDER strip that shares a frame-free
   quilt is read after line orientation by quilt_ladders.py (plan Slice AI):
-  it gives no axis, only keeps its two rails together.
+  it gives no axis, only keeps its two rails together, piece by piece where
+  its stitched rail turns from one axis to the other (plan Slice AK).
 - Island rails: Layer 3 cuts each family's ScaffoldRail by the island (its
   runs and stitched hinges) and orders the pieces; Layer 5 checks them
   against the unfolded frame and never orders a line itself.
@@ -47,6 +51,10 @@ Rules:
   frame_free.py.
 - The per-axis solve is axis_solve.py: every equation group has its own
   gauge; a framed island anchors each group to its frame coordinates.
+  Drift absorbed: a framed island shares its frame drift with the jog
+  check (plan Slice U); a frame-free island takes 1 mm per metre of the
+  larger of its two axis spans on both axes (plan Slice AK); a strip island
+  keeps 1 mm per metre of each axis' own span.
 - Contradictions -> UNCONSTRAINED + diagnostics, never silent smearing.
 """
 
@@ -63,6 +71,7 @@ from scaffold_core.layer_5_runtime import frame_free, quilt_ladders
 from scaffold_core.layer_5_runtime.axis_solve import (
     RESIDUAL_TOLERANCE_PER_SPAN,
     AxisSolve,
+    axis_span,
     solve_axis,
 )
 from scaffold_core.layer_5_runtime.islands import (
@@ -249,7 +258,7 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
             f"run end on a seam-cut mid-chain vertex touches both seam sides: {run_id}:{role} -> unpinned"
         )
     rail_segments = _island_rail_segments(island, runs, lookups)
-    line_of = _lines_from_segments(rail_segments)
+    line_of = rail_line_of = _lines_from_segments(rail_segments)
     if strip is not None and strip.kind is FeatureConstraintKind.STRAIGHT_LADDER:
         ladder_layout = _ladder_layout(strip, runs, node_by_run_end, vertex_by_run_end, diagnostics)
         if ladder_layout is not None:
@@ -266,19 +275,22 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
     if strip_layout is not None:
         roles, signs, direction_of, length_of = strip_layout
         mismatches = ()
-        drift = None  # no frame: the solve measures drift along each axis
+        drift = None  # a strip island: each axis absorbs drift per metre of its own span
     elif frame is None:
         bridged = relations.run_bridged_corner_relations
+        signs = _rail_signs(rail_segments, line_of, diagnostics)
+        line_of, signs, length_by_line = frame_free.join_stitched_lines(
+            runs, line_of, signs, island.stitched_chain_ids, diagnostics
+        )
         axis_by_line = frame_free.bipartition_families(
-            runs, line_of, relations.run_corner_relations, diagnostics, bridged
+            runs, line_of, relations.run_corner_relations, diagnostics, bridged, length_by_line
         )
         roles = {
             e.id: axis_by_line.get(line_of.get(e.id), "OBLIQUE")
             for e in runs
         }
-        signs = _rail_signs(rail_segments, line_of, diagnostics)
         frame_free.orient_lines_by_corners(
-            runs, line_of, axis_by_line, signs, relations.run_corner_relations, diagnostics, bridged
+            runs, line_of, axis_by_line, signs, relations.run_corner_relations, diagnostics, bridged, length_by_line
         )
         if ladders:
             length_of, ladder_ties, ladder_outcomes = quilt_ladders.read_quilt_ladders(
@@ -288,7 +300,7 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
         frame_free.report_unreached_lines(runs, line_of, axis_by_line, bridge_vectors, diagnostics)
         direction_of = {e.id: e.direction for e in runs}
         mismatches: tuple[str, ...] = ()
-        drift = None  # no frame: the solve measures drift along each axis
+        drift = _island_drift(runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_vectors)
     else:
         framed = tuple(e for e in runs if str(e.patch_id) in frame.rotation_by_patch)
         ladder_outcomes = quilt_ladders.rigid_frame_outcomes(ladders, frame.rotation_by_patch, diagnostics)
@@ -309,10 +321,11 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
                 frame, framed, node_by_run_end, lookups.position_of_source, axes
             )
     # A strip island takes its axes from the constraint, not from its lines:
-    # the rail/line check does not apply to it.
+    # the rail/line check does not apply to it. The check compares the rail
+    # pieces with the lines cut from them, before stitched sides are joined.
     rail_conflicts = (
         () if strip_layout is not None
-        else _island_rail_conflicts(rail_segments, line_of, roles, signs, frame is not None)
+        else _island_rail_conflicts(rail_segments, rail_line_of, roles, signs, frame is not None)
     )
     axis_a = solve_axis(
         "AXIS_A", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift, length_of,
@@ -372,6 +385,28 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
         quilt_ladder_by_patch=ladder_outcomes,
         ladder_ties=ladder_ties,
         fill_run_ids=fill_runs,
+    )
+
+
+def _island_drift(runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_vectors) -> float:
+    """The drift a frame-free island absorbs on both axes: per metre of its larger axis span.
+
+    Only frame-free islands: a strip island (STRAIGHT_STRIP) keeps the drift
+    of each axis' own span, and a framed island the drift of its frame.
+
+    The layout puts every line exactly on its axis, while a real line may run
+    off it by the drift (1 mm per metre, plan Slice S); the error that leaves
+    in the cross coordinate grows with the line's length. An equation on one
+    axis compares distances between rows that run along the other axis, so
+    its disagreement grows with the island's extent along that other axis,
+    not with the solved axis' own span (a band 7 m long and 0.4 m wide gets
+    7 mm on both axes, not 0.4 mm across).
+    """
+
+    return RESIDUAL_TOLERANCE_PER_SPAN * max(
+        axis_span(axis_name, runs, roles, signs, node_by_run_end, direction_of, length_of,
+                  {run_id: vector[index] for run_id, vector in bridge_vectors.items()})
+        for index, axis_name in enumerate(("AXIS_A", "AXIS_B"))
     )
 
 
