@@ -21,8 +21,8 @@ Branch: claude/scaffold-g5a-research-8a1f57; main has everything up to
   v1.18; merge commit 5fdecb0).
   Slice AK (in a quilt the two sides of a stitched Chain are one line, a
   ladder strip read in pieces, the frame-free drift per metre of the
-  island, G0 v1.19; commit 46e5a35) is on the branch and not
-  merged yet.
+  island, G0 v1.19; commit 46e5a35) is PR #44, merged by the agent after
+  tests, Tier 3 and the independent reviewer.
 Tests: 1028 passed, 4 skipped, 1 xfailed (python -m pytest from the root).
 ```
 
