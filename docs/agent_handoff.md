@@ -21,7 +21,7 @@ Branch: claude/scaffold-g5a-research-8a1f57; main has everything up to
   v1.19; merge commit 8347897).
   Slice AL (in a quilt the mark makes a ladder strip's stitched rail one
   line, with no length from it and stations by 3D length, G0 v1.20;
-  commit d3d766f) is PR TODO(architect): PR number, to be merged by
+  commit d3d766f) is PR #45, to be merged by
   the agent after tests, Tier 3 and the independent reviewer.
 Tests: 1044 passed, 4 skipped, 1 xfailed (python -m pytest from the root).
 ```
