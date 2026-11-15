@@ -448,16 +448,18 @@ def test_the_report_says_which_bevel_strips_a_quilt_keeps_together_and_which_it_
     laid = payload["bevel_ladders"]
     # f35 meets the conditions in the top quilt, but that quilt pins none of its vertices: not kept together.
     nothing_pinned = quilt_ladders.QUILT_LADDER_NOTHING_PINNED
-    assert laid["constraints"] == 5 and laid["islands"] == 0 and laid["kept_together"] == 1
+    assert laid["constraints"] == 5 and laid["islands"] == 0 and laid["kept_together"] == 2
     assert laid["in_quilt"] == sorted([
         ("patch:seed:f35", nothing_pinned), ("patch:seed:f36", quilt_ladders.QUILT_LADDER_READ),
-        ("patch:seed:f71", not_laid_on_an_axis), ("patch:seed:f73", not_laid_on_an_axis),
+        ("patch:seed:f71", not_laid_on_an_axis), ("patch:seed:f73", quilt_ladders.QUILT_LADDER_READ),
         ("patch:seed:f96", not_laid_on_an_axis),
     ])
     report = payload["report"]
-    assert "bevel strips laid from their ladder: 0 by itself, 1 kept together in a quilt, of 5 constraints" in report
+    assert "bevel strips laid from their ladder: 0 by itself, 2 kept together in a quilt, of 5 constraints" in report
     assert f"  in a quilt, not read: patch:seed:f35: {nothing_pinned}" in report
-    assert f"  in a quilt, not read: patch:seed:f73: {not_laid_on_an_axis}" in report
+    # f73: its stitched rail lies on f111, laid once the two sides of that seam are one line (plan Slice AK).
+    assert f"  in a quilt, not read: patch:seed:f71: {not_laid_on_an_axis}" in report
+    assert "  in a quilt, not read: patch:seed:f73" not in report
     assert "  in a quilt, not read: patch:seed:f36" not in report
     # The bevel strip layer draws the strips laid by themselves only: none here.
     assert payload["layers"]["Scaffold_Islands_LADDER"] == []

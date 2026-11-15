@@ -13,6 +13,8 @@ Rules:
   the mean of its nodes' solved coordinate equals the mean of their frame
   coordinate. Without a frame only the largest group keeps coordinates;
   the others stay unpinned with one diagnostic per axis.
+- Residuals up to the island's drift are absorbed (1 mm per metre of the
+  island, plan Slice S); larger ones are contradictions.
 - Contradictions -> UNCONSTRAINED + diagnostics, never silent smearing.
 """
 
@@ -24,8 +26,9 @@ from typing import Mapping
 from scaffold_core.layer_2_geometry.measures import dot, normalize
 
 RESIDUAL_TOLERANCE = 1e-5
-# Modelling drift the solve absorbs: 1 mm per metre of the island's span
-# along the axis (plan Slice S); larger residuals are contradictions.
+# Modelling drift the solve absorbs: 1 mm per metre (plan Slice S) of the
+# island: of its rigid frame's extent, or without a frame of the larger of
+# its two axis spans (skeleton.py); larger residuals are contradictions.
 RESIDUAL_TOLERANCE_PER_SPAN = 1e-3
 GAUGE_WEIGHT = 1e6
 
@@ -81,7 +84,74 @@ def solve_axis(
     between the components of its two ends. It unions no nodes and is not
     sign-normalized. Ends in one component add it only when the offset is
     not zero within RESIDUAL_TOLERANCE; then the residual check judges it.
+    drift is the residual the solve absorbs; None takes it from this axis'
+    own span alone (axis_span), which the skeleton never relies on.
     """
+
+    component_of, equations = _axis_equations(
+        axis_name, runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_offset_by_run
+    )
+    coords, residuals = _lstsq(equations)
+    if drift is None:
+        drift = RESIDUAL_TOLERANCE_PER_SPAN * _span(coords, equations)
+    # In a rigid frame the jog check and the solve share one drift (plan Slice U).
+    tolerance = max(RESIDUAL_TOLERANCE, drift)
+    bad = [i for i, r in enumerate(residuals) if abs(r) > tolerance]
+    unconstrained: tuple[int, ...] = ()
+    bad_components: set[str] = set()
+    kept = equations
+    if bad:
+        bad_components = {equations[i][0] for i in bad} | {equations[i][1] for i in bad}
+        diagnostics.append(
+            f"{axis_name}: {len(bad)} contradictory equations -> UNCONSTRAINED components"
+        )
+        kept = [
+            eq for index, eq in enumerate(equations)
+            if index not in set(bad) and eq[0] not in bad_components and eq[1] not in bad_components
+        ]
+        coords, residuals = _lstsq(kept)
+        unconstrained = tuple(sorted({index for index in bad}))
+    residual_max = max((abs(r) for r in residuals), default=0.0)
+    coords, alone = _place_groups(
+        axis_name, coords, kept, component_of, bad_components, frame_coordinate_by_node, diagnostics
+    )
+    coordinate_by_node = {
+        node: coords[component]
+        for node, component in component_of.items()
+        if component in coords
+    }
+    frame_only = frozenset(node for node, component in component_of.items() if component in alone)
+    return AxisSolve(axis_name, coordinate_by_node, residual_max, unconstrained, len(equations), frame_only)
+
+
+def axis_span(
+    axis_name, runs, roles, signs, node_by_run_end, direction_of=None, length_of=None, bridge_offset_by_run=None,
+) -> float:
+    """The island's span along one axis: the largest coordinate range of an equation group, all equations kept.
+
+    An island without a rigid frame absorbs drift per metre of the larger
+    of its two axis spans (skeleton.py): an equation on one axis compares
+    distances between rows that run along the other axis, so its error
+    grows with the island's extent along that other axis.
+    """
+
+    _component_of, equations = _axis_equations(
+        axis_name, runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_offset_by_run
+    )
+    coords, _residuals = _lstsq(equations)
+    return _span(coords, equations)
+
+
+def _span(coords, equations) -> float:
+    return max(
+        (max(coords[component] for component in group) - min(coords[component] for component in group)
+         for group in _equation_groups(equations)),
+        default=0.0,
+    )
+
+
+def _axis_equations(axis_name, runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_offset_by_run):
+    """The components of one axis and its equations (start, end, value, run id)."""
 
     own_role = "AXIS_A" if axis_name == "AXIS_A" else "AXIS_B"
     cross_role = "AXIS_B" if axis_name == "AXIS_A" else "AXIS_A"
@@ -124,41 +194,7 @@ def solve_axis(
         if start is None or end is None or (start == end and abs(offset) <= RESIDUAL_TOLERANCE):
             continue
         equations.append((start, end, offset, e.id))
-    coords, residuals = _lstsq(equations)
-    if drift is None:
-        spans = [
-            max(coords[component] for component in group) - min(coords[component] for component in group)
-            for group in _equation_groups(equations)
-        ]
-        drift = RESIDUAL_TOLERANCE_PER_SPAN * max(spans, default=0.0)
-    # In a rigid frame the jog check and the solve share one drift (plan Slice U).
-    tolerance = max(RESIDUAL_TOLERANCE, drift)
-    bad = [i for i, r in enumerate(residuals) if abs(r) > tolerance]
-    unconstrained: tuple[int, ...] = ()
-    bad_components: set[str] = set()
-    kept = equations
-    if bad:
-        bad_components = {equations[i][0] for i in bad} | {equations[i][1] for i in bad}
-        diagnostics.append(
-            f"{axis_name}: {len(bad)} contradictory equations -> UNCONSTRAINED components"
-        )
-        kept = [
-            eq for index, eq in enumerate(equations)
-            if index not in set(bad) and eq[0] not in bad_components and eq[1] not in bad_components
-        ]
-        coords, residuals = _lstsq(kept)
-        unconstrained = tuple(sorted({index for index in bad}))
-    residual_max = max((abs(r) for r in residuals), default=0.0)
-    coords, alone = _place_groups(
-        axis_name, coords, kept, component_of, bad_components, frame_coordinate_by_node, diagnostics
-    )
-    coordinate_by_node = {
-        node: coords[component]
-        for node, component in component_of.items()
-        if component in coords
-    }
-    frame_only = frozenset(node for node, component in component_of.items() if component in alone)
-    return AxisSolve(axis_name, coordinate_by_node, residual_max, unconstrained, len(equations), frame_only)
+    return component_of, equations
 
 
 def _place_groups(axis_name, coords, equations, component_of, excluded, frame_coordinate_by_node, diagnostics):

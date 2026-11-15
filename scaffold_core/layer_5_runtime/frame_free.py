@@ -3,12 +3,17 @@ Layer: 5 - Runtime
 
 Rules:
 - The frame-free consumer of an island without a rigid unfolded frame
-  (G0 DD-47, DD-49, DD-51, DD-52): its island lines are bipartitioned into
+  (G0 DD-47, DD-49, DD-51, DD-52): the island lines of the two sides of a
+  stitched Chain (runs over the same Chain segments) are joined into one line,
+  its island lines are bipartitioned into
   axes by Layer 3 right corners (plain or bridged), whole lines are oriented
   by the corner turn law, an OBLIQUE bridge run is laid by its two corner
-  turns, and a line the corners never reach is reported.
-- Reads Layer 3 RunCornerRelation / RunBridgedCornerRelation records and the
-  island's lines and rail signs only; no 3D direction, world axis or H/V.
+  turns, and a line the corners never reach is reported. The longest line
+  seeds both; a joined line counts its stitched Chain once and keeps the id
+  and orientation of its longest part.
+- Reads Layer 3 RunCornerRelation / RunBridgedCornerRelation records, run
+  fields, the island's lines, rail signs and stitched Chains only; no 3D
+  direction, world axis or H/V.
   Never orders a line or flips one run (G0 DD-47).
 """
 
@@ -23,7 +28,102 @@ from scaffold_core.layer_5_runtime.axis_solve import RESIDUAL_TOLERANCE
 _LAYOUT_AXIS_UNIT = {"AXIS_A": (1.0, 0.0), "AXIS_B": (0.0, 1.0)}
 
 
-def bipartition_families(runs, family_of, run_corner_relations, diagnostics, bridged_corners=()):
+def join_stitched_lines(runs, line_of, signs, stitched_chain_ids, diagnostics):
+    """The two sides of a stitched Chain are one UV line (identity, not evidence).
+
+    Inside one quilt a stitched Chain has one UV per vertex. Two signed runs
+    of two different uses of a stitched Chain that cover exactly the same
+    Chain segments run between the same two vertices of the Chain, so they
+    share their solve nodes and are one straight UV segment: their island
+    lines are one line. Runs whose segment sets differ are not joined, even
+    when they overlap: one side may turn a corner where the other runs
+    straight (a chord shortcut on one use, several runs on the other), and
+    the two sides then are not one line. Both runs follow their uses
+    (G0 DD-51): their orientation signs say whether they walk the Chain the
+    same way, and with their rail signs they fix the relative factor of the
+    two lines (o_a * o_b * s_a * s_b). Lines are joined by a union-find with
+    that parity. A pair already on one line whose parity contradicts it is
+    reported; the line keeps the orientation it had, and the pair's own
+    signs are not changed. Unsigned runs take no part. Reads only the Layer
+    3 run fields (parent Chain, use, segment indices, orientation sign) and
+    the island's stitched Chains. Returns the joined line map, the signs
+    relative to it and the length of each line; the inputs are not changed.
+    A joined line keeps the id and the orientation of its longest part (tie:
+    the smallest id), so the longest line that seeds the bipartition and the
+    line orientation is the line it was before the join. A joined line is as
+    long as its parts without the second side of each joined pair: the
+    stitched Chain is laid once, not twice.
+    """
+
+    stitched = {str(chain_id) for chain_id in stitched_chain_ids}
+    runs_by_chain: dict[str, list] = {}
+    for e in runs:
+        if str(e.parent_chain_id) in stitched and e.id in signs and e.id in line_of:
+            runs_by_chain.setdefault(str(e.parent_chain_id), []).append(e)
+    parent: dict[str, tuple[str, float]] = {}
+    part_length = line_lengths(runs, line_of)
+    second_sides: list = []  # per pair joined across two lines: its second side, laid on the first
+
+    def find(line_id):
+        root, parity = parent.get(line_id, (line_id, 1.0))
+        if root == line_id:
+            return line_id, 1.0
+        top, above = find(root)
+        parent[line_id] = (top, parity * above)
+        return top, parity * above
+
+    for chain_id in sorted(runs_by_chain):
+        members = sorted(runs_by_chain[chain_id], key=lambda e: e.id)
+        for index, first in enumerate(members):
+            for second in members[index + 1:]:
+                if str(first.patch_chain_id) == str(second.patch_chain_id):
+                    continue
+                if sorted(first.segment_indices) != sorted(second.segment_indices):
+                    continue
+                if line_of[first.id] != line_of[second.id]:
+                    second_sides.append(second)  # two lines made one: the Chain is laid once
+                relative = first.orientation_sign * second.orientation_sign * signs[first.id] * signs[second.id]
+                (first_root, first_parity), (second_root, second_parity) = (
+                    find(line_of[first.id]), find(line_of[second.id])
+                )
+                if first_root == second_root:
+                    if first_parity * second_parity != relative:
+                        diagnostics.append(
+                            f"stitched Chain sides disagree on their line orientation: {first.id} / {second.id}"
+                            " -> one line, it keeps the orientation it had"
+                        )
+                    continue
+                kept, joined = sorted((first_root, second_root), key=lambda line_id: (-part_length.get(line_id, 0.0), line_id))
+                parent[joined] = (kept, first_parity * second_parity * relative)
+    if not parent:
+        return line_of, signs, part_length
+    joined_line_of, joined_signs = dict(line_of), dict(signs)
+    for run_id, line_id in line_of.items():
+        root, parity = find(line_id)
+        joined_line_of[run_id] = root
+        if run_id in joined_signs:
+            joined_signs[run_id] = parity * joined_signs[run_id]
+    length_by_line: dict[str, float] = {}
+    for line_id, length in part_length.items():
+        root = find(line_id)[0]
+        length_by_line[root] = length_by_line.get(root, 0.0) + length
+    for e in second_sides:
+        length_by_line[joined_line_of[e.id]] -= e.length
+    return joined_line_of, joined_signs, length_by_line
+
+
+def line_lengths(runs, line_of) -> dict[str, float]:
+    """The length of each island line: the sum of its runs' lengths."""
+
+    length_by_line: dict[str, float] = {}
+    for e in runs:
+        line_id = line_of.get(e.id)
+        if line_id is not None:
+            length_by_line[line_id] = length_by_line.get(line_id, 0.0) + e.length
+    return length_by_line
+
+
+def bipartition_families(runs, family_of, run_corner_relations, diagnostics, bridged_corners=(), length_by_line=None):
     """Axis classes via right corners on the patch surface (frame-free).
 
     Derivation for curved islands, which have no rigid unfolded frame. Two
@@ -35,14 +135,11 @@ def bipartition_families(runs, family_of, run_corner_relations, diagnostics, bri
     lines meeting it at a right corner are AXIS_B, and so on by BFS.
     Contradictions degrade the line to OBLIQUE with a diagnostic - never
     silently forced - and an OBLIQUE line passes no axis to its neighbours.
+    Line lengths are those join_stitched_lines returns, else the sum of the
+    runs.
     """
 
-    length_by_family: dict[str, float] = {}
-    for e in runs:
-        family_id = family_of.get(e.id)
-        if family_id is None:
-            continue
-        length_by_family[family_id] = length_by_family.get(family_id, 0.0) + e.length
+    length_by_family = line_lengths(runs, family_of) if length_by_line is None else length_by_line
     if not length_by_family:
         return {}
     island_run_ids = {e.id for e in runs}
@@ -83,7 +180,7 @@ def bipartition_families(runs, family_of, run_corner_relations, diagnostics, bri
 
 
 def orient_lines_by_corners(
-    runs, line_of, axis_by_line, signs, run_corner_relations, diagnostics, bridged_corners=()
+    runs, line_of, axis_by_line, signs, run_corner_relations, diagnostics, bridged_corners=(), length_by_line=None
 ):
     """One sign factor per island line from the handedness of right corners.
 
@@ -107,11 +204,8 @@ def orient_lines_by_corners(
     """
 
     island_run_ids = {e.id for e in runs}
-    length_by_line: dict[str, float] = {}
-    for e in runs:
-        line_id = line_of.get(e.id)
-        if line_id is not None:
-            length_by_line[line_id] = length_by_line.get(line_id, 0.0) + e.length
+    if length_by_line is None:
+        length_by_line = line_lengths(runs, line_of)
     turns: list[tuple[int, str | None, str | None, float]] = []  # (index, arriving, leaving, angle)
     for index, corner in enumerate(run_corner_relations):
         if corner.kind is not RunCornerKind.RIGHT:

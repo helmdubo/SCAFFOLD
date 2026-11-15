@@ -12,17 +12,26 @@ Rules:
   a warped patch or a bent hinge) is not laid and says so.
 - The ladder gives no axis and no sign: the frame-free bipartition and line
   orientation run as without it. After orientation a strip is read only
-  when exactly one of its rails is stitched in the quilt, the quilt lays
-  that rail (its longest run, tie by id, has an axis role and a sign: that
-  axis is the rail axis) and the free rail has no run on the across axis.
-- A strip that is read: the free rail's runs on the rail axis lose their
-  signs, so they give no length equation (an unsigned run); each free-rail
-  vertex takes the along-rail coordinate of its profile-line partner on the
+  when exactly one of its rails is stitched in the quilt and the quilt lays
+  that rail in at least one piece (plan Slice AK): the stitched rail is cut
+  into pieces where the axis its signed runs lie on changes (a profile
+  line held by runs of one axis is in a piece, a corner line held by both
+  axes or a line held by none is in no piece; two neighbouring lines share
+  a piece when one run holds both). In each piece its axis is the rail
+  axis and the other is the across axis; no free-rail run that lies within
+  a piece may lie on that piece's across axis.
+- A strip that is read, piece by piece: the free rail's runs that lie within
+  a piece and on its rail axis lose their signs, so they give no length
+  equation (an unsigned run); each free-rail vertex of a line in a piece
+  takes the along-rail coordinate of its profile-line partner on the
   stitched rail once the pins are known (pins.py), and lies across on the
-  straight line between its rail's two corners. Across, a stitched end keeps its
-  own length and a free end follows it; with no end stitched the ends take
-  the constraint's width; a run of an end that is not on the across axis
-  is left alone.
+  straight line between the free-rail vertices of the piece's first and
+  last line. A free-rail run that spans two pieces (a mitre) keeps its
+  sign and role; lines on no piece get no tie, counted in one diagnostic.
+  Across, a stitched end keeps its own length and a free end follows it, each
+  on the across axis of the piece that holds its line; with no end stitched
+  the ends take the constraint's width; a run of an end that is not on that
+  axis is left alone.
 - Reads Layer 4 only through the FeatureConstraint, the island's stitched
   Chains and Layer 1 uses (which Chain a use lies on). Nothing of the user
   filter but the island it made, no world axis, no 3D direction, no ladder
@@ -52,19 +61,22 @@ QUILT_LADDER_OUTSIDE_FRAME = "its patch is outside the quilt's rigid frame, not 
 # Outcomes that are expected and stay out of the diagnostics.
 QUIET_OUTCOMES = frozenset((QUILT_LADDER_READ, QUILT_LADDER_BOTH_STITCHED, QUILT_LADDER_RIGID_FRAME))
 NOT_READ_PREFIX = "ladder strip in a quilt not read"
+PIECES_PREFIX = "ladder strip in a quilt read in pieces"
 _AXES = ("AXIS_A", "AXIS_B")
+_ACROSS = {"AXIS_A": "AXIS_B", "AXIS_B": "AXIS_A"}
 
 
 @dataclass(frozen=True)
 class LadderTie:
     """A free-rail vertex of a strip read in its quilt, placed after the pins are known.
 
-    Keys are (vertex occurrence, patch) pin keys. Along the rail axis
-    (along_index 0 = u from AXIS_A, 1 = v from AXIS_B) the vertex takes the
-    coordinate of partner, its profile-line partner on the stitched rail.
-    Across it lies on the straight line between the free rail's two corners
-    (corners: end A, end B), at t, its profile line's u over the strip's
-    length; with one corner pinned, on that corner's row.
+    Keys are (vertex occurrence, patch) pin keys. Along the rail axis of its
+    piece (along_index 0 = u from AXIS_A, 1 = v from AXIS_B) the vertex takes
+    the coordinate of partner, its profile-line partner on the stitched rail.
+    Across it lies on the straight line between the free-rail vertices of
+    its piece's first and last line (corners), at t, its profile line's u
+    from the first line over the piece's length; with one corner pinned, on
+    that corner's row.
     """
 
     key: tuple[str, str]
@@ -114,20 +126,29 @@ def read_quilt_ladders(constraints, island, runs, roles, signs, vertex_by_run_en
         if any(vertex_by_run_end.get((e.id, role)) not in fraction for e in patch_runs for role in ("START", "END")):
             outcome = QUILT_LADDER_OFF_LADDER
         else:
-            outcome, read = _read_strip(ladder, patch_runs, roles, signs, stitched, patch_chain_by_id)
+            outcome, read = _read_strip(ladder, patch_runs, roles, signs, stitched, patch_chain_by_id, vertex_by_run_end)
         outcomes[patch_id] = outcome
         if outcome not in QUIET_OUTCOMES:
             diagnostics.append(f"{NOT_READ_PREFIX}, {outcome}: {patch_id}")
         if outcome != QUILT_LADDER_READ:
             continue
-        free, rail_axis, groups = read
-        across_axis = "AXIS_B" if rail_axis == "AXIS_A" else "AXIS_A"
+        free, pieces, groups = read
+        line_index = _line_index(ladder)
         for e in groups[free]:
-            if roles.get(e.id) == rail_axis:
+            piece = _piece_holding(_line_span(e, line_index, vertex_by_run_end), pieces)
+            if piece is not None and roles.get(e.id) == piece[2]:
                 signs.pop(e.id, None)  # an unsigned run: no length equation
-        changed |= _follow_width(ladder, groups[2:], fraction, vertex_by_run_end, roles, across_axis, length_of, stitched,
+        end_axes = []
+        for line in (0, len(ladder.profile_lines) - 1):
+            piece = _piece_holding((line, line), pieces)
+            end_axes.append(None if piece is None else _ACROSS[piece[2]])
+        changed |= _follow_width(ladder, groups[2:], fraction, vertex_by_run_end, roles, end_axes, length_of, stitched,
                                  patch_chain_by_id)
-        ties.extend(_ties(ladder, patch_id, free, 0 if rail_axis == "AXIS_A" else 1))
+        for first, last, axis in pieces:
+            ties.extend(_ties(ladder, patch_id, free, 0 if axis == "AXIS_A" else 1, first, last))
+        outside = len(ladder.profile_lines) - sum(last - first + 1 for first, last, _axis in pieces)
+        if outside:
+            diagnostics.append(f"{PIECES_PREFIX}, {outside} profile lines on no piece -> not tied: {patch_id}")
     return (length_of if changed else None), tuple(ties), outcomes
 
 
@@ -154,7 +175,8 @@ def drop_strips_without_pins(outcomes, ties, runs, node_by_run_end, uv_nodes, di
 
     uv_nodes holds the solve nodes with both coordinates. Such a strip gets
     the outcome QUILT_LADDER_NOTHING_PINNED with a diagnostic and loses its
-    ties. Returns the outcomes and the ties.
+    ties and its "read in pieces" diagnostic (diagnostics is changed in
+    place): it is not read. Returns the outcomes and the ties.
     """
 
     empty = {
@@ -164,6 +186,11 @@ def drop_strips_without_pins(outcomes, ties, runs, node_by_run_end, uv_nodes, di
             for e in runs if str(e.patch_id) == patch_id for role in ("START", "END")
         )
     }
+    unread = tuple(f"-> not tied: {patch_id}" for patch_id in empty)
+    diagnostics[:] = [
+        message for message in diagnostics
+        if not (message.startswith(PIECES_PREFIX) and message.endswith(unread))
+    ]
     for patch_id in sorted(empty):
         diagnostics.append(f"{NOT_READ_PREFIX}, {QUILT_LADDER_NOTHING_PINNED}: {patch_id}")
     if not empty:
@@ -174,8 +201,8 @@ def drop_strips_without_pins(outcomes, ties, runs, node_by_run_end, uv_nodes, di
     )
 
 
-def _read_strip(ladder, patch_runs, roles, signs, stitched, patch_chain_by_id):
-    """The outcome for one strip, and when it is read (free rail index, rail axis, run groups)."""
+def _read_strip(ladder, patch_runs, roles, signs, stitched, patch_chain_by_id, vertex_by_run_end):
+    """The outcome for one strip, and when it is read (free rail index, pieces, run groups)."""
 
     groups = tuple(
         [e for e in patch_runs if str(e.patch_chain_id) in {str(use) for use in uses}]
@@ -192,24 +219,91 @@ def _read_strip(ladder, patch_runs, roles, signs, stitched, patch_chain_by_id):
         return QUILT_LADDER_NO_RAIL_STITCHED, None
     lead = 0 if stitched_rails[0] else 1
     free = 1 - lead
-    longest = min(groups[lead], key=lambda e: (-e.length, e.id), default=None)
-    if longest is None or roles.get(longest.id) not in _AXES or longest.id not in signs:
+    line_index = _line_index(ladder)
+    pieces = _pieces(len(ladder.profile_lines), groups[lead], roles, signs, line_index, vertex_by_run_end)
+    if not pieces:
         return QUILT_LADDER_RAIL_NOT_LAID, None
-    rail_axis = roles[longest.id]
-    across_axis = "AXIS_B" if rail_axis == "AXIS_A" else "AXIS_A"
-    if any(roles.get(e.id) == across_axis for e in groups[free]):
-        return QUILT_LADDER_FREE_RAIL_ACROSS, None
-    return QUILT_LADDER_READ, (free, rail_axis, groups)
+    for e in groups[free]:
+        piece = _piece_holding(_line_span(e, line_index, vertex_by_run_end), pieces)
+        if piece is not None and roles.get(e.id) == _ACROSS[piece[2]]:
+            return QUILT_LADDER_FREE_RAIL_ACROSS, None
+    return QUILT_LADDER_READ, (free, pieces, groups)
 
 
-def _follow_width(ladder, end_groups, fraction, vertex_by_run_end, roles, across_axis, length_of, stitched,
+def _line_index(ladder) -> dict[str, int]:
+    """Rail vertex occurrence -> the index of its profile line (both rails)."""
+
+    index: dict[str, int] = {}
+    for i, line in enumerate(ladder.profile_lines):
+        index[str(line.rail_a.vertex_id)] = i
+        index[str(line.rail_b.vertex_id)] = i
+    return index
+
+
+def _line_span(e, line_index, vertex_by_run_end) -> tuple[int, int] | None:
+    """The first and last profile line a rail run holds (the lines of its two ends), or None."""
+
+    ends = [line_index.get(vertex_by_run_end.get((e.id, role))) for role in ("START", "END")]
+    if None in ends:
+        return None
+    return min(ends), max(ends)
+
+
+def _pieces(line_count, stitched_runs, roles, signs, line_index, vertex_by_run_end) -> tuple[tuple[int, int, str], ...]:
+    """The stitched rail cut where the axis the quilt lays it on changes: (first line, last line, axis).
+
+    A signed run of the stitched rail on an axis holds the profile lines
+    from one of its ends to the other. A line held on exactly one axis is in
+    a piece; a line held on both axes (a corner where two runs meet) or on
+    none is in no piece. Two neighbouring lines are in one piece when one run
+    holds both. The axes are the quilt's roles (Layer 3 lines through the
+    solve's bipartition); no vertex or run is walked.
+    """
+
+    axes: dict[int, set[str]] = {}
+    spans: dict[str, list[tuple[int, int]]] = {axis: [] for axis in _AXES}
+    for e in stitched_runs:
+        span = _line_span(e, line_index, vertex_by_run_end)
+        if roles.get(e.id) not in _AXES or e.id not in signs or span is None:
+            continue
+        spans[roles[e.id]].append(span)
+        for line in range(span[0], span[1] + 1):
+            axes.setdefault(line, set()).add(roles[e.id])
+    pieces: list[list] = []
+    for line in range(line_count):
+        held = axes.get(line, set())
+        if len(held) != 1:
+            continue
+        (axis,) = held
+        previous = pieces[-1] if pieces else None
+        if (
+            previous is not None and previous[1] == line - 1 and previous[2] == axis
+            and any(first <= line - 1 and line <= last for first, last in spans[axis])
+        ):
+            previous[1] = line
+        else:
+            pieces.append([line, line, axis])
+    return tuple((first, last, axis) for first, last, axis in pieces)
+
+
+def _piece_holding(span, pieces):
+    """The piece whose lines hold the whole span, or None."""
+
+    if span is None:
+        return None
+    return next((piece for piece in pieces if piece[0] <= span[0] and span[1] <= piece[1]), None)
+
+
+def _follow_width(ladder, end_groups, fraction, vertex_by_run_end, roles, end_axes, length_of, stitched,
                   patch_chain_by_id) -> bool:
     """Lengths of the free ends' runs on the across axis: a stitched end leads, else the constraint's width.
 
-    A run of a free end on the across axis takes its share of the width
-    (the constraint's fractions across the end line) times the width to
-    follow. With both ends stitched, or with the stitched end not wholly on
-    the across axis, nothing changes. Returns whether a length changed.
+    end_axes gives each end's across axis: the across axis of the piece
+    that holds the end's profile line, None when no piece holds it. A run of
+    a free end on its across axis takes its share of the width (the
+    constraint's fractions across the end line) times the width to follow.
+    With both ends stitched, or with the stitched end not wholly on its
+    across axis, nothing changes. Returns whether a length changed.
     """
 
     end_uses = (ladder.end_a_patch_chain_ids, ladder.end_b_patch_chain_ids)
@@ -218,7 +312,8 @@ def _follow_width(ladder, end_groups, fraction, vertex_by_run_end, roles, across
         return False
     if stitched_ends:
         leading = end_groups[stitched_ends[0]]
-        if not leading or any(roles.get(e.id) != across_axis for e in leading):
+        across_axis = end_axes[stitched_ends[0]]
+        if not leading or across_axis is None or any(roles.get(e.id) != across_axis for e in leading):
             return False
         width = sum(e.length for e in leading)
     else:
@@ -229,20 +324,26 @@ def _follow_width(ladder, end_groups, fraction, vertex_by_run_end, roles, across
             continue
         for e in group:
             share = abs(fraction[vertex_by_run_end[(e.id, "END")]] - fraction[vertex_by_run_end[(e.id, "START")]])
-            if roles.get(e.id) == across_axis and share > 0.0:
+            if end_axes[index] is not None and roles.get(e.id) == end_axes[index] and share > 0.0:
                 length_of[e.id] = share * width
                 changed = True
     return changed
 
 
-def _ties(ladder, patch_id: str, free: int, along_index: int) -> list[LadderTie]:
-    """One tie per profile line: its free-rail vertex to its stitched-rail partner."""
+def _ties(ladder, patch_id: str, free: int, along_index: int, first: int, last: int) -> list[LadderTie]:
+    """One tie per profile line of one piece (lines first..last): its free-rail vertex to its stitched-rail partner.
+
+    The piece's corners are the free-rail vertices of its first and last
+    line; t is the line's u measured from the first line over the piece's
+    length along the strip.
+    """
 
     def ends(line):
         return (line.rail_a, line.rail_b) if free == 1 else (line.rail_b, line.rail_a)
 
-    lines = ladder.profile_lines
+    lines = ladder.profile_lines[first:last + 1]
     corners = tuple((str(ends(line)[1].vertex_id), patch_id) for line in (lines[0], lines[-1]))
+    span = lines[-1].u - lines[0].u
     ties = []
     for line in lines:
         partner, vertex = ends(line)
@@ -251,7 +352,7 @@ def _ties(ladder, patch_id: str, free: int, along_index: int) -> list[LadderTie]
             source_vertex_id=str(vertex.source_vertex_id),
             partner=(str(partner.vertex_id), patch_id),
             corners=corners,
-            t=line.u / ladder.length if ladder.length > 0.0 else 0.0,
+            t=(line.u - lines[0].u) / span if span > 0.0 else 0.0,
             along_index=along_index,
         ))
     return ties

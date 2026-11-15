@@ -93,18 +93,37 @@ skeleton.py  - selection-wide solve:
   without a frame only the largest group keeps its coordinates;
   snap and drift (plan Slice S): in the rigid frame a run takes an axis
   only within the planar tolerance angle (~5 degrees), and residuals up
-  to 1 mm per metre of the island's span along the axis are drift;
+  to 1 mm per metre of the island are drift: of its rigid frame's extent
+  (the drift shared with the jog check, plan Slice U); without a frame,
+  of the larger of its two axis spans, on both axes (plan Slice AK,
+  skeleton._island_drift; before, the span along the solved axis); in a
+  strip island, of each axis' own span;
   spread safety: contradictory components -> UNCONSTRAINED, excluded,
   their vertices unpinned; residual reported;
   island rails: Layer 3 cuts each family's ScaffoldRail by the island
   (its runs and stitched hinges) and orders the pieces; the pieces are
   the island lines (plan Slice Q), Layer 5 checks them against the frame
-  and never orders a line.
+  and never orders a line. In an island without a rigid frame the lines of
+  the two sides of a stitched Chain are then joined (plan Slice AK,
+  frame_free.join_stitched_lines).
 
 frame_free.py - the consumer of right corners in islands without a rigid
   frame (plan Slices X, AA, AD; split out of skeleton.py in Slice AF):
   axis bipartition, line orientation by the corner turn law, bridge
   vectors, the diagnostic for lines the corners never reach.
+  join_stitched_lines (plan Slice AK, G0 DD-47), run after the rail signs
+  and before the bipartition: two signed runs of two different uses of a
+  stitched Chain with the same segment_indices are one line; their
+  relative factor is o_a * o_b * s_a * s_b (orientation signs of the uses,
+  rail signs of the runs) in a union-find with parity. Runs that overlap
+  only in part are not joined. A pair that contradicts lines already
+  joined keeps the line's orientation, with the diagnostic "stitched
+  Chain sides disagree on their line orientation: ... -> one line, it
+  keeps the orientation it had". A joined line keeps the id and
+  orientation of its longest part (tie: the smallest id) and counts its
+  stitched Chain once; a line the cut view built across a seam is counted
+  as before. It reads Layer 3 run fields, rail signs and the island's
+  stitched Chains only; it walks nothing.
 
 quilt_ladders.py - a STRAIGHT_LADDER strip inside a quilt (plan Slice AI,
   G0 DD-54), called by skeleton.py after line orientation and by pins.py
@@ -112,22 +131,34 @@ quilt_ladders.py - a STRAIGHT_LADDER strip inside a quilt (plan Slice AI,
   no axis and no sign. In a quilt with a rigid frame a strip in the frame
   is unfolded with it, and a strip outside the frame is not laid (a
   diagnostic). A strip is read when exactly one rail is stitched
-  in the quilt, the quilt lays that rail (its longest run, tie by id, has
-  an axis and a sign: the rail axis) and the free rail has no run on the
-  across axis. Then the free rail's runs on the rail axis lose their
-  signs (no length equation); each free-rail vertex takes the rail-axis
-  coordinate of its profile-line partner on the stitched rail, and across
-  lies on the line between the free rail's two corners at u over the
-  strip's length; a vertex whose partner has no pin is unpinned and
-  counted; a run-end pin is never moved. Width: one stitched end wholly on
-  the across axis leads the free end; with no end stitched both ends take
-  the constraint's width. After the solve a strip read whose quilt pins
-  none of its run ends (on both axes) loses its ties. Outcome per strip:
-  kept together, both rails stitched, its quilt has a rigid frame (these
-  three are quiet), no rail stitched, its stitched rail is not laid on an
-  axis, its free rail has a run on the across axis, a run end is not on
-  the ladder, it meets the conditions but its quilt pins none of its
-  vertices, its patch is outside the quilt's rigid frame, not laid
+  in the quilt and the quilt lays that rail in at least one piece (plan
+  Slice AK): a signed axis run of the stitched rail holds the profile
+  lines between its two ends; a line held on exactly one axis is in a
+  piece, a line held on both axes (a plain right corner) or on none is in
+  no piece; neighbouring lines share a piece only when one run holds
+  both. In a piece its axis is the rail axis, the other the across axis,
+  and no free-rail run within the piece may lie on that across axis. Then,
+  per piece, the free rail's runs within it on its rail axis lose their
+  signs (no length equation; a free-rail run spanning two pieces, a mitre,
+  keeps its sign and role); each free-rail vertex of a line in the piece
+  takes the rail-axis coordinate of its profile-line partner on the
+  stitched rail, and across lies on the line between the free-rail
+  vertices of the piece's first and last line, at u from the first line
+  over the piece's length; a vertex whose partner has no pin is unpinned
+  and counted; a run-end pin is never moved. Lines on no piece are not
+  tied; one diagnostic ("ladder strip in a quilt read in pieces, N
+  profile lines on no piece -> not tied") counts them. Width: one stitched
+  end wholly on the across axis of the piece that holds its line leads the
+  free end; with no end stitched both ends take the constraint's width,
+  each on its piece's across axis. After the solve a strip read whose
+  quilt pins none of its run ends (on both axes) loses its ties and its
+  pieces diagnostic. Outcome per strip, exactly one:
+  kept together (read in at least one piece), both rails stitched, its
+  quilt has a rigid frame (these three are quiet), no rail stitched, its
+  stitched rail is not laid on an axis (no piece at all), its free rail
+  has a run on the across axis (of the piece it lies in), a run end is
+  not on the ladder, it meets the conditions but its quilt pins none of
+  its vertices, its patch is outside the quilt's rigid frame, not laid
   (diagnostics).
   It reads the FeatureConstraint, the island's stitched Chains and the
   Layer 1 use-to-Chain mapping only.
@@ -171,7 +202,8 @@ uv_transfer.py - the ONLY bpy write boundary (G5 rule).
 1. axis-parallel: an axis-classified run's endpoints differ in UV only
    along its own axis (zero violations on flat-grid fixtures);
 2. lstsq residual ~0 on developable grids; a residual above the
-   island's drift (plan Slice S: 1 mm per metre of span) must be
+   island's drift (plan Slice S: 1 mm per metre of span; without a rigid
+   frame, since plan Slice AK, of the larger axis span) must be
    accompanied by UNCONSTRAINED diagnostics, never silent smearing. A
    residual within the drift is spread by the solve (a closed outline
    whose mesh lengths miss closure by millimetres);
@@ -271,7 +303,9 @@ skeleton.py:
   Slice X), takes in-line run signs from its ordered
   island rails (plan Slice Q; a run on an unordered rail stays unsigned
   with a diagnostic and adds no length equation, but keeps its axis role,
-  so it still joins its end nodes for the other axis) and orients the
+  so it still joins its end nodes for the other axis), joins the lines of
+  the two sides of a stitched Chain over the same segments (plan Slice
+  AK) and orients the
   lines against each other by the turn of Layer 3 RIGHT corners (plan
   Slice AA, G0 DD-51): convex left, reflex right; no 3D directions;
   a right corner turned over one bridge run (Layer 3
@@ -341,7 +375,9 @@ artist_cross_band: the side band solves with aligned columns (before Slice N
 its bottom row was silently mirrored: the closed rim's ends sat on the wrong
 seam sides, residual 5e-15, zero diagnostics). The two planar end patches
 close their loops only to 0.004; since plan Slice S the solve absorbs
-drift of 1 mm per metre of island span, and they solve.
+drift of 1 mm per metre of island span, and they solve. (Since plan Slice
+AK an island without a rigid frame measures that span as the larger of its
+two axis spans, on both axes.)
 
 artist_cyl_multiseam is RESOLVED (plan Slice L1). The collapse was a Layer 3
 ConnectedDirectionFamily leak through curved shared chains that welded the
@@ -451,7 +487,9 @@ pinned-edge length error against 3D goes from a mean of 0.048 to 0.0077
 (max 0.624 to 0.084); after Blender's fill that quilt has 10 overlapping
 triangle pairs and 2 self-intersecting faces at the corner where f36's
 stitched rail turns around f111 over an unpinned 1.4 mm bridge run (none
-before the slice; a stated limit, see the plan).
+before the slice; a stated limit, see the plan). Resolved by Slice AK, see
+below: the cause was that the two sides of the seam f36/f111 were two
+lines and the ladder was read along one axis only.
 
 After Slice AJ (2026-11-15) a STRAIGHT_STRIP constraint names its rail
 pair, which is AXIS_A (without one, the pair with the longer target as
@@ -465,6 +503,28 @@ baseline is identical (13 objects). With strips on, the column body f1
 after Blender 4.5's fill: 34 pins, 3.59 degrees of mean corner angle
 error, edge error 0.087, 0 flips, 0 overlaps (before: 76 pins, 3.98,
 0.096).
+
+After Slice AK (2026-11-15) an island without a rigid frame joins the
+island lines of the two sides of a stitched Chain: two signed runs of two
+different uses of a stitched Chain over the same Chain segments are one
+line (frame_free.join_stitched_lines), oriented by the uses' orientation
+signs and the run signs (G0 DD-47, DD-51). A ladder strip in such a quilt
+is read in pieces where its stitched rail turns from one axis to the other
+(quilt_ladders.py, G0 DD-54). The drift of such an island is 1 mm per metre
+of the larger of its two axis spans, on both axes (the constant of Slice S
+is unchanged; it was the span along the solved axis). With the filter off
+pins, roles, outcomes and ties are identical on every capture, the 13
+buildings and the user's mesh; only signs of OBLIQUE runs (which give no
+equations) and "not reached" diagnostics on b_ring_s1, d_cyl_s2,
+e_arch_s2_n20 and f_rect_inarc differ. The Tier 3 baseline is identical (13
+objects; no frame-free islands there). On the user's mesh with +Z the
+bottom quilt after Blender 4.5's fill: overlapping triangle pairs 10 -> 0,
+self-intersecting faces 2 -> 0, flips 0 -> 0, pinned source vertices 40 ->
+61, strip f36 shear between its rails 1.68 / 35.57 -> 0.01 / 0.13 degrees
+(mean / max); the mean corner angle error rises 4.00 -> 5.28 degrees and
+the pinned-edge error 0.0071 -> 0.0335, because the band f111 is now laid
+straight and the curved middle of its inner side (OBLIQUE) bulges in the
+fill.
 
 After Slice Z (2026-11) pins are consistent and complete: on the 13
 buildings objects the framed pins that sat beyond drift from their frame

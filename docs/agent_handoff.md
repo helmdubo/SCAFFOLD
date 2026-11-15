@@ -15,14 +15,15 @@ Current phase: G5a - Skeleton Runtime, plus G4a (Layer 4 v0, strip feature,
   and the bevel kinds BEVEL_STRIP / BEVEL_JUNCTION) and the user-filter
   stage scaffold_core/user_filters/ (pass 3, plan Slice AH)
 Architecture: immutable B-rep-inspired interpretation pipeline
-G0 contract: v1.18 (G0.md remains read-only for agents)
+G0 contract: v1.19 (G0.md remains read-only for agents)
 Branch: claude/scaffold-g5a-research-8a1f57; main has everything up to
-  PR #42 (Slice AI: commits db9f7dc, the writer smoke checks, db9d9da,
-  the slice, and e0e0cd5, the review fixes, with its docs and G0 v1.17).
-  Slice AJ (strip rails and free ends, the surface line straight in
-  total, G0 v1.18; commit 77fd542) is on the branch and not
-  merged yet.
-Tests: 1020 passed, 4 skipped, 1 xfailed (python -m pytest from the root).
+  PR #43 (Slice AJ: commit 77fd542, the slice, with its docs and G0
+  v1.18; merge commit 5fdecb0).
+  Slice AK (in a quilt the two sides of a stitched Chain are one line, a
+  ladder strip read in pieces, the frame-free drift per metre of the
+  island, G0 v1.19; commit 46e5a35) is PR #44, merged by the agent after
+  tests, Tier 3 and the independent reviewer.
+Tests: 1028 passed, 4 skipped, 1 xfailed (python -m pytest from the root).
 ```
 
 Scaffold Core currently contains Layers 0-4, the user-filter stage, the G5a
@@ -123,10 +124,15 @@ Implemented:
     frame when no island patch is curved (plan Slice N); an island without
     one takes in-line run signs from its ordered island rails (plan
     Slice Q); the rails are checked against the frame (plan Slice O);
-  - `quilt_ladders.py` (plan Slice AI) a STRAIGHT_LADDER strip in a
+  - `frame_free.py` (plan Slices X, AA, AD, AK) the frame-free branch:
+    the lines of the two sides of a stitched Chain over the same segments
+    are joined into one (Slice AK), then axis bipartition and line
+    orientation by right corners;
+  - `quilt_ladders.py` (plan Slices AI, AK) a STRAIGHT_LADDER strip in a
     frame-free quilt: when exactly one rail is stitched and the quilt lays
-    that rail, the free rail follows its profile-line partners; the
-    ladder gives no axis;
+    that rail in at least one piece (cut where its axis changes), the free
+    rail follows its profile-line partners piece by piece; the ladder
+    gives no axis;
   - `pins.py` run_skeleton_solve output model and invariants (axis-parallel,
     SEAM_SELF length, node/frame and rail/line/frame agreement); pins are
     keyed by topology vertex occurrence (DD-37), so both sides of a seam keep
@@ -631,7 +637,9 @@ approve", items 3 and 11; item 6 is applied as G0 v1.6):
   as G0 v1.6 (2026-11-06), together with the Slice O1 fold-back rule in
   DD-43.
 - Plan Slice S (user-approved): the rigid frame snaps runs to an axis only
-  within about 5 degrees, and the solve absorbs 1 mm per metre of drift;
+  within about 5 degrees, and the solve absorbs 1 mm per metre of drift
+  (since Slice AK, decision 18, a frame-free island per metre of its
+  larger axis span on both axes);
   pins 6966 -> 10104, contradictions 20 -> 5, artist_cross_band end
   patches solve. Plan Slice T: a run that leaves its axis by more than
   drift is a jog and alone goes OBLIQUE; contradictions 5 -> 0, pins
@@ -823,6 +831,71 @@ After Slice AF (bevel strip layout):
 - A STRIP patch whose only bent seam goes to a ladder patch does not leave
   its island although that seam is never stitched (no capture shows it).
 
+After Slice AK (in a quilt the two sides of a stitched Chain are one line;
+a ladder strip is read in pieces; the frame-free drift per metre of the
+island; G0 v1.19 DD-47, DD-52, DD-54, DD-55; plan entry Slice AK has the
+numbers; commit 46e5a35):
+
+- The user chose the defect ("the fold at f36", 2026-11-15) and holds the
+  rule: root cause, not symptom. Nothing else was asked of the user.
+- Cause: Layer 3 was right (f111's side has a bridged right corner over
+  the 1.4 mm edge e312, 90.02 degrees; f36's own side has none, 25.15
+  degrees short, the angle defect). In the frame-free bottom quilt the
+  runs of f111 and of f36 along the stitched Chain f36/f111 were two
+  island lines, so all 29 runs of f111 stayed OBLIQUE, the bridged corner
+  was never laid and the leg of f36 past the corner had no place; and
+  `quilt_ladders.py` read a strip along one axis only.
+- Layer 5 `frame_free.join_stitched_lines` (frame-free islands only, after
+  the rail signs, before the bipartition): two signed runs of two
+  different uses of a stitched Chain with identical `segment_indices` are
+  one line, oriented by o_a * o_b * s_a * s_b; partial overlaps are not
+  joined; a contradicting pair keeps the line's orientation with a
+  diagnostic; a joined line keeps the id and orientation of its longest
+  part and counts its stitched Chain once. Identity, not evidence; no walk.
+- `quilt_ladders.py`: the stitched rail is cut into pieces where the axis
+  of its signed runs changes (a line held on both axes or none is in no
+  piece); the Slice AI rule runs per piece; lines on no piece are not tied
+  and are counted in one diagnostic. "Kept together" means read in at
+  least one piece.
+- Drift (decision 18, decided by the agent inside the user's slice, shown
+  to the user): a frame-free island that is not a strip island absorbs 1
+  mm per metre (constant of Slice S unchanged) of the larger of its two
+  axis spans on both axes, no longer of the solved axis' own span.
+  Rigid-frame and strip islands are unchanged.
+- User's mesh, +Z, bottom quilt after Blender 4.5's fill: overlapping
+  triangle pairs 10 -> 0, self-intersecting faces 2 -> 0, flips 0 -> 0,
+  pinned source vertices 40 -> 61, f36 shear 1.68 / 35.57 -> 0.01 / 0.13
+  degrees (mean / max), f73 4.34 / 22.24 -> 0.55 / 2.02; mean corner angle
+  error 4.00 -> 5.28 degrees, pinned-edge error 0.0071 -> 0.0335. The cost:
+  f111 is now laid straight along f36 and the curved middle of its inner
+  side (5 runs, 2.89 m) stays OBLIQUE and bulges to 3.52 m in the fill;
+  f73's untied middle (4 of 10 profile lines on no piece) reaches about 24
+  degrees; f36's 40.8 mm mitre edge is laid at 106.6 mm. The debug report
+  now says 2 kept together (f36, f73).
+- Elsewhere: filter off, pins, roles, outcomes and ties identical on every
+  capture, the buildings and the user's mesh (only OBLIQUE signs and fewer
+  "not reached" diagnostics on b_ring_s1, d_cyl_s2, e_arch_s2_n20,
+  f_rect_inarc). +Z: a_cube_s3 52 -> 60 pin records (its octant junctions'
+  arcs are now laid straight with the strip rails they are stitched to),
+  c_arch_s2 41 -> 43, e_arch_s2_n20 f1/f3 0 -> 26 (a straight band imposed
+  on a noisy one); every moved HEAD pin set is a pure translation.
+  Buildings and Tier 3 identical (13 objects).
+- Stated limits: the cost above; the ladder still gives the quilt no
+  axis; the seed's length counts a joined line's Chain once but a line
+  Layer 3 built across a seam twice (counting once everywhere moves
+  b_rect_s2, h_rect_s2_tri, m_rect_s2_trimain by 12 pins each; not
+  changed); a frame-free quilt lays only the right-corner component of its
+  longest line and is not tested for overlap; the drift absorbs up to
+  about 9 mm of width disagreement on a 10 m band; only runs over
+  identical segments join (a DD-30 chord shortcut on one side keeps two
+  lines); the top quilt (noisy f0) has no pins; the chamfer join test
+  rests on a stand-in for Layer 3.
+- Next, in order: the curved middle of a band in a quilt (f111's inner
+  side, f73's untied lines); quilt orientation (also the column's back
+  wall); the user-selected-edges proposal (awaiting the user); saw teeth
+  (deferred); a frame-free quilt is not tested for overlap; the older open
+  items below stay.
+
 After Slice AJ (strip rails, free ends, the surface line straight in total;
 G0 v1.18 DD-48, DD-50; plan entry Slice AJ has the numbers and the user's
 decisions of 2026-11-15):
@@ -890,7 +963,8 @@ decisions of 2026-11-15):
   (f0, Arc f16, exactly straight interior rings).
 - Saw teeth are deferred by the user; the case sheet (`ai\band\cases2\`)
   found a natural gap in relative amplitude between 0.93% and 2.03%.
-- Next, in order: the fold at f36's corner; quilt orientation; the
+- Next, in order: the fold at f36's corner (done as Slice AK); quilt
+  orientation; the
   user-selected-edges proposal (awaiting the user); saw teeth (deferred);
   the older open items below stay.
 
@@ -911,7 +985,8 @@ AI has the numbers, the three variants and the user's decision):
   the user's mesh f71, f73 and f96 are not read ("its stitched rail is not
   laid on an axis"); f35 meets the conditions in the top quilt, which has
   no pins, so its outcome is "it meets the conditions but its quilt pins
-  none of its vertices". The debug report says 1 kept together (f36). No
+  none of its vertices". The debug report says 1 kept together (f36; 2
+  since Slice AK, f36 and f73). No
   capture has a strip outside a rigid frame ("its patch is outside the
   quilt's rigid frame, not laid").
 - The gate reads Layer 3's SURFACE_LINE, decided per vertex (a turn
@@ -930,7 +1005,8 @@ AI has the numbers, the three variants and the user's decision):
   changes nothing; the only variants with 0 overlaps put the shear back
   (f36 at 22.4 degrees). Kept: the pins are right (pinned-edge error
   0.0077 mean). Laying that corner belongs to the band slice. (Not taken
-  by Slice AJ; still open, the first item of its "Next".)
+  by Slice AJ; still open, the first item of its "Next". Resolved by
+  Slice AK, see "After Slice AK".)
 - Filter off, a strip without a ladder is assembled by structure as
   before Slice AF; a non-planar strip has no rigid placement, joins
   through the angle-defect gate without an overlap test, and the quilt

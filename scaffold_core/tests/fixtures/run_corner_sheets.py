@@ -4,7 +4,8 @@ Layer: tests fixtures
 Rules:
 - Synthetic single-patch sheets for run corners (RunCornerRelation), bridged
   right corners (RunBridgedCornerRelation) and the frame-free axis
-  bipartition: flat outlines and sheets folded across an edge.
+  bipartition: flat outlines and sheets folded across an edge; two-patch
+  sheets joined by a seam (the two sides of a stitched Chain).
 - Fixtures build small explicit source data.
 - No production logic here.
 """
@@ -14,6 +15,7 @@ from __future__ import annotations
 from math import cos, pi, sin, tan
 
 from scaffold_core.ids import SourceEdgeId, SourceFaceId, SourceMeshId, SourceVertexId
+from scaffold_core.layer_0_source.marks import SourceMark, SourceMarkKind
 from scaffold_core.layer_0_source.snapshot import (
     MeshEdgeRef,
     MeshFaceRef,
@@ -22,7 +24,12 @@ from scaffold_core.layer_0_source.snapshot import (
 )
 
 
-def _sheet(name: str, points: dict[str, tuple[float, float, float]], faces: dict[str, tuple[str, ...]]):
+def _sheet(
+    name: str,
+    points: dict[str, tuple[float, float, float]],
+    faces: dict[str, tuple[str, ...]],
+    seams: tuple[tuple[str, str], ...] = (),
+):
     vertices = {SourceVertexId(key): MeshVertexRef(SourceVertexId(key), point) for key, point in points.items()}
     edges: dict[SourceEdgeId, MeshEdgeRef] = {}
     face_refs: dict[SourceFaceId, MeshFaceRef] = {}
@@ -41,6 +48,9 @@ def _sheet(name: str, points: dict[str, tuple[float, float, float]], faces: dict
         edges=edges,
         faces=face_refs,
         selected_face_ids=tuple(face_refs),
+        marks=tuple(
+            SourceMark(kind=SourceMarkKind.SEAM, target_id=SourceEdgeId("e_{}_{}".format(*sorted(pair)))) for pair in seams
+        ),
     )
 
 
@@ -215,6 +225,64 @@ def make_notched_sheet_source(folded: bool) -> SourceMeshSnapshot:
         faces["F1"] = ("h4", "a3", "f0", "g0")
         faces["F2"] = ("a4", "h4", "g0", "f1")
     return _sheet(f"notched_sheet{'_folded' if folded else ''}", points, faces)
+
+
+def make_chamfered_top_on_folded_wall_source() -> SourceMeshSnapshot:
+    """Return two patches joined by one straight seam: a chamfered flat top on a folded wall.
+
+    Top (z = 0, faces up): p0(0,0) - p1(4,0) - p2(4,0.5) - p3(3.5,1) - p4(0,1);
+    its corner at (4,1) is cut by the chamfer p2 - p3 (two 135-degree
+    corners: a bridged right corner). Wall (y = 0, below the seam p0 - p1,
+    1 m high) with a 1 m flap folded on its left side into x = 0 (one patch,
+    not planar): seen from the wall's surface its top runs straight from the
+    flap over p0 onto the seam (5 m), and so does its bottom. The seam
+    p0 - p1 is the only seam; the top patch has no right corner with any
+    run of the wall.
+    """
+
+    points = {
+        "p0": (0.0, 0.0, 0.0), "p1": (4.0, 0.0, 0.0), "p2": (4.0, 0.5, 0.0), "p3": (3.5, 1.0, 0.0),
+        "p4": (0.0, 1.0, 0.0), "w0": (0.0, 0.0, -1.0), "w1": (4.0, 0.0, -1.0),
+        "k0": (0.0, -1.0, 0.0), "k1": (0.0, -1.0, -1.0),
+    }
+    faces = {
+        "f_top": ("p0", "p1", "p2", "p3", "p4"),
+        "f_wall": ("p1", "p0", "w0", "w1"),
+        "f_flap": ("w0", "p0", "k0", "k1"),
+    }
+    return _sheet("chamfered_top_on_folded_wall", points, faces, seams=(("p0", "p1"),))
+
+
+def make_band_on_sloped_strip_arc_source(segments: int = 12) -> SourceMeshSnapshot:
+    """Return a flat band and a sloped strip joined by one seam along a quarter arc.
+
+    Band (z = 0): a quarter annulus between radius 2 and 3, `segments`
+    quads. Strip: one row of quads from the band's outer arc (radius 3)
+    1 m outward and 4.5 degrees down (a cone; its seam side is curved on its
+    own surface), with a 1 m flap folded down on its end side at angle 0
+    (one patch, not planar). The seam is the outer arc, one Chain of
+    `segments` runs on each side; Layer 3 families do not cross it (it is
+    not a straight single-run hinge), so its two sides lie in two families.
+    The angle defect of the stitch stays under the stitch limit.
+    """
+
+    slope = 4.5 * pi / 180.0
+    points: dict[str, tuple[float, float, float]] = {}
+    faces: dict[str, tuple[str, ...]] = {}
+    for index in range(segments + 1):
+        a = 0.5 * pi * index / segments
+        reach = 3.0 + cos(slope)
+        points[f"i{index}"] = (2.0 * cos(a), 2.0 * sin(a), 0.0)
+        points[f"o{index}"] = (3.0 * cos(a), 3.0 * sin(a), 0.0)
+        points[f"s{index}"] = (reach * cos(a), reach * sin(a), -sin(slope))
+    for index in range(segments):
+        faces[f"b{index}"] = (f"i{index}", f"o{index}", f"o{index + 1}", f"i{index + 1}")
+        faces[f"w{index}"] = (f"o{index}", f"s{index}", f"s{index + 1}", f"o{index + 1}")
+    points["of"] = (3.0, 0.0, -1.0)
+    points["sf"] = (points["s0"][0], 0.0, points["s0"][2] - 1.0)
+    faces["flap"] = ("s0", "o0", "of", "sf")
+    seams = tuple((f"o{index}", f"o{index + 1}") for index in range(segments))
+    return _sheet("band_on_sloped_strip_arc", points, faces, seams=seams)
 
 
 # The folded notched sheet unfolded about its fold x = 6: the flap lands at x > 6.
