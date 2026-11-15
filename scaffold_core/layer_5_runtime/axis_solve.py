@@ -9,6 +9,9 @@ Rules:
   singular block is left to the dense solver.
 - An OBLIQUE bridge run of a bridged right corner may add one equation
   per axis with its given offset (frame-free islands; skeleton.py).
+- A run the skeleton names unmeasured (on a line the mark of a ladder
+  strip made from several lines, plan Slice AL) adds no equation; it keeps
+  its role, so its line still joins its nodes on the cross axis.
 - An island with a rigid unfolded frame anchors every group to the frame:
   the mean of its nodes' solved coordinate equals the mean of their frame
   coordinate. Without a frame only the largest group keeps coordinates;
@@ -69,7 +72,7 @@ def axis_components(runs, roles, role_name, node_by_run_end):
 
 def solve_axis(
     axis_name, runs, roles, signs, node_by_run_end, diagnostics, direction_of=None, drift=None, length_of=None,
-    frame_coordinate_by_node=None, bridge_offset_by_run=None,
+    frame_coordinate_by_node=None, bridge_offset_by_run=None, unmeasured_run_ids=frozenset(),
 ):
     """P7 semantics: the A coordinate lives on COLUMN components (nodes
     connected by AXIS_B runs share one A value) and is constrained by
@@ -84,12 +87,15 @@ def solve_axis(
     between the components of its two ends. It unions no nodes and is not
     sign-normalized. Ends in one component add it only when the offset is
     not zero within RESIDUAL_TOLERANCE; then the residual check judges it.
+    unmeasured_run_ids: runs that add no length equation although they keep
+    their role (their nodes still share the cross coordinate).
     drift is the residual the solve absorbs; None takes it from this axis'
     own span alone (axis_span), which the skeleton never relies on.
     """
 
     component_of, equations = _axis_equations(
-        axis_name, runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_offset_by_run
+        axis_name, runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_offset_by_run,
+        unmeasured_run_ids,
     )
     coords, residuals = _lstsq(equations)
     if drift is None:
@@ -126,6 +132,7 @@ def solve_axis(
 
 def axis_span(
     axis_name, runs, roles, signs, node_by_run_end, direction_of=None, length_of=None, bridge_offset_by_run=None,
+    unmeasured_run_ids=frozenset(),
 ) -> float:
     """The island's span along one axis: the largest coordinate range of an equation group, all equations kept.
 
@@ -136,7 +143,8 @@ def axis_span(
     """
 
     _component_of, equations = _axis_equations(
-        axis_name, runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_offset_by_run
+        axis_name, runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_offset_by_run,
+        unmeasured_run_ids,
     )
     coords, _residuals = _lstsq(equations)
     return _span(coords, equations)
@@ -150,7 +158,10 @@ def _span(coords, equations) -> float:
     )
 
 
-def _axis_equations(axis_name, runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_offset_by_run):
+def _axis_equations(
+    axis_name, runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_offset_by_run,
+    unmeasured_run_ids=frozenset(),
+):
     """The components of one axis and its equations (start, end, value, run id)."""
 
     own_role = "AXIS_A" if axis_name == "AXIS_A" else "AXIS_B"
@@ -160,6 +171,8 @@ def _axis_equations(axis_name, runs, roles, signs, node_by_run_end, direction_of
     for e in runs:
         if roles.get(e.id) != own_role or e.id not in signs:
             continue  # an unsigned run (unordered island rail) adds no equation
+        if e.id in unmeasured_run_ids:
+            continue  # a line the mark made: straight, its length unknown (plan Slice AL)
         start = component_of.get(node_by_run_end[(e.id, "START")])
         end = component_of.get(node_by_run_end[(e.id, "END")])
         if start is None or end is None or start == end:

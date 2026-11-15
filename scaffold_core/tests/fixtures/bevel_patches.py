@@ -297,6 +297,7 @@ def make_marked_ladder_strip_source(
     rail_a: list[tuple[float, float, float]],
     rail_b: list[tuple[float, float, float]],
     across: list[tuple[float, float, float]] | None = None,
+    beyond_a: list[tuple[float, float, float]] | None = None,
 ) -> SourceMeshSnapshot:
     """A MEDIUM strip of len(rail_a) - 1 columns between two STRONG surfaces, WEAK junctions at both ends.
 
@@ -305,8 +306,9 @@ def make_marked_ladder_strip_source(
     len(across) + 1 segments; default: one segment). The strip's faces wind
     rail A -> rail B like (+x, +y) in the plane. One STRONG quad row lies
     beyond each rail and one WEAK quad column beyond each end; every strip
-    boundary edge is a seam. Only the reading whose ends lie on the WEAK
-    junctions fits the marks.
+    boundary edge is a seam. beyond_a gives the far side of the row beyond
+    rail A (default: rail A mirrored over its first profile segment). Only
+    the reading whose ends lie on the WEAK junctions fits the marks.
     """
 
     columns = len(rail_a) - 1
@@ -321,7 +323,7 @@ def make_marked_ladder_strip_source(
         line = [rail_a[i]] + [add(rail_a[i], offset) for offset in inner] + [rail_b[i]]
         for r, point in enumerate(line):
             positions[f"p{i}_{r}"] = point
-        positions[f"oa{i}"] = add(rail_a[i], add(rail_a[i], line[1], -1.0))
+        positions[f"oa{i}"] = beyond_a[i] if beyond_a else add(rail_a[i], add(rail_a[i], line[1], -1.0))
         positions[f"ob{i}"] = add(rail_b[i], add(rail_b[i], line[-2], -1.0))
     for r in range(rows + 1):
         positions[f"ea{r}"] = add(positions[f"p0_{r}"], add(positions[f"p0_{r}"], positions[f"p1_{r}"], -1.0))
