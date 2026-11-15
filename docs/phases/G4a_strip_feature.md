@@ -202,7 +202,9 @@ layer_5_runtime/quilt_ladders.py, G0 DD-54): when exactly one rail is
 stitched and the quilt lays that rail on an axis, the free rail gives no
 length equations and each of its vertices takes the along-rail coordinate
 of its profile-line partner on the stitched rail. The ladder gives the
-quilt no axis. A quilt with a rigid frame reads nothing (its patches in
+quilt no axis, but its mark makes the stitched rail one line, with no
+length equation from it and stations by 3D length for its nodes (plan
+Slice AL, G0 DD-47). A quilt with a rigid frame reads nothing (its patches in
 the frame are planar and unfold exactly); a strip outside the frame is
 not laid and says so. A strip that meets the conditions in a quilt that
 pins none of its vertices is not counted as kept together and says so.
@@ -281,10 +283,16 @@ With the sides joined, the ladder read in pieces and the frame-free drift
 per metre of the island, that quilt has 0 overlapping triangle pairs and
 0 self-intersecting faces after the fill, f36's shear is 0.01 / 0.13
 degrees (mean / max) and f73 is kept together too. The cost: the band f111
-is laid straight and the curved middle of its inner side (OBLIQUE) bulges;
-4 of f73's 10 profile lines are on no piece and its largest corner angle
-error is about 24 degrees there; f36's 40.8 mm mitre edge is laid at 106.6
-mm.
+is laid straight and the curved middle of its inner side stays OBLIQUE;
+4 of f73's 12 profile lines are on no piece; f36's 40.8 mm mitre edge is
+laid at 106.6 mm. (Corrected 2026-11-15, measured in the study of plan
+Slice AL: the pins force that middle to 3.522 m for 2.889 m in 3D and the
+fill lays it as a zigzag of up to 0.036 m across, not a bulge; f73 has 12
+profile lines, not 10; f73's largest corner angle error, about 24 degrees,
+sits on its end faces f75 and f91, whose 3D corners are 66 and 114
+degrees, not where its pieces meet that middle.) Plan Slice AL makes f73's
+stitched rail one line: that middle is laid straight, every profile line
+of f73 is tied, and the 24 degrees on its end faces stay.
 Without the filter a strip without a ladder joins by structure, as before
 Slice AF; such a quilt has no rigid frame and its frame-free layout is not
 checked for overlap, so overlaps after the fill rise on several bevel
