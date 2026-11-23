@@ -21,9 +21,8 @@ Branch: claude/scaffold-g5a-research-8a1f57; main has everything up to
   v1.20; merge commit 321fedf).
   Slice AM (the axis solve takes signs as given; in a quilt a line the
   mark made keeps its length unless it contradicts, the shorter yields;
-  G0 v1.21; commit 8868656) is PR TODO(architect): PR number of Slice AM,
-  to be merged by the agent after tests, Tier 3 and the independent
-  reviewer.
+  G0 v1.21; commit 8868656) is PR #46, merged by the agent
+  after tests, Tier 3 and two rounds of the independent reviewer.
 Tests: 1070 passed, 4 skipped, 1 xfailed (python -m pytest from the root).
 ```
 
