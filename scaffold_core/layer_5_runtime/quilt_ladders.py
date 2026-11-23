@@ -17,9 +17,13 @@ Rules:
   one island line between right corners, plain or bridged, that Layer 3
   records between runs of the rail's Chain, on any use of it, and never
   across a use's own ends (frame_free.join_marked_rails). The runs of the
-  rail's Chain on a line that join made from several lines give no length
-  equation (the mark says straight, not how long); its nodes are stations
-  between its laid nodes. The free rail is never joined. The joins of a
+  rail's Chain on a line that join made from several lines keep their
+  length equations unless letting them go removes the contradiction or
+  leaves fewer contradictory equations among the other runs (the mark
+  says straight, not how long; plan Slice AM, skeleton.py: such lines are
+  tried alone shortest first, ties together, then the shortest k of them
+  together for k = 2 .. n): a line that yields gives no length equation, and its nodes
+  are stations between its laid nodes. The free rail is never joined. The joins of a
   quilt are made together or not at all: if they bring the bipartition a
   conflict, the lines stay as they were and one diagnostic says so. The
   bipartition and line orientation then run on those lines as on any,

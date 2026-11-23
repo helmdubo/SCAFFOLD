@@ -26,8 +26,8 @@ Rules:
   whose own line got no axis (OBLIQUE) is laid by one vector equation per
   axis from the two corner turns. A line the corners never reach stays OBLIQUE with a
   diagnostic. No world axes; roles and
-  signs read no 3D directions (the axis solve still normalizes equations
-  between the same two cross components by a 3D dot).
+  signs read no 3D directions, and the axis solve uses the signs as they
+  are (plan Slice AM).
 - A Layer 4 STRAIGHT_STRIP FeatureConstraint (the only feature channel,
   G0 DD-26) lays an island of exactly its one patch as a rectangle: the
   constraint's loop order and rail pair give axes and signs, its target
@@ -45,9 +45,17 @@ Rules:
   its stitched rail turns from one axis to the other (plan Slice AK).
   Before the bipartition its stitched rail is made one line between the
   right corners Layer 3 records on the rail's Chain (frame_free.
-  join_marked_rails, plan Slice AL); the runs of that Chain on a line the
-  join made from several lines give no length equation, and after the
-  solve its run-end nodes are stations between its laid nodes
+  join_marked_rails, plan Slice AL). The runs of that Chain on a line the
+  join made from several lines keep their length equations unless letting
+  them go removes the contradiction or leaves fewer contradictory
+  equations among the other runs (plan Slice AM): every axis is solved
+  with them first; while the axis has contradictory equations, such lines
+  are tried alone shortest first by 3D rail length (ties together), then
+  the shortest k of them together for k = 2 .. n, and a tried set yields
+  (its runs give no length equation) when it has that effect; after a
+  yield the trial starts again from the shortest; only the kept solve's
+  diagnostics stay. After the solve the run-end nodes of a rail that
+  yielded are stations between its laid nodes
   (frame_free.station_marked_rails). The joins of an island are made
   together or not at all (none when the joined lines' bipartition meets a
   conflict), and the seed is chosen by the lengths before the joins.
@@ -61,7 +69,9 @@ Rules:
   gauge; a framed island anchors each group to its frame coordinates.
   Drift absorbed: a framed island shares its frame drift with the jog
   check (plan Slice U); a frame-free island takes 1 mm per metre of the
-  larger of its two axis spans on both axes (plan Slice AK); a strip island
+  larger of its two axis spans on both axes, taken once with every signed
+  run measured, before any line the mark made yields (plan Slices AK,
+  AM); a strip island
   keeps 1 mm per metre of each axis' own span.
 - Contradictions -> UNCONSTRAINED + diagnostics, never silent smearing.
 """
@@ -104,7 +114,6 @@ UNFOLDED_FRAME = "UNFOLDED"
 FRAME_FREE = "FRAME_FREE"
 STRIP_LAYOUT = "STRIP"  # an applied STRAIGHT_STRIP FeatureConstraint
 LADDER_LAYOUT = "LADDER"  # an applied STRAIGHT_LADDER FeatureConstraint
-_STRIP_AXIS_UNIT = {"AXIS_A": (1.0, 0.0, 0.0), "AXIS_B": (0.0, 1.0, 0.0)}
 
 
 @dataclass(frozen=True)
@@ -138,7 +147,8 @@ class IslandSkeleton:
     # inner nodes keep no coordinate.
     fill_run_ids: frozenset[str] = frozenset()
     # Frame-free quilt: the runs of a line the mark of a ladder strip made from
-    # several lines (plan Slice AL); they give no length equation.
+    # several lines that yielded its length (plan Slices AL, AM); they give
+    # no length equation.
     unmeasured_run_ids: frozenset[str] = frozenset()
 
 
@@ -284,9 +294,9 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
     ladder_ties: tuple[quilt_ladders.LadderTie, ...] = ()
     ladder_outcomes: dict[str, str] = {}
     marked_rails: tuple[frame_free.MarkedRail, ...] = ()
-    unmeasured: frozenset[str] = frozenset()
+    marked_lines: tuple[frame_free.MarkedLine, ...] = ()
     if strip_layout is not None:
-        roles, signs, direction_of, length_of = strip_layout
+        roles, signs, length_of = strip_layout
         mismatches = ()
         drift = None  # a strip island: each axis absorbs drift per metre of its own span
     elif frame is None:
@@ -303,8 +313,8 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
                 island, runs, line_of, signs, length_by_line, ladders, vertex_by_run_end, relations, lookups,
                 diagnostics,
             )
-            # The rail's Chain on a line the mark made is straight, its length unknown: no length equation.
-            unmeasured = frame_free.unmeasured_runs(marked_rails, runs, line_of)
+            # The rail's Chain on a line the mark made is straight; its length holds unless it contradicts.
+            marked_lines = frame_free.marked_lines(marked_rails, runs, line_of)
         if axis_by_line is None:
             axis_by_line = frame_free.bipartition_families(
                 runs, line_of, relations.run_corner_relations, diagnostics, bridged, length_by_line
@@ -322,9 +332,8 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
             )
         bridge_vectors = frame_free.bridge_vectors(runs, roles, signs, bridged, diagnostics)
         frame_free.report_unreached_lines(runs, line_of, axis_by_line, bridge_vectors, diagnostics)
-        direction_of = {e.id: e.direction for e in runs}
         mismatches: tuple[str, ...] = ()
-        drift = _island_drift(runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_vectors, unmeasured)
+        drift = _island_drift(runs, roles, signs, node_by_run_end, length_of, bridge_vectors)
     else:
         framed = tuple(e for e in runs if str(e.patch_id) in frame.rotation_by_patch)
         ladder_outcomes = quilt_ladders.rigid_frame_outcomes(ladders, frame.rotation_by_patch, diagnostics)
@@ -351,22 +360,25 @@ def _island_skeleton(island, assembly, relations, geometry, lookups, strip=None,
         () if strip_layout is not None
         else _island_rail_conflicts(rail_segments, rail_line_of, roles, signs, frame is not None)
     )
-    axis_a = solve_axis(
-        "AXIS_A", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift, length_of,
-        frame_coordinates["AXIS_A"],
-        {run_id: vector[0] for run_id, vector in bridge_vectors.items()},
-        unmeasured,
+    yielded: dict[tuple[str, str], frame_free.MarkedYield] = {}
+    solves = []
+    for index, axis_name in enumerate(("AXIS_A", "AXIS_B")):
+        solve, axis_yielded = _solve_axis_yielding(
+            axis_name, marked_lines, diagnostics, runs=runs, roles=roles, signs=signs,
+            node_by_run_end=node_by_run_end, drift=drift, length_of=length_of,
+            frame_coordinate_by_node=frame_coordinates[axis_name],
+            bridge_offset_by_run={run_id: vector[index] for run_id, vector in bridge_vectors.items()},
+        )
+        solves.append(solve)
+        yielded.update(axis_yielded)
+    axis_a, axis_b = solves
+    unmeasured = frozenset(
+        run_id for line in marked_lines if (line.chain_id, line.line_id) in yielded for run_id in line.run_ids
     )
-    axis_b = solve_axis(
-        "AXIS_B", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift, length_of,
-        frame_coordinates["AXIS_B"],
-        {run_id: vector[1] for run_id, vector in bridge_vectors.items()},
-        unmeasured,
-    )
-    if unmeasured:
-        # The nodes of a line the mark made: stations between its laid nodes, by 3D length.
+    if marked_lines:
+        # One diagnostic per rail the mark made one line; a rail that yielded gets stations by 3D length.
         stationed = frame_free.station_marked_rails(
-            marked_rails, runs, roles, node_by_run_end,
+            marked_rails, yielded, runs, roles, signs, node_by_run_end,
             {"AXIS_A": axis_a.coordinate_by_node, "AXIS_B": axis_b.coordinate_by_node}, diagnostics,
         )
         axis_a = replace(axis_a, coordinate_by_node=stationed["AXIS_A"])
@@ -428,9 +440,9 @@ def _join_marked_rails(island, runs, line_of, signs, length_by_line, ladders, ve
     """The mark joins of a frame-free quilt, made together or not at all (plan Slice AL).
 
     The stitched rail of each ladder strip the quilt could read is made one
-    line (frame_free.join_marked_rails). A line the mark made has no
-    measured length, so the bipartition (and later the orientation) is
-    seeded by the lengths before the joins: a joined line keeps the id of
+    line (frame_free.join_marked_rails). A line the mark made may yield
+    its length in the solve (plan Slice AM), so the bipartition (and later
+    the orientation) is seeded by the lengths before the joins: a joined line keeps the id of
     its longest part and counts as that part alone. If the bipartition of
     the joined lines meets a conflict (a line held on both axes), no join is
     made: the lines, signs and lengths stay as they were, the bipartition is
@@ -470,12 +482,76 @@ def _join_marked_rails(island, runs, line_of, signs, length_by_line, ladders, ve
     return joined_line_of, joined_signs, seed_lengths, axis_by_line, rails
 
 
-def _island_drift(runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_vectors,
-                  unmeasured=frozenset()) -> float:
+def _solve_axis_yielding(axis_name, marked_lines, diagnostics, **solve):
+    """Solve one axis; a line the mark made keeps its length unless yielding it helps (plan Slice AM).
+
+    The axis is solved with every soft run (frame_free.MarkedLine run_ids)
+    giving its length equation. While the solve has contradictory equations
+    and marked lines with a signed run on this axis have not yielded, sets
+    of those lines are tried: first each group alone, shortest first by 3D
+    rail length (lines whose lengths tie form one group,
+    frame_free.marked_line_groups), then the shortest k groups together for
+    k = 2 .. n: each group is tried alone before any two groups together,
+    and sets of several groups are always the shortest k. A tried set yields when the solve without
+    its soft runs' length equations has no contradiction left, or strictly
+    fewer contradictory equations among the other runs (not the set's own
+    soft runs) than the solve with them; otherwise it keeps its length and
+    the next set is tried. After a yield the trial starts again with the
+    new solve from the shortest remaining line. A contradiction no set's
+    yield improves stays as solve_axis reports it. Yielding is judged by
+    its effect, not by which equations the least squares flags: a
+    disagreement may show on one long hard run only, and a contradiction
+    between hard lines may smear onto a marked line's runs. Only the kept
+    solve's diagnostics are appended. Cost: a round with m groups left
+    makes at most 2m - 1 trials and every yield takes at least one group,
+    so an axis with n groups takes at most 1 + n^2 solves. solve holds the
+    keyword arguments of solve_axis but diagnostics and unmeasured_run_ids.
+    Returns the kept AxisSolve and, per (chain_id, line_id) of a line that
+    yielded, its frame_free.MarkedYield (the effect of the yield it was
+    part of, at that step: a later yield does not refresh it).
+    """
+
+    def run(yielded):
+        attempt: list[str] = []
+        unmeasured = frozenset(
+            run_id for line in marked_lines if (line.chain_id, line.line_id) in yielded for run_id in line.run_ids
+        )
+        return solve_axis(axis_name, diagnostics=attempt, unmeasured_run_ids=unmeasured, **solve), attempt
+
+    roles, signs = solve["roles"], solve["signs"]
+    on_axis = [
+        line for line in marked_lines
+        if any(roles.get(run_id) == axis_name and run_id in signs for run_id in line.run_ids)
+    ]
+    yielded: dict[tuple[str, str], frame_free.MarkedYield] = {}
+    result, kept_diagnostics = run(yielded)
+    while result.contradiction_by_run:
+        groups = frame_free.marked_line_groups([line for line in on_axis if (line.chain_id, line.line_id) not in yielded])
+        candidates = groups + [tuple(line for group in groups[:k] for line in group) for k in range(2, len(groups) + 1)]
+        for candidate in candidates:
+            keys = {(line.chain_id, line.line_id) for line in candidate}
+            trial, trial_diagnostics = run(yielded.keys() | keys)
+            own = {run_id for line in candidate for run_id in line.run_ids}
+            before = sum(1 for run_id in result.contradiction_by_run if run_id not in own)
+            after = sum(1 for run_id in trial.contradiction_by_run if run_id not in own)
+            if not trial.contradiction_by_run or after < before:
+                note = frame_free.MarkedYield(before - after, len(trial.contradiction_by_run), len(candidate) - 1)
+                yielded.update({key: note for key in keys})
+                result, kept_diagnostics = trial, trial_diagnostics
+                break
+        else:
+            break  # no set's yield improves the contradiction
+    diagnostics.extend(kept_diagnostics)
+    return result, yielded
+
+
+def _island_drift(runs, roles, signs, node_by_run_end, length_of, bridge_vectors) -> float:
     """The drift a frame-free island absorbs on both axes: per metre of its larger axis span.
 
     Only frame-free islands: a strip island (STRAIGHT_STRIP) keeps the drift
     of each axis' own span, and a framed island the drift of its frame.
+    Every signed run counts, the soft runs of a line the mark made too: the
+    drift is taken once, before any of them yields (plan Slice AM).
 
     The layout puts every line exactly on its axis, while a real line may run
     off it by the drift (1 mm per metre, plan Slice S); the error that leaves
@@ -487,14 +563,14 @@ def _island_drift(runs, roles, signs, node_by_run_end, direction_of, length_of, 
     """
 
     return RESIDUAL_TOLERANCE_PER_SPAN * max(
-        axis_span(axis_name, runs, roles, signs, node_by_run_end, direction_of, length_of,
-                  {run_id: vector[index] for run_id, vector in bridge_vectors.items()}, unmeasured)
+        axis_span(axis_name, runs, roles, signs, node_by_run_end, length_of,
+                  {run_id: vector[index] for run_id, vector in bridge_vectors.items()})
         for index, axis_name in enumerate(("AXIS_A", "AXIS_B"))
     )
 
 
 def _strip_layout(strip, runs, node_by_run_end, diagnostics):
-    """Axis roles, signs, directions and run lengths of a STRAIGHT_STRIP island.
+    """Axis roles, signs and run lengths of a STRAIGHT_STRIP island.
 
     The constraint lists the four uses in loop order. Uses at positions 0 and
     2 share one axis, 1 and 3 the other; the constraint's rail pair is AXIS_A
@@ -522,7 +598,6 @@ def _strip_layout(strip, runs, node_by_run_end, diagnostics):
         first_a = 0 if strip.target_lengths[0] >= strip.target_lengths[1] else 1
     roles = {e.id: "OBLIQUE" for e in runs}
     signs: dict[str, float] = {}
-    direction_of = {e.id: e.direction for e in runs}
     length_of: dict[str, float] = {}
     for position, use in enumerate(uses):
         step = (position - first_a) % 4
@@ -534,8 +609,7 @@ def _strip_layout(strip, runs, node_by_run_end, diagnostics):
             roles[e.id] = role
             signs[e.id] = sign
             length_of[e.id] = e.length * scale
-            direction_of[e.id] = tuple(sign * c for c in _STRIP_AXIS_UNIT[role])
-    return roles, signs, direction_of, length_of
+    return roles, signs, length_of
 
 
 def _ladder_layout(ladder_constraint, runs, node_by_run_end, vertex_by_run_end, diagnostics):

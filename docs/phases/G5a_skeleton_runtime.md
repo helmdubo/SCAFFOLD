@@ -96,8 +96,13 @@ skeleton.py  - selection-wide solve:
   to 1 mm per metre of the island are drift: of its rigid frame's extent
   (the drift shared with the jog check, plan Slice U); without a frame,
   of the larger of its two axis spans, on both axes (plan Slice AK,
-  skeleton._island_drift; before, the span along the solved axis); in a
-  strip island, of each axis' own span;
+  skeleton._island_drift; before, the span along the solved axis), taken
+  once with every signed run (plan Slice AM); in a strip island, of each
+  axis' own span;
+  signs: every equation takes its run's sign as given (rails, joins,
+  corner orientation, frame or strip layout); the solve compares no 3D
+  directions (plan Slice AM; before, it turned an equation between the
+  same two cross components by the dot product of run directions);
   spread safety: contradictory components -> UNCONSTRAINED, excluded,
   their vertices unpinned; residual reported;
   island rails: Layer 3 cuts each family's ScaffoldRail by the island
@@ -108,10 +113,17 @@ skeleton.py  - selection-wide solve:
   frame_free.join_stitched_lines), and the stitched rail of a marked
   ladder strip the quilt could read is made one line (plan Slice AL,
   skeleton._join_marked_rails: all the joins of an island or none); the
-  runs of the rail's Chain on a line the mark made from several lines give
-  no length equation (IslandSkeleton.unmeasured_run_ids, also left out of
-  the drift span), and after the solve their nodes are stations
-  (frame_free.station_marked_rails).
+  runs of the rail's Chain on a line the mark made from several lines keep
+  their length equations unless they contradict
+  (skeleton._solve_axis_yielding, plan Slice AM: while an axis has
+  contradictory equations such lines are tried alone shortest first by 3D
+  rail length, ties together, then the shortest k together (every group
+  alone before any two together); the first set whose yielding removes
+  the contradiction or leaves fewer contradictory equations among the
+  other runs gives no length equation, and the trial restarts; with n
+  groups at most 1 + n^2 solves per axis; IslandSkeleton.unmeasured_run_ids holds the runs of the lines
+  that yielded), and after the solve the nodes of a line that yielded are
+  stations (frame_free.station_marked_rails).
 
 frame_free.py - the consumer of right corners in islands without a rigid
   frame (plan Slices X, AA, AD; split out of skeleton.py in Slice AF):
@@ -148,15 +160,32 @@ frame_free.py - the consumer of right corners in islands without a rigid
   if any line comes out OBLIQUE no join is made and one diagnostic
   "ladder strips in a quilt, stitched rails not made one line: with the
   rails joined the quilt's right corners hold a line on both axes, the
-  lines are kept as they were: <patches>" names the strips. unmeasured_runs: the runs on a rail's
-  Chain whose line the mark made from several lines; they give no length
-  equation. station_marked_rails, after the solve: walking a stretch, a
-  node without an along coordinate between two laid nodes takes the value
-  between them by 3D length; no extrapolation. One diagnostic per stretch:
-  "ladder strip in a quilt, stitched rail made one line from N lines, no
-  length equation, L m in 3D laid at X m: <name>", "..., its ends not
-  both laid: <name>" or "..., no stations: fewer than two of its nodes
-  are laid: <name>".
+  lines are kept as they were: <patches>" names the strips. marked_lines
+  (plan Slice AM): one MarkedLine per (rail Chain, joined line) the mark
+  made from several lines, with its soft runs (every run of that Chain on
+  that line, on every use of the Chain in the island) and its 3D rail
+  length (the summed run lengths of its stretches on the strip's own
+  stitched use; the largest such sum over uses), never read from the
+  other side of the Chain. marked_line_groups: those lines sorted by
+  length, a line within MARKED_LINE_TIE = 1e-9 (relative) of a group's
+  shortest line in that group, so ids never choose who yields.
+  MarkedYield(fewer, left, others): the effect of a yield at its step
+  (fewer: how many fewer contradictory equations the other runs have;
+  left: how many remain at that step); a later yield does not refresh it.
+  station_marked_rails, after the solve, only for a rail whose line
+  yielded: walking a stretch, a node without an along coordinate between
+  two laid nodes takes the value between them by 3D length; no
+  extrapolation. One diagnostic per stretch, H = "ladder strip in a
+  quilt, stitched rail made one line from N lines, L m in 3D": "H, keeps
+  its length: <name>"; "H, gives no length equation, its line has no
+  signed run on an axis: <name>"; or "H, yields its length: without its
+  length equations the other runs of its axis have <effect>" ("H, yields
+  its length together with K other line(s) the mark made: without their
+  length equations the other runs of its axis have <effect>"), effect "no
+  contradictory equation" or "F fewer contradictory equations (M left at
+  that step)", followed by ", laid at X m
+  (signed difference to L, m): <name>", ", its ends not both laid: <name>" or ", no stations:
+  fewer than two of its nodes are laid: <name>".
 
 quilt_ladders.py - a STRAIGHT_LADDER strip inside a quilt (plan Slice AI,
   G0 DD-54), called by skeleton.py after line orientation and by pins.py
@@ -164,7 +193,8 @@ quilt_ladders.py - a STRAIGHT_LADDER strip inside a quilt (plan Slice AI,
   no axis and no sign, but stitched_rail_uses names the stitched uses of
   the stitched rail of each strip it could read (every run end on the
   ladder, exactly one rail stitched), which frame_free.join_marked_rails
-  makes one line before the bipartition (plan Slice AL). In a quilt with a rigid frame a strip in the frame
+  makes one line before the bipartition (plan Slice AL; its lengths hold
+  unless they contradict, plan Slice AM). In a quilt with a rigid frame a strip in the frame
   is unfolded with it, and a strip outside the frame is not laid (a
   diagnostic). A strip is read when exactly one rail is stitched
   in the quilt and the quilt lays that rail in at least one piece (plan
@@ -200,9 +230,15 @@ quilt_ladders.py - a STRAIGHT_LADDER strip inside a quilt (plan Slice AI,
   Layer 1 use-to-Chain mapping only.
 
 axis_solve.py - the per-axis solve: components, equation groups, gauge,
-  frame anchoring, residual tolerance and UNCONSTRAINED exclusion. A run
-  in unmeasured_run_ids (plan Slice AL) adds no equation and keeps its
-  role, so its line still joins its nodes on the cross axis.
+  frame anchoring, residual tolerance and UNCONSTRAINED exclusion. Each
+  own-axis run adds its sign times its length, the sign used as given
+  (plan Slice AM: no 3D direction is compared; axis_span takes every
+  signed run). A run in unmeasured_run_ids (a line the mark made that
+  yielded, plan Slices AL, AM) adds no equation and keeps its role, so
+  its line still joins its nodes on the cross axis.
+  AxisSolve.contradiction_by_run names the run of each contradictory
+  equation with its largest residual, before the contradictory
+  components are dropped; skeleton._solve_axis_yielding reads it.
 
 pins.py      - output model: vertex -> (uv, pinned flag, island id);
   stations (plan Slice Z): an axis run pins its inner source vertices at
@@ -584,6 +620,30 @@ degrees (f111 5.20 / 23.3 -> 3.20 / 8.4); f73 shear between its rails
 f111's inner side is laid straight at 1.101 of its 3D length on every edge
 (the user's own layout: 1.095), its outer side at 1.000. The top quilt
 (noisy f0) keeps its Layer 3 lines and has no pins, as before.
+
+After Slice AM (2026-11-23) the axis solve takes every equation's sign as
+given; the step that turned an equation between the same two cross
+components by the 3D dot of run directions is gone (it could act only in
+islands without a rigid frame, and flipped nothing on 38 captures with
+the filter off and with +Z). In an island without a rigid frame a line
+the mark made from several lines keeps its rail lengths unless they
+contradict; the shorter of contradicting marked lines yields first
+(skeleton._solve_axis_yielding), and the drift is taken once with every
+signed run. Against the code before the slice, every pin, role, sign,
+line, coordinate, outcome, tie and diagnostic is identical with the
+filter off on all 38 captures (13 bevel cases with the user's mesh, 8
+in-repo artist captures, 4 parity references, 13 building captures);
+with +Z only the text of f73's diagnostic in the user's bottom quilt and
+the unmeasured set and diagnostic of d_cyl_s2 islands 1 and 2 change, no
+pin moves. The Tier 3 baseline is identical (13 objects) and the quilt
+smoke differs only in timing. A flat band bent 100, 120 or 180 degrees
+between two marked ladder strips (synthetic) was not laid at all before
+(two contradictory equations from the dot step) and now pins 52, 60 or
+84 vertices, the outer rail at its 3D length and the inner one at 3.000
+of it. With Layer 3 families emulated as stopping after 15 degrees of
+accumulated turn (measurement only) the user's bottom quilt keeps its 69
+pinned source vertices and its layout; before the slice it had none and
+folded.
 
 After Slice Z (2026-11) pins are consistent and complete: on the 13
 buildings objects the framed pins that sat beyond drift from their frame

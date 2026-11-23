@@ -16,8 +16,13 @@ Rules:
   right corners, plain or bridged, that Layer 3 records between runs of the
   rail's Chain on any use of it, and never across a use's own ends (plan
   Slice AL). The runs of the rail's Chain on a line that join made from
-  several lines give no length equation; its run-end nodes are stations,
-  by 3D length, between its nodes the solve lays. The joins are made
+  several lines keep their length equations unless letting them go
+  removes the contradiction or leaves fewer contradictory equations among
+  the other runs (plan Slice AM; skeleton.py tries such lines alone
+  shortest first by 3D rail length, ties together, then the shortest k of
+  them together for k = 2 .. n); a line that yields
+  gives no length equation, and its run-end nodes are stations, by 3D
+  length, between its nodes the solve lays. The joins are made
   together or not at all: skeleton.py keeps the lines as they were when
   the bipartition of the joined lines meets a conflict (whether or not
   the lines without the joins have one too), and the seed of
@@ -275,33 +280,121 @@ def _corner_vertices(chain_id, run_by_id, run_corner_relations, bridged_corners)
     return cut
 
 
-def unmeasured_runs(rails, runs, line_of) -> frozenset[str]:
-    """Runs that give no length equation: on a rail's Chain, on a line the mark made from several lines.
+MARKED_LINE_TIE = 1e-9  # relative: marked lines this close in 3D rail length yield together
 
-    Every use of the rail's Chain in the island counts (the two sides of the
-    stitched rail); other runs that share the joined line keep their length
-    equations: the mark says nothing about them.
+
+@dataclass(frozen=True)
+class MarkedLine:
+    """The rail's Chain on a line the mark made from several lines (plan Slices AL, AM).
+
+    chain_id, line_id: the rail's Chain and the joined island line.
+    run_ids: every run of that Chain on that line, on every use of the
+    Chain in the island (both sides of the stitched rail), in id order:
+    the soft runs. They give length equations until the line yields.
+    length: the 3D rail length of the line: for each use that holds a
+    MarkedRail stretch of this Chain and line (a stitched use of the
+    strip's rail), the summed 3D length of the runs of those stretches;
+    the largest such sum. It is read from the strip's own rail use, never
+    from the other side of the Chain, so it depends neither on ids nor on
+    which use is read first.
     """
 
-    marked = {(rail.chain_id, rail.line_id) for rail in rails if rail.line_count > 1}
-    return frozenset(e.id for e in runs if (str(e.parent_chain_id), line_of.get(e.id)) in marked)
+    chain_id: str
+    line_id: str
+    run_ids: tuple[str, ...]
+    length: float
 
 
-def station_marked_rails(rails, runs, roles, node_by_run_end, coordinates, diagnostics):
-    """Along coordinates of the run-end nodes of each rail the mark made one line (plan Slice AL).
+@dataclass(frozen=True)
+class MarkedYield:
+    """The effect of the yield a marked line was part of, at that step (plan Slice AM; skeleton._solve_axis_yielding).
 
-    coordinates maps AXIS_A / AXIS_B to the solved coordinate per node. Only
-    rails with line_count > 1 are read: their runs gave no length equation.
-    The rail's along axis is its line's role. Walking its runs in the order
-    of the stretch, a node without an along coordinate between two nodes
-    that have one takes the value between them in proportion to the 3D
-    length along the rail (the runs' lengths). A node with such a node on
-    one side only keeps no coordinate (no extrapolation). Its across
-    coordinate is its line's, as on any line. One diagnostic per stretch,
-    named by its patch and its first and last source vertex: its line
-    count, its 3D length and the length it is laid at, or that it gets no
-    stations because fewer than two of its nodes are laid. Returns new
-    coordinate maps; the inputs are not changed.
+    fewer: how many fewer contradictory equations the other runs (not the
+    yielding lines' own soft runs) have without the yielding lines' length
+    equations; left: how many remain at that step (0: none); others: how
+    many other lines the mark made yielded together with this one. Taken
+    when the line yields and never refreshed by a later yield on the axis.
+    """
+
+    fewer: int
+    left: int
+    others: int
+
+
+def marked_lines(rails, runs, line_of) -> tuple[MarkedLine, ...]:
+    """The lines the mark made from several lines, per rail Chain, with their soft runs and 3D rail length.
+
+    Every use of the rail's Chain in the island counts for the soft runs
+    (the two sides of the stitched rail); other runs that share the joined
+    line are not soft: the mark says nothing about them.
+    """
+
+    run_by_id = {e.id: e for e in runs}
+    length_by_use: dict[tuple[str, str, str], float] = {}
+    for rail in rails:
+        if rail.line_count < 2:
+            continue
+        for run_id in rail.run_ids:
+            e = run_by_id[run_id]
+            use = (rail.chain_id, rail.line_id, str(e.patch_chain_id))
+            length_by_use[use] = length_by_use.get(use, 0.0) + e.length
+    length_by_key: dict[tuple[str, str], float] = {}
+    for (chain_id, line_id, _use), length in length_by_use.items():
+        length_by_key[(chain_id, line_id)] = max(length_by_key.get((chain_id, line_id), 0.0), length)
+    soft: dict[tuple[str, str], list[str]] = {}
+    for e in runs:
+        key = (str(e.parent_chain_id), line_of.get(e.id))
+        if key in length_by_key:
+            soft.setdefault(key, []).append(e.id)
+    return tuple(
+        MarkedLine(chain_id, line_id, tuple(sorted(soft.get((chain_id, line_id), ()))), length_by_key[(chain_id, line_id)])
+        for chain_id, line_id in sorted(length_by_key)
+    )
+
+
+def marked_line_groups(lines) -> list[tuple[MarkedLine, ...]]:
+    """The marked lines in the order they are tried as yielding (plan Slice AM): shortest first.
+
+    Lines are sorted by their 3D rail length; a line whose length ties with
+    the first line of the current group (relative MARKED_LINE_TIE) joins
+    that group, so tied lines are tried, and yield, together: ids never
+    choose. Within a group the order is that of the lines given.
+    """
+
+    groups: list[list[MarkedLine]] = []
+    for line in sorted(lines, key=lambda item: item.length):
+        if groups and line.length - groups[-1][0].length <= MARKED_LINE_TIE * max(line.length, groups[-1][0].length):
+            groups[-1].append(line)
+        else:
+            groups.append([line])
+    return [tuple(group) for group in groups]
+
+
+def station_marked_rails(rails, yielded, runs, roles, signs, node_by_run_end, coordinates, diagnostics):
+    """One diagnostic per rail the mark made one line; stations for those that yielded (plan Slices AL, AM).
+
+    Only rails with line_count > 1 are read. yielded maps the (chain_id,
+    line_id) of each line that yielded its length to the MarkedYield of
+    that yield (skeleton._solve_axis_yielding). A rail whose line kept its length takes no
+    stations: its runs gave their length equations. A rail whose line
+    yielded gave none; coordinates maps AXIS_A / AXIS_B to the solved
+    coordinate per node, and the rail's along axis is its line's role.
+    Walking its runs in the order of the stretch, a node without an along
+    coordinate between two nodes that have one takes the value between
+    them in proportion to the 3D length along the rail (the runs' lengths).
+    A node with such a node on one side only keeps no coordinate (no
+    extrapolation). Its across coordinate is its line's, as on any line.
+    Each diagnostic names the stretch by its patch and its first and last
+    source vertex, with its line count and 3D length, and says that it
+    keeps its length, or that its line has no signed run on an axis (no
+    length equation at all), or that it yielded, with the effect of the
+    yield at its step (the other runs of its axis have no contradictory
+    equation, or how many fewer and how many left at that step; a later
+    yield on the axis does not refresh it) and how many other lines
+    the mark made yielded with it, and where it is laid: the length its ends
+    are laid at and its difference to the 3D length, its ends not both
+    laid, or no stations because fewer than two of its nodes are laid.
+    Returns new coordinate maps; the inputs are not changed.
     """
 
     run_by_id = {e.id: e for e in runs}
@@ -311,6 +404,24 @@ def station_marked_rails(rails, runs, roles, node_by_run_end, coordinates, diagn
             continue
         stretch = [run_by_id[run_id] for run_id in rail.run_ids]
         length = sum(e.length for e in stretch)
+        head = f"{MARKED_RAIL_PREFIX} from {rail.line_count} lines, {length:.4f} m in 3D"
+        note = yielded.get((rail.chain_id, rail.line_id))
+        if note is None:
+            if any(e.id in signs and roles.get(e.id) in ("AXIS_A", "AXIS_B") for e in stretch):
+                diagnostics.append(f"{head}, keeps its length: {rail.name}")
+            else:
+                diagnostics.append(f"{head}, gives no length equation, its line has no signed run on an axis: {rail.name}")
+            continue
+        if note.others:
+            plural = "line" if note.others == 1 else "lines"
+            head = f"{head}, yields its length together with {note.others} other {plural} the mark made: without their"
+        else:
+            head = f"{head}, yields its length: without its"
+        if note.left:
+            effect = f"{note.fewer} fewer contradictory equations ({note.left} left at that step)"
+        else:
+            effect = "no contradictory equation"
+        head = f"{head} length equations the other runs of its axis have {effect}"
         axis = roles.get(stretch[0].id)
         along = result.get(axis)
         nodes = [_node_at(stretch[0], _forward_start(stretch[0]), node_by_run_end)]
@@ -319,7 +430,6 @@ def station_marked_rails(rails, runs, roles, node_by_run_end, coordinates, diagn
         for e in stretch:
             walked.append(walked[-1] + e.length)
         fixed = [] if along is None else [index for index, node in enumerate(nodes) if node in along]
-        head = f"{MARKED_RAIL_PREFIX} from {rail.line_count} lines, no length equation, {length:.4f} m in 3D"
         if len(fixed) < 2:
             diagnostics.append(f"{head}, no stations: fewer than two of its nodes are laid: {rail.name}")
             continue
@@ -330,7 +440,7 @@ def station_marked_rails(rails, runs, roles, node_by_run_end, coordinates, diagn
                 along[nodes[index]] = along[nodes[low]] + t * (along[nodes[high]] - along[nodes[low]])
         if fixed[0] == 0 and fixed[-1] == len(nodes) - 1:
             laid = abs(along[nodes[-1]] - along[nodes[0]])
-            diagnostics.append(f"{head} laid at {laid:.4f} m: {rail.name}")
+            diagnostics.append(f"{head}, laid at {laid:.4f} m ({laid - length:+.4f} m): {rail.name}")
         else:
             diagnostics.append(f"{head}, its ends not both laid: {rail.name}")
     return result

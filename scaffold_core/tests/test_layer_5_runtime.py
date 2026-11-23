@@ -478,17 +478,364 @@ def test_frame_free_drift_is_per_metre_of_the_island_not_of_the_solved_axis() ->
 
     for second_width, contradictory in ((0.301, False), (0.35, True)):  # 1 mm of noise; a 5 cm taper
         runs, roles, signs, node_by_run_end = _band(10.0, 0.3, second_width)
-        direction_of = {e.id: e.direction for e in runs}
-        drift = _island_drift(runs, roles, signs, node_by_run_end, direction_of, None, {})
+        drift = _island_drift(runs, roles, signs, node_by_run_end, None, {})
         assert drift == pytest.approx(0.01)  # 1 mm per metre of the band's 10 m, on both axes
         diagnostics: list[str] = []
-        solve = _solve_axis("AXIS_B", runs, roles, signs, node_by_run_end, diagnostics, direction_of, drift)
+        solve = _solve_axis("AXIS_B", runs, roles, signs, node_by_run_end, diagnostics, drift)
         assert bool(diagnostics) is contradictory, (second_width, diagnostics)
         assert bool(solve.coordinate_by_node) is not contradictory
     # Paired negative: per metre of the solved axis alone (0.3 m across) the 1 mm of noise is a contradiction.
     own_span: list[str] = []
     _solve_axis("AXIS_B", *_band(10.0, 0.3, 0.301), own_span)
     assert own_span == ["AXIS_B: 2 contradictory equations -> UNCONSTRAINED components"]
+
+
+def test_equation_signs_are_the_run_signs_never_turned_by_3d_directions() -> None:
+    # plan Slice AM: two AXIS_A runs between the same two columns whose 3D directions point opposite ways (a
+    # band bent more than 90 degrees between two lines the mark made) but whose signs agree are one length.
+    # The old pair normalisation flipped the second by the 3D dot and called them contradictory.
+    from scaffold_core.layer_5_runtime.axis_solve import solve_axis
+
+    runs, roles, signs, node_by_run_end = _ladder(10.0)
+    bent = tuple(SimpleNamespace(id=e.id, length=e.length, direction=(-1.0, 0.0, 0.0)) if e.id == "a1" else e for e in runs)
+    diagnostics: list[str] = []
+    solve = solve_axis("AXIS_A", bent, roles, signs, node_by_run_end, diagnostics, drift=0.01)
+    assert diagnostics == [] and solve.contradiction_by_run == {}
+    assert solve.coordinate_by_node["n1"] - solve.coordinate_by_node["n0"] == pytest.approx(10.0)
+    # Paired negative: opposite signs with the same 3D directions contradict; the signs decide, nothing else.
+    flipped: list[str] = []
+    against = solve_axis("AXIS_A", runs, roles, {**signs, "a1": -1.0}, node_by_run_end, flipped, drift=0.01)
+    assert flipped == ["AXIS_A: 2 contradictory equations -> UNCONSTRAINED components"]
+    assert set(against.contradiction_by_run) == {"a0", "a1"}
+
+
+def _marked(*lines):
+    from scaffold_core.layer_5_runtime.frame_free import MarkedLine
+
+    return tuple(MarkedLine("chain", line_id, (run_id,), length) for line_id, run_id, length in lines)
+
+
+def _yielding(runs, roles, signs, node_by_run_end, marked, axis="AXIS_A", drift=0.01):
+    from scaffold_core.layer_5_runtime.skeleton import _solve_axis_yielding
+
+    diagnostics: list[str] = []
+    solve, yielded = _solve_axis_yielding(
+        axis, marked, diagnostics, runs=runs, roles=roles, signs=signs, node_by_run_end=node_by_run_end,
+        drift=drift, length_of=None, frame_coordinate_by_node=None, bridge_offset_by_run={},
+    )
+    return solve, yielded, diagnostics
+
+
+def test_the_shorter_of_two_contradicting_marked_lines_yields_whatever_their_ids() -> None:
+    # plan Slice AM: two rails the mark made one line, measured 10.0 and 10.5 between the same two columns.
+    # The shorter (by its 3D rail length) yields: the longer leads, and no contradiction is left behind.
+    runs, roles, signs, node_by_run_end = _ladder(10.5)
+    for first, second in ((("L0", "a0", 10.0), ("L1", "a1", 10.5)), (("L1", "a0", 10.0), ("L0", "a1", 10.5))):
+        solve, yielded, diagnostics = _yielding(runs, roles, signs, node_by_run_end, _marked(first, second))
+        assert set(yielded) == {("chain", first[0])}  # the 10.0 m line, whatever its id
+        assert solve.coordinate_by_node["n1"] - solve.coordinate_by_node["n0"] == pytest.approx(10.5)
+        assert diagnostics == [] and solve.contradiction_by_run == {}  # the first attempt's diagnostic is gone
+    # The 3D rail length decides, not the length the run gives: with the lengths named the other way round
+    # the 10.5 m run yields to the 10.0 m one.
+    solve, yielded, _diagnostics = _yielding(runs, roles, signs, node_by_run_end, _marked(("L0", "a0", 10.5), ("L1", "a1", 10.0)))
+    assert set(yielded) == {("chain", "L1")}
+    assert solve.coordinate_by_node["n1"] - solve.coordinate_by_node["n0"] == pytest.approx(10.0)
+
+
+def test_marked_lines_of_equal_length_that_contradict_yield_together() -> None:
+    # plan Slice AM: no id decides who yields. The smallest case: two rails the mark made, of one 3D rail
+    # length (relative 1e-9), whose runs give 10.0 and 10.5. Both yield; the axis then has no length equation
+    # between the two columns, so neither column is laid. (No mesh of the data builds this: two marked lines
+    # of one length that contradict need a quilt whose other lines measure them apart.)
+    runs, roles, signs, node_by_run_end = _ladder(10.5)
+    solve, yielded, diagnostics = _yielding(
+        runs, roles, signs, node_by_run_end, _marked(("L0", "a0", 10.0), ("L1", "a1", 10.0 * (1.0 + 1e-10)))
+    )
+    assert set(yielded) == {("chain", "L0"), ("chain", "L1")}
+    assert solve.equation_count == 0 and solve.coordinate_by_node == {} and diagnostics == []
+    # Paired negative: a length apart by more than the tie, one yields.
+    _solve, apart, _diagnostics = _yielding(
+        runs, roles, signs, node_by_run_end, _marked(("L0", "a0", 10.0), ("L1", "a1", 10.0 * (1.0 + 1e-8)))
+    )
+    assert set(apart) == {("chain", "L0")}
+
+
+def test_the_drift_does_not_shrink_when_marked_lines_yield() -> None:
+    # plan Slice AM: the drift is taken once with every run measured. Two marked lines of one length span the
+    # island (10.0 and 10.5 m between columns c0 and c1) and both yield; what is left is a 0.3 m step measured
+    # 0.300 and 0.305 between c1 and c2. Against the island's drift (10.6 mm) the 5 mm is noise; against the
+    # drift of the runs left (2 mm, the 2 m rungs) it would be a contradiction.
+    def run(run_id, run_length):
+        return SimpleNamespace(id=run_id, length=run_length, direction=(1.0, 0.0, 0.0))
+
+    runs = (run("a0", 10.0), run("a1", 10.5), run("a2", 0.3), run("a3", 0.305), run("b0", 2.0), run("b1", 2.0), run("b2", 2.0))
+    ends = {"a0": ("n0", "n1"), "a1": ("n2", "n3"), "a2": ("n1", "n4"), "a3": ("n3", "n5"),
+            "b0": ("n0", "n2"), "b1": ("n1", "n3"), "b2": ("n4", "n5")}
+    node_by_run_end = {(run_id, role): node for run_id, pair in ends.items() for role, node in zip(("START", "END"), pair)}
+    roles = {run_id: ("AXIS_A" if run_id.startswith("a") else "AXIS_B") for run_id in ends}
+    signs = {run_id: 1.0 for run_id in ends}
+    from scaffold_core.layer_5_runtime.skeleton import _island_drift, _solve_axis_yielding
+
+    drift = _island_drift(runs, roles, signs, node_by_run_end, None, {})
+    assert drift == pytest.approx(0.0106, abs=1e-4)
+    diagnostics: list[str] = []
+    solve, yielded = _solve_axis_yielding(
+        "AXIS_A", _marked(("L0", "a0", 10.0), ("L1", "a1", 10.0)), diagnostics, runs=runs, roles=roles, signs=signs,
+        node_by_run_end=node_by_run_end, drift=drift, length_of=None, frame_coordinate_by_node=None, bridge_offset_by_run={},
+    )
+    assert set(yielded) == {("chain", "L0"), ("chain", "L1")}
+    assert diagnostics == [] and solve.equation_count == 2
+    assert solve.coordinate_by_node["n4"] - solve.coordinate_by_node["n1"] == pytest.approx(0.3025)
+    # Paired negative: with the drift of the runs left, the same step is a contradiction; letting the marked
+    # lines go no longer removes every contradiction (nor any other one), so they keep their lengths and all
+    # four equations are reported.
+    left = {run_id: sign for run_id, sign in signs.items() if run_id not in ("a0", "a1")}
+    shrunk = _island_drift(runs, roles, left, node_by_run_end, None, {})
+    assert shrunk == pytest.approx(0.002)
+    narrow: list[str] = []
+    _yielding_solve, _ = _solve_axis_yielding(
+        "AXIS_A", _marked(("L0", "a0", 10.0), ("L1", "a1", 10.0)), narrow, runs=runs, roles=roles, signs=signs,
+        node_by_run_end=node_by_run_end, drift=shrunk, length_of=None, frame_coordinate_by_node=None, bridge_offset_by_run={},
+    )
+    assert narrow == ["AXIS_A: 4 contradictory equations -> UNCONSTRAINED components"]
+
+
+def test_a_marked_line_that_contradicts_a_line_layer_3_holds_yields_and_a_hard_contradiction_stays() -> None:
+    # plan Slice AM: a marked line (a0, 10.0) against a run no mark touches (a1, 10.5): the marked line yields,
+    # even though it is not the shorter run here, and the other leads.
+    runs, roles, signs, node_by_run_end = _ladder(10.5)
+    solve, yielded, diagnostics = _yielding(runs, roles, signs, node_by_run_end, _marked(("L0", "a0", 20.0)))
+    assert set(yielded) == {("chain", "L0")} and diagnostics == []
+    assert solve.coordinate_by_node["n1"] - solve.coordinate_by_node["n0"] == pytest.approx(10.5)
+    # A contradiction that holds no run of a marked line is the solve's own, exactly as without marked lines:
+    # here the only marked line is a rung on the other axis.
+    from scaffold_core.layer_5_runtime.axis_solve import solve_axis
+
+    plain: list[str] = []
+    expected = solve_axis("AXIS_A", runs, roles, signs, node_by_run_end, plain, drift=0.01, bridge_offset_by_run={})
+    solve, yielded, diagnostics = _yielding(runs, roles, signs, node_by_run_end, _marked(("L0", "b0", 2.0)))
+    assert not yielded and diagnostics == plain == ["AXIS_A: 2 contradictory equations -> UNCONSTRAINED components"]
+    assert solve == expected
+    # Paired positive: without a contradiction a marked line keeps its length (no yield, one solve).
+    agree = _ladder(10.0)
+    solve, yielded, diagnostics = _yielding(*agree, _marked(("L0", "a0", 10.0)))
+    assert not yielded and diagnostics == [] and solve.equation_count == 2
+
+
+def _columns(lengths, rungs):
+    """AXIS_A runs between columns (name -> (start column, end column, length)); AXIS_B rungs tie each column's nodes."""
+
+    runs, ends = [], {}
+    nodes_of: dict[str, list[str]] = {}
+    for run_id, (first, second, run_length) in lengths.items():
+        start, end = f"{first}_{run_id}", f"{second}_{run_id}"
+        nodes_of.setdefault(first, []).append(start)
+        nodes_of.setdefault(second, []).append(end)
+        runs.append(SimpleNamespace(id=run_id, length=run_length, direction=(1.0, 0.0, 0.0)))
+        ends[run_id] = (start, end)
+    for column, nodes in sorted(nodes_of.items()):
+        for index, (a, b) in enumerate(zip(nodes, nodes[1:])):
+            run_id = f"r_{column}_{index}"
+            runs.append(SimpleNamespace(id=run_id, length=rungs, direction=(0.0, 1.0, 0.0)))
+            ends[run_id] = (a, b)
+    node_by_run_end = {(run_id, role): node for run_id, pair in ends.items() for role, node in zip(("START", "END"), pair)}
+    roles = {run_id: ("AXIS_B" if run_id.startswith("r_") else "AXIS_A") for run_id in ends}
+    return tuple(runs), roles, {run_id: 1.0 for run_id in ends}, node_by_run_end
+
+
+def test_a_marked_line_whose_disagreement_shows_only_on_a_hard_run_still_yields() -> None:
+    # plan Slice AM, rule B: a marked line of five 1.02 m runs (5.10 m between columns c0 and c5), measured on
+    # both sides of its stitched Chain, against one hard 5 m run. The least squares puts 29 mm of the 0.1 m on the
+    # one hard equation and 14 mm on each soft one: only the hard run is over the 20 mm drift. Judged by its
+    # effect the marked line yields: without it no contradiction is left (the bump strip of Slice AL, 0.20 high).
+    lengths = {f"s{i}{side}": (f"c{i}", f"c{i + 1}", 1.02) for i in range(5) for side in "ab"}
+    lengths["h"] = ("c0", "c5", 5.0)
+    runs, roles, signs, node_by_run_end = _columns(lengths, 0.3)
+    from scaffold_core.layer_5_runtime.axis_solve import solve_axis
+    from scaffold_core.layer_5_runtime.frame_free import MarkedLine
+
+    marked = (MarkedLine("chain", "L", tuple(sorted(run_id for run_id in lengths if run_id != "h")), 5.1),)
+    measured: list[str] = []
+    first = solve_axis("AXIS_A", runs, roles, signs, node_by_run_end, measured, drift=0.02, bridge_offset_by_run={})
+    assert set(first.contradiction_by_run) == {"h"}  # the disagreement shows on the hard run alone
+    solve, yielded, diagnostics = _yielding(runs, roles, signs, node_by_run_end, marked, drift=0.02)
+    assert set(yielded) == {("chain", "L")} and diagnostics == []
+    assert solve.coordinate_by_node["c5_h"] - solve.coordinate_by_node["c0_h"] == pytest.approx(5.0)
+
+
+def test_a_marked_line_a_hard_contradiction_smears_onto_keeps_its_length() -> None:
+    # plan Slice AM, rule B: two hard runs between c0 and c1 disagree (10.0 against 10.05, a taper); a marked line
+    # of one run agrees with the first (10.0). The least squares smears the taper onto the marked run too: all
+    # three equations are over the drift. Letting the marked line go leaves the same two hard runs contradictory,
+    # so it keeps its length and the contradiction is the solve's own, as without the marked line's yield.
+    runs, roles, signs, node_by_run_end = _columns(
+        {"h0": ("c0", "c1", 10.0), "h1": ("c0", "c1", 10.05), "s": ("c0", "c1", 10.0)}, 2.0
+    )
+    from scaffold_core.layer_5_runtime.axis_solve import solve_axis
+
+    plain: list[str] = []
+    expected = solve_axis("AXIS_A", runs, roles, signs, node_by_run_end, plain, drift=0.015, bridge_offset_by_run={})
+    assert set(expected.contradiction_by_run) == {"h0", "h1", "s"}  # the smear reaches the marked run
+    solve, yielded, diagnostics = _yielding(runs, roles, signs, node_by_run_end, _marked(("L", "s", 10.0)), drift=0.015)
+    assert not yielded and solve == expected
+    assert diagnostics == plain == ["AXIS_A: 3 contradictory equations -> UNCONSTRAINED components"]
+
+
+def test_a_marked_line_off_the_disagreeing_loop_keeps_its_length_and_the_one_on_it_yields() -> None:
+    # plan Slice AM, rule B: two marked lines on one axis. The shorter (2.0 m, between c1 and c2) agrees with the
+    # hard run beside it; the longer (10.5 m, between c0 and c1) disagrees with a hard 10.0 m run. The shorter is
+    # tried first and keeps its length (letting it go changes nothing); the longer is tried next and yields.
+    runs, roles, signs, node_by_run_end = _columns(
+        {"h0": ("c0", "c1", 10.0), "long": ("c0", "c1", 10.5), "h1": ("c1", "c2", 2.0), "short": ("c1", "c2", 2.0)}, 1.0
+    )
+    marked = _marked(("SHORT", "short", 2.0), ("LONG", "long", 10.5))
+    solve, yielded, diagnostics = _yielding(runs, roles, signs, node_by_run_end, marked)
+    assert set(yielded) == {("chain", "LONG")} and diagnostics == []
+    assert solve.coordinate_by_node["c1_h0"] - solve.coordinate_by_node["c0_h0"] == pytest.approx(10.0)
+    assert solve.coordinate_by_node["c2_short"] - solve.coordinate_by_node["c1_short"] == pytest.approx(2.0)
+
+
+def test_after_a_yield_the_shorter_lines_are_tried_again() -> None:
+    # plan Slice AM, rule B: the shorter marked line A (2.1 against a hard 2.0 between c1 and c2) is tried first,
+    # but while the longer B (10.5 between c0 and c1) is measured, the loop of B against the hard 12.0 m run
+    # c0-c2 keeps every other equation contradictory, so A keeps its length. B is tried next and yields; the trial
+    # then starts again from the shortest line: A is tried again and now yields too. No contradiction is left.
+    runs, roles, signs, node_by_run_end = _columns(
+        {"B": ("c0", "c1", 10.5), "h12": ("c1", "c2", 2.0), "A": ("c1", "c2", 2.1), "H02": ("c0", "c2", 12.0)}, 1.0
+    )
+    solve, yielded, diagnostics = _yielding(runs, roles, signs, node_by_run_end, _marked(("A", "A", 2.1), ("B", "B", 10.5)))
+    assert set(yielded) == {("chain", "A"), ("chain", "B")} and diagnostics == []
+    assert solve.coordinate_by_node["c2_h12"] - solve.coordinate_by_node["c1_h12"] == pytest.approx(2.0)
+    assert solve.coordinate_by_node["c2_H02"] - solve.coordinate_by_node["c0_H02"] == pytest.approx(12.0)
+    # Each yielded alone, B first with the fewer-equations effect, A then with none left. A note is the effect at
+    # its own step and is never refreshed: B's note keeps the 2 equations left at its step (review round two,
+    # R2-2), although the final solve has none, and its text says so.
+    from scaffold_core.layer_5_runtime import frame_free
+
+    assert yielded == {("chain", "B"): frame_free.MarkedYield(1, 2, 0), ("chain", "A"): frame_free.MarkedYield(1, 0, 0)}
+    assert solve.contradiction_by_run == {}
+    run_b = next(e for e in runs if e.id == "B")
+    run_b = SimpleNamespace(id="B", length=run_b.length, orientation_sign=1, start_source_vertex_id="s0", end_source_vertex_id="s1")
+    rail = frame_free.MarkedRail("strip", "chain", "B", ("B",), 2, "strip (s0..s1)")
+    texts: list[str] = []
+    frame_free.station_marked_rails(
+        (rail,), yielded, (run_b,), {"B": "AXIS_A"}, {"B": 1.0}, {("B", "START"): "n0", ("B", "END"): "n1"},
+        {"AXIS_A": {}, "AXIS_B": {}}, texts,
+    )
+    assert texts == [
+        f"{frame_free.MARKED_RAIL_PREFIX} from 2 lines, 10.5000 m in 3D, yields its length: without its length equations"
+        " the other runs of its axis have 1 fewer contradictory equations (2 left at that step), no stations: fewer"
+        " than two of its nodes are laid: strip (s0..s1)"
+    ]
+
+
+def test_a_yield_that_leaves_a_hard_contradiction_states_how_many_fewer_and_how_many_left() -> None:
+    # plan Slice AM, review F5: a marked line (10.3 m) against a hard 10.0 m line between c0 and c1, and apart
+    # from them a hard taper (3.0 against 3.05 between c2 and c3, tied to c1 by a hard run). Letting the marked
+    # line go frees the hard 10.0 m line (one fewer contradictory equation among the other runs); the taper's two
+    # equations are left, the solve's own.
+    lengths = {"H": ("c0", "c1", 10.0), "A": ("c0", "c1", 10.3), "g0": ("c2", "c3", 3.0), "g1": ("c2", "c3", 3.05),
+               "k": ("c1", "c2", 1.0)}
+    runs, roles, signs, node_by_run_end = _columns(lengths, 1.0)
+    from scaffold_core.layer_5_runtime.frame_free import MarkedYield
+
+    solve, yielded, diagnostics = _yielding(runs, roles, signs, node_by_run_end, _marked(("A", "A", 10.3)), drift=0.014)
+    assert yielded == {("chain", "A"): MarkedYield(1, 2, 0)}
+    assert set(solve.contradiction_by_run) == {"g0", "g1"}
+    assert diagnostics == ["AXIS_A: 2 contradictory equations -> UNCONSTRAINED components"]
+
+
+def test_two_marked_lines_against_one_hard_line_yield_together_when_neither_alone_helps() -> None:
+    # plan Slice AM, review F1: a hard 10.0 m line and two marked lines of 10.3 and 10.6 m between the same two
+    # columns. Letting either go alone leaves the other contradicting the hard line; the shortest two together
+    # remove the contradiction. Both yield, and the hard line lays the columns 10 m apart.
+    lengths = {"H": ("c0", "c1", 10.0), "A": ("c0", "c1", 10.3), "B": ("c0", "c1", 10.6)}
+    runs, roles, signs, node_by_run_end = _columns(lengths, 1.0)
+    from scaffold_core.layer_5_runtime.frame_free import MarkedYield
+
+    solve, yielded, diagnostics = _yielding(runs, roles, signs, node_by_run_end, _marked(("B", "B", 10.6), ("A", "A", 10.3)))
+    assert set(yielded) == {("chain", "A"), ("chain", "B")} and diagnostics == []
+    assert yielded[("chain", "A")] == yielded[("chain", "B")] == MarkedYield(1, 0, 1)  # the hard line freed, together
+    assert solve.coordinate_by_node["c1_H"] - solve.coordinate_by_node["c0_H"] == pytest.approx(10.0)
+    # Paired negative: one marked line alone against the hard line yields alone.
+    _solve, alone, _diagnostics = _yielding(*_columns({"H": lengths["H"], "A": lengths["A"]}, 1.0), _marked(("A", "A", 10.3)))
+    assert alone == {("chain", "A"): MarkedYield(1, 0, 0)}
+
+
+def test_of_three_marked_lines_that_contradict_the_two_shorter_yield_and_the_longest_leads() -> None:
+    # plan Slice AM, review F1: three marked lines of 10.0, 10.3 and 10.6 m between the same two columns, no hard
+    # line. No line alone removes the contradiction; the shortest two together do, so the longest keeps its
+    # length and leads: each group is tried alone before any two together, and a set of several groups is always
+    # the shortest k.
+    lengths = {"A": ("c0", "c1", 10.0), "B": ("c0", "c1", 10.3), "C": ("c0", "c1", 10.6), "k": ("c1", "c2", 1.0)}
+    runs, roles, signs, node_by_run_end = _columns(lengths, 1.0)
+    marked = _marked(("C", "C", 10.6), ("A", "A", 10.0), ("B", "B", 10.3))
+    solve, yielded, diagnostics = _yielding(runs, roles, signs, node_by_run_end, marked)
+    assert set(yielded) == {("chain", "A"), ("chain", "B")} and diagnostics == []
+    assert yielded[("chain", "A")].others == 1 and yielded[("chain", "A")].left == 0
+    assert solve.coordinate_by_node["c1_C"] - solve.coordinate_by_node["c0_C"] == pytest.approx(10.6)
+    assert {"c0_A", "c1_A", "c2_k"} <= set(solve.coordinate_by_node)  # every column laid
+
+
+def test_stated_limit_a_marked_line_through_a_node_beside_a_hard_taper_keeps_its_length() -> None:
+    # plan Slice AM, review F2, a stated limit (pinned as it is, not as wished): two hard runs between c0 and c1
+    # disagree (10.0 against 10.03, a taper); a marked line of 11.0 m runs c0 -> x -> c1 as two runs of 5.5 m, and
+    # a hard run ties x to y. Letting the marked line go leaves the two hard runs as contradictory as before, so
+    # it keeps its length: the taper smears onto its runs, and x's and y's components become UNCONSTRAINED,
+    # where Slice AL (every soft run unmeasured) laid them.
+    lengths = {"h0": ("c0", "c1", 10.0), "h1": ("c0", "c1", 10.03), "S1": ("c0", "x", 5.5), "S2": ("x", "c1", 5.5),
+               "k": ("x", "y", 1.0)}
+    runs, roles, signs, node_by_run_end = _columns(lengths, 1.0)
+    from scaffold_core.layer_5_runtime.axis_solve import solve_axis
+    from scaffold_core.layer_5_runtime.frame_free import MarkedLine
+
+    marked = (MarkedLine("chain", "S", ("S1", "S2"), 11.0),)
+    solve, yielded, diagnostics = _yielding(runs, roles, signs, node_by_run_end, marked)
+    assert not yielded and diagnostics == ["AXIS_A: 4 contradictory equations -> UNCONSTRAINED components"]
+    assert not {"x_S1", "x_S2", "x_k", "y_k"} & set(solve.coordinate_by_node)
+    slice_al = solve_axis("AXIS_A", runs, roles, signs, node_by_run_end, [], drift=0.01, bridge_offset_by_run={},
+                          unmeasured_run_ids=frozenset({"S1", "S2"}))
+    assert {"x_k", "y_k"} <= set(slice_al.coordinate_by_node)
+
+
+def test_a_contradiction_carried_by_a_bridge_offset_lets_a_marked_line_yield() -> None:
+    # plan Slice AM, review F6: a bridge run's offset is an equation of the solve, and its contradiction names
+    # the bridge run. The marked line (both sides of its Chain, 10.0 m each, n0 -> n1 and n2 -> n3) disagrees
+    # with an OBLIQUE bridge that offsets n0 to n3 by 10.3 m on AXIS_A: the least squares puts 0.2 m on the bridge,
+    # 0.1 m on each soft run, and only the bridge is over the 0.15 m drift. Without the marked line's lengths no
+    # contradiction is left, so it yields and the bridge lays the columns.
+    from scaffold_core.layer_5_runtime.axis_solve import solve_axis
+    from scaffold_core.layer_5_runtime.frame_free import MarkedLine
+    from scaffold_core.layer_5_runtime.skeleton import _solve_axis_yielding
+
+    runs, roles, signs, node_by_run_end = _ladder(10.0)
+    runs = runs + (SimpleNamespace(id="o", length=10.5, direction=(1.0, 1.0, 0.0)),)
+    roles = {**roles, "o": "OBLIQUE"}
+    node_by_run_end = {**node_by_run_end, ("o", "START"): "n0", ("o", "END"): "n3"}
+    bridges = {"o": 10.3}
+    measured = solve_axis("AXIS_A", runs, roles, signs, node_by_run_end, [], drift=0.15, bridge_offset_by_run=bridges)
+    assert set(measured.contradiction_by_run) == {"o"}
+    diagnostics: list[str] = []
+    solve, yielded = _solve_axis_yielding(
+        "AXIS_A", (MarkedLine("chain", "L", ("a0", "a1"), 10.0),), diagnostics, runs=runs, roles=roles, signs=signs,
+        node_by_run_end=node_by_run_end, drift=0.15, length_of=None, frame_coordinate_by_node=None,
+        bridge_offset_by_run=bridges,
+    )
+    assert set(yielded) == {("chain", "L")} and diagnostics == []
+    assert solve.coordinate_by_node["n3"] - solve.coordinate_by_node["n0"] == pytest.approx(10.3)
+
+
+def test_tied_marked_lines_are_measured_from_the_shortest_line_of_their_group() -> None:
+    # plan Slice AM, review F6: each of three lines is within the tie (1e-9 relative) of the next, but the third
+    # is not within it of the first: the group is anchored at its first, shortest line, so the third starts a
+    # new group (ties do not chain).
+    from scaffold_core.layer_5_runtime.frame_free import MarkedLine, marked_line_groups
+
+    lines = [MarkedLine("chain", name, (name,), 10.0 * (1.0 + step * 0.6e-9)) for name, step in (("C", 2), ("A", 0), ("B", 1))]
+    assert [[line.line_id for line in group] for group in marked_line_groups(lines)] == [["A", "B"], ["C"]]
+    # Paired positive: all three within the tie of the first are one group.
+    close = [MarkedLine("chain", name, (name,), 10.0 * (1.0 + step * 0.4e-9)) for name, step in (("C", 2), ("A", 0), ("B", 1))]
+    assert [[line.line_id for line in group] for group in marked_line_groups(close)] == [["A", "B", "C"]]
 
 
 def test_framed_solve_uses_the_frame_drift_shared_with_the_jog_check() -> None:
