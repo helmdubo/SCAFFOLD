@@ -27,7 +27,12 @@ from scaffold_core.layer_5_runtime import skeleton as skeleton_module
 from scaffold_core.layer_5_runtime.pins import run_skeleton_solve
 from scaffold_core.layer_5_runtime.skeleton import FRAME_FREE, UNFOLDED_FRAME
 from scaffold_core.pipeline.passes import run_pass_0, run_pass_1_relations, run_pass_2_features, run_pass_3_filters
-from scaffold_core.tests.fixtures.bevel_patches import make_marked_cut_ring_source, make_marked_ladder_strip_source
+from scaffold_core.tests.fixtures.bevel_patches import (
+    make_marked_band_source,
+    make_marked_cut_ring_source,
+    make_marked_ladder_strip_source,
+    make_marked_split_band_source,
+)
 from scaffold_core.user_filters.model import FilterOptions, FilterSnapshot, SeamDirective, SeamDirectiveKind
 
 ROUNDED = Path(__file__).resolve().parent / "data" / "bevel_cases" / "u_rounded_wall_noise_top.capture.json"
@@ -180,7 +185,7 @@ def test_the_bottom_strip_f36_keeps_its_rails_together_in_its_quilt(monkeypatch)
     pinned_sources = {v.source_vertex_id for v in solve.vertices if v.patch_id == F36 and v.pinned}
     assert {"v208", "v209", "v210", "v211", "v157", "v158"} <= pinned_sources
     assert not [d for d in solve.diagnostics if "without a pinned profile partner" in d and d.startswith(island.id)]
-    assert not [d for d in skeleton.diagnostics if "contradictory" in d]
+    assert not [d for d in skeleton.diagnostics if "contradictory equations ->" in d]
     # The one-face strip f95 at f111's other end measures the band's width 0.4218 against 0.4207: within
     # the drift of the 7 m quilt, not of the 0.42 m across it (plan Slice AK). 69 source vertices pinned:
     # 61 before plan Slice AL, which made f73's stitched rail one line and pinned the four inner-side vertices
@@ -216,13 +221,17 @@ def test_the_bottom_strip_f36_keeps_its_rails_together_in_its_quilt(monkeypatch)
 def test_the_mark_makes_f73s_coarse_stitched_rail_one_line_laid_evenly_and_read_in_one_piece() -> None:
     # plan Slice AL: f111's inner side (f73's stitched rail) turns 6.5-12.4 degrees per vertex, so Layer 3
     # cuts it into 7 lines; the middle five were reached by no right corner and laid by nothing. The mark
-    # makes it one line, which gives no length (6.233 m in 3D between ends the quilt fixes 6.865 apart).
+    # makes it one line (6.233 m in 3D between ends the quilt fixes 6.865 apart). Plan Slice AM: measured, it
+    # contradicts the outer side, which Layer 3 holds as one line; without its lengths no contradiction is left,
+    # so the line the mark made yields its length.
     _plain, up = _rounded()
     solve = run_skeleton_solve(up)
     f73, f111 = "patch:seed:f73", "patch:seed:f111"
     island, skeleton = _skeleton(solve, f73)
-    assert f"{frame_free.MARKED_RAIL_PREFIX} from 7 lines, no length equation, 6.2331 m in 3D laid at 6.8648 m:" \
-           f" {f73} (v160..v157)" in skeleton.diagnostics
+    assert f"{frame_free.MARKED_RAIL_PREFIX} from 7 lines, 6.2331 m in 3D, yields its length: without its length" \
+           f" equations the other runs of its axis have no contradictory equation, laid at 6.8648 m (+0.6317 m): {f73} (v160..v157)" \
+           in skeleton.diagnostics
+    assert len([d for d in skeleton.diagnostics if d.startswith(frame_free.MARKED_RAIL_PREFIX)]) == 1
     ladder = _ladder(up, f73).ladder
     ties = [tie for tie in skeleton.ladder_ties if tie.key[1] == f73]
     assert len(ties) == len(ladder.profile_lines) == 12  # one piece: every profile line tied
@@ -256,7 +265,7 @@ def test_the_mark_makes_f73s_coarse_stitched_rail_one_line_laid_evenly_and_read_
     for e in straight:
         start, end = pin[str(e.start_source_vertex_id)], pin[str(e.end_source_vertex_id)]
         assert math.dist(start, end) == pytest.approx(e.length, rel=1e-4)
-    assert not [d for d in skeleton.diagnostics if "contradictory" in d or d.startswith(quilt_ladders.PIECES_PREFIX)]
+    assert not [d for d in skeleton.diagnostics if "contradictory equations ->" in d or d.startswith(quilt_ladders.PIECES_PREFIX)]
     # The top quilt (noisy f0) still pins nothing: its mark joins are not made (see the f71 test).
     top, _top_skeleton = _skeleton(solve, "patch:seed:f35")
     assert not [v for v in solve.vertices if v.island_id == top.id and v.pinned]
@@ -451,7 +460,7 @@ def test_a_synthetic_strip_with_rail_a_stitched_follows_the_width_rule(splits, w
     expected = ladder.width if width is None else width
     assert width is None or expected != pytest.approx(ladder.width)  # the rule, not the constraint, gives it
     _check_kept_together(context, solve, patch_id, width=expected, lines_pinned=len(ladder.profile_lines))
-    assert not [d for d in solve.diagnostics if "contradictory" in d or "without a pinned profile partner" in d]
+    assert not [d for d in solve.diagnostics if "contradictory equations ->" in d or "without a pinned profile partner" in d]
 
 
 def test_with_both_ends_stitched_each_keeps_its_length_and_the_free_rail_runs_straight_between() -> None:
@@ -491,7 +500,7 @@ def test_a_strip_whose_stitched_rail_turns_a_corner_is_read_in_two_pieces_with_i
     assert len({tied[vertex] for vertex in free[:2]}) == 1 and len({tied[vertex] for vertex in free[3:]}) == 1
     assert tied[free[0]] != tied[free[-1]]
     assert f"{quilt_ladders.PIECES_PREFIX}, 1 profile lines on no piece -> not tied: {patch_id}" in solve.diagnostics
-    assert not [d for d in solve.diagnostics if "contradictory" in d or "partner" in d]
+    assert not [d for d in solve.diagnostics if "contradictory equations ->" in d or "partner" in d]
     # Rails together in each piece: one coordinate shared, the same distance across throughout the piece.
     pins = _pins(solve, patch_id)
     for piece in (lines[:2], lines[3:]):
@@ -669,7 +678,9 @@ def _families(context, runs):
     return {family_of.get(e.id) for e in runs}
 
 
-def test_a_marked_rail_cut_into_several_lines_is_one_line_with_no_length_and_stations_by_3d_length() -> None:
+def test_a_marked_rail_that_contradicts_only_lines_layer_3_holds_yields_its_length_and_takes_stations() -> None:
+    # Plan Slice AM: the rail the mark made one line is 5.088 m in 3D; the straight far side beyond it, which
+    # Layer 3 holds as one line, fixes its ends 5 m apart. Measured, the rail contradicts it and yields.
     context, solve, patch_id = _synthetic(BUMP_A, BUMP_B, joins=("A",), splits=("B", "EB"), beyond_a=FAR_A)
     ladder = _ladder(context, patch_id).ladder
     island, skeleton = _skeleton(solve, patch_id)
@@ -692,9 +703,12 @@ def test_a_marked_rail_cut_into_several_lines_is_one_line_with_no_length_and_sta
     names = {f"{patch_id} ({first}..{last})", f"{patch_id} ({last}..{first})"}
     marked = [d for d in solve.diagnostics if d.startswith(frame_free.MARKED_RAIL_PREFIX)]
     assert len(marked) == 1  # one diagnostic per stretch
-    head = f"{frame_free.MARKED_RAIL_PREFIX} from 5 lines, no length equation, {length:.4f} m in 3D laid at 5.0000 m: "
+    head = (
+        f"{frame_free.MARKED_RAIL_PREFIX} from 5 lines, {length:.4f} m in 3D, yields its length: without its length"
+        " equations the other runs of its axis have no contradictory equation, laid at 5.0000 m (-0.0881 m): "
+    )
     assert marked[0].startswith(head) and marked[0][len(head):] in names
-    assert not [d for d in solve.diagnostics if "contradictory" in d or "partner" in d or d.startswith(quilt_ladders.PIECES_PREFIX)]
+    assert not [d for d in solve.diagnostics if "contradictory equations ->" in d or "partner" in d or d.startswith(quilt_ladders.PIECES_PREFIX)]
     # Its nodes lie on one row, at stations in proportion to 3D length between its two laid ends.
     pins = _pins(solve, patch_id)
     along = _rail_axis(context, skeleton, ladder.rail_a_patch_chain_ids)
@@ -710,6 +724,40 @@ def test_a_marked_rail_cut_into_several_lines_is_one_line_with_no_length_and_sta
     assert len([tie for tie in skeleton.ladder_ties if tie.key[1] == patch_id]) == len(ladder.profile_lines)
 
 
+LOW_BUMP_A = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.2, 0.0), (3.0, 0.2, 0.0), (4.0, 0.0, 0.0), (5.0, 0.0, 0.0)]
+LOW_BUMP_B = [(x, y + 0.3, 0.2 if 1 < i < 4 else 0.0) for i, (x, y, _z) in enumerate(LOW_BUMP_A)]
+
+
+def test_a_marked_rail_whose_disagreement_shows_only_on_a_hard_run_still_yields() -> None:
+    # Plan Slice AM, rule B: the bump 0.2 high, the rail 5.0396 m in 3D against the straight 5 m far side. The
+    # least squares puts the 4 cm almost all on the far side's one run (the rail's two sides spread their share
+    # over ten equations): only that hard equation is over the drift. Without the rail's lengths no
+    # contradiction is left, so the rail yields and both are laid at 5 m, as Slice AL laid them.
+    context, solve, patch_id = _synthetic(LOW_BUMP_A, LOW_BUMP_B, joins=("A",), splits=("B", "EB"), beyond_a=FAR_A)
+    island, skeleton = _skeleton(solve, patch_id)
+    pins = _source_pins(solve, island)
+    assert math.dist(pins["p0_0"], pins["p5_0"]) == pytest.approx(5.0, abs=1e-9)
+    assert math.dist(pins["oa0"], pins["oa5"]) == pytest.approx(5.0, abs=1e-9)
+    assert skeleton.unmeasured_run_ids
+    assert not [d for d in skeleton.diagnostics if "contradictory equations ->" in d]
+    marked = [d for d in skeleton.diagnostics if d.startswith(frame_free.MARKED_RAIL_PREFIX)]
+    assert len(marked) == 1 and "5.0396 m in 3D, yields its length: without its length equations the other runs" \
+        " of its axis have no contradictory equation, laid at 5.0000 m (-0.0396 m)" in marked[0]
+    # The disagreement indeed shows on the hard run alone: with the rail measured, the far side's run is the only
+    # contradictory equation (the solve rule B discards).
+    from scaffold_core.layer_5_runtime.axis_solve import solve_axis
+
+    axis = _rail_axis(context, skeleton, _ladder(context, patch_id).ladder.rail_a_patch_chain_ids)
+    axis_name = ("AXIS_A", "AXIS_B")[axis]
+    evidence = context.relation_snapshot.patch_chain_directional_evidence
+    runs = tuple(e for e in evidence if e.id in skeleton.axis_role_by_run)
+    measured = solve_axis(
+        axis_name, runs, skeleton.axis_role_by_run, skeleton.orientation_by_run, skeleton.node_by_run_end, [],
+        drift=0.006, bridge_offset_by_run={},
+    )
+    assert measured.contradiction_by_run and not set(measured.contradiction_by_run) & set(skeleton.unmeasured_run_ids)
+
+
 def test_the_free_rail_of_a_marked_strip_is_not_joined() -> None:
     context, solve, patch_id = _synthetic(BUMP_A, BUMP_B, joins=("A",), splits=("B", "EB"), beyond_a=FAR_A)
     ladder = _ladder(context, patch_id).ladder
@@ -721,38 +769,44 @@ def test_the_free_rail_of_a_marked_strip_is_not_joined() -> None:
     assert len({skeleton.line_by_run[e.id] for e in _rail_runs(context, skeleton, ladder.rail_a_patch_chain_ids)}) == 1
 
 
-def test_a_marked_rail_with_fewer_than_two_laid_nodes_gets_no_stations_and_says_so() -> None:
-    # The neighbour's far side mirrors rail A's coarse arc: nothing in the quilt ties rail A's two ends.
+def test_a_marked_rail_nothing_contradicts_keeps_its_length_and_says_so() -> None:
+    # The neighbour's far side mirrors rail A's coarse arc: nothing in the quilt contradicts rail A's length
+    # (plan Slice AM). Its runs keep their length equations, so it needs no stations.
     context, solve, patch_id = _synthetic(BUMP_A, BUMP_B, joins=("A",), splits=("B", "EB"))
     ladder = _ladder(context, patch_id).ladder
     _island, skeleton = _skeleton(solve, patch_id)
-    assert skeleton.unmeasured_run_ids
+    rail = _rail_runs(context, skeleton, ladder.rail_a_patch_chain_ids)
+    assert len({skeleton.line_by_run[e.id] for e in rail}) == 1  # the mark made it one line
+    assert skeleton.unmeasured_run_ids == frozenset()
     marked = [d for d in solve.diagnostics if d.startswith(frame_free.MARKED_RAIL_PREFIX)]
     assert len(marked) == 1 and marked[0].startswith(
-        f"{frame_free.MARKED_RAIL_PREFIX} from 5 lines, no length equation, 5.0881 m in 3D, "
-        f"no stations: fewer than two of its nodes are laid: {patch_id} ("
+        f"{frame_free.MARKED_RAIL_PREFIX} from 5 lines, 5.0881 m in 3D, keeps its length: {patch_id} ("
     )
+    assert not [d for d in solve.diagnostics if "contradictory equations ->" in d]
+    # Laid straight at its 3D length, one row, every profile line's rail vertex in proportion to 3D length.
     pins = _pins(solve, patch_id)
-    inner = [str(line.rail_a.vertex_id) for line in ladder.profile_lines[1:-1]]
-    assert not [vertex for vertex in inner if vertex in pins]  # no stations, no extrapolation
-    # Paired positive: with the straight far side both ends are laid and every inner node is a station.
+    along = _rail_axis(context, skeleton, ladder.rail_a_patch_chain_ids)
+    rail_pins = [pins[str(line.rail_a.vertex_id)] for line in ladder.profile_lines]
+    assert all(p[1 - along] == pytest.approx(rail_pins[0][1 - along], abs=EXACT) for p in rail_pins)
+    walked = [0.0]
+    for a, b in zip(BUMP_A, BUMP_A[1:]):
+        walked.append(walked[-1] + math.dist(a, b))
+    for p, w in zip(rail_pins, walked):
+        assert abs(p[along] - rail_pins[0][along]) == pytest.approx(w, abs=1e-9)
+    # Paired negative: with the straight far side 5 m long the same rail yields (the test above).
     _c, laid, laid_id = _synthetic(BUMP_A, BUMP_B, joins=("A",), splits=("B", "EB"), beyond_a=FAR_A)
-    assert all(vertex in _pins(laid, laid_id) for vertex in inner)
+    assert _skeleton(laid, laid_id)[1].unmeasured_run_ids
 
 
-def test_on_the_mirrored_case_the_mark_loses_pins_head_had_as_a_stated_limit(monkeypatch) -> None:
-    # Rule 2 is unconditional: the joined rail gives no length equation even where nothing else in the quilt
-    # ties its two ends. Without the join (HEAD) the rail's Layer 3 lines keep their lengths and pin p1_0 and
-    # p1_1 (rail A on profile lines 0 and 1); with the join neither is laid. The slice states this price.
+def test_on_the_mirrored_case_the_mark_no_longer_loses_the_pins_head_had(monkeypatch) -> None:
+    # Plan Slice AL made the joined rail give no length unconditionally and lost p1_0 and p1_1 (rail A on
+    # profile lines 0 and 1) here, as a stated price. Plan Slice AM: nothing contradicts the rail, so it keeps
+    # its lengths; every vertex the run without the mark joins pins is pinned again, and more.
     context, solve, patch_id = _synthetic(BUMP_A, BUMP_B, joins=("A",), splits=("B", "EB"))
     _c, head, _p = _without_mark_joins(monkeypatch, BUMP_A, BUMP_B, joins=("A",), splits=("B", "EB"))
     head_pins, pins = _pins(head, patch_id), _pins(solve, patch_id)
-    lost = sorted(vertex for vertex in head_pins if vertex not in pins)
-    assert lost == ["vertex:p1_0", "vertex:p1_1"]
-    assert not [vertex for vertex in pins if vertex not in head_pins]
-    # Paired positive: with the straight far side the joined rail is laid and keeps them.
-    _c, laid, laid_id = _synthetic(BUMP_A, BUMP_B, joins=("A",), splits=("B", "EB"), beyond_a=FAR_A)
-    assert all(vertex in _pins(laid, laid_id) for vertex in lost)
+    assert {"vertex:p1_0", "vertex:p1_1"} <= set(head_pins) <= set(pins)
+    assert len(pins) > len(head_pins)
 
 
 def test_a_marked_rail_that_already_is_one_line_keeps_its_length_equations() -> None:
@@ -864,30 +918,82 @@ def test_stations_lie_between_laid_nodes_by_length_and_never_beyond_them(orienta
         for e in runs for role, source in (("START", e.start_source_vertex_id), ("END", e.end_source_vertex_id))
     }
     roles = {e.id: "AXIS_A" for e in runs}
+    signs = {e.id: 1.0 for e in runs}
     coordinates = {"AXIS_A": {"n1": 10.0, "n3": 14.0}, "AXIS_B": {f"n{i}": 0.5 for i in range(5)}}
     rail = frame_free.MarkedRail("strip", "chain", "line", tuple(e.id for e in runs), 3, "strip (s0..s4)")
-    diagnostics: list[str] = []
-    placed = frame_free.station_marked_rails((rail,), runs, roles, node_by_run_end, coordinates, diagnostics)
+    yielded = {("chain", "line"): frame_free.MarkedYield(2, 0, 0)}  # the line yielded alone, no contradiction left
+
+    def station(rails, coords, which=yielded, run_signs=signs):
+        diagnostics: list[str] = []
+        placed = frame_free.station_marked_rails(rails, which, runs, roles, run_signs, node_by_run_end, coords, diagnostics)
+        return placed, diagnostics
+
+    placed, diagnostics = station((rail,), coordinates)
     assert placed["AXIS_A"] == {"n1": 10.0, "n2": pytest.approx(10.0 + 4.0 * 2.0 / 3.0), "n3": 14.0}
     assert placed["AXIS_B"] == coordinates["AXIS_B"] and coordinates["AXIS_A"] == {"n1": 10.0, "n3": 14.0}
-    head = f"{frame_free.MARKED_RAIL_PREFIX} from 3 lines, no length equation, 5.0000 m in 3D"
+    head = (
+        f"{frame_free.MARKED_RAIL_PREFIX} from 3 lines, 5.0000 m in 3D, yields its length: without its length"
+        " equations the other runs of its axis have no contradictory equation"
+    )
     assert diagnostics == [f"{head}, its ends not both laid: strip (s0..s4)"]
-    # Both ends laid: the length it is laid at.
-    diagnostics = []
+    # The effect of the yield: fewer contradictory equations, some left; and lines that yielded together.
+    _placed, diagnostics = station((rail,), coordinates, which={("chain", "line"): frame_free.MarkedYield(3, 2, 0)})
+    assert diagnostics == [
+        f"{frame_free.MARKED_RAIL_PREFIX} from 3 lines, 5.0000 m in 3D, yields its length: without its length"
+        " equations the other runs of its axis have 3 fewer contradictory equations (2 left at that step), its ends not both laid: strip (s0..s4)"
+    ]
+    for others, plural in ((1, "line"), (2, "lines")):
+        _placed, diagnostics = station((rail,), coordinates, which={("chain", "line"): frame_free.MarkedYield(1, 0, others)})
+        assert diagnostics == [
+            f"{frame_free.MARKED_RAIL_PREFIX} from 3 lines, 5.0000 m in 3D, yields its length together with {others}"
+            f" other {plural} the mark made: without their length equations the other runs of its axis have no contradictory equation, its ends"
+            " not both laid: strip (s0..s4)"
+        ]
+    # Both ends laid: the length it is laid at, and by how much it differs from the 3D length.
     ends = {"AXIS_A": {"n0": 0.0, "n4": 4.0}, "AXIS_B": coordinates["AXIS_B"]}
-    placed = frame_free.station_marked_rails((rail,), runs, roles, node_by_run_end, ends, diagnostics)
+    placed, diagnostics = station((rail,), ends)
     assert placed["AXIS_A"]["n1"] == pytest.approx(0.8) and placed["AXIS_A"]["n3"] == pytest.approx(3.2)
-    assert diagnostics == [f"{head} laid at 4.0000 m: strip (s0..s4)"]
+    assert diagnostics == [f"{head}, laid at 4.0000 m (-1.0000 m): strip (s0..s4)"]
     # One laid node: no stations, one diagnostic.
-    diagnostics = []
     one_node = {"AXIS_A": {"n1": 10.0}, "AXIS_B": coordinates["AXIS_B"]}
-    assert frame_free.station_marked_rails((rail,), runs, roles, node_by_run_end, one_node, diagnostics) == one_node
+    placed, diagnostics = station((rail,), one_node)
+    assert placed == one_node
     assert diagnostics == [f"{head}, no stations: fewer than two of its nodes are laid: strip (s0..s4)"]
+    # Paired negative: a line that kept its length takes no stations and says so.
+    placed, diagnostics = station((rail,), coordinates, which={})
+    assert placed == coordinates
+    assert diagnostics == [f"{frame_free.MARKED_RAIL_PREFIX} from 3 lines, 5.0000 m in 3D, keeps its length: strip (s0..s4)"]
+    # A line with no signed run on an axis gives no length equation at all, and says that instead.
+    placed, diagnostics = station((rail,), coordinates, which={}, run_signs={})
+    assert placed == coordinates and diagnostics == [
+        f"{frame_free.MARKED_RAIL_PREFIX} from 3 lines, 5.0000 m in 3D, gives no length equation, its line has no"
+        " signed run on an axis: strip (s0..s4)"
+    ]
     # Paired negative: a rail that already was one line (line_count 1) gets no stations and says nothing.
-    diagnostics = []
     one = frame_free.MarkedRail("strip", "chain", "line", rail.run_ids, 1, "strip (s0..s4)")
-    assert frame_free.station_marked_rails((one,), runs, roles, node_by_run_end, coordinates, diagnostics) == coordinates
-    assert diagnostics == []
+    assert station((one,), coordinates) == (coordinates, [])
+
+
+def test_a_marked_line_is_as_long_as_its_longest_stitched_rail_use_whatever_the_order() -> None:
+    # plan Slice AM, review F6: the 3D rail length of a line the mark made is read per use that holds a rail
+    # stretch of its Chain and line (two strips side by side whose stitched rails are one Chain), and the largest
+    # sum counts. The two uses' runs may differ in length (a use may take the chord shortcut of its own side,
+    # plan Slice W Stage B): the largest keeps the length independent of which use or rail is read first.
+    from types import SimpleNamespace
+
+    def run(run_id, use, length):
+        return SimpleNamespace(id=run_id, length=length, patch_chain_id=use, parent_chain_id="chain")
+
+    runs = (run("u0", "use_a", 2.0), run("u1", "use_a", 3.0), run("w0", "use_b", 5.1), run("x", "other", 1.0))
+    line_of = {"u0": "line", "u1": "line", "w0": "line", "x": "line"}
+    on_a = frame_free.MarkedRail("strip_a", "chain", "line", ("u0", "u1"), 2, "strip_a (s0..s2)")
+    on_b = frame_free.MarkedRail("strip_b", "chain", "line", ("w0",), 2, "strip_b (s2..s0)")
+    for rails in ((on_a, on_b), (on_b, on_a)):
+        (line,) = frame_free.marked_lines(rails, runs, line_of)
+        assert line.length == pytest.approx(5.1) and line.run_ids == ("u0", "u1", "w0", "x")
+    # Paired negative: a rail of one line (line_count 1) makes no marked line.
+    one = frame_free.MarkedRail("strip_a", "chain", "line", ("u0", "u1"), 1, "strip_a (s0..s2)")
+    assert frame_free.marked_lines((one,), runs, line_of) == ()
 
 
 def _source_pins(solve, island):
@@ -967,7 +1073,7 @@ def test_the_join_keeps_the_parity_of_the_stitched_rails_two_sides() -> None:
     # The row beyond keeps its own lengths (1 m each), in the same direction as the rail.
     for i, vertex in enumerate(beyond):
         assert (pins[vertex][along] - pins[beyond[0]][along]) * direction == pytest.approx(float(i), abs=1e-9)
-    assert not [d for d in solve.diagnostics if "contradictory" in d]
+    assert not [d for d in solve.diagnostics if "contradictory equations ->" in d]
 
 
 def test_a_closed_marked_rail_is_never_joined_across_its_own_cut() -> None:
@@ -996,9 +1102,10 @@ def test_a_closed_marked_rail_is_never_joined_across_its_own_cut() -> None:
     rail = _rail_runs(context, skeleton, ladder.rail_a_patch_chain_ids)
     assert len(rail) == 12 and len({skeleton.line_by_run[e.id] for e in rail}) == 1
     marked = [d for d in solve.diagnostics if d.startswith(frame_free.MARKED_RAIL_PREFIX)]
+    # The closed line meets no right corner: it has no axis and so no length equation at all (plan Slice AM).
     assert marked == [
-        f"{frame_free.MARKED_RAIL_PREFIX} from 12 lines, no length equation, {sum(e.length for e in rail):.4f} m in 3D, "
-        f"no stations: fewer than two of its nodes are laid: {patch_id} (r1_0..r1_0)"
+        f"{frame_free.MARKED_RAIL_PREFIX} from 12 lines, {sum(e.length for e in rail):.4f} m in 3D, gives no length "
+        f"equation, its line has no signed run on an axis: {patch_id} (r1_0..r1_0)"
     ]
     # Paired negative, the join itself: ordered by segment alone, the first two runs meet at the cut r1_0.
     first, second = sorted(rail, key=lambda e: e.segment_indices[0])[:2]
@@ -1022,9 +1129,163 @@ def test_a_mark_join_that_would_make_a_new_longest_line_does_not_move_the_seed(m
     for patch_id in ("patch:seed:f112", "patch:seed:f114"):
         _island, skeleton = _skeleton(solve, patch_id)
         _head_island, before = _skeleton(head, patch_id)
-        assert skeleton.unmeasured_run_ids and not before.unmeasured_run_ids
+        # The join is made (its diagnostic); the joined line is OBLIQUE, so it gives no length (plan Slice AM).
+        assert [d for d in skeleton.diagnostics if d.startswith(f"{frame_free.MARKED_RAIL_PREFIX} from 2 lines")]
+        assert not [d for d in before.diagnostics if d.startswith(frame_free.MARKED_RAIL_PREFIX)]
         assert skeleton.axis_role_by_run == before.axis_role_by_run
         runs = [e for e in evidence if e.id in skeleton.line_by_run]
         summed = frame_free.line_lengths(runs, skeleton.line_by_run)
-        joined = skeleton.line_by_run[next(iter(sorted(skeleton.unmeasured_run_ids)))]
+        ladder = _ladder(context, patch_id).ladder
+        joined_uses = [
+            use for use in ladder.rail_a_patch_chain_ids + ladder.rail_b_patch_chain_ids
+            if len({skeleton.line_by_run[e.id] for e in runs if e.patch_chain_id == use}) == 1
+            and len({before.line_by_run[e.id] for e in runs if e.patch_chain_id == use}) > 1
+        ]
+        joined = skeleton.line_by_run[next(e.id for e in runs if e.patch_chain_id == joined_uses[0])]
         assert summed[joined] > max(frame_free.line_lengths(runs, before.line_by_run).values())
+
+
+# --------------------------------------------------------------------------- plan Slice AM: a band between two marked strips
+
+
+def _band(degrees, segments, **kwargs):
+    key = ("band", degrees, segments, tuple(sorted(kwargs.items())))
+    if key not in _CACHE:
+        source = make_marked_band_source(degrees, segments, **kwargs)
+        context = run_pass_3_filters(run_pass_2_features(run_pass_1_relations(run_pass_0(source))), FilterOptions(world_up=UP))
+        _CACHE[key] = (context, run_skeleton_solve(context))
+    return _CACHE[key]
+
+
+def _band_quilt(solve):
+    (island,) = [i for i in solve.assembly.islands if len(i.patch_ids) == 7]  # the band, its strips and junctions
+    return island, next(s for s in solve.skeletons if s.island_id == island.id)
+
+
+@pytest.mark.parametrize(("degrees", "segments"), ((90.0, 8), (100.0, 10), (120.0, 12), (180.0, 18)))
+def test_a_band_between_two_marked_strips_is_laid_whole_with_the_longer_rail_leading(degrees, segments) -> None:
+    # A flat band bent in its plane (11.25 or 10 degrees per segment, so Layer 3 cuts each side into one line
+    # per segment) between two marked strips; the mark makes each strip's stitched rail one line. Past 90
+    # degrees the band's two end runs, between the same two rows, point opposite ways in 3D: the old pair
+    # normalisation flipped one, called them contradictory and pinned nothing. Both rails measured contradict
+    # (radius 3 against radius 1): the shorter, inner one yields and lies on stations at one ratio.
+    context, solve = _band(degrees, segments)
+    island, skeleton = _band_quilt(solve)
+    assert skeleton.frame == FRAME_FREE
+    assert not [d for d in skeleton.diagnostics if "contradictory equations ->" in d or "not tied" in d]
+    position = {str(k): v.position for k, v in context.source_snapshot.vertices.items()}
+    pins = _source_pins(solve, island)
+    sides = {side: [f"{side}{k}" for k in range(segments + 1)] for side in ("o", "i")}
+    assert all(vertex in pins for names in sides.values() for vertex in names)
+    lengths = {side: sum(math.dist(position[a], position[b]) for a, b in zip(names, names[1:])) for side, names in sides.items()}
+    for side, names in sides.items():
+        laid = math.dist(pins[names[0]], pins[names[-1]])
+        ratios = [math.dist(pins[a], pins[b]) / math.dist(position[a], position[b]) for a, b in zip(names, names[1:])]
+        expected = 1.0 if side == "o" else lengths["o"] / lengths["i"]
+        assert laid == pytest.approx(lengths["o"], rel=1e-9)  # both rails as long as the outer one in 3D
+        assert max(ratios) - min(ratios) < 1e-9 and ratios[0] == pytest.approx(expected, rel=1e-9)
+    # Every profile line of both strips is tied; both strips are kept together.
+    for constraint in context.feature_snapshot.constraints:
+        if constraint.kind is FeatureConstraintKind.STRAIGHT_LADDER:
+            patch_id = str(constraint.patch_id)
+            assert skeleton.quilt_ladder_by_patch[patch_id] == quilt_ladders.QUILT_LADDER_READ
+            ties = [tie for tie in skeleton.ladder_ties if tie.key[1] == patch_id]
+            assert len(ties) == len(constraint.ladder.profile_lines) == segments + 1
+    marked = sorted(d for d in skeleton.diagnostics if d.startswith(frame_free.MARKED_RAIL_PREFIX))
+    assert len(marked) == 2
+    keeps = f"{frame_free.MARKED_RAIL_PREFIX} from {segments} lines, {lengths['o']:.4f} m in 3D, keeps its length: "
+    yields = (
+        f"{frame_free.MARKED_RAIL_PREFIX} from {segments} lines, {lengths['i']:.4f} m in 3D, yields its length: without"
+        " its length equations the other runs of its axis have no contradictory equation, "
+    )
+    assert [d for d in marked if d.startswith(keeps)] and [d for d in marked if d.startswith(yields)]
+    assert any(d.endswith(f"laid at {lengths['o']:.4f} m (+{lengths['o'] - lengths['i']:.4f} m): {d.rsplit(': ', 1)[1]}")
+               for d in marked if d.startswith(yields))
+    # The soft runs of the yielding line are the unmeasured runs: the inner Chain, on both its sides.
+    evidence = context.relation_snapshot.patch_chain_directional_evidence
+    inner = {e.id for e in evidence if {str(e.start_source_vertex_id), str(e.end_source_vertex_id)} <= set(sides["i"])}
+    assert inner and set(skeleton.unmeasured_run_ids) == inner
+
+
+def test_two_marked_rails_against_a_seam_layer_3_holds_yield_together_and_the_seam_leads() -> None:
+    # plan Slice AM, review round two (R2-1): a band of radii 10 / 20 / 30 bent 8 degrees in 10 segments, split
+    # along its length by a seam at r 20 that Layer 3 holds as one line; the inner and outer rails, stitched to
+    # marked strips, wobble out by 5 cm at vertices 3, 5 and 7, so Layer 3 cuts them into several lines and the
+    # mark makes each one line. Three lines between the same two rows: neither marked rail alone removes the
+    # contradiction (the other still contradicts the seam); the two together do. Both yield together and the
+    # seam's line leads at its 3D length; every profile line of both strips is tied.
+    key = ("split_band", 8.0, 10)
+    if key not in _CACHE:
+        source = make_marked_split_band_source(8.0, 10, (10.0, 20.0, 30.0), 0.05)
+        context = run_pass_3_filters(run_pass_2_features(run_pass_1_relations(run_pass_0(source))), FilterOptions(world_up=UP))
+        _CACHE[key] = (context, run_skeleton_solve(context))
+    context, solve = _CACHE[key]
+    (island,) = [i for i in solve.assembly.islands if len(i.patch_ids) == 8]  # two band patches, two strips, four ends
+    skeleton = next(s for s in solve.skeletons if s.island_id == island.id)
+    assert skeleton.frame == FRAME_FREE
+    assert not [d for d in skeleton.diagnostics if "contradictory equations ->" in d or "not tied" in d]
+    position = {str(k): v.position for k, v in context.source_snapshot.vertices.items()}
+    pins = _source_pins(solve, island)
+    sides = {side: [f"{side}{k}" for k in range(11)] for side in ("i", "m", "o")}
+    assert all(vertex in pins for names in sides.values() for vertex in names)
+    lengths = {side: sum(math.dist(position[a], position[b]) for a, b in zip(names, names[1:])) for side, names in sides.items()}
+    for names in sides.values():
+        assert math.dist(pins[names[0]], pins[names[-1]]) == pytest.approx(lengths["m"], rel=1e-9)  # the seam leads
+    marked = sorted(d for d in skeleton.diagnostics if d.startswith(frame_free.MARKED_RAIL_PREFIX))
+    assert len(marked) == 2
+    for side in ("i", "o"):
+        text = (
+            f"from {{}} lines, {lengths[side]:.4f} m in 3D, yields its length together with 1 other line the mark made:"
+            f" without their length equations the other runs of its axis have no contradictory equation, laid at"
+            f" {lengths['m']:.4f} m ({lengths['m'] - lengths[side]:+.4f} m): "
+        )
+        assert [d for d in marked if any(text.format(n) in d for n in range(2, 11))], (side, marked)
+    for constraint in context.feature_snapshot.constraints:
+        if constraint.kind is FeatureConstraintKind.STRAIGHT_LADDER:
+            patch_id = str(constraint.patch_id)
+            assert skeleton.quilt_ladder_by_patch[patch_id] == quilt_ladders.QUILT_LADDER_READ
+            ties = [tie for tie in skeleton.ladder_ties if tie.key[1] == patch_id]
+            assert len(ties) == len(constraint.ladder.profile_lines) == 11
+    # Layer 3 holds the seam as one line and cuts both rails into several.
+    evidence = context.relation_snapshot.patch_chain_directional_evidence
+    seam = {skeleton.line_by_run[e.id] for e in evidence if e.id in skeleton.line_by_run
+            and {str(e.start_source_vertex_id), str(e.end_source_vertex_id)} <= set(sides["m"])}
+    assert len(seam) == 1
+
+
+def test_the_island_drift_counts_the_runs_of_the_lines_the_mark_made() -> None:
+    # plan Slice AM, review F6: the band bent 180 degrees, 1 cm wider at its last end (2.00 m across at one end,
+    # 2.01 m at the other): the two widths contradict by 5 mm each in the least squares. The island's drift is
+    # taken once with every run measured, the marked arcs too (6.7 mm, they carry the island's larger span);
+    # without them the island would span only its 2.4 m width (2.4 mm) and the widths would be a contradiction.
+    context, solve = _band(180.0, 18, end_widening=0.01)
+    island, skeleton = _band_quilt(solve)
+    assert not [d for d in skeleton.diagnostics if "contradictory equations ->" in d]
+    assert max(skeleton.axis_a.residual_max, skeleton.axis_b.residual_max) == pytest.approx(0.005, abs=1e-6)
+    pins = _source_pins(solve, island)
+    assert all(f"{side}{k}" in pins for side in "io" for k in range(19))
+    # Paired negative: 1.5 cm wider (7.5 mm each) is over the island's drift: a contradiction, nothing pinned.
+    _wide_context, wide = _band(180.0, 18, end_widening=0.015)
+    wide_island, wide_skeleton = _band_quilt(wide)
+    assert [d for d in wide_skeleton.diagnostics if "contradictory equations ->" in d]
+    assert not _source_pins(wide, wide_island)
+
+
+@pytest.mark.parametrize("variant", ({"inner_first": True}, {"mirrored": True}, {"inner_first": True, "mirrored": True}))
+def test_who_yields_does_not_depend_on_ids_or_on_a_mirror(variant) -> None:
+    context, solve = _band(120.0, 12)
+    other_context, other = _band(120.0, 12, **variant)
+    marked = sorted(d.split(": ")[0] for d in _band_quilt(solve)[1].diagnostics if d.startswith(frame_free.MARKED_RAIL_PREFIX))
+    other_marked = sorted(d.split(": ")[0] for d in _band_quilt(other)[1].diagnostics if d.startswith(frame_free.MARKED_RAIL_PREFIX))
+    assert marked == other_marked  # the same texts, up to the patch names
+    for this_context, this in ((context, solve), (other_context, other)):
+        island, skeleton = _band_quilt(this)
+        yielded = [d for d in skeleton.diagnostics if d.startswith(frame_free.MARKED_RAIL_PREFIX) and "yields" in d]
+        assert len(yielded) == 1 and yielded[0].endswith(("(i12..i0)", "(i0..i12)"))  # the inner rail yields
+        pins = _source_pins(this, island)
+        assert len(pins) == len(_source_pins(solve, _band_quilt(solve)[0]))
+    # The layouts are one shape: every pinned distance is the same in both.
+    pins, other_pins = _source_pins(solve, _band_quilt(solve)[0]), _source_pins(other, _band_quilt(other)[0])
+    names = sorted(pins)
+    for a, b in zip(names, names[1:] + names[:1]):
+        assert math.dist(pins[a], pins[b]) == pytest.approx(math.dist(other_pins[a], other_pins[b]), abs=1e-9)

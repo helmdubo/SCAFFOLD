@@ -5,8 +5,9 @@ Rules:
 - Small synthetic meshes for the Layer 4 bevel rule: an extruded corner
   profile with one bevel strip (convex or concave, marked or not, with or
   without seams), flat patch layouts and a capped prism for the structural
-  rule edges; a marked ladder strip of any rail shape, and a marked ring
-  cut by one seam, for the ladder constraint.
+  rule edges; a marked ladder strip of any rail shape, a marked ring
+  cut by one seam, and a flat band bent between two marked strips, for
+  the ladder constraint.
 - Seams are given as vertex pairs; Face Strength marks per face index.
 - No production logic here.
 """
@@ -348,6 +349,120 @@ def make_marked_ladder_strip_source(
         faces.append((f"p{columns}_{r}", f"eb{r}", f"eb{r + 1}", f"p{columns}_{r + 1}"))
         seams += [(f"p0_{r}", f"p0_{r + 1}"), (f"p{columns}_{r}", f"p{columns}_{r + 1}")]
     return _mesh("marked_ladder_strip", positions, faces, tuple(seams), strengths)
+
+
+def make_marked_band_source(
+    degrees: float, segments: int, *, inner_first: bool = False, mirrored: bool = False, end_widening: float = 0.0
+) -> SourceMeshSnapshot:
+    """A flat STRONG band bent by degrees in its plane between two marked MEDIUM strips (plan Slice AM).
+
+    The band runs between arcs of radius 1 (inner, vertices i0..) and 3
+    (outer, o0..) in segments equal steps; a 0.2 m MEDIUM strip lies beyond
+    each arc, dropping 0.1 m (outer oo.., inner ii..), and a WEAK quad
+    continues each strip end along its tangent. Every strip boundary edge is
+    a seam. Faces wind like (+x, +y). inner_first lists each inner strip
+    face before the outer one (the strips swap their patch ids); mirrored
+    reflects y and reverses every face (the same band, mirrored).
+    end_widening moves the outer arc's last vertex (and its strip's) out
+    radially by that much: the band is that much wider at its last end.
+    """
+
+    inner_radius, outer_radius, width, drop = 1.0, 3.0, 0.2, 0.1
+    positions: dict[str, tuple[float, float, float]] = {}
+    for k in range(segments + 1):
+        t = math.radians(degrees * k / segments)
+        c, s = math.cos(t), math.sin(t)
+        outer = outer_radius + (end_widening if k == segments else 0.0)
+        positions[f"i{k}"] = (inner_radius * c, inner_radius * s, 0.0)
+        positions[f"o{k}"] = (outer * c, outer * s, 0.0)
+        positions[f"oo{k}"] = ((outer + width) * c, (outer + width) * s, -drop)
+        positions[f"ii{k}"] = ((inner_radius - width) * c, (inner_radius - width) * s, -drop)
+    faces: list[tuple[str, ...]] = []
+    strengths: dict[int, SourceFaceStrength] = {}
+    seams = []
+    for k in range(segments):
+        strip_faces = [(f"o{k}", f"oo{k}", f"oo{k + 1}", f"o{k + 1}"), (f"ii{k}", f"i{k}", f"i{k + 1}", f"ii{k + 1}")]
+        strengths[len(faces)] = STRONG
+        faces.append((f"i{k}", f"o{k}", f"o{k + 1}", f"i{k + 1}"))
+        for face in (strip_faces[::-1] if inner_first else strip_faces):
+            strengths[len(faces)] = MEDIUM
+            faces.append(face)
+        seams += [(f"o{k}", f"o{k + 1}"), (f"i{k}", f"i{k + 1}")]
+    for k, step, tag in ((0, -1.0, "s"), (segments, 1.0, "e")):
+        t = math.radians(degrees * k / segments)
+        tx, ty = -math.sin(t) * step * 0.2, math.cos(t) * step * 0.2
+        for name in ("o", "oo", "i", "ii"):
+            x, y, z = positions[f"{name}{k}"]
+            positions[f"{name}{tag}"] = (x + tx, y + ty, z)
+        if step < 0:
+            ends = [(f"o{tag}", f"oo{tag}", f"oo{k}", f"o{k}"), (f"ii{tag}", f"i{tag}", f"i{k}", f"ii{k}")]
+        else:
+            ends = [(f"o{k}", f"oo{k}", f"oo{tag}", f"o{tag}"), (f"ii{k}", f"i{k}", f"i{tag}", f"ii{tag}")]
+        for face in (ends[::-1] if inner_first else ends):
+            strengths[len(faces)] = WEAK
+            faces.append(face)
+        seams += [(f"o{k}", f"oo{k}"), (f"i{k}", f"ii{k}")]
+    if mirrored:
+        positions = {name: (x, -y, z) for name, (x, y, z) in positions.items()}
+        faces = [face[::-1] for face in faces]
+    return _mesh("marked_band", positions, faces, tuple(seams), strengths)
+
+
+def make_marked_split_band_source(
+    degrees: float, segments: int, radii: tuple[float, float, float], wobble: float
+) -> SourceMeshSnapshot:
+    """A flat band split along its length by a seam into two STRONG patches, between two marked MEDIUM strips.
+
+    Three arcs of radii radii (inner i.., middle m.., outer o..) bent by
+    degrees in segments equal steps. The middle arc is a seam between the
+    two band patches; the inner and outer arcs are the stitched rails of a
+    0.2 m MEDIUM strip each, dropping 0.1 m beyond them (ii.., oo..), with
+    a WEAK quad continuing each strip end along its tangent. The inner and
+    outer arcs (and their strips) are moved out radially by wobble at the
+    odd vertices strictly between 1 and segments - 1, so Layer 3 cuts them
+    into several lines while the middle arc stays one (plan Slice AM,
+    review round two). Every strip boundary edge is a seam.
+    """
+
+    inner_radius, middle_radius, outer_radius = radii
+    width, drop = 0.2, 0.1
+    positions: dict[str, tuple[float, float, float]] = {}
+    for k in range(segments + 1):
+        t = math.radians(degrees * k / segments)
+        c, s = math.cos(t), math.sin(t)
+        moved = wobble if k % 2 and 1 < k < segments - 1 else 0.0
+        inner, outer = inner_radius + moved, outer_radius + moved
+        positions[f"i{k}"] = (inner * c, inner * s, 0.0)
+        positions[f"m{k}"] = (middle_radius * c, middle_radius * s, 0.0)
+        positions[f"o{k}"] = (outer * c, outer * s, 0.0)
+        positions[f"oo{k}"] = ((outer + width) * c, (outer + width) * s, -drop)
+        positions[f"ii{k}"] = ((inner - width) * c, (inner - width) * s, -drop)
+    faces: list[tuple[str, ...]] = []
+    strengths: dict[int, SourceFaceStrength] = {}
+    seams = []
+    for k in range(segments):
+        for face in ((f"i{k}", f"m{k}", f"m{k + 1}", f"i{k + 1}"), (f"m{k}", f"o{k}", f"o{k + 1}", f"m{k + 1}")):
+            strengths[len(faces)] = STRONG
+            faces.append(face)
+        for face in ((f"o{k}", f"oo{k}", f"oo{k + 1}", f"o{k + 1}"), (f"ii{k}", f"i{k}", f"i{k + 1}", f"ii{k + 1}")):
+            strengths[len(faces)] = MEDIUM
+            faces.append(face)
+        seams += [(f"m{k}", f"m{k + 1}"), (f"o{k}", f"o{k + 1}"), (f"i{k}", f"i{k + 1}")]
+    for k, step, tag in ((0, -1.0, "s"), (segments, 1.0, "e")):
+        t = math.radians(degrees * k / segments)
+        tx, ty = -math.sin(t) * step * 0.2, math.cos(t) * step * 0.2
+        for name in ("o", "oo", "i", "ii"):
+            x, y, z = positions[f"{name}{k}"]
+            positions[f"{name}{tag}"] = (x + tx, y + ty, z)
+        if step < 0:
+            ends = [(f"o{tag}", f"oo{tag}", f"oo{k}", f"o{k}"), (f"ii{tag}", f"i{tag}", f"i{k}", f"ii{k}")]
+        else:
+            ends = [(f"o{k}", f"oo{k}", f"oo{tag}", f"o{tag}"), (f"ii{k}", f"i{k}", f"i{tag}", f"ii{tag}")]
+        for face in ends:
+            strengths[len(faces)] = WEAK
+            faces.append(face)
+        seams += [(f"o{k}", f"oo{k}"), (f"i{k}", f"ii{k}")]
+    return _mesh("marked_split_band", positions, faces, tuple(seams), strengths)
 
 
 def make_marked_cut_ring_source(sides: int = 12) -> SourceMeshSnapshot:

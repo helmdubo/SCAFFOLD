@@ -5,13 +5,19 @@ Rules:
 - Per-axis least-squares solve of one island skeleton (G5a): nodes joined by
   cross-axis runs share one coordinate (a component); each own-axis run is
   one length equation between two components.
+- An equation's sign is its run's sign alone (rails, stitched and mark
+  joins, corner orientation, or a frame or strip layout); the solve never
+  turns a sign by a 3D direction (plan Slice AM).
 - Every connected group of equations is solved with its own gauge; no
   singular block is left to the dense solver.
 - An OBLIQUE bridge run of a bridged right corner may add one equation
   per axis with its given offset (frame-free islands; skeleton.py).
 - A run the skeleton names unmeasured (on a line the mark of a ladder
-  strip made from several lines, plan Slice AL) adds no equation; it keeps
-  its role, so its line still joins its nodes on the cross axis.
+  strip made from several lines that yielded its length, plan Slices AL,
+  AM) adds no equation; it keeps its role, so its line still joins its
+  nodes on the cross axis.
+- The solve names the runs of its contradictory equations, so the
+  skeleton can let a line the mark made yield its length and solve again.
 - An island with a rigid unfolded frame anchors every group to the frame:
   the mean of its nodes' solved coordinate equals the mean of their frame
   coordinate. Without a frame only the largest group keeps coordinates;
@@ -25,8 +31,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Mapping
-
-from scaffold_core.layer_2_geometry.measures import dot, normalize
 
 RESIDUAL_TOLERANCE = 1e-5
 # Modelling drift the solve absorbs: 1 mm per metre (plan Slice S) of the
@@ -46,6 +50,10 @@ class AxisSolve:
     # Framed island: nodes whose coordinate is their frame coordinate alone
     # (their component has no equation on this axis).
     frame_only_nodes: frozenset[str] = field(default_factory=frozenset)
+    # The run of each contradictory equation (its residual over the
+    # tolerance) -> the largest such residual of that run, before the
+    # contradictory components are dropped.
+    contradiction_by_run: Mapping[str, float] = field(default_factory=dict)
 
 
 def axis_components(runs, roles, role_name, node_by_run_end):
@@ -71,31 +79,33 @@ def axis_components(runs, roles, role_name, node_by_run_end):
 
 
 def solve_axis(
-    axis_name, runs, roles, signs, node_by_run_end, diagnostics, direction_of=None, drift=None, length_of=None,
+    axis_name, runs, roles, signs, node_by_run_end, diagnostics, drift=None, length_of=None,
     frame_coordinate_by_node=None, bridge_offset_by_run=None, unmeasured_run_ids=frozenset(),
 ):
     """P7 semantics: the A coordinate lives on COLUMN components (nodes
     connected by AXIS_B runs share one A value) and is constrained by
     AXIS_A run lengths; symmetric for B on ROW components.
 
-    direction_of supplies run directions in the island frame when one exists.
+    Each own-axis run with a sign adds sign * length between the components
+    of its START and END; the sign is used as given.
     length_of overrides run lengths (a strip island's scaled lengths).
     frame_coordinate_by_node gives, in an island with a rigid unfolded frame,
     each node's frame coordinate along this axis; None without a frame.
     bridge_offset_by_run gives, for an OBLIQUE bridge run of a bridged right
     corner, its END minus START coordinate along this axis: one equation
-    between the components of its two ends. It unions no nodes and is not
-    sign-normalized. Ends in one component add it only when the offset is
-    not zero within RESIDUAL_TOLERANCE; then the residual check judges it.
+    between the components of its two ends. It unions no nodes. Ends in one
+    component add it only when the offset is not zero within
+    RESIDUAL_TOLERANCE; then the residual check judges it.
     unmeasured_run_ids: runs that add no length equation although they keep
     their role (their nodes still share the cross coordinate).
     drift is the residual the solve absorbs; None takes it from this axis'
     own span alone (axis_span), which the skeleton never relies on.
+    The result names the runs of the contradictory equations
+    (contradiction_by_run) together with their residuals.
     """
 
     component_of, equations = _axis_equations(
-        axis_name, runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_offset_by_run,
-        unmeasured_run_ids,
+        axis_name, runs, roles, signs, node_by_run_end, length_of, bridge_offset_by_run, unmeasured_run_ids,
     )
     coords, residuals = _lstsq(equations)
     if drift is None:
@@ -103,6 +113,10 @@ def solve_axis(
     # In a rigid frame the jog check and the solve share one drift (plan Slice U).
     tolerance = max(RESIDUAL_TOLERANCE, drift)
     bad = [i for i, r in enumerate(residuals) if abs(r) > tolerance]
+    contradiction_by_run: dict[str, float] = {}
+    for index in bad:
+        run_id = equations[index][3]
+        contradiction_by_run[run_id] = max(contradiction_by_run.get(run_id, 0.0), abs(residuals[index]))
     unconstrained: tuple[int, ...] = ()
     bad_components: set[str] = set()
     kept = equations
@@ -127,24 +141,23 @@ def solve_axis(
         if component in coords
     }
     frame_only = frozenset(node for node, component in component_of.items() if component in alone)
-    return AxisSolve(axis_name, coordinate_by_node, residual_max, unconstrained, len(equations), frame_only)
+    return AxisSolve(
+        axis_name, coordinate_by_node, residual_max, unconstrained, len(equations), frame_only, contradiction_by_run
+    )
 
 
-def axis_span(
-    axis_name, runs, roles, signs, node_by_run_end, direction_of=None, length_of=None, bridge_offset_by_run=None,
-    unmeasured_run_ids=frozenset(),
-) -> float:
+def axis_span(axis_name, runs, roles, signs, node_by_run_end, length_of=None, bridge_offset_by_run=None) -> float:
     """The island's span along one axis: the largest coordinate range of an equation group, all equations kept.
 
     An island without a rigid frame absorbs drift per metre of the larger
     of its two axis spans (skeleton.py): an equation on one axis compares
     distances between rows that run along the other axis, so its error
-    grows with the island's extent along that other axis.
+    grows with the island's extent along that other axis. Every signed
+    own-axis run counts, also one the skeleton later solves unmeasured.
     """
 
     _component_of, equations = _axis_equations(
-        axis_name, runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_offset_by_run,
-        unmeasured_run_ids,
+        axis_name, runs, roles, signs, node_by_run_end, length_of, bridge_offset_by_run,
     )
     coords, _residuals = _lstsq(equations)
     return _span(coords, equations)
@@ -159,10 +172,14 @@ def _span(coords, equations) -> float:
 
 
 def _axis_equations(
-    axis_name, runs, roles, signs, node_by_run_end, direction_of, length_of, bridge_offset_by_run,
-    unmeasured_run_ids=frozenset(),
+    axis_name, runs, roles, signs, node_by_run_end, length_of, bridge_offset_by_run, unmeasured_run_ids=frozenset(),
 ):
-    """The components of one axis and its equations (start, end, value, run id)."""
+    """The components of one axis and its equations (start, end, value, run id).
+
+    Each value is the run's sign times its length, as given: runs between
+    the same two cross components are not compared by their 3D directions
+    (plan Slice AM; an unsigned run adds no equation).
+    """
 
     own_role = "AXIS_A" if axis_name == "AXIS_A" else "AXIS_B"
     cross_role = "AXIS_B" if axis_name == "AXIS_A" else "AXIS_A"
@@ -178,26 +195,7 @@ def _axis_equations(
         if start is None or end is None or start == end:
             continue
         run_length = e.length if length_of is None else length_of[e.id]
-        equations.append([start, end, signs[e.id] * run_length, e.id, e])
-    # Runs connecting the same two cross-components are mutually parallel
-    # on a developable region: normalize their signs to the group's first
-    # run so parallel columns/rails cannot contradict each other.
-    reference_by_pair = {}
-    for equation in equations:
-        start, end, value, _eid, e = equation
-        pair = (min(start, end), max(start, end))
-        direction = e.direction if direction_of is None else direction_of[e.id]
-        oriented = tuple(c * (1.0 if value >= 0.0 else -1.0) for c in direction)
-        if pair not in reference_by_pair:
-            reference_by_pair[pair] = (oriented, start, end)
-            continue
-        ref_dir, _ref_start, _ref_end = reference_by_pair[pair]
-        # On a developable region runs between the same two rails are
-        # parallel: the coordinate grows along the reference direction,
-        # so the equation sign follows the dot sign alone.
-        if dot(normalize(oriented), normalize(ref_dir)) < 0.0:
-            equation[2] = -value
-    equations = [(eq[0], eq[1], eq[2], eq[3]) for eq in equations]
+        equations.append((start, end, signs[e.id] * run_length, e.id))
     for e in runs:
         offset = (bridge_offset_by_run or {}).get(e.id)
         if offset is None or roles.get(e.id) in (own_role, cross_role):
