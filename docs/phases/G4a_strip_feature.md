@@ -202,9 +202,11 @@ layer_5_runtime/quilt_ladders.py, G0 DD-54): when exactly one rail is
 stitched and the quilt lays that rail on an axis, the free rail gives no
 length equations and each of its vertices takes the along-rail coordinate
 of its profile-line partner on the stitched rail. The ladder gives the
-quilt no axis, but its mark makes the stitched rail one line, with no
-length equation from it and stations by 3D length for its nodes (plan
-Slice AL, G0 DD-47). A quilt with a rigid frame reads nothing (its patches in
+quilt no axis, but its mark makes the stitched rail one line (plan Slice
+AL, G0 DD-47). Where that line was several lines its lengths hold unless
+they contradict; then the shorter of contradicting marked lines yields its
+length, and the nodes of a line that yielded are stations by 3D length
+(plan Slice AM). A quilt with a rigid frame reads nothing (its patches in
 the frame are planar and unfold exactly); a strip outside the frame is
 not laid and says so. A strip that meets the conditions in a quilt that
 pins none of its vertices is not counted as kept together and says so.

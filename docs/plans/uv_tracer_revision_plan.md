@@ -4037,6 +4037,10 @@ Next, open items in this order:
 
 1. Which side of a straightened band leads its length, and the
    accumulated-turn bound for Layer 3 families (the coupling above).
+   (Note of 2026-11-23: the length rule is answered by Slice AM: a line
+   the mark made keeps its length unless it contradicts, and of
+   contradicting lines the shorter yields, so the longest leads; the
+   Layer 3 bound itself stays open.)
 2. Drift spread in proportion to run length.
 3. Quilt orientation (also the column's back wall).
 4. Seeding every right-corner component of a frame-free quilt.
@@ -4044,6 +4048,520 @@ Next, open items in this order:
 6. Saw teeth: deferred by the user.
 7. A frame-free quilt is not tested for overlap.
 8. The older open items already listed in this plan stay.
+
+## Slice AM — the solve takes signs as given; a line the mark made keeps its length unless it contradicts (DONE, 2026-11)
+
+Correction (note of 2026-11-23) to the Slice AL entry above, which stays
+as written; measured in the sign study of this slice (`am_sign\`):
+
+- The 5 degrees that the 1.4 mm bridge run takes are not on f98. They sit
+  on face f123 at v208 and v210 (5.24 and 5.23 degrees; 0.05 and 0.03
+  with the drift spread by run length).
+- The 33.9 degrees on f36's mitre face f98 at v208 are mostly the shear
+  of the straight layout. With the drift spread by run length f98:v208
+  goes to 28.7 degrees and f98:v210 rises from 26.4 to 31.6, so the
+  quilt's largest error falls only from 33.9 to 31.6: about 2 degrees of
+  it are drift.
+
+Target: items В and Б of an external code review that the user relayed
+(В: a 3D dot product decides signs inside the solve; Б: a contradiction
+should be localised to its cycle). Commit 8868656; G0 v1.21 DD-47,
+DD-52, DD-54.
+
+The user opened this slice on 2026-11-23: "start the next slice with
+measuring items В and Б of the review". What to build was chosen by the
+architect from the measurements (plan decision 20, taken inside the
+slice the user opened; the user may reverse it): a line the mark made
+keeps its length unless it contradicts, and of contradicting lines the
+shorter yields, so the longest line keeps its length. Reason: that is
+what the user's own layout of the bottom quilt does (UV layer `UVMap`:
+outer side 0.999 of its 3D length, inner side 1.095 evenly), and it
+leaves that quilt exactly as Slice AL laid it.
+
+Data of every whole-state comparison in this entry: 38 captures, 13
+bevel cases (the user's `u_rounded_wall_noise_top` among them), 8 in-repo
+`tests/data/artist_*.json`, 4 parity references (Arc, building_walls,
+collumn, Main_wall) and 13 building captures of `E:\buildings.blend`
+(`run_smoke --seamed --capture-dir`, read-only), each with the filter off
+and with `world_up` +Z (76 runs).
+
+Measured first (two studies in the session scratchpad, `am_sign\` and
+`am_cycles\`, NOTES.txt, not in the repo):
+
+- The dot step (`axis_solve._axis_equations`). Equations between the same
+  two cross components had their signs normalised to the first one's by
+  the dot product of their 3D run directions. Pairs that met an earlier
+  equation on the same components: framed 6456 (off) / 5809 (+Z),
+  frame-free quilts 169 / 222, frame-free single patches 2 / 3, strips
+  1 / 1. Flipped: 0 everywhere; every frame-free cosine is at least 0.8.
+  In framed and strip islands the step is provably inert (a framed sign
+  is the sign of the frame direction against its axis with |cos| at
+  least 0.996; a strip's direction is its sign times the unit axis). It
+  is live only in frame-free islands, where it compares raw 3D
+  directions (against DD-47). It dates from Layer 5 v0 (commit 7699316,
+  2026-06-13), when an unsigned run took +1; since then an unsigned run
+  adds no equation. Removing it is bit-identical on all 76 runs.
+- The case where it acts: a flat band (radii 1 to 3 m) between two marked
+  ladder strips, both stitched rails made one line by the mark, so the
+  band's two end runs join the same two rows with a cosine of cos(bend).
+  At 100, 120 and 180 degrees the step flips one end run: "AXIS_A: 2
+  contradictory equations", 0 pins, both strips "pins none of its
+  vertices". At 80 degrees it flips nothing.
+- The gauge (item А): 5639 equation groups; the largest has 89
+  components and 178 equations (bld_walls island 0, AXIS_A). The largest
+  coordinate difference to a reference solve (numpy least squares with
+  the gauge eliminated, checked against exact rationals) is 6.7e-13; the
+  condition number of the reduced incidence matrix is at most 83; no
+  verdict changes. On the largest capture `solve_axis` takes 0.22 s of
+  the 17.6 s of `run_skeleton_solve` (1.3%), `build_islands` 15.9 s (93%).
+- Drift spread in proportion to run length (weights 1/length, a bridge
+  1/its run length): every verdict is unchanged; pins move by up to 4.6
+  mm on the buildings (walls, walls.003, building_walls; in-island), so
+  the Tier 3 baseline would change; on the bottom quilt after the fill
+  f123's 5.2 degrees go, and the largest error falls from 33.9 to 31.6
+  (the correction above); on e_arch_s2_n20 the quilt maximum falls from
+  2.64 to 2.38 degrees but some corners get worse (f19:v21 0.36 -> 0.77).
+  Three tests fail under it (two are verdict changes on synthetic
+  fixtures). Not built.
+- Census of accumulated turn. Directional runs (17640 uses): the largest
+  first-to-last 3D angle is 9.70 degrees and the largest accumulated
+  surface turn 9.48 (u_rounded f0:0:0:20, 1.165 m); no run turns more
+  than 15 degrees, so the per-segment gate of runs is no accident on the
+  data. Island lines turning more than 15 degrees on a patch side are
+  found only on c_arch_s2 and e_arch_s2_n20 +Z (through the Slice AK
+  join: straight on f22, 62.8 / 57.9 degrees on f26), d_cyl_s2 +Z,
+  ref_collumn, and u_rounded (f111's sides 90.0 and 86.1, f36 63.7 and
+  56.2, f73 61.0, the top quilt's f35, f71, f96); none on the buildings,
+  cubes, rects, rings, walls, Arc or Main_wall.
+- Emulation of families stopped after 15 degrees of accumulated turn
+  (in Layer 5: each ordered island rail segment cut greedily from its
+  first station where the accumulated surface turn passes 15 degrees;
+  measurement only, not a Layer 3 change). Against the code before this
+  slice it cuts 4 families on all data (u_rounded 3, collumn 1) and
+  changes only the user's bottom quilt: 69 pinned source vertices (111
+  occurrences) -> 0, and after the fill 10 overlapping triangle pairs and
+  2 self-intersecting faces (the fold before Slice AK). Two causes: both
+  band sides become lines the mark made, so neither has a length; and
+  the drift, which left those runs out of its spans, shrinks from 7.01 to
+  0.57 mm, so f95's 1.07 mm width noise becomes an AXIS_B contradiction.
+- Contradictions as cycles (item Б). 3784 solves, 15055 independent
+  cycles. The code before this slice reports contradictory equations in
+  exactly one solve: e_arch_s2_n20 +Z island 2 AXIS_B (tolerance 4.41
+  mm), the 2-cycle of f46's two ends (0.2406 against 0.2612 m, 20.6 mm).
+  It drops 7 of its 8 equations and 2 components, and the island keeps 3
+  pin occurrences; removing only that cycle's two equations gives 44 pin
+  occurrences on 24 source vertices (f26 kept together, 9 ties) and
+  changes nothing else. A cycle test free of subdivision (1 mm per metre
+  of the cycle's own length) would fail 297 cycles, mostly rigid building
+  frames (5 cm over 6.8 m).
+- Who leads the length, candidates on the user's bottom quilt with a
+  mark-made line keeping its lengths (the 0.6317 m cycle of 27 AXIS_A
+  equations: the bridge run, f111's 9 inner and 17 outer runs). After
+  Blender 4.5's fill:
+
+| candidate | pins (occurrences) | overlaps | self-x | flips | angle error | outer / inner |
+|---|---|---|---|---|---|---|
+| user's UVMap | - | 4 | 1 | 1 | 4.39 / 52.1 | 0.999 / 1.095 |
+| before this slice | 69 (111) | 0 | 0 | 0 | 4.49 / 33.9 | 1.000 / 1.101 |
+| before this slice + emulation | 0 | 10 | 2 | 0 | 1.68 / 97.1 | fold |
+| shorter yields, bridges hard (built) | 69 (111) | 0 | 0 | 0 | 4.49 / 33.9 | 1.000 / 1.101 |
+| the same + emulation | 69 (111) | 0 | 0 | 0 | 4.49 / 33.9 | 1.000 / 1.101 |
+| bridges last | 69 (111) | 25 | 2 | 2 | 13.9 / 134.9 | 1.086 / 1.000 |
+| disagreement shared by length | 69 (111) | 0 | 0 | 0 | 4.50 / 36.8 | 0.955 / 1.048 |
+| side stitched to more hard runs leads | 33 (57) | 0 | 0 | 0 | 3.54 / 33.9 | 0.956 / 1.046 |
+
+  "Bridges last" puts the 0.63 m into the 1.4 mm bridge run (laid 463
+  times its length). Pure length order is the same, the bridge being the
+  shortest run.
+
+The cause (item Г of the review, measured): runs and families are gated
+per junction (DD-45, 5.73 degrees) with no bound on the accumulated
+turn. Runs never turn more than 9.7 degrees on the data; families do (the
+lines above). Since Slice AL which side of a straightened band keeps its
+length rested on that accident: f111's outer side is one Layer 3 line
+(5.29 degrees per junction, 90 in total) and its inner side seven. The
+bound itself (open item 1) needs a rule for who leads the length first;
+this slice gives it.
+
+The rule (Layer 5 only):
+
+```text
+Layer 5  axis_solve._axis_equations: the dot step is gone. Each own-axis
+         run adds its sign times its length between the components of its
+         START and END, the sign used as given (rails, stitched and mark
+         joins, corner orientation, frame or strip layout). direction_of is
+         removed from solve_axis, axis_span and _axis_equations (no other
+         reader), with the import of dot / normalize; skeleton._strip_layout
+         no longer builds directions and _STRIP_AXIS_UNIT is gone. The
+         framed branch keeps its own direction_of for its roles and signs.
+         axis_span lost unmeasured_run_ids. New field
+         AxisSolve.contradiction_by_run: the run of each contradictory
+         equation -> its largest residual, before the contradictory
+         components are dropped.
+Layer 5  frame_free.marked_lines (replaces unmeasured_runs): one MarkedLine
+         (chain_id, line_id, run_ids, length) per rail Chain and joined
+         line the mark made from several lines. run_ids are the soft runs
+         (every run of that Chain on that line, on every use of the Chain
+         in the island); length is the 3D rail length, the summed run
+         lengths of its stretches on the strip's own stitched use (the
+         largest such sum over uses), never read from the other side.
+         marked_line_groups: sorted by length; a line within
+         MARKED_LINE_TIE = 1e-9 (relative) of a group's shortest line joins
+         that group. MarkedYield(fewer, left, others): the effect of a
+         yield at its step (fewer contradictory equations among the other
+         runs, how many left at that step, how many other lines yielded
+         with it); a later yield does not refresh it.
+Layer 5  skeleton._solve_axis_yielding, for each axis: solve with every soft
+         run measured. While the kept solve has contradictory equations
+         and marked lines with a signed run on this axis have not yielded,
+         try candidates: each group alone, shortest first, then the
+         shortest k groups together for k = 2 .. n (every group is tried
+         alone before any two together; a set of several groups is always
+         the shortest k). A candidate yields when
+         the solve without its soft runs' length equations has no
+         contradiction, or strictly fewer contradictory equations among
+         the runs that are not its own soft runs (counted by run) than the
+         kept solve. On a yield the trial restarts from the shortest group
+         left; if no candidate helps, the kept solve stands as solve_axis
+         reports it. Only the kept solve's diagnostics are appended. With
+         no marked line it is one solve_axis call. A round with m groups
+         left makes at most 2m - 1 trials and every yield takes at least
+         one group, so an axis with n groups takes at most 1 + n^2 solves.
+Layer 5  skeleton._island_skeleton: the drift is taken once by _island_drift
+         with every signed run (the soft runs too), before any yield.
+         IslandSkeleton.unmeasured_run_ids holds the soft runs of the lines
+         that yielded. The seed and the all-or-nothing fallback of Slice AL
+         are unchanged.
+Layer 5  frame_free.station_marked_rails(rails, yielded, ...): stations only
+         for a rail whose line yielded; one diagnostic per stretch,
+         H = "ladder strip in a quilt, stitched rail made one line from N
+         lines, L m in 3D": "H, keeps its length: <name>"; "H, gives no
+         length equation, its line has no signed run on an axis: <name>";
+         "H, yields its length: without its length equations the other
+         runs of its axis have <effect>" or "H, yields its length together
+         with K other line(s) the mark made: without their length
+         equations the other runs of its axis have <effect>", effect "no
+         contradictory equation" or "F fewer contradictory equations (M
+         left at that step)", then ", laid at X m (+D m): <name>", ", its
+         ends not both laid: <name>" or ", no stations: fewer than two of
+         its nodes are laid: <name>".
+Layer 5  quilt_ladders.py: module rule only.
+tests    test_layer_5_runtime.py (solver level): equation signs are the run
+         signs, never turned by 3D directions (paired: opposite signs
+         contradict); the shorter of two contradicting marked lines yields
+         whatever their ids; equal lengths yield together (paired: 1e-8
+         apart, one yields); the drift does not shrink when marked lines
+         yield; a marked line against a line Layer 3 holds yields and a
+         hard contradiction stays; a disagreement seen only on a hard run
+         still lets the marked line yield; a hard contradiction smeared
+         onto a marked line leaves it its length (the result equals
+         solve_axis); a marked line off the disagreeing loop keeps its
+         length; after a yield the shorter lines are tried again (and the
+         notes are the step's: B MarkedYield(1, 2, 0), "(2 left at that
+         step)", although the final axis has no contradiction); two
+         marked lines against one hard line yield together when neither
+         alone helps (10.0 / 10.3 / 10.6 m); of three that contradict the
+         two shorter yield; the stated limit F2 (a marked line beside a
+         hard taper keeps its length); a contradiction carried by a bridge
+         offset; the tie anchor; a yield that leaves a hard contradiction
+         says how many fewer and how many left.
+         test_layer_5_quilt_ladders.py (meshes): a band between two marked
+         strips is laid whole with the longer rail leading (90, 100, 120,
+         180 degrees); who yields does not depend on ids or on a mirror
+         (inner first, mirrored, both); the bump 0.20 strip whose
+         disagreement shows only on hard runs still yields; the island
+         drift counts the runs of the lines the mark made (band 180, 1 cm
+         wider at its last end: drift 6.7 mm with the marked arcs, 2.4
+         without; paired 1.5 cm: contradiction); a marked line is as long
+         as its longest stitched rail use whatever the order; two marked
+         rails against a seam Layer 3 holds yield together and the seam
+         leads (the mesh case of F1: a band of radii 10 / 20 / 30 m bent 8
+         degrees in 10 segments, split along its length by a seam at
+         radius 20, its inner and outer rails moved out 5 cm at the odd
+         interior vertices so Layer 3 cuts them into several lines; no
+         contradiction, all three arcs at the seam's 3D length 2.7925 m,
+         both rails "together with 1 other line the mark made", 11 profile
+         lines tied on each strip). Changed by
+         design: the f73 text; the bump 0.30 rail yields (laid at 5.0000);
+         the rail nothing contradicts keeps its 5.0881 m and is laid
+         straight at 3D stations; the mirrored case no longer loses p1_0
+         and p1_1; the closed marked ring is OBLIQUE ("no signed run on an
+         axis"); the seed test checks the join by its diagnostic.
+fixtures make_marked_band_source(degrees, segments, inner_first, mirrored,
+         end_widening): a flat band of radii 1 and 3 m between two marked
+         ladder strips (10 to 11.25 degrees per segment, so the band ends
+         are right corners). make_marked_split_band_source(degrees,
+         segments, radii, wobble): the split band above.
+         Test filters that look for the solve's contradiction text match
+         "contradictory equations ->" (the yield text now contains
+         "contradictory equation").
+```
+
+Results:
+
+- Full state against the code before the slice (every pin UV and flag,
+  role, sign, line, coordinate, unconstrained set, equation count,
+  ladder outcome, tie, unmeasured set, bridge vector, diagnostic and
+  corner-law count) on the 38 captures: filter off identical everywhere.
+  +Z: two runs differ. The user's bottom quilt changes only the text of
+  f73's diagnostic, now "ladder strip in a quilt, stitched rail made one
+  line from 7 lines, 6.2331 m in 3D, yields its length: without its
+  length equations the other runs of its axis have no contradictory
+  equation, laid at 6.8648 m (+0.6317 m): patch:seed:f73 (v160..v157)";
+  its 69 pinned source
+  vertices (111 occurrences) are bit-identical and its equation counts
+  equal. d_cyl_s2 islands 1 and 2: the unmeasured set goes from 4 runs to
+  none (its joined lines are OBLIQUE and give no equation either way) and
+  the diagnostic reads "... 0.7488 m in 3D, gives no length equation, its
+  line has no signed run on an axis: ...". The reviewer counted 33858
+  pinned vertices, bitwise identical.
+- The drift of the bottom quilt taken with every run is 6.6 mm (7.0 mm
+  with the inner runs left out, as in Slice AL); verdicts and pins are
+  the same.
+- Emulation of bounded families, with this slice: the bottom quilt keeps
+  69 pinned source vertices (111 occurrences); after Blender 4.5's fill
+  0 overlapping triangle pairs, 0 self-intersecting faces, 0 flips,
+  angle error 4.49 / 33.92 degrees, outer side 0.9999, inner side 1.1012
+  on every edge: identical to the slice without the emulation and to
+  Slice AL without it. Other effects of the emulation: 13 runs of f36's
+  free rail OBLIQUE (pieces; no pin moves), f36's outer rail a line the
+  mark made ("from 2 lines, 6.8638 m in 3D, keeps its length"), and the
+  emulation's own diagnostics on u_rounded (filter off) and collumn.
+- Synthetic bands between two marked strips (+Z): 90 degrees in 8
+  segments 8 pins (junctions only) -> 44, 18 of 18 ties; 100 / 120 / 180
+  degrees (10 / 12 / 18 segments) 0 pins ("AXIS_A: 2 contradictory
+  equations") -> 52 / 60 / 84, ties 22 / 26 / 38 (every profile line).
+  The outer rail is laid at its 3D length (4.7048 m, ratio 1.000000), the
+  inner rail (1.5683 m) at 4.7048 m, ratio 3.000000 on every edge. Who
+  yields is the same with the inner strip first, mirrored, and both.
+- The bump strip with the straight 5 m far side (a Layer 3 line), bump
+  height -> rail length -> laid length of the rail and the far side:
+
+| bump | rail (3D) | Slice AL | this slice |
+|---|---|---|---|
+| 0.30 | 5.0881 m | 5.0000 | yields, 5.0000 |
+| 0.20 | 5.0396 m | 5.0000 | yields, 5.0000 |
+| 0.15 | 5.0224 m | 5.0000 | yields, 5.0000 |
+| 0.145 | 5.0209 m | 5.0000 | keeps its length, both 5.0060 |
+| 0.12 | 5.0143 m | 5.0000 | keeps its length, both 5.0041 |
+| 0.10 | one Layer 3 line | 5.0029 | 5.0029 |
+
+  Under the drift the disagreement is spread over the rail and the far
+  side (about 1.2 mm per metre, the island's drift) where Slice AL laid
+  them exactly; no pin on the captures moves for this reason.
+- Buildings: the Tier 3 seamed baseline is identical (13 objects, 0
+  errors); the quilt smoke (+Z, `--unwrap-quilts`) differs from the code
+  before the slice only in timing.
+
+Stated limits:
+
+- A line the mark made keeps its length on trust where nothing
+  contradicts it (review F3). A rail that turns through a mitre for
+  which Layer 3 records no corner is laid straight at its 3D length:
+  the user's top quilt with only f35's rail joined (the reviewer's
+  filter of `stitched_rail_uses`; not reached today) gets 54 pins with
+  pinned edges at 0.275 to 2.046 of their 3D length (78 edges; f35
+  v120-v121 0.275, v121-v124 1.626, f97/f105 2.046), where Slice AL's rule
+  gives 5 pins at 0.91 to 1.44; with f35 and f96 joined 56 pins and 2
+  contradictory AXIS_B equations. Today the all-or-nothing fallback hides
+  it (with f35, f71 and f96 the quilt keeps its Layer 3 lines, 0 pins,
+  as before). Not filled in Blender.
+- A line the mark made beside a hard contradiction it does not cause
+  keeps its length even when far off (review F2; solver level: a hard
+  taper of 10.00 / 10.03 m over a 10 mm drift and a marked line of 11.0 m
+  through a node x: without the line the taper still has 2 contradictory
+  equations, so the line keeps its length, 1 m wrong, and x's components
+  are UNCONSTRAINED; Slice AL laid them). A test pins it.
+- Under the drift a line the mark made keeps its length and the drift is
+  spread over it and its neighbours (review F4; the bump table above).
+- "Shortest yields" stretches the inner rail of a bend to the outer one
+  (ratio 3.000 on the synthetic bands, 1.101 on the user's mesh). If the
+  texture should follow the inner edge, or the longer rail is long by
+  noise (a sawtooth outer edge), the leader is wrong.
+- The trial is greedy per axis and a yield is never given back. The
+  effect test counts contradictory equations, not their size: a yield
+  that removes one large contradiction but lets the smear flag one more
+  small equation elsewhere is refused. Cost: a round with m groups left
+  makes at most 2m - 1 trials and every yield takes at least one group,
+  so an axis with n groups of lines the mark made takes at most 1 + n^2
+  solves (five marked lines against one hard line: 13 solves). On the
+  data the shortest line always yields alone on its first trial (2
+  solves on that axis, 1 on the other) and no set of several groups is
+  ever tried; at most 2 marked lines per quilt; no timing change in the
+  smoke. The largest count in the reviewer's fuzz was 11 solves per axis.
+- Several lines the mark made between the same rows yield together when
+  no single one helps, and the line Layer 3 holds leads: on the split
+  band (radii 10 / 20 / 30 m, a seam Layer 3 holds at radius 20) both
+  marked rails are laid at the seam's 2.7925 m (4.2087 m and 1.4503 m in
+  3D). With today's Layer 3 such a loop needs the hard line to be one
+  Layer 3 line (at most 15 degrees in total) and the rails to be cut
+  into several lines by a wobble, not by the bend.
+- In the reviewer's fuzz (3000 random column graphs, 1 to 4 marked lines)
+  the fuzz counts 16 trials as worse than Slice AL. 10 of them have a hard
+  contradiction in both (the F2 limit above; a user can meet it, noisy
+  quilts such as the top patch f0 have hard contradictions). 6 have no
+  contradiction in either and differ in which equation group is largest
+  (the frame-free gauge keeps only the largest): in 4 of them this slice
+  lays more columns, in 2 it lays 2 where Slice AL laid 3. None ends in a
+  contradiction where Slice AL had none; renaming and reordering never
+  change who yields; not seen on data.
+- The emulation of bounded families is a Layer 5 stand-in for a Layer 3
+  change; it cuts greedily from a rail's start.
+- Test limits: ties, the restart, a contradiction carried by a bridge
+  equation and the length over uses are tested at solver or unit level
+  only; the island drift has a mesh test on one band, and the case of
+  two marked lines yielding together has the split-band mesh test. Of
+  the worker's 20 mutants of round three (run on the two test files of
+  the slice) none survives; two survived until a test was added for each
+  (the drift taken without the soft runs, and the count of fewer
+  contradictory equations). Of the reviewer's 15 mutants of round two
+  (full suite) 13 are killed; left_is_after is equivalent always (the
+  yielding set's own runs are never among its trial's contradictions),
+  note_final (the note refreshed from the final solve) is now caught by
+  the restart test, which pins the step's note (B's "2 left"); that
+  mutant was not re-run.
+- The checkpoint scenes now live in
+  `dev/tools/blender_smoke/reports/checkpoints/` (git-ignored), because
+  the session's temp scratchpad was emptied by a system cleanup on
+  2026-11-18 (the study harnesses of Slices AK and AL were found empty).
+
+Also measured, not built (open items, with their numbers):
+
+1. The accumulated-turn bound for Layer 3 families itself: a G3 contract
+   change. The census and the emulation above say what it would cost: on
+   the 38 captures nothing but the user's bottom quilt, which this slice
+   now keeps. The emulation cuts greedily from a rail's start, so where a
+   uniform arc is cut needs its own design; the Slice AK stitched-side
+   join is a second path the bound does not reach (c_arch_s2,
+   e_arch_s2_n20).
+2. A rail the mark made that turns through a mitre Layer 3 records no
+   corner for keeps its 3D length (the first stated limit; review F3).
+3. Localising a real contradiction to its loop: on all data one solve
+   (e_arch_s2_n20 +Z island 2) would gain 41 pin occurrences (3 -> 44),
+   nothing else changes. "Bridges last" fails (the 1.4 mm bridge would
+   absorb 0.63 m). This slice did not take the cycle-basis verdict: a
+   per-cycle verdict depends on the chosen spanning forest, so the least
+   squares verdict is kept as the single arbiter, and the cycles are used
+   for the analysis.
+4. Drift spread in proportion to run length: verdicts unchanged, the 5
+   degrees at face f123 gone, the quilt's largest error 33.9 -> 31.6
+   degrees, building pins move up to 4.6 mm (the Tier 3 baseline would
+   change), some corners of e_arch_s2_n20 worse.
+5. The gauge by penalty is no practical problem (largest group 89
+   components, 6.7e-13 from an exact solve); the solve is 1.3% of the run
+   time on the largest capture, `build_islands` 93%.
+
+### External review, 2026-11-23
+
+The user relayed an external code review on 2026-11-23. Its items and
+what was found for each:
+
+| item | claim | found |
+|---|---|---|
+| А | the gauge by penalty and the conditioning of the solve | measured: no change needed (largest group 89 components, 6.7e-13 from an exact solve, condition number at most 83) |
+| Б | contradictions should be localised to their cycle | the cycle frame is adopted for the analysis; localisation is open (open item 3), the least-squares verdict stays the arbiter |
+| В | a 3D dot product decides signs inside the solve | true; it flipped nothing on the data but broke bands bent more than 90 degrees between two marked strips; removed in this slice |
+| Г | runs and families "creep": they turn without an accumulated bound | true: the gates are per junction with no accumulated bound; runs turn at most 9.7 degrees on the data, families up to 90; the per-vertex gate is a recorded earlier decision (OQ-11, DD-45); the bound is open item 1 |
+| Д | one Z4 relation instead of two passes for axes and signs | not built; a candidate to do with quilt orientation |
+| Е | accumulated drift of the unfolded frame | not measured |
+| - | a Rust port | not now: the model still changes every slice |
+| - | sliding line constraints in an own relaxer instead of point pins | the destination after the structure; the "straight, length unknown" of Slices AL and AM is a hand-made case of it |
+
+Reviewer gate (independent agent), round one: PASS WITH FIXES. It
+reproduced every claim on data with its own dump and compare (tests,
+Tier 3, the quilt smoke, the full state on 38 captures x 2, the bands,
+the emulation with its own trees and the after-fill numbers), confirmed
+that the dot step was inert in framed and strip islands and flipped
+nothing on data (instrumented: 2 flips on each band of 100 degrees or
+more), checked termination, order and id independence (fuzz, and
+mirror, rotation with scale, flipped winding and renaming on the bands,
+the user's mesh, d_cyl_s2 and artist_walls_005) and ran 15 mutants.
+Findings:
+
+- F1 (major): with two or more marked lines in parallel on one
+  contradictory loop no single yield helps, so none yielded (H 10.0 /
+  A 10.3 / B 10.6: 0 columns laid; Slice AL laid them; fuzz 208 trials
+  worse than Slice AL, 158 new contradictions). Fixed: the shortest k
+  groups together are tried after the single ones; fuzz 16 / 0, at most
+  11 solves in the fuzz; full state on all data unchanged. Solver-level
+  tests, and since round two a mesh test (below).
+- F2, F3, F4 (medium): stated limits above; no code.
+- F5 (minor): the yield diagnostic said more than was observed. Fixed:
+  it states the effect.
+- F6 (minor): surviving mutants (the island drift, a contradiction on a
+  bridge equation, the tie anchor, MarkedLine.length). Tests added;
+  MarkedLine.length kept as the largest over uses, with a test.
+
+Round two, on the fixes: PASS WITH FIXES (small). With its own scripts
+and copies it reproduced the suite (1069 passed), Tier 3 (baseline
+identical, 13 objects) and the quilt smoke (as HEAD apart from timing),
+the full state against HEAD on 38 captures x 2 (filter off identical;
++Z only the f73 text and d_cyl_s2 islands 1 and 2; all 33858 pins
+identical), the bands (44 / 52 / 60 / 84 pins, ties 18 / 22 / 26 / 38,
+ratios 1.000000 and 3.000000), the emulation fill (69 pinned source
+vertices, 0 overlaps, self-intersections and flips, outer 0.9999, inner
+1.1012) and the fuzz (16 worse than Slice AL: 10 the stated F2 limit, 6
+a different largest equation group, 4 of those better and 2 worse; 0
+new contradictions; 0 id-dependent). The candidate-set loop is the rule
+as stated and independent of order and ids, ties inside sets of several
+groups included. On real data the shortest line always yields alone in
+2 solves and no set of several groups is ever tried (the bands; f73 on
+the user's bottom quilt, MarkedYield(35, 0, 0); under the emulation f73
+yields alone and f36 keeps its length). Findings, closed by the worker's
+round four and checked by the architect:
+
+- R2-1 (major): a mesh does put three lines on one loop (two the mark
+  made, one Layer 3 holds): the split band of radii 10 / 20 / 30 m with a
+  seam Layer 3 holds. The round-one code laid 0 pins on it ("AXIS_B: 32
+  contradictory equations"), this round 63, as Slice AL. Closed: it is
+  now the mesh-level test of F1; both marked rails yield together and
+  the seam leads at 2.7925 m. The claim "no mesh can" is withdrawn.
+- R2-2 (minor): the yield note is taken at the step of the yield and
+  never refreshed, so a text could say "(2 left)" when the final axis has
+  no contradiction, and "fewer" counts only the other runs. Closed: the
+  text says "the other runs of its axis have ..." and "(M left at that
+  step)"; the restart test pins the notes.
+- R2-3 (minor): a docstring sentence and a test comment said the longest
+  line never yields alone before every shorter one was tried with it.
+  Replaced with what the code does: each group is tried alone before any
+  two together, and sets of several groups are always the shortest k.
+  The bound 1 + n^2 is stated.
+
+Mutants of round two: 15 on the full suite, 13 killed; left_is_after is
+equivalent always, note_final was a missing test (now pinned, R2-2). Not
+run by the reviewer: invariance transforms and a Blender fill of the
+split band, the worker's probe_three*.py, dumps of the killed mutants.
+The worker's whole-state compare of round four against round three: one
+run differs, only the f73 text.
+
+Checks after the fixes (the architect): `python -m pytest` 1070 passed,
+4 skipped, 1 xfailed (1044 before; full suite from the repo root). Tier 3
+on buildings: baseline identical, 13 objects; quilt smoke as before apart
+from timing.
+Checkpoint scenes in `dev/tools/blender_smoke/reports/checkpoints/am/`
+(git-ignored): `bands_am.blend` (band_coarse90, band_bend120, band_u180
+side by side, UV layers `Scaffold_before` and `Scaffold`; picture
+`png/bands_before_after.png`: 8 / 0 / 0 pins before, 44 / 60 / 84 now)
+and `rounded_wall_scaffold_am.blend` (the user's scene copied, every face
+UV and pin of the `Scaffold` layer bit-identical to the Slice AL
+checkpoint; picture `png/quilt_am_bottom.png`).
+
+Next, open items in this order:
+
+1. The accumulated-turn bound for Layer 3 families (and directional
+   runs).
+2. Cutting a rail the mark made at a mitre Layer 3 does not record (with
+   noise and saw teeth, deferred by the user).
+3. Localising a real contradiction to its loop.
+4. Drift spread in proportion to run length.
+5. Quilt orientation, with the Z4 formulation as a candidate, and seeding
+   every right-corner component of a frame-free quilt.
+6. The user-selected-edges proposal: awaiting the user.
+7. Saw teeth: deferred by the user.
+8. A frame-free quilt is not tested for overlap.
+9. `build_islands` takes 93% of the skeleton solve time on the largest
+   building.
+10. The older open items already listed in this plan stay.
 
 ## Decisions the user must approve before the relevant slice
 
@@ -4172,4 +4690,21 @@ Next, open items in this order:
    user in the report and in the PR; G0 v1.20 DD-47, DD-54. The user may
    reverse it. It leaves open which side of a band leads its length
    (Slice AL, Next item 1).
+20. Slice AM (opened by the user on 2026-11-23 after an external code
+   review they relayed: "start the next slice with measuring items В and Б
+   of the review"). Inside it the architect chose what to build from the
+   measurements: the axis solve takes signs as given (the 3D dot step is
+   removed), and in a quilt without a rigid frame a line the mark made
+   from several lines keeps its rail lengths unless they contradict; of
+   contradicting marked lines the shorter yields first (then the
+   shortest k together), so the longest line keeps its length; the drift
+   is taken once with every run. Reason: the user's own layout of the
+   bottom quilt keeps the longer side (UV layer UVMap: outer side 0.999,
+   inner side 1.095 evenly), and the rule leaves that quilt exactly as
+   Slice AL laid it, also with Layer 3 families bounded at 15 degrees of
+   accumulated turn (emulated). Decided by the architect, shown to the
+   user in the report and in the PR; G0 v1.21 DD-47, DD-52, DD-54. The
+   user may reverse it. Localising contradictions to their loop, drift by
+   run length and the Layer 3 bound itself were measured and not built
+   (Slice AM, Next items 1, 3, 4).
 ```

@@ -1,4 +1,4 @@
-﻿# Agent Handoff - Scaffold Core
+# Agent Handoff - Scaffold Core
 
 This file is the continuity document for independent AI agents.
 
@@ -15,15 +15,16 @@ Current phase: G5a - Skeleton Runtime, plus G4a (Layer 4 v0, strip feature,
   and the bevel kinds BEVEL_STRIP / BEVEL_JUNCTION) and the user-filter
   stage scaffold_core/user_filters/ (pass 3, plan Slice AH)
 Architecture: immutable B-rep-inspired interpretation pipeline
-G0 contract: v1.20 (G0.md remains read-only for agents)
+G0 contract: v1.21 (G0.md remains read-only for agents)
 Branch: claude/scaffold-g5a-research-8a1f57; main has everything up to
-  PR #44 (Slice AK: commit 46e5a35, the slice, with its docs and G0
-  v1.19; merge commit 8347897).
-  Slice AL (in a quilt the mark makes a ladder strip's stitched rail one
-  line, with no length from it and stations by 3D length, G0 v1.20;
-  commit d3d766f) is PR #45, to be merged by
-  the agent after tests, Tier 3 and the independent reviewer.
-Tests: 1044 passed, 4 skipped, 1 xfailed (python -m pytest from the root).
+  PR #45 (Slice AL: commit d3d766f, the slice, with its docs and G0
+  v1.20; merge commit 321fedf).
+  Slice AM (the axis solve takes signs as given; in a quilt a line the
+  mark made keeps its length unless it contradicts, the shorter yields;
+  G0 v1.21; commit 8868656) is PR TODO(architect): PR number of Slice AM,
+  to be merged by the agent after tests, Tier 3 and the independent
+  reviewer.
+Tests: 1070 passed, 4 skipped, 1 xfailed (python -m pytest from the root).
 ```
 
 Scaffold Core currently contains Layers 0-4, the user-filter stage, the G5a
@@ -124,13 +125,16 @@ Implemented:
     frame when no island patch is curved (plan Slice N); an island without
     one takes in-line run signs from its ordered island rails (plan
     Slice Q); the rails are checked against the frame (plan Slice O);
-  - `frame_free.py` (plan Slices X, AA, AD, AK, AL) the frame-free
+  - `frame_free.py` (plan Slices X, AA, AD, AK, AL, AM) the frame-free
     branch: the lines of the two sides of a stitched Chain over the same
     segments are joined into one (Slice AK), the stitched rail of a marked
-    ladder strip is one line between right corners, with no length
-    equation where it was several lines and stations by 3D length (Slice
-    AL; all the joins of an island or none), then axis bipartition and
-    line orientation by right corners;
+    ladder strip is one line between right corners (Slice AL; all the
+    joins of an island or none); where it was several lines it keeps its
+    lengths unless they contradict, the shorter of contradicting marked
+    lines yields and then has stations by 3D length (Slice AM); then axis
+    bipartition and line orientation by right corners;
+  - `axis_solve.py` the per-axis solve; equation signs are used as given,
+    no 3D direction is compared (Slice AM);
   - `quilt_ladders.py` (plan Slices AI, AK) a STRAIGHT_LADDER strip in a
     frame-free quilt: when exactly one rail is stitched and the quilt lays
     that rail in at least one piece (cut where its axis changes), the free
@@ -744,6 +748,7 @@ Open after Slice AA:
   vertices (the slits of the window reveals) stay unpinned.
 - `solve_axis` still normalizes equations between the same two cross
   components by a raw 3D dot; it flips nothing on the 25 captures now.
+  (Removed in Slice AM, 2026-11-23.)
   `_segments_follow_chain` (Layer 2) and `_patch_chain_reverses_source_path`
   (Layer 3) compensated for the reversed runs and are trivial for open
   chains now.
@@ -834,6 +839,114 @@ After Slice AF (bevel strip layout):
   buildings). Unchanged from before; the user was told and may change it.
 - A STRIP patch whose only bent seam goes to a ladder patch does not leave
   its island although that seam is never stitched (no capture shows it).
+
+After Slice AM (the axis solve takes signs as given; in a quilt a line
+the mark made keeps its length unless it contradicts, the shorter
+yields; G0 v1.21 DD-47, DD-52, DD-54; plan entry Slice AM has the
+numbers, the external review of 2026-11-23 and a correction to Slice AL;
+commit 8868656):
+
+- The user opened the slice on 2026-11-23 after an external code review
+  they relayed: "start the next slice with measuring items В and Б of the
+  review" (В: a 3D dot decides signs inside the solve; Б: contradictions
+  should be localised to their cycle). The architect chose what to build
+  from the measurements (plan decision 20): the longest line keeps its
+  length, as in the user's own layout of the bottom quilt (UVMap: outer
+  0.999, inner 1.095 evenly), and that quilt stays exactly as Slice AL
+  laid it. The user may reverse it.
+- A. `axis_solve` no longer turns equation signs by the dot of run
+  directions. It was provably inert in framed and strip islands, compared
+  raw 3D directions in frame-free ones (against DD-47), flipped nothing
+  on 38 captures x 2 filter settings, and broke every flat band bent more
+  than 90 degrees between two marked ladder strips (synthetic bands of
+  100 / 120 / 180 degrees: 0 pins before, 52 / 60 / 84 now, outer rail at
+  its 3D length, inner at 3.000 of it).
+- B. In a frame-free island a line the mark made from several lines keeps
+  its rail lengths unless they contradict (Slice AL dropped them always).
+  `skeleton._solve_axis_yielding`: every run is measured first; while an
+  axis has contradictory equations, marked lines with a signed run on it
+  are tried alone shortest first by 3D rail length (`frame_free.
+  marked_line_groups`, ties within 1e-9 relative together), then the
+  shortest k together (every group alone before any two together); the
+  first set whose yielding removes the contradiction or leaves fewer
+  contradictory equations among the other runs yields (no length
+  equation on the rail's Chain, roles kept), and the trial restarts;
+  otherwise the contradiction is handled as before. At most 1 + n^2
+  solves per axis for n groups; on the data the shortest line always
+  yields alone in 2 solves. The yield text states the step's effect on
+  the other runs ("... the other runs of its axis have no contradictory
+  equation" or "F fewer contradictory equations (M left at that step)").
+  The drift is taken once with every signed run (reverts the Slice AL
+  sentence of DD-52). Only yielded rails take stations; the seed and the
+  all-or-nothing fallback are unchanged. `AxisSolve.contradiction_by_run`
+  names the runs of contradictory equations.
+- Why: since Slice AL which side of band f111 kept its length rested on
+  f111's outer side being one Layer 3 line (5.29 degrees per junction, 90
+  in total). With families stopped after 15 degrees of accumulated turn
+  (Layer 5 emulation, measurement only) the bottom quilt had 0 pins and
+  folded; now it keeps its 69 pinned source vertices and its layout (after
+  the fill 0 overlaps, 0 self-x, 0 flips, outer 0.9999, inner 1.1012). On
+  the 38 captures that bound would cost nothing but that quilt.
+- Elsewhere: full state against the code before the slice on 38 captures
+  (13 bevel cases, 8 artist captures, 4 parity references, 13 buildings):
+  filter off identical; +Z only the text of f73's diagnostic in the
+  user's bottom quilt and the unmeasured set and diagnostic of d_cyl_s2
+  islands 1 and 2 change, every pin identical. Tier 3 identical (13
+  objects); quilt smoke as before apart from timing.
+- Correction to Slice AL (dated note in the plan): the 5 degrees the
+  1.4 mm bridge run takes sit on face f123 at v208 / v210, not on f98;
+  most of the 33.9 degrees on f98 is the shear of the straight layout,
+  about 2 degrees of it drift.
+- Stated limits: a line the mark made keeps its length on trust where
+  nothing contradicts it, so a rail through a mitre Layer 3 records no
+  corner for is laid straight at its 3D length (the user's top quilt with
+  only f35 joined: 54 pins, pinned edges 0.275 to 2.046 of 3D; hidden
+  today by the all-or-nothing fallback; review F3); a marked line beside
+  a hard contradiction it does not cause keeps its length (F2); under the
+  drift the disagreement is spread over the line and its neighbours (F4:
+  a 5.0209 m rail and its 5 m far side both laid at 5.0060 m, Slice AL
+  5.0000); "shortest yields" stretches the inner rail of a bend (3.000 on
+  the synthetic bands, 1.101 on the user's mesh); yields are greedy per
+  axis and never given back; the effect test counts equations, not their
+  size; several marked lines between the same rows yield together when
+  no single one helps and the line Layer 3 holds leads (the split-band
+  mesh test: a seam Layer 3 holds at radius 20 m, both marked rails laid
+  at its 2.7925 m); ties, the restart, a bridge-carried contradiction and
+  the length over uses are tested at solver or unit level only; the
+  emulation is a Layer 5 stand-in.
+- Measured, not built: the Layer 3 accumulated-turn bound; localising a
+  real contradiction to its loop (one solve on all data, e_arch_s2_n20
+  +Z island 2: 3 -> 44 pin occurrences; "bridges last" folds; the cycle
+  verdict depends on the spanning forest, so the least-squares verdict
+  stays the arbiter); drift by run length (verdicts unchanged, building
+  pins move up to 4.6 mm); the gauge is no practical problem (largest
+  group 89 components, 6.7e-13 from an exact solve).
+- Checkpoint scenes now live in
+  `dev/tools/blender_smoke/reports/checkpoints/` (git-ignored; `am/`
+  for this slice) because the session's temp scratchpad was emptied by a
+  system cleanup on 2026-11-18.
+- Review round one: PASS WITH FIXES (F1: two or more marked lines in
+  parallel on one loop never yielded, fixed by trying the shortest k
+  together; F5 wording; F6 tests; F2 to F4 stated). Round two: PASS WITH
+  FIXES (small); it reproduced the suite, Tier 3, the quilt smoke, the
+  full state (33858 pins identical), the bands, the emulation fill and
+  the fuzz (16 worse than Slice AL: 10 the F2 limit, 6 a different
+  largest equation group, 4 better and 2 worse; 0 new contradictions, 0
+  id-dependent), and found the loop order- and id-independent. R2-1: a
+  mesh does put three lines on one loop (the split band of radii 10 / 20
+  / 30 m), now the mesh test of F1; R2-2: the yield note is the step's,
+  the text now says so and the restart test pins it; R2-3: an untrue
+  docstring sentence replaced. Mutants 15, 13 killed, one equivalent
+  always, one now pinned. Architect's check after the fixes: 1070
+  passed, 4 skipped, 1 xfailed; Tier 3 baseline identical (13 objects).
+- Next, in order: the accumulated-turn bound for Layer 3 families (and
+  directional runs); cutting a mark-made rail at a mitre Layer 3 does not
+  record (with noise and saw teeth, deferred); localising a real
+  contradiction to its loop; drift by run length; quilt orientation, with
+  the Z4 formulation as a candidate, and seeding every right-corner
+  component; the user-selected-edges proposal (awaiting the user); saw
+  teeth (deferred); a frame-free quilt is not tested for overlap;
+  `build_islands` takes 93% of the solve time on the largest building.
 
 After Slice AL (in a quilt the mark makes a ladder strip's stitched rail
 one line; that line gives no length, its nodes are stations by 3D length;
